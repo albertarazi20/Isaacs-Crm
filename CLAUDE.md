@@ -1,4 +1,4 @@
-# mca-crm — working rules
+# Isaac (MCA CRM) — working rules
 
 ## What this is
 A CRM for a **merchant cash advance (MCA)** shop. One client: a friend of the owner.

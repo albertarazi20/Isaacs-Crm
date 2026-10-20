@@ -1,4 +1,4 @@
-# mca-crm
+# Isaac — MCA CRM
 
 A CRM for a merchant cash advance shop. Built for one client (a friend).
 
