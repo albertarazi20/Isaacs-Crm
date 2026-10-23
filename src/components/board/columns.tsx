@@ -9,6 +9,7 @@ import { bucketLabel, type BucketKey, type ISODate } from "@/lib/mca/dates";
 import { stageDef, type StageKey } from "@/lib/mca/stages";
 import { formatMoneyCompact } from "@/lib/money";
 import { FollowUpCard, PipelineCard } from "./cards";
+import { LazySlot } from "./LazySlot";
 import { bucketDueDate, isDropBucket, sameCards, STAGE_MONEY_LABEL, summarize } from "./logic";
 
 const WIDTH = "w-[17rem] max-sm:w-[82vw] max-sm:max-w-80";
@@ -26,14 +27,29 @@ const sameList = (a: ListProps, b: ListProps) =>
   a.onOpenPicker === b.onOpenPicker &&
   sameCards(a.cards, b.cards);
 
+const EAGER = 6;
+
 /** Memoised so a column re-rendering for a hover highlight does not touch its cards. */
 const PipelineList = memo(function PipelineList({ cards, ...rest }: ListProps) {
-  return cards.map((c) => <PipelineCard key={c.id} card={c} {...rest} />);
+  return cards.map((c, i) => (
+    <LazySlot
+      key={c.id}
+      id={c.id}
+      eager={i < EAGER}
+      label={`${c.business_name}, ${stageDef(c.stage).label}`}
+    >
+      <PipelineCard card={c} {...rest} />
+    </LazySlot>
+  ));
 }, sameList);
 
 const FollowUpList = memo(
   function FollowUpList({ cards, label, ...rest }: ListProps & { label: string }) {
-    return cards.map((c) => <FollowUpCard key={c.id} card={c} bucketLabel={label} {...rest} />);
+    return cards.map((c, i) => (
+      <LazySlot key={c.id} id={c.id} eager={i < EAGER} label={`${c.business_name}, ${label}`}>
+        <FollowUpCard card={c} bucketLabel={label} {...rest} />
+      </LazySlot>
+    ));
   },
   (a, b) => a.label === b.label && sameList(a, b),
 );

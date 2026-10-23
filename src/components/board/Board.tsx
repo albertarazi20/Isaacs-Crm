@@ -44,6 +44,7 @@ import {
   type BoardView,
   type DropBucket,
 } from "./logic";
+import { setDraggingId } from "./LazySlot";
 import { FollowUpSheet, StageSheet } from "./Sheets";
 import { useCollapsedGroups, useStoredFlag } from "./storage";
 import { FollowUpView, PipelineView } from "./views";
@@ -201,9 +202,16 @@ export function Board({ initialCards, view }: { initialCards: ClientCard[]; view
     useSensor(KeyboardSensor, { coordinateGetter: columnCoordinates }),
   );
 
-  const onDragStart = (e: DragStartEvent) => setActiveId(String(e.active.id));
-  const onDragEnd = ({ active, over }: DragEndEvent) => {
+  const onDragStart = (e: DragStartEvent) => {
+    setActiveId(String(e.active.id));
+    setDraggingId(String(e.active.id));
+  };
+  const endDrag = () => {
     setActiveId(null);
+    setDraggingId(null);
+  };
+  const onDragEnd = ({ active, over }: DragEndEvent) => {
+    endDrag();
     const card = byId.get(String(active.id));
     if (!card || !over) return;
     const [kind, key = ""] = String(over.id).split(":");
@@ -270,7 +278,7 @@ export function Board({ initialCards, view }: { initialCards: ClientCard[]; view
           accessibility={A11Y[view]}
           onDragStart={onDragStart}
           onDragEnd={onDragEnd}
-          onDragCancel={() => setActiveId(null)}
+          onDragCancel={endDrag}
         >
           {visible.length === 0 ? (
             <EmptyState title="No merchants match">

@@ -104,3 +104,19 @@ land in "Name in" with an "Imported status: Funded" note for Isaac to finish.
 `tests/language.test.ts` fails if visible UI text says loan, lender, borrower, installment, interest
 rate, principal, APR, amount due, customer, or "payment" (use remittance). Identifiers such as
 `paymentCents` may keep their names.
+
+## 2026-10-23 — every page loads every client in one query (and where that stops working)
+
+Today, Board, Renewals, Long game and Clients all read `client_cards` once and filter in memory.
+Measured on 5,000 synthetic clients (30,000 notes/calls, 5,000 timers, 2,000 positions), as the
+restricted `isaac_app` role with RLS on, `to_jsonb` of every row forced:
+
+- first (cold) query: **3.0 s**; warm: **0.36 s**; payload **6.5 MB**
+- command: create `isaac_bench`, `pnpm db:migrate`, bulk-insert with `generate_series`, then time
+  `select count(*), sum(length(j::text)) from (select to_jsonb(c) j from client_cards c order by c.next_due_on nulls last, lower(c.business_name)) x`
+  after `set local role isaac_app` and `set_config('app.user_id', …)`. (Read the user id BEFORE
+  switching role — RLS hides `app_users` from `isaac_app` until the id is set.)
+
+Fine for Isaac's size (hundreds, maybe a couple of thousand). **Past ~3,000 active clients** the board
+should load per-column and the payload should drop columns the board doesn't draw. Do that when the
+number is real, not before.
