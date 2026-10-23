@@ -187,6 +187,7 @@ describe("the hourly cron route", () => {
     process.env.RESEND_API_KEY = "re_test_key";
     process.env.RESEND_FROM = "Isaac <isaac@example.com>";
     process.env.CRON_SECRET = "c".repeat(20);
+    process.env.ALLOWED_EMAILS ??= "isaac@x.com";
     return import("@/app/api/cron/reminders/route");
   }
   const call = (handler: (r: Request) => Promise<Response>, auth?: string) =>
@@ -274,6 +275,29 @@ describe("the hourly cron route", () => {
       expect(res.status).toBe(200);
       expect(await res.json()).toMatchObject({ sent: 1, failed: 0, calls: { failed: 0 } });
       expect(await lastRun()).toBeGreaterThan(FIVE_HOURS_AGO.getTime());
+    });
+
+    it("a user taken off ALLOWED_EMAILS gets no email through the real route, and the run is still healthy", async () => {
+      await arrange();
+      const fetched = vi.fn(
+        async () => new Response(JSON.stringify({ id: "re_x" }), { status: 200 }),
+      );
+      vi.stubGlobal("fetch", fetched);
+      // env() is read once per module load, so load the route fresh with the shorter list.
+      const before = process.env.ALLOWED_EMAILS;
+      vi.resetModules();
+      process.env.ALLOWED_EMAILS = "someone-else@x.com";
+      try {
+        const { POST } = await route();
+        const res = await call(POST, AUTH);
+        expect(res.status).toBe(200);
+        expect(await res.json()).toMatchObject({ sent: 0, skipped: 1 });
+        expect(fetched).not.toHaveBeenCalled();
+        expect(await lastRun()).toBeGreaterThan(FIVE_HOURS_AGO.getTime());
+      } finally {
+        process.env.ALLOWED_EMAILS = before;
+        vi.resetModules();
+      }
     });
 
     it("the digest fails to send (wrong RESEND_FROM): 502 with the counts, and the heartbeat does NOT move", async () => {

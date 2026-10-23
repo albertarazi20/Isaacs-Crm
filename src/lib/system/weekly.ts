@@ -107,6 +107,8 @@ export async function runWeeklyScorecards(args: {
   now: Date;
   appUrl: string;
   send: DigestSender;
+  /** Who may still receive email (see runReminders). Default: everyone. */
+  allowed?: (loginEmail: string) => boolean;
 }): Promise<WeeklySummary> {
   const users = await args.db.withSystem(
     async (q) =>
@@ -119,6 +121,10 @@ export async function runWeeklyScorecards(args: {
   const summary: WeeklySummary = { users: users.length, sent: 0, skipped: 0, failed: 0 };
 
   for (const user of users) {
+    if (args.allowed && !args.allowed(user.email)) {
+      summary.skipped += 1;
+      continue;
+    }
     const today = todayIn(user.timezone, args.now);
     const isMonday = parseISODate(today).getUTCDay() === 1;
     if (!isMonday || localHour(user.timezone, args.now) < user.digest_hour) {

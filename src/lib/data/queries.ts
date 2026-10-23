@@ -77,7 +77,10 @@ export async function getClientDetail(q: Db, id: string): Promise<ClientDetail |
 /** Clients with at least one open timer due today or earlier — the number on the Today tab. */
 export async function dueCount(q: Db, today: string): Promise<number> {
   const { rows } = await q.query<{ n: number }>(
-    "select count(distinct client_id)::int as n from timers where done_at is null and due_on <= $1::date",
+    // A do-not-contact merchant is never a call to make, whatever their timer says (Today skips them too).
+    `select count(distinct t.client_id)::int as n
+       from timers t join clients c on c.id = t.client_id
+      where t.done_at is null and t.due_on <= $1::date and c.contact_status <> 'dnc'`,
     [today],
   );
   return rows[0]?.n ?? 0;

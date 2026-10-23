@@ -2,7 +2,8 @@ import { timingSafeEqual } from "node:crypto";
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { sendViaResend } from "@/lib/email/resend";
-import { env } from "@/lib/env";
+import { isAllowedEmail } from "@/lib/auth/google";
+import { devLoginEnabled, env } from "@/lib/env";
 import { recordHeartbeat } from "@/lib/system/heartbeat";
 import { runCallReminders, runReminders } from "@/lib/system/reminders";
 import { runWeeklyScorecards } from "@/lib/system/weekly";
@@ -31,9 +32,11 @@ async function handle(req: Request): Promise<NextResponse> {
   const now = new Date();
   const send = (to: string, d: { subject: string; text: string; html: string }) =>
     sendViaResend(cfg, { to, ...d });
-  const digest = await runReminders({ db, now, appUrl: e.APP_URL, send });
-  const calls = await runCallReminders({ db, now, appUrl: e.APP_URL, send });
-  const weekly = await runWeeklyScorecards({ db, now, appUrl: e.APP_URL, send });
+  // The allowlist is the owner's off-switch for a person: off the list means no sign-in AND no more email.
+  const allowed = (email: string) => devLoginEnabled() || isAllowedEmail(email, e.ALLOWED_EMAILS);
+  const digest = await runReminders({ db, now, appUrl: e.APP_URL, send, allowed });
+  const calls = await runCallReminders({ db, now, appUrl: e.APP_URL, send, allowed });
+  const weekly = await runWeeklyScorecards({ db, now, appUrl: e.APP_URL, send, allowed });
   // A run in which any email failed to send (a wrong RESEND_FROM, a dead key) is not a healthy run: leave the
   // heartbeat alone so the banner fires, and answer 502 so the external scheduler alerts too. The failed sends
   // rolled their claims back, so the next hourly run retries them.

@@ -64,6 +64,8 @@ export async function runReminders(args: {
   now: Date;
   appUrl: string;
   send: DigestSender;
+  /** Who may still receive email. Taking someone off ALLOWED_EMAILS must stop their reminders too. Default: everyone. */
+  allowed?: (loginEmail: string) => boolean;
 }): Promise<ReminderSummary> {
   const users = await args.db.withSystem(
     async (q) =>
@@ -76,6 +78,10 @@ export async function runReminders(args: {
   const summary: ReminderSummary = { users: users.length, sent: 0, skipped: 0, failed: 0 };
 
   for (const user of users) {
+    if (args.allowed && !args.allowed(user.email)) {
+      summary.skipped += 1;
+      continue;
+    }
     if (localHour(user.timezone, args.now) < user.digest_hour) {
       summary.skipped += 1;
       continue;
@@ -125,6 +131,7 @@ async function loadDueTimers(
             t.kind, t.due_on, t.note, c.scheduled_call_at
        from timers t join clients c on c.id = t.client_id
       where t.user_id = $1 and t.done_at is null and t.due_on <= $2::date
+        and c.contact_status <> 'dnc'
         and not exists (select 1 from trashed_clients tc where tc.client_id = c.id)`,
     [userId, today],
   );
@@ -201,6 +208,7 @@ interface CallRow {
   phone: string;
   scheduled_call_at: Date;
   timezone: string;
+  login_email: string;
   to_email: string;
   wanted_amount_cents: number | null;
   last_call_note: string | null;
@@ -219,19 +227,22 @@ export async function runCallReminders(args: {
   now: Date;
   appUrl: string;
   send: DigestSender;
+  /** Who may still receive email (see runReminders). Default: everyone. */
+  allowed?: (loginEmail: string) => boolean;
 }): Promise<CallReminderSummary> {
   const due = await args.db.withSystem(
     async (q) =>
       (
         await q.query<CallRow>(
           `select c.user_id, c.id as client_id, c.business_name, c.contact_name, c.phone, c.scheduled_call_at,
-                u.timezone, coalesce(u.notify_email, u.email) as to_email,
+                u.timezone, u.email as login_email, coalesce(u.notify_email, u.email) as to_email,
                 (select k.wanted_amount_cents from client_asks k where k.client_id = c.id order by k.created_at desc limit 1) as wanted_amount_cents,
                 (select a.body from activities a where a.client_id = c.id and a.kind = 'call' and a.body <> '' order by a.occurred_at desc limit 1) as last_call_note,
                 (select count(*) from positions p where p.client_id = c.id)::int as position_count
            from clients c join app_users u on u.id = c.user_id
           where u.digest_enabled and c.scheduled_call_at > $1
             and c.scheduled_call_at <= $1::timestamptz + make_interval(mins => $2)
+            and c.contact_status <> 'dnc'
             and not exists (select 1 from trashed_clients tc where tc.client_id = c.id)`,
           [args.now, CALL_REMINDER_WINDOW_MIN],
         )
@@ -239,6 +250,7 @@ export async function runCallReminders(args: {
   );
   const summary: CallReminderSummary = { sent: 0, failed: 0 };
   for (const c of due) {
+    if (args.allowed && !args.allowed(c.login_email)) continue;
     const ref = `${c.client_id}@${c.scheduled_call_at.toISOString()}`;
     try {
       const sent = await args.db.withSystem(async (q) => {

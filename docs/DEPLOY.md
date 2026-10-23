@@ -19,8 +19,9 @@ New hosting project, new database, new Google Cloud project, new Resend domain. 
 - The connecting role must be allowed to `create role` once and `set role isaac_app` (the first migration does both).
   Use the project's owner role, not a read-only one.
 - Row-level security is the wall between merchants. The app role `isaac_app` cannot bypass it. Never connect the
-  app as a superuser for requests: `withUser` always drops to `isaac_app`; `withSystem` is confined to login,
-  reminders and `/api/*` (a test enforces that).
+  app as a superuser for requests: `withUser` always drops to `isaac_app`; `withSystem` is confined to
+  `src/lib/system/**`, `src/lib/db/**` and `src/app/api/**` (a test enforces that). Every request does read one
+  small row that way (the "sign out everywhere" epoch), so the owner connection is used for that lookup only.
 
 ## 3. Environment variables (host dashboard, never git, never chat)
 
@@ -47,7 +48,7 @@ The app shows a red banner if the scheduler stops (heartbeat).
 1. `pnpm db:migrate` against the direct URL. Expect every file in `db/migrations/` applied, no errors.
 2. Open the app, sign in as Isaac. Wrong Google account must show "not allowed".
 3. Add a client, move it, log a call. Check the database rows changed.
-4. Settings → "Send me a test reminder". Check the email arrives (and isn't in spam).
+4. Settings → "Send me a test email". Check the email arrives (and isn't in spam).
 5. Connect Gmail, send a test email to yourself.
 6. Wait for the scheduler's first hourly call; the heartbeat banner must not appear.
 7. Import Isaac's CSV (Clients → Import).
@@ -56,8 +57,9 @@ The app shows a red banner if the scheduler stops (heartbeat).
 ## 6. Backups
 
 **(unverified)** Neon keeps point-in-time history on paid plans and a short window on free. Also download
-**Clients → Download clients (CSV)** and **Download notes (CSV)** weekly until a real backup is set up.
-Merchant data is the business. Decide who owns the backup before real clients go in.
+**Clients → Download clients (CSV)** and **Download notes (CSV)** weekly until a real backup is set up. Those two
+files are a **reference copy, not a backup**: they leave out all but each merchant's latest advance, plus offers,
+submissions, funders, stips, positions and timers, and nothing reads them back in. Merchant data is the business. Decide who owns the backup before real clients go in.
 
 ## 7. Security reminders
 
