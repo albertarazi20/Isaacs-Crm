@@ -264,6 +264,10 @@ function TextDialogBody({
     applicationLinkSet: Boolean(ctx?.applicationLink),
   });
 
+  // A text can't be called back, so an unfilled {field} blocks sending, exactly as it does for email.
+  const blocked = leftoverFields(message).length > 0;
+  const blockedReason = "Fill in the highlighted fields first";
+
   const sent = () => {
     recordTextSent(today);
     setPending({
@@ -286,7 +290,12 @@ function TextDialogBody({
           <Button variant="ghost" onClick={onClose}>
             Cancel
           </Button>
-          <Button variant="primary" onClick={sent}>
+          <Button
+            variant="primary"
+            onClick={sent}
+            disabled={blocked}
+            title={blocked ? blockedReason : undefined}
+          >
             I sent it →
           </Button>
         </>
@@ -329,22 +338,43 @@ function TextDialogBody({
           </p>
         ) : null}
         <div className="flex flex-wrap gap-2">
-          <a className={buttonClass("secondary", "md")} href={smsHref(e164, message)}>
-            Open in Messages (phone)
-          </a>
-          <a
-            className={buttonClass("secondary", "md")}
-            href={voiceTextHref(e164)}
-            target="_blank"
-            rel="noopener noreferrer"
-            onClick={() => {
-              void copy(message).then(
-                (ok) => ok && toast({ message: "Message copied — paste it into Google Voice" }),
-              );
-            }}
-          >
-            Open Google Voice
-          </a>
+          {blocked ? (
+            <>
+              <span
+                aria-disabled="true"
+                title={blockedReason}
+                className={buttonClass("secondary", "md", "pointer-events-none opacity-50")}
+              >
+                Open in Messages (phone)
+              </span>
+              <span
+                aria-disabled="true"
+                title={blockedReason}
+                className={buttonClass("secondary", "md", "pointer-events-none opacity-50")}
+              >
+                Open Google Voice
+              </span>
+            </>
+          ) : (
+            <>
+              <a className={buttonClass("secondary", "md")} href={smsHref(e164, message)}>
+                Open in Messages (phone)
+              </a>
+              <a
+                className={buttonClass("secondary", "md")}
+                href={voiceTextHref(e164)}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={() => {
+                  void copy(message).then(
+                    (ok) => ok && toast({ message: "Message copied — paste it into Google Voice" }),
+                  );
+                }}
+              >
+                Open Google Voice
+              </a>
+            </>
+          )}
           <Button
             onClick={() =>
               void copy(e164).then((ok) =>

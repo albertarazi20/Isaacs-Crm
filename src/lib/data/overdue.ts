@@ -50,6 +50,8 @@ export async function blockedByOtherTimers(
 /**
  * Move every client with the existing `set_follow_up()` SQL function, in ONE statement: if any single
  * client fails (deleted meanwhile, someone else's id), the whole transaction rolls back and nothing moved.
+ * A follow-up's note is the REASON the call exists ("call after the 3rd"), so each client keeps its own;
+ * only a follow-up with no note gets the generic one.
  */
 export async function applyMoves(
   q: Db,
@@ -57,10 +59,25 @@ export async function applyMoves(
   note: string = BULK_NOTE,
 ): Promise<number> {
   if (moves.length === 0) return 0;
+  // Each client keeps its own reason. A client that already had one gets a timeline line saying it was moved in
+  // bulk (set_follow_up's own line then carries the reason); one without a reason gets the generic note.
   const { rows } = await q.query<{ n: number }>(
-    `select count(*)::int as n from (
-       select set_follow_up(t.c, t.d, $3) from unnest($1::uuid[], $2::date[]) as t(c, d)
-     ) moved`,
+    `with src as (
+       select t.c, t.d,
+              nullif((select k.note from timers k
+                       where k.client_id = t.c and k.kind = 'follow_up' and k.done_at is null
+                       order by k.created_at desc limit 1), '') as old_note
+         from unnest($1::uuid[], $2::date[]) as t(c, d)
+     ),
+     moved as (
+       select src.c, src.old_note, set_follow_up(src.c, src.d, coalesce(src.old_note, $3)) as timer from src
+     ),
+     logged as (
+       insert into activities (user_id, client_id, kind, body)
+       select cl.user_id, m.c, 'timer', $3 from moved m join clients cl on cl.id = m.c where m.old_note is not null
+       returning 1
+     )
+     select count(*)::int as n from moved`,
     [moves.map((m) => m.id), moves.map((m) => m.dueOn), note],
   );
   return rows[0]?.n ?? 0;

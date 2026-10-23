@@ -6,6 +6,7 @@ import type { Priority } from "@/lib/data/priority";
 import type { ClientCard } from "@/lib/data/types";
 import { cardFundingTerms } from "@/lib/data/views";
 import { relativeDay, timeAgo } from "@/lib/format";
+import { bookedTime, bookedToday } from "@/lib/mca/booked";
 import { balanceCents, paydownPct } from "@/lib/mca/funding";
 import { formatUS } from "@/lib/mca/phone";
 import { TIMER_LABELS } from "@/lib/mca/stages";
@@ -58,7 +59,8 @@ export const ClientRow = memo(function ClientRow({
   /** Times this client's date was pushed in the last 14 days. */
   snoozeCount?: number;
 }) {
-  const { today, nowMs } = useApp();
+  const { today, nowMs, timezone } = useApp();
+  const booked = bookedToday(card, today, timezone);
   const due = card.next_due_on;
   const overdue = due !== null && due < today;
   const isToday = due === today;
@@ -89,6 +91,7 @@ export const ClientRow = memo(function ClientRow({
                 </span>
               </Badge>
             ) : null}
+            {booked ? <Badge tone="accent">Call at {bookedTime(card, timezone)}</Badge> : null}
             {due ? (
               <Badge tone={overdue ? "bad" : isToday ? "warn" : "neutral"}>
                 {card.next_due_kind ? `${TIMER_LABELS[card.next_due_kind]} · ` : ""}
@@ -131,7 +134,18 @@ export const ClientRow = memo(function ClientRow({
               {hot ? "★" : "☆"}
             </button>
           ) : null}
-          <SnoozeMenu card={card} />
+          {booked ? (
+            // Snoozing can't move an appointment, so don't offer a button that appears to do nothing.
+            <Link
+              href={`/clients/${card.id}`}
+              title="This merchant has a call booked today. Move or cancel the call on their page."
+              className="rounded-lg px-2 py-1 text-xs font-medium text-accent hover:bg-surface-2"
+            >
+              Move the call
+            </Link>
+          ) : (
+            <SnoozeMenu card={card} />
+          )}
         </div>
       </div>
 

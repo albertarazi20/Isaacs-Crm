@@ -1,4 +1,5 @@
 import { addDays, addMonths, isLongGame, type ISODate } from "../mca/dates";
+import { bookedToday } from "../mca/booked";
 import { balanceCents, paydownPct, renewalDate, type FundingTerms } from "../mca/funding";
 import { stageDef, type StageGroup, type TimerKind } from "../mca/stages";
 import { formatDate } from "../format";
@@ -71,24 +72,31 @@ export interface TodayView {
   };
 }
 
-export function buildToday(cards: readonly ClientCard[], today: ISODate): TodayView {
+export function buildToday(
+  cards: readonly ClientCard[],
+  today: ISODate,
+  timezone = "UTC",
+): TodayView {
   // A do-not-contact merchant is never on the call list, however their timer reads.
   const due = cards.filter(
     (c): c is ClientCard & { next_due_on: ISODate } =>
       c.next_due_on !== null && c.contact_status !== "dnc",
   );
+  // The booking decides, not the earliest timer: an older follow-up must not hide today's appointment.
+  const booked = (c: ClientCard) => bookedToday(c, today, timezone);
   const scheduled = due
-    .filter((c) => c.next_due_on === today && c.next_due_kind === "scheduled_call")
-    .sort(byPriority);
+    .filter(booked)
+    .sort(
+      (a, b) =>
+        (a.scheduled_call_at ?? "").localeCompare(b.scheduled_call_at ?? "") || byPriority(a, b),
+    );
   const overdue = due
-    .filter((c) => c.next_due_on < today)
+    .filter((c) => c.next_due_on < today && !booked(c))
     .sort((a, b) => a.next_due_on.localeCompare(b.next_due_on) || byPriority(a, b));
-  const dueToday = due
-    .filter((c) => c.next_due_on === today && c.next_due_kind !== "scheduled_call")
-    .sort(byPriority);
+  const dueToday = due.filter((c) => c.next_due_on === today && !booked(c)).sort(byPriority);
   const weekOut = addDays(today, 7);
   const upcoming = due
-    .filter((c) => c.next_due_on > today && c.next_due_on <= weekOut)
+    .filter((c) => c.next_due_on > today && c.next_due_on <= weekOut && !booked(c))
     .sort((a, b) => a.next_due_on.localeCompare(b.next_due_on) || byPriority(a, b));
 
   let renewalReady = 0;

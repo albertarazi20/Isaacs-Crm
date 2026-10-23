@@ -18,7 +18,7 @@ export default async function DialPage() {
   const items = await db.withUser(session.userId, async (q): Promise<DialItem[]> => {
     const cards = await listCards(q);
     const ctx = await userContext(q);
-    const view = buildToday(cards, ctx.today);
+    const view = buildToday(cards, ctx.today, ctx.timezone);
     const prio = { today: ctx.today, timezone: ctx.timezone };
     const queue = [
       ...view.scheduled.map((card) => ({ card, priority: priorityOf(card, prio) })),

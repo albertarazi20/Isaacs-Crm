@@ -43,7 +43,7 @@ export default async function TodayPage() {
   const { cards, ctx, view, snoozed, streak } = await db.withUser(session.userId, async (q) => {
     const cards = await listCards(q);
     const ctx = await userContext(q);
-    const view = buildToday(cards, ctx.today);
+    const view = buildToday(cards, ctx.today, ctx.timezone);
     // One query for every visible row: how often each had its date pushed in the last 14 days.
     const visible = [...view.scheduled, ...view.overdue, ...view.dueToday, ...view.upcoming];
     const ids = visible.map((c) => c.id);

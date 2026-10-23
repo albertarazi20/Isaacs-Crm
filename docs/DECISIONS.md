@@ -278,3 +278,19 @@ costs more than the query. `EXPLAIN ANALYZE select to_jsonb(c) from client_cards
 without. Every request now runs `set local jit = off` (`tests/db-settings.test.ts`). Still heavy at that size:
 Clients ships every merchant (11 MB) — fine for hundreds, slow on a phone at thousands. Next step if it matters:
 page the Clients list and slim the card payload. Reports and win-back stay fast because they aggregate in SQL.
+
+## 2026-10-23 — second review round (docs/REVIEW-3B.md): what changed
+
+- **Do-not-contact is enforced where it is read:** the morning email, the booked-call email, the Today badge and the
+  Monday scorecard all skip a do-not-contact merchant, whatever timer a later drag or "set follow-up" gave them.
+  (The database still allows the timer; refusing it there would also block moving a merchant to "Not interested".)
+- **Off the allowlist means off the email too:** the three email jobs skip anyone not on `ALLOWED_EMAILS` (the
+  cron route passes the same rule sign-in uses). The unit tests call the jobs without a rule, so they serve everyone.
+- **A booked call today is an appointment** however it ties with an older follow-up: Today and the dial classify by
+  `scheduled_call_at` in the user's time zone, show "Call at 3:00 PM", and replace Snooze (which can't move an
+  appointment) with "Move the call".
+- **Bulk reschedule keeps each follow-up's reason.** Only a follow-up with no note gets "Rescheduled in bulk".
+- **Leaving do-not-contact** replaces the 36-month review timer with a follow-up a week out.
+- **A text with an unfilled `{field}` can't be sent**, the same rule email already had.
+- Not changed: the snooze-reason question still isn't asked on a Board drop, the Set-follow-up button, note chips or
+  win-back "Not now" (it never blocks; it only asks). Recorded in the backlog.

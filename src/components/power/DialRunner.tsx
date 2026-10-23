@@ -11,6 +11,7 @@ import { formatUS } from "@/lib/mca/phone";
 import { TIMER_LABELS, type TimerKind } from "@/lib/mca/stages";
 import { formatMoney, formatMoneyCompact } from "@/lib/money";
 import { useApp } from "../app-context";
+import { bookedToday } from "@/lib/mca/booked";
 import { ContactActions } from "../ContactActions";
 import { StageBadge } from "../StageBadge";
 import { Badge, cn } from "../ui";
@@ -42,9 +43,13 @@ function Row({ label, children }: { label: string; children: ReactNode }) {
 }
 
 /** Calls booked for today first (they are appointments), then starred clients, then the ranked order. */
-function arrange(items: DialItem[], hot: ReadonlySet<string>, today: string): DialItem[] {
-  const booked = (i: DialItem) =>
-    i.card.next_due_kind === "scheduled_call" && i.card.next_due_on === today;
+function arrange(
+  items: DialItem[],
+  hot: ReadonlySet<string>,
+  today: string,
+  timezone: string,
+): DialItem[] {
+  const booked = (i: DialItem) => bookedToday(i.card, today, timezone);
   return [
     ...items.filter(booked),
     ...items.filter((i) => !booked(i) && hot.has(i.card.id)),
@@ -73,10 +78,11 @@ export function DialRunner({ items }: { items: DialItem[] }) {
       items.filter((i) => !skippedSet.has(i.card.id)),
       hot,
       today,
+      timezone,
     );
     const back = skipped.flatMap((id) => byId.get(id) ?? []);
     return [...front, ...back];
-  }, [items, skipped, hot, today]);
+  }, [items, skipped, hot, today, timezone]);
 
   const n = ordered.length;
   const idx = n === 0 ? 0 : Math.min(cursor, n - 1);
@@ -279,7 +285,8 @@ function DialCard({
               {relativeDay(due, today)}
             </Badge>
           ) : null}
-          {card.scheduled_call_at && kind === "scheduled_call" ? (
+          {card.scheduled_call_at &&
+          (kind === "scheduled_call" || bookedToday(card, today, timezone)) ? (
             <Badge tone="accent">Booked {formatDateTime(card.scheduled_call_at, timezone)}</Badge>
           ) : null}
         </div>
