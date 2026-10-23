@@ -223,6 +223,13 @@ export function isStageKey(v: string): v is StageKey {
 
 export type TimerKind = "follow_up" | "check_in" | "renewal" | "scheduled_call";
 
+export const TIMER_LABELS: Record<TimerKind, string> = {
+  follow_up: "Follow up",
+  check_in: "Funded check-in",
+  renewal: "Renewal call",
+  scheduled_call: "Scheduled call",
+};
+
 export interface PlannedTimer {
   kind: TimerKind;
   dueOn: ISODate;

@@ -1,6 +1,6 @@
 import { diffDays, type ISODate } from "./dates";
 import { formatUS } from "./phone";
-import { stageDef, type StageKey, type TimerKind } from "./stages";
+import { stageDef, TIMER_LABELS, type StageKey, type TimerKind } from "./stages";
 
 export interface DueTimer {
   timerId: string;
@@ -29,13 +29,6 @@ export function groupDue(timers: readonly DueTimer[], today: ISODate): DigestGro
   };
 }
 
-const KIND_LABEL: Record<TimerKind, string> = {
-  follow_up: "Follow up",
-  check_in: "Funded check-in",
-  renewal: "Renewal call",
-  scheduled_call: "Scheduled call",
-};
-
 function esc(s: string): string {
   return s
     .replaceAll("&", "&amp;")
@@ -47,7 +40,7 @@ function esc(s: string): string {
 function line(t: DueTimer, today: ISODate, appUrl: string): { text: string; html: string } {
   const late = diffDays(t.dueOn, today);
   const when = late > 0 ? `${late}d overdue` : "today";
-  const label = `${KIND_LABEL[t.kind]} · ${stageDef(t.stage).label}`;
+  const label = `${TIMER_LABELS[t.kind]} · ${stageDef(t.stage).label}`;
   const who = `${t.businessName} — ${t.contactName}`;
   const href = `${appUrl}/clients/${t.clientId}`;
   const phone = t.phone ? formatUS(t.phone) : "";

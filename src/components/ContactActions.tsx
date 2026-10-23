@@ -1,0 +1,498 @@
+"use client";
+
+import Link from "next/link";
+import { useEffect, useState } from "react";
+import { logTouchAction, sendEmailAction } from "@/app/actions";
+import { addDays, type ISODate } from "@/lib/mca/dates";
+import { formatDate } from "@/lib/format";
+import { emailBody, emailSubject, textTemplate } from "@/lib/mca/templates";
+import {
+  gmailComposeHref,
+  normalizeUS,
+  smsHref,
+  telHref,
+  voiceCallHref,
+  voiceTextHref,
+} from "@/lib/mca/phone";
+import {
+  OUTCOME_LABELS,
+  suggestNextFollowUp,
+  type TouchKind,
+  type TouchOutcome,
+} from "@/lib/mca/touch";
+import type { StageKey } from "@/lib/mca/stages";
+import { useApp } from "./app-context";
+import { Dialog, useCall, useToast } from "./overlay";
+import { TimerPicker } from "./TimerPicker";
+import { Button, buttonClass, cn, Field, Input, Textarea } from "./ui";
+
+export interface ContactTarget {
+  id: string;
+  business_name: string;
+  contact_name: string;
+  phone: string;
+  email: string;
+  stage: StageKey;
+}
+
+const PENDING_KEY = "isaac:pending-touch";
+const PENDING_EVENT = "isaac:pending-touch";
+const PENDING_MAX_AGE_MS = 6 * 3_600_000;
+
+interface PendingTouch {
+  clientId: string;
+  name: string;
+  kind: TouchKind;
+  at: number;
+}
+
+function setPending(p: PendingTouch): void {
+  try {
+    localStorage.setItem(PENDING_KEY, JSON.stringify(p));
+  } catch {
+    /* private mode: the in-memory event below still opens the prompt */
+  }
+  window.dispatchEvent(new CustomEvent<PendingTouch>(PENDING_EVENT, { detail: p }));
+}
+
+function clearPending(): void {
+  try {
+    localStorage.removeItem(PENDING_KEY);
+  } catch {
+    /* nothing stored */
+  }
+}
+
+function readPending(): PendingTouch | null {
+  try {
+    const raw = localStorage.getItem(PENDING_KEY);
+    if (!raw) return null;
+    const p = JSON.parse(raw) as PendingTouch;
+    return Date.now() - p.at < PENDING_MAX_AGE_MS ? p : null;
+  } catch {
+    return null;
+  }
+}
+
+const isTouchDevice = () => window.matchMedia("(pointer: coarse)").matches;
+
+async function copy(text: string): Promise<boolean> {
+  try {
+    await navigator.clipboard.writeText(text);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** Call / Text / Email for one client. Every use ends in the one-tap outcome prompt, so the timer never goes stale. */
+export function ContactActions({
+  client,
+  size = "sm",
+}: {
+  client: ContactTarget;
+  size?: "sm" | "md";
+}) {
+  const { senderName } = useApp();
+  const toast = useToast();
+  const [textOpen, setTextOpen] = useState(false);
+  const [emailOpen, setEmailOpen] = useState(false);
+  const e164 = normalizeUS(client.phone);
+
+  function call() {
+    if (!e164)
+      return toast({ message: "No valid phone number on file for this client", tone: "error" });
+    if (isTouchDevice()) {
+      window.location.href = telHref(e164);
+    } else {
+      void copy(e164);
+      window.open(voiceCallHref(e164), "_blank", "noopener");
+      toast({ message: `${e164} copied — paste it into Google Voice if it doesn't dial` });
+    }
+    setPending({ clientId: client.id, name: client.business_name, kind: "call", at: Date.now() });
+  }
+
+  return (
+    <div className="flex items-center gap-1.5">
+      <Button
+        size={size}
+        variant="secondary"
+        onClick={call}
+        aria-label={`Call ${client.business_name}`}
+        disabled={!e164}
+      >
+        📞 Call
+      </Button>
+      <Button
+        size={size}
+        variant="secondary"
+        onClick={() => setTextOpen(true)}
+        aria-label={`Text ${client.business_name}`}
+        disabled={!e164}
+      >
+        💬 Text
+      </Button>
+      <Button
+        size={size}
+        variant="secondary"
+        onClick={() => setEmailOpen(true)}
+        aria-label={`Email ${client.business_name}`}
+      >
+        ✉️ Email
+      </Button>
+      <TextDialog
+        open={textOpen}
+        onClose={() => setTextOpen(false)}
+        client={client}
+        senderName={senderName}
+      />
+      <EmailDialog
+        open={emailOpen}
+        onClose={() => setEmailOpen(false)}
+        client={client}
+        senderName={senderName}
+      />
+    </div>
+  );
+}
+
+function TextDialog({
+  open,
+  ...rest
+}: {
+  open: boolean;
+  onClose: () => void;
+  client: ContactTarget;
+  senderName: string;
+}) {
+  // The body mounts fresh on every open, so its state always starts from the template.
+  return open ? <TextDialogBody {...rest} /> : null;
+}
+
+function TextDialogBody({
+  onClose,
+  client,
+  senderName,
+}: {
+  onClose: () => void;
+  client: ContactTarget;
+  senderName: string;
+}) {
+  const toast = useToast();
+  const e164 = normalizeUS(client.phone);
+  const [message, setMessage] = useState(() =>
+    textTemplate({
+      contactName: client.contact_name,
+      businessName: client.business_name,
+      stage: client.stage,
+      senderName,
+    }),
+  );
+  if (!e164) return null;
+
+  const sent = () => {
+    setPending({ clientId: client.id, name: client.business_name, kind: "text", at: Date.now() });
+    onClose();
+  };
+
+  return (
+    <Dialog
+      open
+      onClose={onClose}
+      title={`Text ${client.contact_name || client.business_name}`}
+      footer={
+        <>
+          <Button variant="ghost" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button variant="primary" onClick={sent}>
+            I sent it →
+          </Button>
+        </>
+      }
+    >
+      <div className="space-y-3">
+        <Field label="Message">
+          <Textarea value={message} onChange={(e) => setMessage(e.target.value)} rows={5} />
+        </Field>
+        <div className="flex flex-wrap gap-2">
+          <a className={buttonClass("secondary", "md")} href={smsHref(e164, message)}>
+            Open in Messages (phone)
+          </a>
+          <a
+            className={buttonClass("secondary", "md")}
+            href={voiceTextHref(e164)}
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={() => {
+              void copy(message).then(
+                (ok) => ok && toast({ message: "Message copied — paste it into Google Voice" }),
+              );
+            }}
+          >
+            Open Google Voice
+          </a>
+          <Button
+            onClick={() =>
+              void copy(e164).then((ok) =>
+                toast({
+                  message: ok ? `${e164} copied` : "Couldn't copy",
+                  tone: ok ? "info" : "error",
+                }),
+              )
+            }
+          >
+            Copy number
+          </Button>
+        </div>
+        <p className="text-xs text-muted">
+          Google Voice has no official link for a new text, so the number or message is copied for
+          you to paste. When you&apos;re done, tap “I sent it” and log the result.
+        </p>
+      </div>
+    </Dialog>
+  );
+}
+
+function EmailDialog({
+  open,
+  ...rest
+}: {
+  open: boolean;
+  onClose: () => void;
+  client: ContactTarget;
+  senderName: string;
+}) {
+  return open ? <EmailDialogBody {...rest} /> : null;
+}
+
+function EmailDialogBody({
+  onClose,
+  client,
+  senderName,
+}: {
+  onClose: () => void;
+  client: ContactTarget;
+  senderName: string;
+}) {
+  const { today, gmailConnected, gmailNeedsReconnect } = useApp();
+  const call = useCall();
+  const template = {
+    contactName: client.contact_name,
+    businessName: client.business_name,
+    stage: client.stage,
+    senderName,
+  };
+  const [subject, setSubject] = useState(() => emailSubject(template));
+  const [body, setBody] = useState(() => emailBody(template));
+  const [next, setNext] = useState<ISODate>(() => addDays(today, 3));
+  const [busy, setBusy] = useState(false);
+  const [reconnect, setReconnect] = useState(gmailNeedsReconnect);
+  const to = client.email.trim();
+
+  async function send() {
+    setBusy(true);
+    const res = await sendEmailAction({ clientId: client.id, subject, body, nextDueOn: next });
+    setBusy(false);
+    if (!res.ok && res.reconnect) setReconnect(true);
+    const card = await call(
+      Promise.resolve(res),
+      `Sent — next follow-up ${formatDate(next, today)}`,
+    );
+    if (card) onClose();
+  }
+
+  return (
+    <Dialog
+      open
+      onClose={onClose}
+      wide
+      title={`Email ${client.contact_name || client.business_name}`}
+      footer={
+        <>
+          <Button variant="ghost" onClick={onClose}>
+            Cancel
+          </Button>
+          {to ? (
+            <a
+              className={buttonClass("secondary", "md")}
+              href={gmailComposeHref({ to, subject, body })}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={() => {
+                setPending({
+                  clientId: client.id,
+                  name: client.business_name,
+                  kind: "email",
+                  at: Date.now(),
+                });
+                onClose();
+              }}
+            >
+              Open in Gmail instead
+            </a>
+          ) : null}
+          {gmailConnected && !reconnect ? (
+            <Button variant="primary" disabled={busy || !to} onClick={() => void send()}>
+              {busy ? "Sending…" : "Send from my Gmail"}
+            </Button>
+          ) : (
+            <a className={buttonClass("primary", "md")} href="/api/auth/google?purpose=gmail">
+              {reconnect ? "Reconnect Gmail" : "Connect Gmail to send"}
+            </a>
+          )}
+        </>
+      }
+    >
+      {to ? (
+        <div className="space-y-3">
+          <Field label="To">
+            <Input value={to} readOnly />
+          </Field>
+          <Field label="Subject">
+            <Input value={subject} onChange={(e) => setSubject(e.target.value)} />
+          </Field>
+          <Field label="Message">
+            <Textarea rows={8} value={body} onChange={(e) => setBody(e.target.value)} />
+          </Field>
+          <Field label="Follow up again">
+            <TimerPicker value={next} onChange={setNext} today={today} />
+          </Field>
+          {reconnect ? (
+            <p className="rounded-lg bg-warn-soft p-3 text-sm text-warn">
+              Gmail needs to be reconnected (Google expired the permission). “Open in Gmail instead”
+              still works.
+            </p>
+          ) : null}
+        </div>
+      ) : (
+        <p className="text-sm">
+          No email address on file.{" "}
+          <Link className="text-accent underline" href={`/clients/${client.id}`} onClick={onClose}>
+            Add one on the client page
+          </Link>
+          .
+        </p>
+      )}
+    </Dialog>
+  );
+}
+
+/** One instance lives in the layout. Opens after any Call/Text/Email and survives a phone reload. */
+export function PendingTouchPrompt() {
+  const { today } = useApp();
+  const call = useCall();
+  const [pending, setPendingState] = useState<PendingTouch | null>(null);
+  const [outcome, setOutcome] = useState<TouchOutcome | null>(null);
+  const [note, setNote] = useState("");
+  const [next, setNext] = useState<ISODate>(today);
+  const [pickedDate, setPickedDate] = useState(false);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    const show = (p: PendingTouch | null) => {
+      setPendingState(p);
+      if (p) {
+        setOutcome(null);
+        setNote("");
+        setPickedDate(false);
+        setNext(suggestNextFollowUp(null, today));
+      }
+    };
+    show(readPending());
+    const onEvent = (e: Event) => show((e as CustomEvent<PendingTouch>).detail);
+    const onVisible = () => document.visibilityState === "visible" && show(readPending());
+    window.addEventListener(PENDING_EVENT, onEvent);
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      window.removeEventListener(PENDING_EVENT, onEvent);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
+  }, [today]);
+
+  function choose(o: TouchOutcome) {
+    setOutcome(o);
+    if (!pickedDate) setNext(suggestNextFollowUp(o, today));
+  }
+
+  function close() {
+    clearPending();
+    setPendingState(null);
+  }
+
+  async function save() {
+    if (!pending) return;
+    setBusy(true);
+    const card = await call(
+      logTouchAction({
+        clientId: pending.clientId,
+        kind: pending.kind,
+        outcome,
+        body: note,
+        nextDueOn: next,
+      }),
+      `Logged — next follow-up ${formatDate(next, today)}`,
+    );
+    setBusy(false);
+    if (card) close();
+  }
+
+  const verb = pending?.kind === "call" ? "call" : pending?.kind === "text" ? "text" : "email";
+  return (
+    <Dialog
+      open={pending !== null}
+      onClose={close}
+      title={`How did the ${verb} with ${pending?.name ?? ""} go?`}
+      footer={
+        <>
+          <Button variant="ghost" onClick={close}>
+            Skip (don&apos;t log)
+          </Button>
+          <Button
+            variant="primary"
+            disabled={busy || (pending?.kind !== "email" && outcome === null)}
+            onClick={() => void save()}
+          >
+            {busy ? "Saving…" : "Log it"}
+          </Button>
+        </>
+      }
+    >
+      <div className="space-y-4">
+        {pending?.kind !== "email" ? (
+          <div className="grid grid-cols-2 gap-2" role="group" aria-label="Outcome">
+            {(Object.keys(OUTCOME_LABELS) as TouchOutcome[]).map((o) => (
+              <button
+                key={o}
+                type="button"
+                aria-pressed={outcome === o}
+                onClick={() => choose(o)}
+                className={cn(
+                  "h-11 rounded-lg border text-sm font-medium transition",
+                  outcome === o
+                    ? "border-accent bg-accent text-accent-fg"
+                    : "border-border bg-surface hover:bg-surface-2",
+                )}
+              >
+                {OUTCOME_LABELS[o]}
+              </button>
+            ))}
+          </div>
+        ) : null}
+        <Field label="Notes (what he said, what he wants)">
+          <Textarea rows={4} value={note} onChange={(e) => setNote(e.target.value)} autoFocus />
+        </Field>
+        <Field label="Follow up again">
+          <TimerPicker
+            value={next}
+            today={today}
+            onChange={(d) => {
+              setNext(d);
+              setPickedDate(true);
+            }}
+          />
+        </Field>
+      </div>
+    </Dialog>
+  );
+}

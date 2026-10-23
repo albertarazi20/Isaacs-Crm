@@ -3,6 +3,8 @@ import { createRemoteJWKSet, jwtVerify } from "jose";
 export const LOGIN_SCOPES = ["openid", "email", "profile"];
 export const GMAIL_SEND_SCOPE = "https://www.googleapis.com/auth/gmail.send";
 
+export const OAUTH_COOKIE = "isaac_oauth";
+
 export type OAuthPurpose = "login" | "gmail";
 
 export function buildAuthUrl(args: {

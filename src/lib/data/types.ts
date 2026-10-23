@@ -157,5 +157,7 @@ export interface ActionOk<T> {
 export interface ActionErr {
   ok: false;
   error: string;
+  /** The Gmail grant is dead — show the reconnect prompt. */
+  reconnect?: boolean;
 }
 export type ActionResult<T> = ActionOk<T> | ActionErr;
