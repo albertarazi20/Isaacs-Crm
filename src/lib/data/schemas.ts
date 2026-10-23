@@ -8,11 +8,14 @@ const isoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Use a YYYY-MM-DD date")
 const localDateTime = z.string().regex(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/, "Pick a date and time");
 const id = z.string().uuid();
 /** Multi-line text (notes, bodies). Refuses SSNs and card/account numbers — see sensitive.ts. */
+const tooLong = (max: number) =>
+  `That's too long — the limit is ${max.toLocaleString("en-US")} characters`;
+
 const text = (max = 2000) =>
   z
     .string()
     .trim()
-    .max(max)
+    .max(max, tooLong(max))
     .superRefine((v, ctx) => {
       const hit = findSensitive(v);
       if (hit) ctx.addIssue({ code: "custom", message: hit.message });
@@ -23,7 +26,7 @@ const line = (max = 200) =>
   z
     .string()
     .trim()
-    .max(max)
+    .max(max, tooLong(max))
     .regex(/^[^\p{Cc}]*$/u, "That field can't contain line breaks or control characters")
     // The same guard as notes: an SSN typed into "Source" or "terms" is as stored as one typed into a note.
     .superRefine((v, ctx) => {
@@ -151,6 +154,8 @@ export const moveSchema = z
     funding: fundingInputSchema.optional(),
     competitor: competitorInputSchema.optional(),
     default: defaultInputSchema.optional(),
+    /** "Phone call scheduled" only: when the call is, as typed (local date and time). */
+    callAt: localDateTime.optional(),
   })
   .refine((v) => v.stage !== "funded" || v.funding, {
     message: "Funding terms are required to mark a client funded",
@@ -158,7 +163,12 @@ export const moveSchema = z
   });
 export type MoveInput = z.output<typeof moveSchema>;
 
-export const followUpSchema = z.object({ clientId: id, dueOn: isoDate });
+/** keepCalls: leave a funded merchant's check-in and renewal call on their own dates (a drag does; Snooze doesn't). */
+export const followUpSchema = z.object({
+  clientId: id,
+  dueOn: isoDate,
+  keepCalls: z.boolean().optional(),
+});
 export const bucketSchema = z.object({
   clientId: id,
   bucket: z.enum(["today", "1w", "2w", "1m", "2m", "3m", "6m", "9m", "12m", "18m", "24m", "36m"]),
@@ -203,25 +213,41 @@ export type ClientFieldsInput = z.output<typeof clientFieldsSchema>;
 
 export const askSchema = z.object({
   clientId: id,
-  wantedAmount: optMoney,
+  wantedAmount: optMoney.refine((v) => v === null || v > 0, "Enter an amount above $0"),
   wantedTerms: line(500).default(""),
   estApproval: optMoney,
   estApprovalNote: text().default(""),
 });
 
-export const positionSchema = z.object({
-  clientId: id,
-  id: id.optional(),
-  positionNo: z.coerce.number().int().min(1).max(20),
-  funderName: line(200).default(""),
-  fundedAmount: optMoney,
-  payback: optMoney,
-  balance: optMoney,
-  payment: optMoney,
-  frequency: frequency.nullable().optional(),
-  fundedOn: isoDate.nullable().optional(),
-  note: text().default(""),
-});
+export const positionSchema = z
+  .object({
+    clientId: id,
+    id: id.optional(),
+    positionNo: z.coerce.number().int().min(1).max(20),
+    funderName: line(200).default(""),
+    fundedAmount: optMoney,
+    payback: optMoney,
+    balance: optMoney,
+    payment: optMoney,
+    frequency: frequency.nullable().optional(),
+    fundedOn: isoDate.nullable().optional(),
+    note: text().default(""),
+  })
+  // An advance pays back more than it funded (factor 1.00 and up), and what is still owed can't exceed the payback.
+  .superRefine((v, ctx) => {
+    if (v.payback !== null && v.fundedAmount !== null && v.payback < v.fundedAmount)
+      ctx.addIssue({
+        code: "custom",
+        path: ["payback"],
+        message: "The payback is less than the advance — an advance pays back more than it funded",
+      });
+    if (v.balance !== null && v.payback !== null && v.balance > v.payback)
+      ctx.addIssue({
+        code: "custom",
+        path: ["balance"],
+        message: "The balance can't be more than the payback",
+      });
+  });
 
 export const offerSchema = z.object({
   clientId: id,
@@ -291,6 +317,8 @@ export const importSchema = z.object({
 export const duplicateCheckSchema = z.object({
   phone: line(40).optional(),
   businessName: line(200).optional(),
+  /** Editing a merchant: he is not a duplicate of himself. */
+  excludeId: id.optional(),
 });
 
 export const contactStatusSchema = z.object({

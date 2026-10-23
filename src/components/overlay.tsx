@@ -54,7 +54,7 @@ export function Dialog({
               type="button"
               aria-label="Close"
               onClick={onClose}
-              className="rounded-md px-2 py-1 text-muted hover:bg-surface-2"
+              className="inline-flex size-10 items-center justify-center rounded-md text-muted hover:bg-surface-2 sm:size-8"
             >
               ✕
             </button>

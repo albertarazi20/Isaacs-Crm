@@ -8,6 +8,7 @@ import type { ClientCard } from "@/lib/data/types";
 import { formatDate } from "@/lib/format";
 import { stageDef, type StageKey } from "@/lib/mca/stages";
 import {
+  CallDialog,
   ChangeFollowUpDialog,
   CompetitorDialog,
   DefaultDialog,
@@ -158,6 +159,9 @@ export function useStageMove(): StageMove {
           onSubmit={submit}
           onCancel={() => close(null)}
         />
+      ) : null}
+      {ask?.stage === "call_scheduled" ? (
+        <CallDialog key="call" card={ask.card} onSubmit={submit} onCancel={() => close(null)} />
       ) : null}
       {ask?.stage === "lost" ? (
         <CompetitorDialog

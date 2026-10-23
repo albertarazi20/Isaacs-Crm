@@ -17,6 +17,7 @@ import { formatUS } from "@/lib/mca/phone";
 import { STAGE_GROUPS, STAGES, type StageKey } from "@/lib/mca/stages";
 import { formatMoneyCompact } from "@/lib/money";
 import { useApp } from "./app-context";
+import { ClientCards } from "./ClientCards";
 import { StageBadge } from "./StageBadge";
 import { Badge, Button, cn, EmptyState, Input, Select } from "./ui";
 
@@ -62,7 +63,7 @@ export function ClientsTable({ cards }: { cards: ClientCard[] }) {
     <div className="space-y-3">
       <div className="flex flex-wrap items-center gap-2">
         <Input
-          className="w-full sm:w-72"
+          className="order-1 w-full sm:order-none sm:w-72"
           type="search"
           placeholder="Search name, business, phone, email…"
           aria-label="Search clients"
@@ -70,7 +71,7 @@ export function ClientsTable({ cards }: { cards: ClientCard[] }) {
           onChange={(e) => set("term", e.target.value)}
         />
         <Select
-          className="w-48"
+          className="order-2 min-w-0 flex-1 sm:order-none sm:w-48 sm:flex-none"
           aria-label="Sort by"
           value={sort}
           onChange={(e) => setSort(e.target.value as SortKey)}
@@ -80,7 +81,12 @@ export function ClientsTable({ cards }: { cards: ClientCard[] }) {
           <option value="touch">Last contacted</option>
           <option value="newest">Newest first</option>
         </Select>
-        <div className="flex flex-wrap gap-1.5" role="group" aria-label="Filter by group">
+        {/* On a phone the groups are one swipeable row under the search, not three wrapped lines. */}
+        <div
+          className="order-4 flex w-full gap-1.5 overflow-x-auto sm:order-none sm:w-auto sm:flex-wrap sm:overflow-visible"
+          role="group"
+          aria-label="Filter by group"
+        >
           {[{ key: "all" as const, label: "All" }, ...STAGE_GROUPS].map((g) => (
             <button
               key={g.key}
@@ -88,7 +94,7 @@ export function ClientsTable({ cards }: { cards: ClientCard[] }) {
               aria-pressed={f.group === g.key}
               onClick={() => set("group", g.key)}
               className={cn(
-                "h-8 rounded-lg border px-2.5 text-sm font-medium",
+                "h-10 shrink-0 rounded-lg border px-2.5 text-sm font-medium whitespace-nowrap sm:h-8",
                 f.group === g.key
                   ? "border-accent bg-accent text-accent-fg"
                   : "border-border bg-surface hover:bg-surface-2",
@@ -98,10 +104,15 @@ export function ClientsTable({ cards }: { cards: ClientCard[] }) {
             </button>
           ))}
         </div>
-        <Button size="sm" aria-expanded={showMore} onClick={() => setShowMore((v) => !v)}>
+        <Button
+          size="sm"
+          className="order-3 sm:order-none"
+          aria-expanded={showMore}
+          onClick={() => setShowMore((v) => !v)}
+        >
           More filters{narrowing > 0 ? ` (${narrowing})` : ""}
         </Button>
-        <span className="ml-auto text-sm text-muted">
+        <span className="order-5 ml-auto text-sm text-muted sm:order-none">
           {rows.length} of {cards.length}
         </span>
       </div>
@@ -190,6 +201,9 @@ export function ClientsTable({ cards }: { cards: ClientCard[] }) {
         </div>
       ) : null}
 
+      {/* A phone gets cards (name, stage, when to call); the table is for wider screens. */}
+      {rows.length > 0 ? <ClientCards rows={rows} /> : null}
+
       {rows.length === 0 ? (
         <EmptyState title={cards.length === 0 ? "No clients yet" : "No matches"}>
           {cards.length === 0
@@ -197,7 +211,7 @@ export function ClientsTable({ cards }: { cards: ClientCard[] }) {
             : "Try a shorter search or a different filter."}
         </EmptyState>
       ) : (
-        <div className="overflow-x-auto rounded-xl border border-border bg-surface">
+        <div className="overflow-x-auto rounded-xl border border-border bg-surface max-sm:hidden">
           <table className="w-full min-w-[760px] text-left text-sm">
             <thead className="border-b border-border text-xs font-medium text-muted uppercase">
               <tr>

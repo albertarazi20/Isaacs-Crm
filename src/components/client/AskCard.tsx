@@ -62,7 +62,7 @@ export function AskCard({
       )}
       {earlier.length > 0 ? (
         <details className="mt-3 border-t border-border pt-3">
-          <summary className="cursor-pointer text-sm font-medium text-muted hover:text-text">
+          <summary className="cursor-pointer text-sm font-medium text-muted hover:text-text max-sm:py-3">
             How much he wanted in the past ({earlier.length})
           </summary>
           <ul className="mt-2 space-y-2">

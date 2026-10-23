@@ -65,6 +65,12 @@ export function GlobalSearch() {
   const [error, setError] = useState<string | null>(null);
   const fetchedAt = useRef(0);
   const loading = useRef(false);
+  const { nowMs } = useApp();
+  // Every action re-renders the layout with a new time: a merchant added or trashed since the copy was taken must
+  // not be missed by the very next search (an inbound call from a number he just saved).
+  useEffect(() => {
+    fetchedAt.current = 0;
+  }, [nowMs]);
   const isMac = useIsMac();
   const mounted = useMounted();
 

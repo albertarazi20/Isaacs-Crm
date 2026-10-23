@@ -176,6 +176,45 @@ describe("moveClient", () => {
     ).toBe(addDays(ctx.today, -9));
   });
 
+  it("QA I-8: a card moved to 'Phone call scheduled' with a time has that call booked", async () => {
+    const c = await newClient("Booked By Drag");
+    const day = addDays(ctx.today, 2);
+    const moved = await move(c.id, "call_scheduled", {
+      callAt: `${day}T10:30`,
+      reason: "go over offers",
+    });
+    expect(moved.stage).toBe("call_scheduled");
+    expect(moved.scheduled_call_at).not.toBeNull();
+    const [row] = await rows(
+      "select kind, due_on::text d, note from timers where client_id = $1 and kind = 'scheduled_call' and done_at is null",
+      [c.id],
+    );
+    expect(row).toMatchObject({ kind: "scheduled_call", d: day, note: "go over offers" });
+    // and without a time (Move without a time) it still moves
+    const bare = await newClient("Moved Bare");
+    expect((await move(bare.id, "call_scheduled")).scheduled_call_at).toBeNull();
+  });
+  it("QA I-6: skipping Application in still records the day the application came in", async () => {
+    const c = await newClient("Skipper Pizza");
+    await move(c.id, "interested");
+    expect(
+      (await rows("select application_received_on from clients where id = $1", [c.id]))[0]
+        .application_received_on,
+    ).toBeNull();
+    await move(c.id, "stips");
+    expect(
+      (await rows("select application_received_on from clients where id = $1", [c.id]))[0]
+        .application_received_on,
+    ).toBe(ctx.today);
+    // an exit stage does not claim an application came in
+    const e = await newClient("Never Applied Pizza");
+    await move(e.id, "not_interested");
+    expect(
+      (await rows("select application_received_on from clients where id = $1", [e.id]))[0]
+        .application_received_on,
+    ).toBeNull();
+  });
+
   describe("to Funded", () => {
     const funding = {
       amount: "50k",

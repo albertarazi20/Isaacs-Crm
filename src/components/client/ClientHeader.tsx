@@ -5,7 +5,7 @@ import { useState } from "react";
 import { trashClientAction, updateClientAction } from "@/app/actions";
 import type { ClientDetail } from "@/lib/data/types";
 import { formatDate, relativeDay } from "@/lib/format";
-import { formatUS } from "@/lib/mca/phone";
+import { formatUS, normalizeUS } from "@/lib/mca/phone";
 import { STAGE_GROUPS, STAGES, TIMER_LABELS } from "@/lib/mca/stages";
 import { formatMoney } from "@/lib/money";
 import { ContactStatusButton } from "./ContactStatus";
@@ -49,7 +49,7 @@ export function StickyBar({ card }: { card: ClientDetail["card"] }) {
             )}
           </p>
         </div>
-        <ContactActions client={card} size="md" />
+        <ContactActions client={card} size="md" explain="always" />
       </div>
     </div>
   );
@@ -62,14 +62,20 @@ function CopyValue({ value, shown, label }: { value: string; shown: string; labe
       type="button"
       title="Click to copy"
       onClick={() => void copy(value, label)}
-      className="max-w-full truncate rounded text-left text-sm font-medium underline decoration-dotted underline-offset-4 hover:text-accent"
+      className="max-w-full truncate rounded text-left text-sm font-medium underline decoration-dotted underline-offset-4 hover:text-accent max-sm:py-3"
     >
       {shown}
     </button>
   );
 }
 
-export function ClientDetails({ detail }: { detail: ClientDetail }) {
+export function ClientDetails({
+  detail,
+  className,
+}: {
+  detail: ClientDetail;
+  className?: string;
+}) {
   const { card } = detail;
   const { today, timezone } = useApp();
   const { requestMove, dialogs } = useStageMove();
@@ -89,7 +95,7 @@ export function ClientDetails({ detail }: { detail: ClientDetail }) {
     <button
       type="button"
       onClick={() => setEditing(true)}
-      className="text-sm text-muted underline decoration-dotted underline-offset-4 hover:text-accent"
+      className="text-sm text-muted underline decoration-dotted underline-offset-4 hover:text-accent max-sm:py-3"
     >
       Add {what}
     </button>
@@ -105,7 +111,7 @@ export function ClientDetails({ detail }: { detail: ClientDetail }) {
   ].filter(Boolean);
 
   return (
-    <div className="rounded-xl border border-border bg-surface p-4">
+    <div className={cn("rounded-xl border border-border bg-surface p-4", className)}>
       <div className="flex flex-wrap items-start justify-between gap-3">
         <dl className="grid min-w-0 flex-1 grid-cols-2 gap-x-6 gap-y-3 sm:grid-cols-3 xl:grid-cols-5">
           <Stat label="Merchant">
@@ -139,7 +145,7 @@ export function ClientDetails({ detail }: { detail: ClientDetail }) {
           <div className="w-44">
             <Select
               aria-label="Move to stage"
-              className="h-9"
+              className="sm:h-9"
               value=""
               disabled={moving}
               onChange={(e) => void move(e.target.value)}
@@ -207,7 +213,14 @@ function EditClientDialog({ card, onClose }: { card: ClientDetail["card"]; onClo
         <Field label="Merchant name">
           <Input {...bind("contactName")} autoComplete="off" />
         </Field>
-        <Field label="Phone">
+        <Field
+          label="Phone"
+          hint={
+            v.phone.trim() !== "" && normalizeUS(v.phone) === null
+              ? "Not a usable phone number yet — Call and Text stay off until it has 10 digits."
+              : undefined
+          }
+        >
           <Input {...bind("phone")} type="tel" inputMode="tel" />
         </Field>
         <Field label="Email">

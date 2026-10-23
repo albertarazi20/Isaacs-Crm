@@ -1,4 +1,4 @@
-import { formatMoney } from "../money";
+import { formatMoney, parseMoney } from "../money";
 import type { AdvanceRow } from "./types";
 
 /** Points of the advance the shop keeps: $2,500 on $50,000 is 5 points. */
@@ -13,6 +13,36 @@ export function centsFromPoints(points: number, amountCents: number): number {
 /** 5 → "5", 5.25 → "5.25", 4.999 → "5": never more than two decimals. */
 export function formatPoints(points: number): string {
   return String(Math.round(points * 100) / 100);
+}
+
+export type CommissionText =
+  { ok: true; cents: number | null; viaPoints: boolean } | { ok: false; error: string };
+
+/**
+ * What he types in a commission box: dollars ("3500", "$3.5k") or points of the advance ("6%", "6 pts", "6 points").
+ * A bare number under 20 is asked about, never guessed — "6" is six points to a broker and six dollars to a program
+ * that stored it as $6.00 once (QA I-3).
+ */
+export function parseCommissionText(text: string, amountCents: number | null): CommissionText {
+  const raw = text.trim();
+  if (raw === "") return { ok: true, cents: null, viaPoints: false };
+  const pts = /^(\d+(?:\.\d+)?|\.\d+)\s*(?:%|pts?|points?)$/i.exec(raw);
+  if (pts) {
+    const points = Number(pts[1]);
+    if (points > 100)
+      return { ok: false, error: "Points are a percent of the advance — 6 means 6%, not $6" };
+    if (!amountCents) return { ok: false, error: "Enter the advance amount first to use points" };
+    return { ok: true, cents: centsFromPoints(points, amountCents), viaPoints: true };
+  }
+  const cents = parseMoney(raw);
+  if (cents === null) return { ok: false, error: "Enter dollars like 3.5k, or points like 6%" };
+  const explicit = /[$,km]/i.test(raw);
+  if (!explicit && cents < 2_000)
+    return {
+      ok: false,
+      error: `Is ${raw} points or dollars? Type ${raw}% for points, or $${raw} for dollars`,
+    };
+  return { ok: true, cents, viaPoints: false };
 }
 
 export interface AveragePoints {

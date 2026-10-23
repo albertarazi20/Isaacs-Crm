@@ -1,5 +1,6 @@
 import { useCallback, useMemo, useSyncExternalStore } from "react";
 import type { StageGroup } from "@/lib/mca/stages";
+import { VIEW_COOKIE, type BoardView } from "./logic";
 
 /**
  * Per-browser preferences. localStorage can be missing or throw (private windows, blocked site
@@ -83,4 +84,13 @@ export function useCollapsedGroups(): [ReadonlySet<StageGroup>, (g: StageGroup) 
   );
   const groups = useMemo(() => parseGroups(raw), [raw]);
   return [groups, toggle];
+}
+
+/** Remembers the Board view for next time in the cookie the server reads (see VIEW_COOKIE). Never throws. */
+export function rememberView(view: BoardView): void {
+  try {
+    document.cookie = `${VIEW_COOKIE}=${view}; path=/; max-age=31536000; samesite=lax`;
+  } catch {
+    /* cookies blocked: the view still works, it just is not remembered */
+  }
 }

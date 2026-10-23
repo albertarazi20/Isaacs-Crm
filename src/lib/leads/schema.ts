@@ -37,6 +37,11 @@ export const leadSchema = z
     source: str(100).optional(),
     notes: str(2000).optional(),
   })
+  // "N/A", "none", "-" are not phone numbers: kept out, so the lead is judged on what it really gave.
+  .transform((v) => ({
+    ...v,
+    phone: (v.phone ?? "").replace(/\D/g, "").length >= 7 ? v.phone : undefined,
+  }))
   .superRefine((v, ctx) => {
     if (!v.phone && !v.email)
       ctx.addIssue({ code: "custom", message: "Include a phone number or an email" });

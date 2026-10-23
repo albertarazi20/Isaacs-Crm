@@ -194,3 +194,16 @@ Test merchants are the 51 seeded ones; "today" in every run was Fri 2026-10-23 (
 
 Follow-ups view: drag into every column writes the exact calendar-month date (1w…36m, Today) and leaves exactly one open follow-up; same-column drop and Overdue/Later drops change nothing; keyboard Space/arrows/Space works in both views with screen-reader announcements and skips the disabled Overdue column; three drags in a row end consistent in the DB. Pipeline: Interested → Application in stamps the date and writes `stage_change`; Undo and the toast's Change work; Dead deal / Not interested / Declined / Killed move straight away with 9/12/3/6-month timers; Lost deal asks who won, stores the rival offer (`won = true`, every field) and calls back at half the term; Funded stores amount × factor = payback, a 30-day check-in and a 50% renewal call; Workable default stores default date, promise time (in Isaac's timezone) and amount; walking one merchant through all 23 stages gave every stage the documented default timer and never left zero timers; a blank/invalid dialog keeps the card put and the typed values; a server refusal (SSN in a note) keeps the dialog open with the text; a vanished client snaps the card back with a toast. Search, Overdue-only, group collapse and Hide-empty work; collapse/hide persist across reload; the page works with `localStorage` throwing. Mobile: no horizontal overflow, the sheet move works, touch long-press drag and swipe-to-scroll both work. Client page: notes, call outcomes (suggested follow-up lands in the DB; Skip changes nothing; prompt survives a reload), book/cancel call (booking survives an unrelated logged call), presets 1w…36m, custom date, 37 months and past dates refused in plain words, ask history (both snapshots kept), positions and competing offers add/edit/delete with two-click delete, stips tick/untick with "Ready to submit", edit details, stage move from the client page, SSN / card / routing-number notes refused.
 Timings with 51 merchants (`E2E_ONLY=perf pnpm -s e2e board`): Board render to first interactive card 560–770 ms; first drag shows in the new column in ~0.8 s including ~0.6 s of scripted mouse travel; the database row follows 140–280 ms later; JS heap 28–35 MB.
+
+### I-22 [severity: polish] `/favicon.ico` returns 404
+
+- Where: no `src/app/favicon.ico` (only `icon.svg` and `apple-icon.png`); Chrome asks for `/favicon.ico` on its own.
+- Steps to reproduce: open any client page with DevTools console open (or run `pnpm -s e2e client`).
+- Expected: no failed request in the console of a fresh page load.
+- Actual: `Failed to load resource: the server responded with a status of 404 (Not Found) @ /favicon.ico` on the client page.
+- Evidence: client check "no console errors on the client page (desktop)".
+- Suggested fix: add `src/app/favicon.ico` (or an explicit `icons` entry in the metadata so the browser never guesses).
+
+## Status note, end of this pass
+
+The last `pnpm -s e2e client` run (after the lead's first fixes landed) shows I-4 and I-5 green: an SSN in "Source" / the ask's terms line, `SSN 123456789` and a checksum-failing 16-digit number are now refused. Everything else above was still failing in that run, so the checks stay in the suite as the regression tests.

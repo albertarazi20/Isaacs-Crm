@@ -70,10 +70,17 @@ new it finds. `[x]` done and tested · `[~]` in progress · `[ ]` queued · `[!]
 - [ ] Merge duplicate merchants (move notes, timers, advances onto one card)
 - [ ] Cross-device ★ (a `clients.hot` column; today the star is per browser)
 - [ ] Stips upload link texted to the merchant [!] needs a storage decision (private bucket) from the owner
-- [ ] A true backup: full export incl. advances, offers, submissions, stips — and the import that reads it back
+- [x] A true backup: full export incl. advances, offers, submissions, stips — and a restore that reads it back (`docs/BACKUP.md`)
 - [ ] Consent source/date capture per merchant (TCPA) [!] counsel first
 - [ ] Per-field audit trail for client edits (who changed what)
 - [ ] Clients list: page it and slim the card payload (11 MB of HTML at 5,000 merchants; fine at hundreds)
+- [ ] One definition of "the day to call about a renewal": the timer (50%), the Funding card (collected figure), the Renewals page (funder's own line) and Today's reason can disagree (review-3A A-11)
+- [ ] Estimates presented as facts: the "Record received" box is pre-filled with an estimate; a renewal's commission shows as entered (A-14)
+- [ ] Row-level security keys on `app.user_id`, which the app role can change; fine while no SQL is built from input (`tests/boundaries.test.ts` guards it) — one database role per user is the real fix (A-17)
+- [ ] Foreign keys prove "same user", not "same merchant" (offers/timers → submissions); two `app` helpers lack `search_path` (A-20)
+- [ ] A deal that leaves the funding pipeline and comes back gets no new chase timers; "Send to funders" replaces a do-not-contact merchant's review timer (A-22)
+- [ ] The new-lead email is sent inside the request; a slow Resend delays the sender's answer by up to 10 s (A-19)
+- [ ] Snooze-reason prompt on a Board drop, the Set-follow-up button, note chips and win-back "Not now" (3B)
 
 ## 3. Proof work
 

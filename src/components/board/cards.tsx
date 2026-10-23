@@ -69,7 +69,7 @@ function NameLink({ card }: { card: ClientCard }) {
       href={`/clients/${card.id}`}
       prefetch={false}
       draggable={false}
-      className="min-w-0 truncate font-semibold leading-snug hover:underline"
+      className="min-w-0 truncate font-semibold leading-snug hover:underline max-sm:py-3"
       title={card.dba ? `${card.business_name} (DBA ${card.dba})` : card.business_name}
     >
       {card.business_name}
@@ -91,7 +91,7 @@ function PickerButton({
       type="button"
       onClick={onClick}
       aria-label={aria}
-      className="shrink-0 rounded-md border border-border px-1.5 py-0.5 text-xs font-medium text-muted hover:bg-surface-2 hover:text-text"
+      className="shrink-0 rounded-md border border-border px-1.5 py-0.5 text-xs font-medium text-muted hover:bg-surface-2 hover:text-text max-sm:h-10 max-sm:px-3 max-sm:text-sm"
     >
       {label}
     </button>
@@ -117,7 +117,7 @@ function Footer({ card }: { card: ClientCard }) {
         onTouchStart={stop}
         className="mt-1 pointer-fine:invisible pointer-fine:mt-0 pointer-fine:[grid-area:1/1] pointer-fine:group-focus-within:visible pointer-fine:group-hover:visible"
       >
-        <ContactActions client={card} size="sm" />
+        <ContactActions client={card} size="sm" explain="touch" />
       </div>
     </div>
   );

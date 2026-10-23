@@ -24,6 +24,22 @@ export function parseView(v: string | string[] | undefined): BoardView {
   return v === "followups" ? "followups" : "pipeline";
 }
 
+/**
+ * The last Board view he used lives in a cookie, not localStorage: the server reads it, so the page
+ * arrives in the right view with no flash of the other one (I-9). Per browser, like the other
+ * Board preferences.
+ */
+export const VIEW_COOKIE = "isaac_board_view";
+
+/** `?view=` wins when it names a view (a link or a reload); otherwise the remembered one; otherwise Pipeline. */
+export function resolveView(
+  param: string | string[] | undefined,
+  remembered: string | undefined,
+): BoardView {
+  if (param === "followups" || param === "pipeline") return param;
+  return parseView(remembered);
+}
+
 /** No date at all counts as overdue: a client with no next step is the one most likely to be forgotten. */
 export function isOverdue(card: ClientCard, today: ISODate): boolean {
   return card.next_due_on === null || card.next_due_on < today;
@@ -118,7 +134,17 @@ export function optimisticMove(card: ClientCard, stage: StageKey, today: ISODate
   return { ...withDue(card, due), stage };
 }
 
+/**
+ * What a drag into a follow-up column looks like before the server answers. A renewal call or check-in that is
+ * already due earlier keeps its own date (the drag only moves the follow-up), like a booked call.
+ */
 export function optimisticDue(card: ClientCard, dueOn: ISODate): ClientCard {
+  if (
+    (card.next_due_kind === "renewal" || card.next_due_kind === "check_in") &&
+    card.next_due_on !== null &&
+    card.next_due_on <= dueOn
+  )
+    return { ...card };
   return withDue(card, dueOn);
 }
 

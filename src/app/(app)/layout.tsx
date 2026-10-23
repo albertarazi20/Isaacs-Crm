@@ -87,9 +87,11 @@ export default async function AppLayout({ children }: { children: React.ReactNod
             role="status"
             className="border-b border-bad/40 bg-bad-soft px-4 py-2 text-center text-sm font-medium text-bad"
           >
-            {reminders.neverRan
-              ? "Reminder emails have never gone out — check the hourly scheduler."
-              : `Reminder emails haven't gone out for ${reminders.hoursSince} hours — check the hourly scheduler.`}
+            {reminders.missing.length > 0
+              ? `Reminder emails can't go out — the server is missing ${reminders.missing.join(", ")}.`
+              : reminders.neverRan
+                ? "Reminder emails have never gone out — check the hourly scheduler."
+                : `Reminder emails haven't gone out for ${reminders.hoursSince} hours — check the hourly scheduler.`}
           </div>
         ) : null}
         {gmail.needsReconnect ? (

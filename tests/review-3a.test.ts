@@ -445,3 +445,195 @@ describe("A-15: the duplicate check reads names the same way in TypeScript and i
     expect(await asA((q) => findDuplicates(q, { businessName: "王记餐厅" }))).toEqual([]);
   });
 });
+
+describe("QA I-1: dragging to a follow-up column leaves the renewal call and check-in alone", () => {
+  const setFollowUp = (id: string, on: string, keep: boolean) =>
+    asA((q) => q.query("select * from set_follow_up($1, $2, '', $3)", [id, on, keep]));
+
+  it("keep_calls: the follow-up moves, the renewal call and check-in keep their dates", async () => {
+    const id = await merchant("Hot renewal", "funded");
+    await fundIt(id, d(-60));
+    // today: renewal d(60) from the fixture; make it due now like the QA case
+    await t.pool.query(
+      "update timers set due_on = $2 where client_id = $1 and kind = 'renewal' and done_at is null",
+      [id, t.today],
+    );
+    const before = await timersOf(id);
+    await setFollowUp(id, d(1095), true);
+    const after = await timersOf(id);
+    expect(after.find((x) => x.kind === "renewal")?.due_on).toBe(t.today);
+    expect(after.find((x) => x.kind === "check_in")?.due_on).toBe(
+      before.find((x) => x.kind === "check_in")?.due_on,
+    );
+    expect(after.find((x) => x.kind === "follow_up")?.due_on).toBe(d(1095));
+  });
+
+  it("without keep_calls (Snooze) the old behaviour stays: the calls are pushed to the chosen date", async () => {
+    const id = await merchant("Snoozed funded", "funded");
+    await fundIt(id, d(-60));
+    await setFollowUp(id, d(200), false);
+    const after = await timersOf(id);
+    expect(after.find((x) => x.kind === "renewal")?.due_on).toBe(d(200));
+    expect(after.find((x) => x.kind === "check_in")?.due_on).toBe(d(200));
+  });
+});
+
+describe("QA I-7: cancelling a booked call puts the merchant back where he was", () => {
+  const book = (id: string, at: string) =>
+    asA((q) => q.query("select * from schedule_call($1, $2::timestamptz, '')", [id, at]));
+  const cancel = (id: string) => asA((q) => q.query("select * from cancel_call($1)", [id]));
+  const stageOf = async (id: string) =>
+    (
+      await t.pool.query<{ stage: string; scheduled_call_at: string | null }>(
+        "select stage, scheduled_call_at from clients where id = $1",
+        [id],
+      )
+    ).rows[0];
+  const at = () => `${d(2)}T15:00:00Z`;
+
+  it("Interested → booked → cancelled is Interested again, with the move written down", async () => {
+    const id = await merchant("Cancel me", "interested");
+    await book(id, at());
+    expect((await stageOf(id))?.stage).toBe("call_scheduled");
+    await cancel(id);
+    expect(await stageOf(id)).toMatchObject({ stage: "interested", scheduled_call_at: null });
+    const { rows } = await t.pool.query<{ from_stage: string; to_stage: string }>(
+      "select from_stage, to_stage from activities where client_id = $1 and kind = 'stage_change' order by created_at desc, id desc limit 1",
+      [id],
+    );
+    expect(rows[0]).toEqual({ from_stage: "call_scheduled", to_stage: "interested" });
+  });
+
+  it("with no record of where he was, he goes back to 'Spoke with owner'", async () => {
+    const id = await merchant("No history", "interested");
+    await t.pool.query("update clients set stage = 'call_scheduled' where id = $1", [id]);
+    await t.pool.query("delete from activities where client_id = $1 and kind = 'stage_change'", [
+      id,
+    ]);
+    await cancel(id);
+    expect((await stageOf(id))?.stage).toBe("spoke_with_owner");
+  });
+
+  it("a merchant who has moved on since keeps his stage", async () => {
+    const id = await merchant("Moved on", "interested");
+    await book(id, at());
+    await asA((q) =>
+      q.query("select * from move_client($1, 'application_in', $2::jsonb)", [
+        id,
+        timersJson({ kind: "follow_up", due_on: d(3) }),
+      ]),
+    );
+    await cancel(id);
+    expect((await stageOf(id))?.stage).toBe("application_in");
+  });
+});
+
+describe("A-21: 'today' inside the database is the user's day", () => {
+  /** A zone whose calendar date is NOT the server's (UTC) date right now. */
+  async function farZone() {
+    const utc = (
+      await t.pool.query<{ d: string }>("select (now() at time zone 'UTC')::date::text d")
+    ).rows[0]?.d;
+    for (const tz of ["Pacific/Kiritimati", "Pacific/Pago_Pago"]) {
+      const local = (
+        await t.pool.query<{ d: string }>("select (now() at time zone $1)::date::text d", [tz])
+      ).rows[0]?.d;
+      if (local !== utc) return { tz, local: local as string };
+    }
+    throw new Error("no zone differs from UTC right now");
+  }
+
+  it("app.local_today() follows the signed-in user's time zone", async () => {
+    const { tz, local } = await farZone();
+    const u = await insertUser(t.pool, `far-${seq}@x.com`, tz);
+    const { rows } = await t.db.withUser(u, (q) =>
+      q.query<{ d: string }>("select app.local_today()::text d"),
+    );
+    expect(rows[0]?.d).toBe(local);
+  });
+
+  it("a cancelled call's generic follow-up is 'tomorrow' on his calendar", async () => {
+    const { tz, local } = await farZone();
+    const u = await insertUser(t.pool, `far2-${seq}@x.com`, tz);
+    const id = await insertClient(t.db, u, "Far away");
+    await t.db.withUser(u, (q) =>
+      q.query("select * from move_client($1, 'interested', $2::jsonb)", [
+        id,
+        timersJson({ kind: "follow_up", due_on: addDays(local, 5) }),
+      ]),
+    );
+    await t.db.withUser(u, (q) =>
+      q.query("select * from schedule_call($1, $2::timestamptz, '')", [
+        id,
+        `${addDays(local, 3)}T15:00:00Z`,
+      ]),
+    );
+    await t.pool.query(
+      "update timers set done_at = now(), done_reason = 'replaced' where client_id = $1 and kind <> 'scheduled_call' and done_at is null",
+      [id],
+    );
+    await t.db.withUser(u, (q) => q.query("select * from cancel_call($1)", [id]));
+    const { rows } = await t.pool.query<{ due_on: string }>(
+      "select due_on::text from timers where client_id = $1 and done_at is null",
+      [id],
+    );
+    expect(rows).toEqual([{ due_on: addDays(local, 1) }]);
+  });
+});
+
+describe("A-13: a merchant in the trash can't be edited from a stale tab", () => {
+  const trash = (id: string) => asA((q) => q.query("select trash_client($1)", [id]));
+  const restore = (id: string) => asA((q) => q.query("select restore_client($1)", [id]));
+
+  it("his advance can't be edited while he's in the trash, and can after restore", async () => {
+    const id = await merchant("Trashed advance", "funded");
+    const f = await fundIt(id, d(-10));
+    await trash(id);
+    await expect(edit(f, { payment_cents: 200_000 })).rejects.toThrow(/in the trash/);
+    expect(Number((await fundingRow(f)).payment_cents)).toBe(55_000);
+    await restore(id);
+    await edit(f, { payment_cents: 60_000 });
+    expect(Number((await fundingRow(f)).payment_cents)).toBe(60_000);
+  });
+
+  it("his offers and submissions are frozen too", async () => {
+    const id = await merchant("Trashed offers", "application_in");
+    const fnd = await funder(`Trash F ${seq}`);
+    const [sub] = (
+      await asA((q) =>
+        q.query<{ id: string }>("select * from create_submissions($1, $2::uuid[], null, '')", [
+          id,
+          [fnd],
+        ]),
+      )
+    ).rows;
+    const o = (
+      await asA((q) =>
+        q.query<{ id: string }>("select * from record_offer($1, $2::jsonb)", [
+          sub?.id,
+          JSON.stringify({ amount_cents: 1_000_000, factor_rate: 1.3 }),
+        ]),
+      )
+    ).rows[0]?.id as string;
+    await trash(id);
+    await expect(asA((q) => q.query("select * from accept_offer($1)", [o]))).rejects.toThrow(
+      /in the trash/,
+    );
+    await expect(
+      asA((q) =>
+        q.query("select * from set_submission_status($1, 'declined', 'credit', '')", [sub?.id]),
+      ),
+    ).rejects.toThrow(/in the trash/);
+    await restore(id);
+    await asA((q) => q.query("select * from accept_offer($1)", [o]));
+  });
+
+  it("purging a trashed merchant still removes everything, advance and offers included", async () => {
+    const id = await merchant("Purge me", "funded");
+    const f = await fundIt(id, d(-10));
+    await trash(id);
+    await asA((q) => q.query("select purge_client($1)", [id]));
+    expect((await t.pool.query("select 1 from fundings where id = $1", [f])).rowCount).toBe(0);
+    expect((await t.pool.query("select 1 from clients where id = $1", [id])).rowCount).toBe(0);
+  });
+});

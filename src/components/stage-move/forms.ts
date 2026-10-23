@@ -1,4 +1,5 @@
 import type { ClientCard } from "@/lib/data/types";
+import { parseCommissionText } from "@/lib/earnings/commission";
 import { toLocalInput } from "@/lib/format";
 import { addDays, addMonths, type ISODate } from "@/lib/mca/dates";
 import {
@@ -37,9 +38,16 @@ export const DEFAULT_STAGES: readonly StageKey[] = [
 
 export const isDefaultStage = (stage: StageKey) => DEFAULT_STAGES.includes(stage);
 
-/** Funded and lost always ask for details; a default stage asks only when there is an advance to stamp. */
-export function needsInput(card: Pick<ClientCard, "funding_id">, stage: StageKey): boolean {
+/**
+ * Funded and lost always ask for details; a default stage asks only when there is an advance to stamp; "Phone call
+ * scheduled" asks when the call is, unless one is already booked (QA I-8: the column says "time is booked").
+ */
+export function needsInput(
+  card: Pick<ClientCard, "funding_id" | "scheduled_call_at" | "stage">,
+  stage: StageKey,
+): boolean {
   if (stage === "funded" || stage === "lost") return true;
+  if (stage === "call_scheduled") return card.stage !== stage && card.scheduled_call_at === null;
   return isDefaultStage(stage) && card.funding_id !== null;
 }
 
@@ -49,6 +57,13 @@ export type FormErrors<T> = Partial<Record<keyof T, string>>;
 export function centsToInput(cents: number | null | undefined): string {
   if (cents === null || cents === undefined) return "";
   return cents % 100 === 0 ? String(cents / 100) : (cents / 100).toFixed(2);
+}
+
+/** The day and time typed for a booked call: filled in, and not on a day that has already gone. */
+export function callTimeProblem(at: string, today: ISODate): string | undefined {
+  if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(at)) return "Pick the day and time of the call";
+  if (at.slice(0, 10) < today) return "That day has already passed — pick a time from now on";
+  return undefined;
 }
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -111,8 +126,9 @@ export function checkFunding(
   set("payment", moneyProblem(f.payment, true, "Enter the remittance amount, like 450"));
   set("positionNo", wholeProblem(f.positionNo, "Position", 1));
   set("termDays", wholeProblem(f.termDays, "Term", 1));
-  set("commission", moneyProblem(f.commission, false, ""));
   const amount = parseMoney(f.amount);
+  const commission = parseCommissionText(f.commission, amount);
+  set("commission", commission.ok ? undefined : commission.error);
   const payment = parseMoney(f.payment);
   // The preview only needs the money terms, so it keeps working while an optional field is wrong.
   if (!DATE_RE.test(f.fundedOn) || !amount || !payment || factor === null)

@@ -15,7 +15,7 @@ import { stageDef } from "@/lib/mca/stages";
 import { formatDate } from "@/lib/format";
 import { useApp } from "./app-context";
 import { useCall, useToast } from "./overlay";
-import { Badge, Button, Card, Field, Input, Select, Textarea } from "./ui";
+import { Badge, Button, buttonClass, Card, cn, Field, Input, Select, Textarea } from "./ui";
 
 const SAMPLE =
   "Business,Owner,Phone,Amount,Status,Follow up,Notes\nMike's Pizza,Mike Ross,(305) 555-0101,50k,Interested,,Wants it for payroll";
@@ -27,6 +27,7 @@ export function ImportWizard() {
   const router = useRouter();
   const [text, setText] = useState("");
   const [fileError, setFileError] = useState<string | null>(null);
+  const [fileName, setFileName] = useState<string | null>(null);
   const [mapping, setMapping] = useState<Record<ImportField, number | null> | null>(null);
   const [spreadDays, setSpreadDays] = useState(10);
   const [defaultSource, setDefaultSource] = useState("");
@@ -65,6 +66,7 @@ export function ImportWizard() {
     if (file.size > 5_000_000)
       return setFileError("That file is over 5 MB — split it into smaller files.");
     setMapping(null);
+    setFileName(file.name);
     setText(await file.text());
   }
 
@@ -93,20 +95,35 @@ export function ImportWizard() {
             check the matching below.
           </p>
         </div>
-        <input
-          type="file"
-          accept=".csv,text/csv"
-          aria-label="CSV file"
-          onChange={(e) => void onFile(e.target.files?.[0])}
-          className="text-sm"
-        />
+        {/* The browser's own file control is unstyled; the real input hides inside a button-looking label. */}
+        <div className="flex flex-wrap items-center gap-3">
+          <label
+            className={cn(
+              buttonClass("secondary", "md"),
+              "cursor-pointer has-focus-visible:outline-2 has-focus-visible:outline-offset-2 has-focus-visible:outline-accent",
+            )}
+          >
+            <input
+              type="file"
+              accept=".csv,text/csv"
+              onChange={(e) => void onFile(e.target.files?.[0])}
+              className="sr-only"
+            />
+            <span aria-hidden>📄</span> Choose a spreadsheet
+          </label>
+          <span className="min-w-0 truncate text-sm text-muted" aria-live="polite">
+            {fileName ?? "No file chosen yet"}
+          </span>
+        </div>
         {fileError ? (
           <p role="alert" className="text-sm text-bad">
             {fileError}
           </p>
         ) : null}
         <details>
-          <summary className="cursor-pointer text-sm text-muted">…or paste rows here</summary>
+          <summary className="cursor-pointer text-sm text-muted max-sm:py-3">
+            …or paste rows here
+          </summary>
           <Textarea
             className="mt-2 font-mono text-xs"
             rows={6}
@@ -114,6 +131,7 @@ export function ImportWizard() {
             value={text}
             onChange={(e) => {
               setMapping(null);
+              setFileName(null);
               setText(e.target.value);
             }}
           />
@@ -238,7 +256,7 @@ export function ImportWizard() {
 
           {built.problems.length > 0 ? (
             <details>
-              <summary className="cursor-pointer text-sm font-medium text-warn">
+              <summary className="cursor-pointer text-sm font-medium text-warn max-sm:py-3">
                 Things to look at ({built.problems.length})
               </summary>
               <ul className="mt-2 max-h-48 list-disc space-y-0.5 overflow-y-auto pl-5 text-sm text-muted">

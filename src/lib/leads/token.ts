@@ -14,7 +14,8 @@ export function hashToken(token: string): string {
 
 /** The token from an `Authorization: Bearer …` header, or null if it's missing or not shaped like ours. */
 export function parseBearer(header: string | null): string | null {
-  const m = /^Bearer ([^\s]+)$/.exec(header ?? "");
+  // The scheme is case-insensitive (RFC 7235): "bearer isl_…" is as good as "Bearer isl_…".
+  const m = /^bearer ([^\s]+)$/i.exec(header ?? "");
   const token = m?.[1];
   return token && TOKEN_RE.test(token) ? token : null;
 }
@@ -58,7 +59,15 @@ export async function readLimitedJson(
     chunks.push(value);
   }
   try {
-    return { ok: true, value: JSON.parse(Buffer.concat(chunks).toString("utf8")) };
+    // Some tools put a byte-order mark in front of the JSON; it is not part of it.
+    return {
+      ok: true,
+      value: JSON.parse(
+        Buffer.concat(chunks)
+          .toString("utf8")
+          .replace(/^\uFEFF/, ""),
+      ),
+    };
   } catch {
     return { ok: false, status: 400, error: "That isn't valid JSON" };
   }

@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
+import { cookies } from "next/headers";
 import { Board } from "@/components/board/Board";
-import { parseView } from "@/components/board/logic";
+import { resolveView, VIEW_COOKIE } from "@/components/board/logic";
 import { requireSession } from "@/lib/auth/server";
 import { listCards } from "@/lib/data/queries";
 import { loadShell } from "@/lib/data/shell";
@@ -19,9 +20,11 @@ export default async function BoardPage({
   searchParams: Promise<{ view?: string | string[] }>;
 }) {
   const session = await requireSession();
-  const [{ view }, cards] = await Promise.all([
+  const [{ view }, cards, store] = await Promise.all([
     searchParams,
     db.withUser(session.userId, (q) => listCards(q)),
+    cookies(),
   ]);
-  return <Board initialCards={cards} view={parseView(view)} />;
+  // ?view= wins; a bare /board (the nav link) opens the view he used last.
+  return <Board initialCards={cards} view={resolveView(view, store.get(VIEW_COOKIE)?.value)} />;
 }

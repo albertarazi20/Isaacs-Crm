@@ -13,10 +13,27 @@ function assertHeaderSafe(name: string, value: string): void {
 /** One plain address. "a@b.com,c@d.com" would silently email a second person from Isaac's own Gmail. */
 const SINGLE_ADDRESS = /^[^\s@,;<>"]+@[^\s@,;<>"]+\.[^\s@,;<>"]+$/;
 
+/**
+ * A non-ASCII subject becomes several RFC 2047 encoded words of at most 45 bytes each (an encoded word may not pass
+ * 75 characters), folded onto continuation lines. A code point is never split between two words.
+ */
 function encodeSubject(subject: string): string {
-  return /^[\x20-\x7e]*$/.test(subject)
-    ? subject
-    : `=?UTF-8?B?${Buffer.from(subject, "utf8").toString("base64")}?=`;
+  if (/^[\x20-\x7e]*$/.test(subject)) return subject;
+  const words: string[] = [];
+  let current = "";
+  let bytes = 0;
+  for (const ch of subject) {
+    const size = Buffer.byteLength(ch, "utf8");
+    if (bytes + size > 45) {
+      words.push(current);
+      current = "";
+      bytes = 0;
+    }
+    current += ch;
+    bytes += size;
+  }
+  if (current) words.push(current);
+  return words.map((w) => `=?UTF-8?B?${Buffer.from(w, "utf8").toString("base64")}?=`).join("\r\n ");
 }
 
 /** RFC 2822 message as base64url — the shape Gmail's users.messages.send wants in `raw`. */

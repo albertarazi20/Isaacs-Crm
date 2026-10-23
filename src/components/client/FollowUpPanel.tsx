@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { cancelCallAction, scheduleCallAction, setFollowUpAction } from "@/app/actions";
 import type { ClientDetail } from "@/lib/data/types";
-import { addDays, type ISODate } from "@/lib/mca/dates";
+import type { ISODate } from "@/lib/mca/dates";
 import { TIMER_LABELS } from "@/lib/mca/stages";
 import { formatDate, formatDateTime, relativeDay } from "@/lib/format";
 import { useApp } from "../app-context";
@@ -58,9 +58,7 @@ export function FollowUpPanel({ detail, className }: { detail: ClientDetail; cla
       <SetFollowUp
         clientId={card.id}
         today={today}
-        initial={
-          card.next_due_on && card.next_due_on > today ? card.next_due_on : addDays(today, 7)
-        }
+        current={timers.find((t) => t.kind === "follow_up")?.due_on ?? null}
       />
       <hr className="my-4 border-border" />
       <ScheduleCall clientId={card.id} />
@@ -81,20 +79,28 @@ export function FollowUpPanel({ detail, className }: { detail: ClientDetail; cla
   );
 }
 
+/**
+ * Starts with nothing picked, on purpose: a tap on "Set follow-up" must never move him a week he did
+ * not choose (I-18). After a save the date he picked stays lit — it is now the current follow-up — and
+ * the button rests until he picks a different one.
+ */
 function SetFollowUp({
   clientId,
   today,
-  initial,
+  current,
 }: {
   clientId: string;
   today: ISODate;
-  initial: ISODate;
+  /** The date of the follow-up already set, if any. */
+  current: ISODate | null;
 }) {
   const run = useRun();
-  const [dueOn, setDueOn] = useState<ISODate>(initial);
+  const [dueOn, setDueOn] = useState<ISODate | "">("");
   const [busy, setBusy] = useState(false);
+  const nothingToChange = dueOn === "" || dueOn === current;
 
   async function save() {
+    if (!dueOn) return;
     setBusy(true);
     await run(
       setFollowUpAction({ clientId, dueOn }),
@@ -107,7 +113,18 @@ function SetFollowUp({
     <div className="mt-4 space-y-2">
       <p className="text-xs font-medium text-muted">Change the follow-up date</p>
       <TimerPicker value={dueOn} onChange={setDueOn} today={today} />
-      <Button variant="primary" disabled={busy} onClick={() => void save()}>
+      <Button
+        variant="primary"
+        disabled={busy || nothingToChange}
+        title={
+          dueOn === ""
+            ? "Pick a time or a date first"
+            : dueOn === current
+              ? "That is already the follow-up date"
+              : undefined
+        }
+        onClick={() => void save()}
+      >
         {busy ? "Saving…" : "Set follow-up"}
       </Button>
       <Muted>

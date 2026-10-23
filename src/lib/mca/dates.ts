@@ -126,7 +126,7 @@ export type BucketKey = "overdue" | "today" | PresetKey | "later";
 export const BUCKET_ORDER: readonly BucketKey[] = [
   "overdue",
   "today",
-  ...FOLLOW_UP_PRESETS.filter((p) => p.key !== "9m" && p.key !== "18m").map((p) => p.key),
+  ...FOLLOW_UP_PRESETS.map((p) => p.key),
   "later",
 ];
 

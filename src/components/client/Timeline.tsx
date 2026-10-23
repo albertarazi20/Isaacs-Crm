@@ -42,7 +42,34 @@ const OUTCOME_TONE = {
 
 const PAGE = 40;
 
-export function Timeline({ card, activities }: { card: ClientCard; activities: ActivityRow[] }) {
+/**
+ * The last call and the note box. A separate block from the history so a phone can put it right under
+ * the pinned header: he is on the phone with the merchant, the note box is what he needs (I-13).
+ */
+export function NotesPanel({
+  card,
+  activities,
+  className,
+}: {
+  card: ClientCard;
+  activities: ActivityRow[];
+  className?: string;
+}) {
+  return (
+    <section aria-label="Last call and note box" className={cn("space-y-4", className)}>
+      <LastContact card={card} activities={activities} />
+      <NoteComposer card={card} />
+    </section>
+  );
+}
+
+export function Timeline({
+  activities,
+  className,
+}: {
+  activities: ActivityRow[];
+  className?: string;
+}) {
   const [filter, setFilter] = useState<TimelineFilter>("all");
   const [limit, setLimit] = useState(PAGE);
   const counts = countByFilter(activities);
@@ -50,9 +77,7 @@ export function Timeline({ card, activities }: { card: ClientCard; activities: A
   const shown = rows.slice(0, limit);
 
   return (
-    <section aria-label="Notes and history" className="space-y-4">
-      <LastContact card={card} activities={activities} />
-      <NoteComposer card={card} />
+    <section aria-label="Notes and history" className={cn("space-y-4", className)}>
       <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label="Show">
         {TIMELINE_FILTERS.map((f) => (
           <button
@@ -65,7 +90,7 @@ export function Timeline({ card, activities }: { card: ClientCard; activities: A
               setLimit(PAGE);
             }}
             className={cn(
-              "h-8 rounded-full border px-3 text-sm font-medium transition",
+              "h-10 rounded-full border px-3 text-sm font-medium transition sm:h-8",
               filter === f.key
                 ? "border-accent bg-accent text-accent-fg"
                 : "border-border bg-surface hover:bg-surface-2",

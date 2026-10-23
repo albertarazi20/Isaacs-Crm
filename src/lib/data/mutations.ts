@@ -2,7 +2,15 @@ import type { Db } from "../db";
 import { dueFromPreset, validateFollowUpDate, type ISODate } from "../mca/dates";
 import type { FundingTerms } from "../mca/funding";
 import { contactAllowed } from "../mca/contact";
-import { defaultTimers, type PlannedTimer, type StageKey } from "../mca/stages";
+import {
+  defaultTimers,
+  stageDef,
+  type PlannedTimer,
+  type StageGroup,
+  type StageKey,
+} from "../mca/stages";
+
+const APPLICATION_IN_GROUPS = new Set<StageGroup>(["underwriting", "funded"]);
 import { defaultStips } from "../mca/stips";
 import { suggestNextFollowUp } from "../mca/touch";
 import { getCard } from "./queries";
@@ -176,18 +184,25 @@ export async function moveClient(q: Db, input: MoveInput, ctx: UserContext): Pro
       sqlTimers(timers),
       input.reason,
     ]);
-    if (stage === "application_in") {
-      await q.query(
-        "update clients set application_received_on = coalesce(application_received_on, $2::date) where id = $1",
-        [clientId, ctx.today],
-      );
-    }
     if (stage === "paid_in_full") {
       await q.query(
         "update fundings set status = 'paid_off' where client_id = $1 and status in ('active', 'defaulted')",
         [clientId],
       );
     }
+  }
+  if (stage === "call_scheduled" && input.callAt) {
+    if (input.callAt.slice(0, 10) < ctx.today)
+      throw new UserError("That time has already passed — pick a time from now on");
+    const at = await localToInstant(q, input.callAt, ctx.timezone);
+    await q.query("select * from schedule_call($1, $2, $3)", [clientId, at, input.reason]);
+  }
+  // However he got there (skipping "Application in" included), a deal in underwriting or funded had an application.
+  if (APPLICATION_IN_GROUPS.has(stageDef(stage).group)) {
+    await q.query(
+      "update clients set application_received_on = coalesce(application_received_on, $2::date) where id = $1",
+      [clientId, ctx.today],
+    );
   }
   return mustCard(q, clientId);
 }
@@ -198,7 +213,11 @@ export async function setFollowUp(
   ctx: UserContext,
 ): Promise<ClientCard> {
   checkDate(input.dueOn, ctx.today);
-  await q.query("select * from set_follow_up($1, $2)", [input.clientId, input.dueOn]);
+  await q.query("select * from set_follow_up($1, $2, '', $3)", [
+    input.clientId,
+    input.dueOn,
+    input.keepCalls ?? false,
+  ]);
   return mustCard(q, input.clientId);
 }
 
@@ -217,7 +236,7 @@ export async function moveToBucket(
 ): Promise<ClientCard> {
   return setFollowUp(
     q,
-    { clientId: input.clientId, dueOn: bucketDate(input.bucket, ctx.today) },
+    { clientId: input.clientId, dueOn: bucketDate(input.bucket, ctx.today), keepCalls: true },
     ctx,
   );
 }
@@ -266,6 +285,9 @@ export async function scheduleCall(
   input: z.output<typeof scheduleCallSchema>,
   ctx: UserContext,
 ): Promise<ClientCard> {
+  // The database would call this "a follow-up date in the past"; he is booking a call.
+  if (input.at.slice(0, 10) < ctx.today)
+    throw new UserError("That time has already passed — pick a time from now on");
   const at = await localToInstant(q, input.at, ctx.timezone);
   await q.query("select * from schedule_call($1, $2, $3)", [input.clientId, at, input.note]);
   return mustCard(q, input.clientId);

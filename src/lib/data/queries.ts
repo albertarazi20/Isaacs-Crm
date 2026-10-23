@@ -110,7 +110,7 @@ export interface DuplicateMatch {
  */
 export async function findDuplicates(
   q: Db,
-  input: { phone?: string; businessName?: string },
+  input: { phone?: string; businessName?: string; excludeId?: string },
 ): Promise<DuplicateMatch[]> {
   const e164 = input.phone ? normalizeUS(input.phone) : null;
   const digits = e164 ? e164.slice(2) : null;
@@ -130,11 +130,12 @@ export async function findDuplicates(
             exists (select 1 from trashed_clients t where t.client_id = clients.id) as trashed
        from clients
       where (contact_status <> 'ok' or not exists (select 1 from trashed_clients t where t.client_id = clients.id))
+        and ($3::uuid is null or id <> $3::uuid)
         and (($1::text is not null and right(regexp_replace(phone, '[^0-9]', '', 'g'), 10) = $1)
          or ($2 <> '' and ${NAME_KEY_SQL("business_name")} = $2))
       order by by_phone desc, business_name
       limit 5`,
-    [digits, name],
+    [digits, name, input.excludeId ?? null],
   );
   return rows.map((r) => ({
     id: r.id,

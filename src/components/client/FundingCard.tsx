@@ -200,7 +200,7 @@ export function FundingCard({
 
       {past.length > 0 ? (
         <details className="mt-3 border-t border-border pt-3">
-          <summary className="cursor-pointer text-sm font-medium text-muted hover:text-text">
+          <summary className="cursor-pointer text-sm font-medium text-muted hover:text-text max-sm:py-3">
             Past advances ({past.length})
           </summary>
           <ul className="mt-2 space-y-2">

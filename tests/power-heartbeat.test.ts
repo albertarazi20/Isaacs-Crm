@@ -1,6 +1,7 @@
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import {
   evaluateReminderStatus,
+  missingReminderEnv,
   recordHeartbeat,
   reminderStatus,
   REMINDER_JOB,
@@ -91,6 +92,27 @@ describe("when the banner shows (pure)", () => {
   it("is silent when the scheduler is not set up (local dev)", () => {
     expect(status({ configured: false, lastRunAt: null }).stale).toBe(false);
     expect(status({ configured: false, lastRunAt: ago(99 * HOUR) }).stale).toBe(false);
+  });
+  it("review-3B B-8: in production a missing setting raises the banner (after the account's first day) and names it", () => {
+    const prod = (over: Partial<Parameters<typeof evaluateReminderStatus>[0]>) =>
+      status({ configured: false, lastRunAt: null, production: true, ...over });
+    expect(prod({ missing: ["CRON_SECRET"] })).toMatchObject({
+      stale: true,
+      missing: ["CRON_SECRET"],
+    });
+    // a brand-new account has not had a day yet
+    expect(prod({ missing: ["CRON_SECRET"], accountCreatedAt: ago(2 * HOUR) }).stale).toBe(false);
+    // nothing missing and nothing configured is local dev even if NODE_ENV says production
+    expect(prod({ missing: [] }).stale).toBe(false);
+    // and not in development, however much is missing
+    expect(prod({ missing: ["RESEND_API_KEY"], production: false }).stale).toBe(false);
+  });
+  it("missingReminderEnv lists exactly what is unset", () => {
+    expect(missingReminderEnv({ RESEND_API_KEY: "k", CRON_SECRET: "s" })).toEqual(["RESEND_FROM"]);
+    expect(missingReminderEnv({})).toEqual(["RESEND_API_KEY", "RESEND_FROM", "CRON_SECRET"]);
+    expect(
+      missingReminderEnv({ RESEND_API_KEY: "k", RESEND_FROM: "a@b.c", CRON_SECRET: "s" }),
+    ).toEqual([]);
   });
   it("is silent while the last run is within three hours, even at the edge", () => {
     expect(status({ lastRunAt: ago(HOUR) })).toMatchObject({ stale: false, hoursSince: 1 });

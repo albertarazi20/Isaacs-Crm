@@ -91,7 +91,11 @@ export default async function SettingsPage({
         <SectionTitle>Hourly reminder scheduler</SectionTitle>
         <p className="text-sm text-muted">
           {!reminders?.configured
-            ? "Not set up yet. Reminder emails need the email key and the scheduler secret on the server."
+            ? `Not set up yet. Reminder emails need ${
+                reminders && reminders.missing.length > 0
+                  ? reminders.missing.join(", ")
+                  : "the email key, the sender address and the scheduler secret"
+              } on the server.`
             : reminders.lastRunAt
               ? `Last ran ${timeAgo(reminders.lastRunAt, new Date(requestTimeMs()))}.${reminders.stale ? " That is too long ago — check the scheduler." : ""}`
               : "Has not run yet."}
@@ -106,6 +110,24 @@ export default async function SettingsPage({
         <Link href="/lead-intake" className="text-sm font-medium text-accent underline">
           Set up lead intake
         </Link>
+      </Card>
+      <Card className="space-y-2 p-4">
+        <SectionTitle>Your data</SectionTitle>
+        <p className="text-sm text-muted">
+          Everything you have put in — merchants, advances, offers, notes, timers — as one file you
+          can keep. It holds no passwords, Gmail access or tokens.
+        </p>
+        <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm font-medium">
+          <a href="/api/export/backup" className="text-accent underline" download>
+            Download a full backup (.json)
+          </a>
+          <a href="/api/export/clients" className="text-accent underline" download>
+            Merchants (.csv)
+          </a>
+          <a href="/api/export/activity" className="text-accent underline" download>
+            All notes (.csv)
+          </a>
+        </div>
       </Card>
       <SecurityPanel />
     </div>

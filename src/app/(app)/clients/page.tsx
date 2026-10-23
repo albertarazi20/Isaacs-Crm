@@ -1,9 +1,32 @@
 import Link from "next/link";
 import { ClientsTable } from "@/components/ClientsTable";
+import { OverflowMenu } from "@/components/OverflowMenu";
 import { buttonClass } from "@/components/ui";
 import { requireSession } from "@/lib/auth/server";
 import { listCards } from "@/lib/data/queries";
 import { db } from "@/lib/db";
+
+const TOOLS = [
+  { href: "/api/export/clients", label: "Download clients (CSV)" },
+  { href: "/api/export/activity", label: "Download notes (CSV)" },
+  { href: "/import", label: "Import from spreadsheet" },
+  { href: "/lead-intake", label: "Lead intake" },
+  { href: "/reports", label: "Reports" },
+  { href: "/trash", label: "Trash" },
+];
+
+/** Downloads are plain links (the browser saves the file); pages go through the router. */
+function ToolLink({ tool, className }: { tool: (typeof TOOLS)[number]; className?: string }) {
+  return tool.href.startsWith("/api/") ? (
+    <a href={tool.href} className={className}>
+      {tool.label}
+    </a>
+  ) : (
+    <Link href={tool.href} className={className}>
+      {tool.label}
+    </Link>
+  );
+}
 
 export default async function ClientsPage() {
   const session = await requireSession();
@@ -12,26 +35,17 @@ export default async function ClientsPage() {
     <div className="space-y-4">
       <div className="flex items-center justify-between gap-3">
         <h1 className="text-2xl font-bold tracking-tight">Clients</h1>
-        <div className="flex flex-wrap gap-2">
-          <a href="/api/export/clients" className={buttonClass("secondary", "md")}>
-            Download clients (CSV)
-          </a>
-          <a href="/api/export/activity" className={buttonClass("secondary", "md")}>
-            Download notes (CSV)
-          </a>
-          <Link href="/import" className={buttonClass("secondary", "md")}>
-            Import from spreadsheet
-          </Link>
-          <Link href="/lead-intake" className={buttonClass("secondary", "md")}>
-            Lead intake
-          </Link>
-          <Link href="/reports" className={buttonClass("secondary", "md")}>
-            Reports
-          </Link>
-          <Link href="/trash" className={buttonClass("secondary", "md")}>
-            Trash
-          </Link>
+        {/* Wide screens: every action is a button. A phone folds them into one "…" menu so the list starts near the top. */}
+        <div className="hidden flex-wrap gap-2 sm:flex">
+          {TOOLS.map((t) => (
+            <ToolLink key={t.href} tool={t} className={buttonClass("secondary", "md")} />
+          ))}
         </div>
+        <OverflowMenu label="More actions">
+          {TOOLS.map((t) => (
+            <ToolLink key={t.href} tool={t} />
+          ))}
+        </OverflowMenu>
       </div>
       <ClientsTable cards={cards} />
     </div>

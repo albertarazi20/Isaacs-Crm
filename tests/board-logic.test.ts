@@ -33,6 +33,7 @@ import {
   competitorCallback,
   defaultFollowUp,
   fundingPreview,
+  callTimeProblem,
   needsInput,
   undoInput,
   type FundingForm,
@@ -158,7 +159,10 @@ describe("grouping", () => {
     expect(at(addDays(TODAY, 1))).toBe("1w");
     expect(at(addDays(TODAY, 7))).toBe("1w");
     expect(at(addDays(TODAY, 8))).toBe("2w");
-    expect(at(addMonths(TODAY, 8))).toBe("12m");
+    expect(at(addMonths(TODAY, 8))).toBe("9m");
+    expect(at(addMonths(TODAY, 9))).toBe("9m");
+    expect(at(addMonths(TODAY, 10))).toBe("12m");
+    expect(at(addMonths(TODAY, 15))).toBe("18m");
     expect(at(addMonths(TODAY, 36))).toBe("36m");
     expect(at(addDays(addMonths(TODAY, 36), 1))).toBe("later");
   });
@@ -270,6 +274,17 @@ describe("optimistic moves", () => {
     expect(optimisticDue(booked, "2026-10-24").next_due_kind).toBe("scheduled_call");
     const lateCall = card({ next_due_on: "2027-02-01", next_due_kind: "scheduled_call" });
     expect(optimisticDue(lateCall, "2027-01-23").next_due_on).toBe("2027-01-23");
+  });
+
+  it("QA I-1: a drag never pushes a due renewal call or check-in out to the far follow-up", () => {
+    const renewal = card({ stage: "funded", next_due_on: "2026-10-23", next_due_kind: "renewal" });
+    const dragged = optimisticDue(renewal, "2029-10-23");
+    expect(dragged.next_due_on).toBe("2026-10-23");
+    expect(dragged.next_due_kind).toBe("renewal");
+    const checkIn = card({ stage: "funded", next_due_on: "2026-11-26", next_due_kind: "check_in" });
+    expect(optimisticDue(checkIn, "2029-10-23").next_due_on).toBe("2026-11-26");
+    // a call due LATER than the follow-up is simply overtaken by it
+    expect(optimisticDue(checkIn, "2026-10-30").next_due_on).toBe("2026-10-30");
   });
 
   it("replaces only the card with that id", () => {
@@ -459,9 +474,26 @@ describe("which moves need a dialog", () => {
           "default_bad",
           "legal_collections",
           "written_off",
+          "call_scheduled",
         ].includes(k),
     ))
       expect(needsInput(card({ funding_id: "f1" }), s)).toBe(false);
+  });
+  it("QA I-8: 'Phone call scheduled' asks when the call is — unless one is booked or he is already there", () => {
+    expect(needsInput(card({ stage: "interested" }), "call_scheduled")).toBe(true);
+    expect(
+      needsInput(
+        card({ stage: "stips", scheduled_call_at: "2026-10-24T14:00:00Z" }),
+        "call_scheduled",
+      ),
+    ).toBe(false);
+    expect(needsInput(card({ stage: "call_scheduled" }), "call_scheduled")).toBe(false);
+  });
+  it("a call time must be filled in and not on a day that has gone", () => {
+    expect(callTimeProblem("", TODAY)).toMatch(/day and time/);
+    expect(callTimeProblem("2026-10-22T09:00", TODAY)).toMatch(/already passed/);
+    expect(callTimeProblem("2026-10-23T09:00", TODAY)).toBeUndefined();
+    expect(callTimeProblem("2026-10-24T10:00", TODAY)).toBeUndefined();
   });
 });
 
@@ -492,6 +524,16 @@ describe("funding form", () => {
 
   it("rejects a factor outside 1–3, a future funded date and a bad position", () => {
     expect(checkFunding(fundingForm({ factorRate: "0.9" }), TODAY).errors.factorRate).toBeDefined();
+    // QA I-3: a bare "6" in the commission box is a question, "6%" and "$3k" are answers
+    expect(checkFunding(fundingForm({ commission: "6" }), TODAY).errors.commission).toMatch(
+      /points or dollars/,
+    );
+    expect(
+      checkFunding(fundingForm({ commission: "6%" }), TODAY).errors.commission,
+    ).toBeUndefined();
+    expect(
+      checkFunding(fundingForm({ commission: "$3k" }), TODAY).errors.commission,
+    ).toBeUndefined();
     expect(
       checkFunding(fundingForm({ factorRate: "13.5" }), TODAY).errors.factorRate,
     ).toBeDefined();

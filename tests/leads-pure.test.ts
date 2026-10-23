@@ -32,14 +32,15 @@ describe("lead tokens", () => {
 
 describe("parseBearer", () => {
   const good = generateToken();
-  it("accepts a well-formed bearer token", () => {
+  it("accepts a well-formed bearer token, whatever the case of the scheme (RFC 7235)", () => {
     expect(parseBearer(`Bearer ${good}`)).toBe(good);
+    expect(parseBearer(`bearer ${good}`)).toBe(good);
+    expect(parseBearer(`BEARER ${good}`)).toBe(good);
   });
   it.each([
     null,
     "",
     good,
-    `bearer ${good}`,
     `Bearer  ${good}`,
     `Bearer ${good} extra`,
     "Bearer isl_short",
@@ -57,6 +58,9 @@ const req = (body: BodyInit | null, headers: HeadersInit = {}) =>
 describe("readLimitedJson", () => {
   it("reads a JSON body", async () => {
     expect(await readLimitedJson(req('{"a":1}'))).toEqual({ ok: true, value: { a: 1 } });
+  });
+  it("reads a body that starts with a byte-order mark", async () => {
+    expect(await readLimitedJson(req('\uFEFF{"a":1}'))).toEqual({ ok: true, value: { a: 1 } });
   });
   it("refuses an empty body and bad JSON in plain words", async () => {
     expect(await readLimitedJson(req(null))).toMatchObject({ ok: false, status: 400 });
@@ -106,7 +110,7 @@ describe("leadSchema", () => {
   it("ignores fields it doesn't know — an outside caller can't set a stage or an owner", () => {
     const r = leadSchema.parse({
       businessName: "A",
-      phone: "1",
+      phone: "3055550100",
       stage: "funded",
       user_id: "x",
       id: "y",
@@ -178,5 +182,21 @@ describe("leads from real senders (review 3A: A-3)", () => {
   it("keeps the whole-lead messages as they were", () => {
     const r = leadSchema.safeParse({ businessName: "X" });
     expect(describeLeadProblem(r.error!)).toBe("Include a phone number or an email");
+  });
+});
+
+describe("review-3A A-19: a phone that isn't one", () => {
+  const base = { businessName: "Junk Phone Pizza" };
+  it("'N/A' and '-' are not phone numbers: the lead needs an email instead", () => {
+    expect(leadSchema.safeParse({ ...base, phone: "N/A" }).success).toBe(false);
+    const ok = leadSchema.parse({ ...base, phone: "none", email: "m@x.com" });
+    expect(ok.phone).toBeUndefined();
+  });
+  it("a real phone, however it is typed, is kept", () => {
+    for (const p of ["305-555-0142", "(305) 555 0142", "+1 305 555 0142", "5550142"])
+      expect(leadSchema.parse({ ...base, phone: p }).phone).toBe(p);
+  });
+  it("a number sent as a number is still a phone", () => {
+    expect(leadSchema.parse({ ...base, phone: 3055550142 }).phone).toBe("3055550142");
   });
 });

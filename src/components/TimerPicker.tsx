@@ -4,13 +4,16 @@ import { addMonths, dueFromPreset, FOLLOW_UP_PRESETS, type ISODate } from "@/lib
 import { relativeDay } from "@/lib/format";
 import { cn, Input } from "./ui";
 
-/** Presets from 1 week to 36 months plus any custom date. The one place Isaac sets a timer. */
+/**
+ * Presets from 1 week to 36 months plus any custom date. The one place Isaac sets a timer.
+ * `value` may be "" (nothing picked yet): then no preset looks pressed and no date is shown.
+ */
 export function TimerPicker({
   value,
   onChange,
   today,
 }: {
-  value: ISODate;
+  value: ISODate | "";
   onChange: (v: ISODate) => void;
   today: ISODate;
 }) {
@@ -19,7 +22,7 @@ export function TimerPicker({
       <div className="flex flex-wrap gap-1.5" role="group" aria-label="Follow-up in">
         {FOLLOW_UP_PRESETS.map((p) => {
           const date = dueFromPreset(p.key, today);
-          const selected = value === date;
+          const selected = value !== "" && value === date;
           return (
             <button
               key={p.key}
@@ -28,7 +31,7 @@ export function TimerPicker({
               aria-pressed={selected}
               onClick={() => onChange(date)}
               className={cn(
-                "h-8 min-w-11 rounded-lg border px-2 text-sm font-medium transition",
+                "h-10 min-w-11 rounded-lg border px-2 text-sm font-medium transition sm:h-8",
                 selected
                   ? "border-accent bg-accent text-accent-fg"
                   : "border-border bg-surface hover:bg-surface-2",
@@ -49,7 +52,7 @@ export function TimerPicker({
           value={value}
           onChange={(e) => e.target.value && onChange(e.target.value)}
         />
-        <span className="text-sm text-muted">{relativeDay(value, today)}</span>
+        {value ? <span className="text-sm text-muted">{relativeDay(value, today)}</span> : null}
       </div>
     </div>
   );

@@ -29,7 +29,11 @@ const VARIANT: Record<Variant, string> = {
   ghost: "text-muted hover:bg-surface-2 hover:text-text",
   danger: "bg-bad-soft text-bad hover:opacity-80",
 };
-const SIZE: Record<Size, string> = { sm: "h-8 px-2.5 text-sm", md: "h-10 px-4 text-sm" };
+// "sm" is the dense desktop size; under the sm: breakpoint a thumb needs 40px (I-12).
+const SIZE: Record<Size, string> = {
+  sm: "h-10 px-3 text-sm sm:h-8 sm:px-2.5",
+  md: "h-10 px-4 text-sm",
+};
 const BASE =
   "inline-flex items-center justify-center gap-1.5 rounded-lg font-medium transition disabled:cursor-not-allowed disabled:opacity-50";
 

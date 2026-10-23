@@ -6,6 +6,7 @@ import type { ClientCard } from "@/lib/data/types";
 import { BUCKET_ORDER, type BucketKey, type ISODate } from "@/lib/mca/dates";
 import { STAGE_GROUPS, STAGES, type StageGroup, type StageKey } from "@/lib/mca/stages";
 import { BucketColumn, StageColumn } from "./columns";
+import { GroupTabs, type GroupTab } from "./GroupTabs";
 import { BoardScrollContext } from "./LazySlot";
 
 interface Shared {
@@ -18,25 +19,37 @@ interface Shared {
 function Scroller({
   label,
   dragging,
+  tabs,
+  collapsed,
+  onToggleGroup,
   children,
 }: {
   label: string;
   dragging: boolean;
+  /** Pipeline only: the phone's stage-group tabs, drawn above the board (I-20). */
+  tabs?: readonly GroupTab[];
+  collapsed?: ReadonlySet<StageGroup>;
+  onToggleGroup?: (g: StageGroup) => void;
   children: ReactNode;
 }) {
   const [el, setEl] = useState<HTMLDivElement | null>(null);
   return (
-    <div
-      ref={setEl}
-      role="region"
-      aria-label={label}
-      className={cn(
-        "flex min-h-0 flex-1 items-stretch gap-3 overflow-x-auto overflow-y-hidden pb-2",
-        !dragging && "snap-x snap-proximity md:snap-none",
-      )}
-    >
-      <BoardScrollContext.Provider value={el}>{children}</BoardScrollContext.Provider>
-    </div>
+    <>
+      {tabs && collapsed && onToggleGroup ? (
+        <GroupTabs tabs={tabs} scroller={el} collapsed={collapsed} onToggleGroup={onToggleGroup} />
+      ) : null}
+      <div
+        ref={setEl}
+        role="region"
+        aria-label={label}
+        className={cn(
+          "flex min-h-0 flex-1 items-stretch gap-3 overflow-x-auto overflow-y-hidden pb-2",
+          !dragging && "snap-x snap-proximity md:snap-none",
+        )}
+      >
+        <BoardScrollContext.Provider value={el}>{children}</BoardScrollContext.Provider>
+      </div>
+    </>
   );
 }
 
@@ -54,8 +67,22 @@ export function PipelineView({
   collapsed: ReadonlySet<StageGroup>;
   onToggleGroup: (g: StageGroup) => void;
 }) {
+  // The groups that have a column on screen, with their totals, for the phone's tab row.
+  const tabs = STAGE_GROUPS.flatMap((g) => {
+    const stages = STAGES.filter((s) => s.group === g.key);
+    if (!stages.some((s) => !hideEmpty || dragging || byStage[s.key].length > 0)) return [];
+    return [
+      { key: g.key, label: g.label, count: stages.reduce((n, s) => n + byStage[s.key].length, 0) },
+    ];
+  });
   return (
-    <Scroller label="Pipeline board, one column per stage" dragging={dragging}>
+    <Scroller
+      label="Pipeline board, one column per stage"
+      dragging={dragging}
+      tabs={tabs}
+      collapsed={collapsed}
+      onToggleGroup={onToggleGroup}
+    >
       {STAGE_GROUPS.map((g) => {
         const stages = STAGES.filter((s) => s.group === g.key);
         const count = stages.reduce((n, s) => n + byStage[s.key].length, 0);
@@ -67,6 +94,7 @@ export function PipelineView({
           return (
             <section
               key={g.key}
+              data-group={g.key}
               aria-label={`${g.label}, collapsed, ${count} merchants`}
               className="flex w-11 shrink-0 snap-start flex-col rounded-lg border border-border bg-surface-2/60"
               style={{ borderTopColor: color, borderTopWidth: 4 }}
@@ -88,7 +116,12 @@ export function PipelineView({
           );
 
         return (
-          <section key={g.key} aria-label={`${g.label} stages`} className="flex shrink-0 flex-col">
+          <section
+            key={g.key}
+            data-group={g.key}
+            aria-label={`${g.label} stages`}
+            className="flex shrink-0 flex-col"
+          >
             <header
               className="rounded-t-lg border-t-4 px-2 py-1"
               style={{

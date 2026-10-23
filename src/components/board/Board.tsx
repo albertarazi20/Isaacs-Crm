@@ -11,8 +11,8 @@ import {
   type DragStartEvent,
 } from "@dnd-kit/core";
 import Link from "next/link";
-import { useCallback, useDeferredValue, useMemo, useState } from "react";
-import { moveToBucketAction } from "@/app/actions";
+import { useCallback, useDeferredValue, useEffect, useMemo, useState } from "react";
+import { moveToBucketAction, setFollowUpAction } from "@/app/actions";
 import { useApp } from "@/components/app-context";
 import { useCall, useToast } from "@/components/overlay";
 import { stageNeedsInput, useStageMove } from "@/components/stage-move/useStageMove";
@@ -20,7 +20,7 @@ import { cn, EmptyState, Input } from "@/components/ui";
 import type { ClientCard } from "@/lib/data/types";
 import { BUCKET_ORDER } from "@/lib/mca/dates";
 import { formatDate } from "@/lib/format";
-import { isStageKey, stageDef, type StageKey } from "@/lib/mca/stages";
+import { isStageKey, stageDef, TIMER_LABELS, type StageKey } from "@/lib/mca/stages";
 import { DragFace } from "./cards";
 import {
   collision,
@@ -46,7 +46,7 @@ import {
 } from "./logic";
 import { setDraggingId } from "./LazySlot";
 import { FollowUpSheet, StageSheet } from "./Sheets";
-import { useCollapsedGroups, useStoredFlag } from "./storage";
+import { rememberView, useCollapsedGroups, useStoredFlag } from "./storage";
 import { FollowUpView, PipelineView } from "./views";
 
 const A11Y = {
@@ -131,6 +131,9 @@ export function Board({ initialCards, view }: { initialCards: ClientCard[]; view
   const [activeId, setActiveId] = useState<string | null>(null);
   const [picker, setPicker] = useState<ClientCard | null>(null);
 
+  // The nav link is a bare /board: remember the view so it opens where he left off (I-9).
+  useEffect(() => rememberView(view), [view]);
+
   const deferredQuery = useDeferredValue(query);
   const visible = useMemo(
     () => filterCards(cards, { query: deferredQuery, overdueOnly }, today),
@@ -186,12 +189,33 @@ export function Board({ initialCards, view }: { initialCards: ClientCard[]; view
       track(card.id, false);
       setCards((cur) => (done ? replaceCard(cur, done) : revertCard(cur, card, guess)));
       if (!done) return;
+      // A drag only moves the follow-up. A booked call, funded check-in or renewal call keeps its own date, and the
+      // toast says so (the old date comes back with Undo, which a mis-drop needs).
+      const kept =
+        done.next_due_on !== null && done.next_due_on < dueOn && done.next_due_kind !== "follow_up"
+          ? ` (${TIMER_LABELS[done.next_due_kind ?? "follow_up"].toLowerCase()} stays ${formatDate(done.next_due_on, today)})`
+          : "";
+      const back = card.next_due_on === null || card.next_due_on < today ? today : card.next_due_on;
       toast({
         tone: "success",
-        message:
-          done.next_due_on === dueOn || done.next_due_on === null
-            ? `${card.business_name} → follow up ${formatDate(dueOn, today)}`
-            : `${card.business_name} → follow up ${formatDate(dueOn, today)} (a call is booked ${formatDate(done.next_due_on, today)})`,
+        message: `${card.business_name} → follow up ${formatDate(dueOn, today)}${kept}`,
+        action: {
+          label: "Undo",
+          onClick: () => {
+            void (async () => {
+              const undone = await call(
+                setFollowUpAction({ clientId: card.id, dueOn: back, keepCalls: true }),
+              );
+              if (undone) {
+                setCards((cur) => replaceCard(cur, undone));
+                toast({
+                  tone: "success",
+                  message: `Undone — ${card.business_name} follow up is back to ${formatDate(back, today)}`,
+                });
+              }
+            })();
+          },
+        },
       });
     },
     [call, toast, today, track],

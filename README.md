@@ -22,6 +22,7 @@ lead from 2024 is a warm call today.
 - **Reminders:** morning email digest, call heads-up, instant new-lead alert, Monday scorecard (Resend);
   send email as Isaac through his Gmail (Google OAuth); texting opens his phone / Google Voice (no SMS API).
 - **Lead intake:** `POST /api/leads` puts a new merchant on Today as "call now" (`docs/LEAD-INTAKE.md`).
+- **Backup:** Settings → Your data downloads everything as one JSON file; `scripts/restore-backup.ts` puts it back (`docs/BACKUP.md`).
 - CSV import and export, trash with restore, sign out of all devices, installable on a phone.
 
 ## Where things are
@@ -30,7 +31,7 @@ lead from 2024 is a warm call today.
 - `docs/DOMAIN.md` — the MCA model, the stages and their default timers, and what research did and did not confirm.
 - `docs/DECISIONS.md` — why it is built this way (data handling, RLS, timers, Gmail, texting, reminders).
 - `docs/REQUIREMENTS.md` — every ask from the owner, mapped to what is proven. `docs/TEST-PLAN.md`, `docs/ISSUES.md`.
-- `docs/DEPLOY.md`, `docs/LEAD-INTAKE.md`, `docs/CREW-RULES.md` (how the parallel builders were kept apart), `docs/REVIEW-*.md`.
+- `docs/DEPLOY.md`, `docs/LEAD-INTAKE.md`, `docs/BACKUP.md`, `docs/CREW-RULES.md` (how the parallel builders were kept apart), `docs/REVIEW-*.md`.
 - `db/migrations/` — Postgres schema, row-level security and the SQL functions that move clients.
 - `src/lib/mca/` — pure domain logic (stages, timers, renewal math, stips). `src/lib/data/` — queries, mutations, schemas.
 

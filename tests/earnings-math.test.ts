@@ -7,6 +7,7 @@ import {
   estimateCommission,
   expectedCommission,
   formatPoints,
+  parseCommissionText,
   pointsOf,
   sumCommission,
   type CommissionContext,
@@ -391,5 +392,34 @@ describe("review-3A A-18: payback rounds half-up on integers", () => {
       }
     }
     expect(bad).toBe(0);
+  });
+});
+
+describe("QA I-3: a commission box never turns '6' into $6.00", () => {
+  const A = 5_000_000; // $50,000
+  it("points of the advance: 6%, 6 pts, 6 points all mean $3,000", () => {
+    for (const t of ["6%", "6 pts", "6pt", "6 points", "6 POINTS", " 6 % "]) {
+      expect(parseCommissionText(t, A), t).toEqual({ ok: true, cents: 300_000, viaPoints: true });
+    }
+    expect(parseCommissionText("6.5%", A)).toMatchObject({ cents: 325_000 });
+  });
+  it("dollars: $3.5k, 3,500 and a bare 3500 are $3,500", () => {
+    for (const t of ["$3.5k", "3,500", "3500", "3.5k"]) {
+      expect(parseCommissionText(t, A), t).toEqual({ ok: true, cents: 350_000, viaPoints: false });
+    }
+  });
+  it("a bare number under $20 is asked about, not stored; $6 is explicit", () => {
+    const r = parseCommissionText("6", A);
+    expect(r.ok).toBe(false);
+    expect(!r.ok && r.error).toMatch(/6% for points, or \$6 for dollars/);
+    expect(parseCommissionText("19", A).ok).toBe(false);
+    expect(parseCommissionText("20", A)).toMatchObject({ ok: true, cents: 2_000 });
+    expect(parseCommissionText("$6", A)).toMatchObject({ ok: true, cents: 600 });
+  });
+  it("empty is fine (optional); nonsense and impossible points are refused in words", () => {
+    expect(parseCommissionText("  ", A)).toEqual({ ok: true, cents: null, viaPoints: false });
+    expect(parseCommissionText("lots", A).ok).toBe(false);
+    expect(parseCommissionText("150%", A).ok).toBe(false);
+    expect(parseCommissionText("6%", null).ok).toBe(false);
   });
 });

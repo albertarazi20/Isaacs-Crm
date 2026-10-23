@@ -7,14 +7,16 @@ import { TimerPicker } from "@/components/TimerPicker";
 import { Button, cn, Input, Select, Textarea } from "@/components/ui";
 import type { ClientCard } from "@/lib/data/types";
 import { formatDate, toLocalInput } from "@/lib/format";
-import { formatMoney } from "@/lib/money";
-import type { ISODate } from "@/lib/mca/dates";
+import { formatPoints, parseCommissionText, pointsOf } from "@/lib/earnings/commission";
+import { formatMoney, parseMoney } from "@/lib/money";
+import { addDays, type ISODate } from "@/lib/mca/dates";
 import type { Frequency } from "@/lib/mca/funding";
 import { stageDef, type StageKey } from "@/lib/mca/stages";
 import {
   centsToInput,
   checkCompetitor,
   checkDefault,
+  callTimeProblem,
   checkFunding,
   clampToToday,
   competitorCallback,
@@ -115,6 +117,16 @@ export function FundingDialog({
   const set = (k: keyof FundingForm) => (v: string) => setF((cur) => ({ ...cur, [k]: v }));
   const { errors, terms } = checkFunding(f, today);
   const preview = terms ? fundingPreview(terms, today) : null;
+  const commission = parseCommissionText(f.commission, parseMoney(f.amount));
+  const commissionCents = commission.ok ? commission.cents : null;
+  const commissionHint =
+    commission.ok && commission.cents !== null
+      ? `= ${formatMoney(commission.cents)}${
+          terms
+            ? ` · ${formatPoints(pointsOf(commission.cents, terms.amountCents) ?? 0)} points`
+            : ""
+        }`
+      : "Dollars (3.5k) or points of the advance (6%). Optional";
   const err = (k: keyof FundingForm) => (tried ? errors[k] : undefined);
   const renewing = card.funding_id !== null;
 
@@ -131,7 +143,8 @@ export function FundingDialog({
         funderName: f.funderName.trim(),
         positionNo: f.positionNo,
         termDays: f.termDays,
-        commission: f.commission,
+        // dollars, whichever way he typed it ("6%" of the advance becomes its dollar amount)
+        commission: commissionCents === null ? "" : centsToInput(commissionCents),
       },
     });
   }
@@ -240,16 +253,12 @@ export function FundingDialog({
               placeholder="120"
             />
           </Row>
-          <Row
-            label="Commission points ($)"
-            error={err("commission")}
-            hint="Your commission on this advance, optional"
-          >
+          <Row label="Your commission" error={err("commission")} hint={commissionHint}>
             <Input
               inputMode="decimal"
               value={f.commission}
               onChange={(e) => set("commission")(e.target.value)}
-              placeholder="3.5k"
+              placeholder="3.5k or 6%"
             />
           </Row>
         </div>
@@ -276,6 +285,71 @@ export function FundingDialog({
             Fill in the amount, factor rate and remittance to see the payback and the renewal date.
           </p>
         )}
+      </form>
+    </Dialog>
+  );
+}
+
+// ---- phone call scheduled ------------------------------------------------------------------
+
+/** Dragging a card onto "Phone call scheduled" asks when the call is; otherwise nothing would ever remind him. */
+export function CallDialog({ card, onSubmit, onCancel }: DialogProps) {
+  const { today, timezone } = useApp();
+  const first = useFocusFirst();
+  const { busy, send } = useBusy(onSubmit);
+  const [at, setAt] = useState(() => `${addDays(today, 1)}T10:00`);
+  const [note, setNote] = useState("");
+  const [tried, setTried] = useState(false);
+  const problem = callTimeProblem(at, today);
+
+  function submit() {
+    setTried(true);
+    if (problem) return;
+    void send({ callAt: at, reason: note.trim() });
+  }
+
+  return (
+    <Dialog
+      open
+      onClose={() => !busy && onCancel()}
+      title={`${card.business_name} — when is the call?`}
+      footer={
+        <>
+          <Button variant="ghost" onClick={onCancel} disabled={busy}>
+            Cancel
+          </Button>
+          <Button disabled={busy} onClick={() => void send({})}>
+            Move without a time
+          </Button>
+          <Button variant="primary" type="submit" form="call-form" disabled={busy}>
+            {busy ? "Booking…" : "Book the call"}
+          </Button>
+        </>
+      }
+    >
+      <form
+        ref={first}
+        id="call-form"
+        noValidate
+        className="space-y-4"
+        onSubmit={(e) => {
+          e.preventDefault();
+          submit();
+        }}
+      >
+        <p className="text-sm text-muted">
+          With a time booked you get the reminder, and the call shows on Today at that time.
+        </p>
+        <Row label={`When (${timezone.replace("_", " ")})`} error={tried ? problem : undefined}>
+          <Input type="datetime-local" value={at} onChange={(e) => setAt(e.target.value)} />
+        </Row>
+        <Row label="What it's about" hint="Optional">
+          <Input
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+            placeholder="Review offers, get statements…"
+          />
+        </Row>
       </form>
     </Dialog>
   );

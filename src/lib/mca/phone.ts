@@ -6,6 +6,17 @@ export function normalizeUS(raw: string): string | null {
   return null;
 }
 
+/**
+ * Why Call and Text are off for this phone field, in plain words, or null when the number can be
+ * dialed. An empty field and a field with no usable number (like "call his cell") read differently.
+ */
+export function phoneProblem(raw: string): string | null {
+  if (normalizeUS(raw)) return null;
+  return raw.trim() === ""
+    ? "No phone number on file. Add one in Edit details."
+    : "Not a usable phone number. Fix it in Edit details.";
+}
+
 export function formatUS(raw: string): string {
   const e164 = normalizeUS(raw);
   if (!e164) return raw;

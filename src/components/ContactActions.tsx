@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useId, useState } from "react";
 import { logTouchAction, sendEmailAction } from "@/app/actions";
 import type { ISODate } from "@/lib/mca/dates";
 import { formatDate } from "@/lib/format";
@@ -9,6 +9,7 @@ import { emailBody, emailSubject, textTemplate } from "@/lib/mca/templates";
 import {
   gmailComposeHref,
   normalizeUS,
+  phoneProblem,
   smsHref,
   telHref,
   voiceCallHref,
@@ -114,17 +115,26 @@ export function ContactActions({
   client,
   size = "sm",
   suggestedText,
+  explain,
 }: {
   client: ContactTarget;
   size?: "sm" | "md";
   /** A ready-made message for the Text dialog to start from (win-back uses a reason-aware one). */
   suggestedText?: string;
+  /**
+   * Say in words, under the buttons, why Call and Text are greyed out for a phone number that cannot
+   * be dialed. "touch" shows it on phones only (no tooltips there; cards stay as tall as before on a
+   * desktop). The reason is always in the buttons' tooltip too.
+   */
+  explain?: "always" | "touch";
 }) {
   const { senderName } = useApp();
   const toast = useToast();
+  const whyId = useId();
   const [textOpen, setTextOpen] = useState(false);
   const [emailOpen, setEmailOpen] = useState(false);
   const e164 = normalizeUS(client.phone);
+  const phoneWhy = phoneProblem(client.phone);
   const status = client.contact_status ?? "ok";
   const callOk = contactAllowed(status, "call");
   const textOk = contactAllowed(status, "text");
@@ -155,15 +165,21 @@ export function ContactActions({
     });
   }
 
+  // A blocked contact status wins: that is the reason that matters. Otherwise say what is wrong with the number.
+  const callWhy = callOk.ok ? phoneWhy : callOk.reason;
+  const textWhy = textOk.ok ? phoneWhy : textOk.reason;
+  const showWhy = explain !== undefined && phoneWhy !== null;
+
   return (
-    <div className="flex items-center gap-1.5">
+    <div className="flex flex-wrap items-center gap-1.5">
       <Button
         size={size}
         variant="secondary"
         onClick={call}
         aria-label={`Call ${client.business_name}`}
+        aria-describedby={showWhy && !e164 ? whyId : undefined}
         disabled={!e164 || !callOk.ok}
-        title={callOk.ok ? undefined : callOk.reason}
+        title={callWhy ?? undefined}
       >
         📞 Call
       </Button>
@@ -172,8 +188,9 @@ export function ContactActions({
         variant="secondary"
         onClick={() => setTextOpen(true)}
         aria-label={`Text ${client.business_name}`}
+        aria-describedby={showWhy && !e164 ? whyId : undefined}
         disabled={!e164 || !textOk.ok}
-        title={textOk.ok ? undefined : textOk.reason}
+        title={textWhy ?? undefined}
       >
         💬 Text
       </Button>
@@ -191,6 +208,18 @@ export function ContactActions({
         <span className="rounded-md bg-bad-soft px-1.5 py-0.5 text-xs font-semibold whitespace-nowrap text-bad">
           {CONTACT_STATUS_LABELS[status]}
         </span>
+      ) : null}
+      {showWhy ? (
+        <p
+          id={whyId}
+          className={cn(
+            // w-0 + min-w-full: its own line, but it never widens the buttons' row.
+            "w-0 min-w-full text-xs text-warn",
+            explain === "touch" && "pointer-fine:hidden",
+          )}
+        >
+          {phoneWhy}
+        </p>
       ) : null}
       <TextDialog
         open={textOpen}

@@ -142,6 +142,19 @@ describe("raw email for Gmail", () => {
     );
     expect(msg).toMatch(/Subject: =\?UTF-8\?B\?[A-Za-z0-9+/=]+\?=/);
   });
+  it("review-3B B-17: a long non-ASCII subject is split into short encoded words that decode back whole", () => {
+    const subject = `Update on your offers — ${"Pizzería Núñez ".repeat(12)}`.trim();
+    const msg = decode(buildRawEmail({ from: "a@b.com", to: "c@d.com", subject, text: "x" }));
+    const header =
+      /Subject: ((?:=\?UTF-8\?B\?[A-Za-z0-9+/=]+\?=(?:\r\n )?)+)\r\n/.exec(msg)?.[1] ?? "";
+    const words = header.split("\r\n ");
+    expect(words.length).toBeGreaterThan(1);
+    for (const w of words) expect(w.length).toBeLessThanOrEqual(75);
+    const decoded = words
+      .map((w) => Buffer.from(w.slice("=?UTF-8?B?".length, -2), "base64").toString("utf8"))
+      .join("");
+    expect(decoded).toBe(subject);
+  });
   it("refuses header injection", () => {
     expect(() =>
       buildRawEmail({ from: "a@b.com", to: "c@d.com\r\nBcc: evil@z.com", subject: "x", text: "x" }),
