@@ -161,7 +161,7 @@ export async function moveClient(q: Db, input: MoveInput, ctx: UserContext): Pro
       await q.query(
         `insert into competing_offers (user_id, client_id, funder_name, amount_cents, factor_rate, payment_cents,
                                        frequency, position_no, term_days, offered_on, won, note)
-         select user_id, id, $2, $3, $4, $5, $6, $7, $8, coalesce($9::date, current_date), true, $10 from clients where id = $1`,
+         select user_id, id, $2, $3, $4, $5, $6, $7, $8, coalesce($9::date, app.local_today()), true, $10 from clients where id = $1`,
         [
           clientId,
           c.funderName,
@@ -447,7 +447,7 @@ export async function saveOffer(q: Db, input: z.output<typeof offerSchema>): Pro
   await q.query(
     `insert into competing_offers (user_id, client_id, funder_name, amount_cents, factor_rate, payment_cents,
                                    frequency, position_no, term_days, offered_on, won, note)
-     select user_id, id, $2, $3, $4, $5, $6, $7, $8, coalesce($9::date, current_date), $10, $11 from clients where id = $1`,
+     select user_id, id, $2, $3, $4, $5, $6, $7, $8, coalesce($9::date, app.local_today()), $10, $11 from clients where id = $1`,
     [input.clientId, ...v],
   );
 }

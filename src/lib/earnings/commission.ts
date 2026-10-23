@@ -34,6 +34,9 @@ export function parseCommissionText(text: string, amountCents: number | null): C
     if (!amountCents) return { ok: false, error: "Enter the advance amount first to use points" };
     return { ok: true, cents: centsFromPoints(points, amountCents), viaPoints: true };
   }
+  // a comma is a thousands separator: "3,500" is fine, "6,5" is a typo for something else
+  if (raw.includes(",") && !/^\$?\d{1,3}(,\d{3})+(\.\d+)?$/.test(raw))
+    return { ok: false, error: "Use 3,500 or 3.5k for dollars, or 6% for points" };
   const cents = parseMoney(raw);
   if (cents === null) return { ok: false, error: "Enter dollars like 3.5k, or points like 6%" };
   const explicit = /[$,km]/i.test(raw);

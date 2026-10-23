@@ -1,5 +1,6 @@
 import type { ClientCard } from "@/lib/data/types";
 import { parseCommissionText } from "@/lib/earnings/commission";
+import { DAYS_PER_REMITTANCE, MAX_PAYOFF_DAYS } from "@/lib/earnings/terms";
 import { toLocalInput } from "@/lib/format";
 import { addDays, addMonths, type ISODate } from "@/lib/mca/dates";
 import {
@@ -12,7 +13,7 @@ import {
 } from "@/lib/mca/funding";
 import { defaultTimers, FUNDED_CHECK_IN_DAYS, LOST_FALLBACK_MONTHS } from "@/lib/mca/stages";
 import type { StageKey } from "@/lib/mca/stages";
-import { parseFactor, parseMoney } from "@/lib/money";
+import { formatMoney, parseFactor, parseMoney } from "@/lib/money";
 
 export const FREQUENCIES: readonly { value: Frequency; label: string }[] = [
   { value: "daily", label: "Daily" },
@@ -125,10 +126,14 @@ export function checkFunding(
   );
   set("payment", moneyProblem(f.payment, true, "Enter the remittance amount, like 450"));
   set("positionNo", wholeProblem(f.positionNo, "Position", 1));
+  if (!errors.positionNo && f.positionNo.trim() !== "" && Number(f.positionNo) > 20)
+    errors.positionNo = "Position must be a whole number from 1 to 20";
   set("termDays", wholeProblem(f.termDays, "Term", 1));
   const amount = parseMoney(f.amount);
   const commission = parseCommissionText(f.commission, amount);
   set("commission", commission.ok ? undefined : commission.error);
+  if (commission.ok && commission.cents !== null && amount !== null && commission.cents > amount)
+    errors.commission = "Commission can't be more than the advance";
   const payment = parseMoney(f.payment);
   // The preview only needs the money terms, so it keeps working while an optional field is wrong.
   if (!DATE_RE.test(f.fundedOn) || !amount || !payment || factor === null)
@@ -140,8 +145,12 @@ export function checkFunding(
     paymentCents: payment,
     frequency: f.frequency,
   };
-  if (payment > paybackCents(amount, factor))
-    errors.payment = "One remittance can't be more than the whole payback";
+  const payback = paybackCents(amount, factor);
+  if (payment > payback) errors.payment = "One remittance can't be more than the whole payback";
+  else if (Math.ceil(payback / payment) * DAYS_PER_REMITTANCE[f.frequency] > MAX_PAYOFF_DAYS) {
+    const remit = formatMoney(payment);
+    errors.payment = `At ${remit} this advance would take more than 5 years to pay back — check the remittance amount`;
+  }
   return { errors, terms };
 }
 
@@ -261,6 +270,10 @@ export interface UndoInput {
  * true undo: leaving Funded would record a second advance, and a move that wrote a funding or
  * competitor record leaves that record behind.
  */
+/** Did this move write something a plain move back would leave behind (an advance, a rival's offer, a booked call)? */
+export const wroteRecord = (extra: Record<string, unknown>): boolean =>
+  "funding" in extra || "competitor" in extra || "callAt" in extra;
+
 export function undoInput(
   prev: ClientCard,
   to: StageKey,

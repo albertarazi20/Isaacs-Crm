@@ -2,11 +2,17 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { trashClientAction, updateClientAction } from "@/app/actions";
+import {
+  findDuplicatesAction,
+  mergeClientsAction,
+  trashClientAction,
+  updateClientAction,
+} from "@/app/actions";
+import type { DuplicateMatch } from "@/lib/data/queries";
 import type { ClientDetail } from "@/lib/data/types";
 import { formatDate, relativeDay } from "@/lib/format";
 import { formatUS, normalizeUS } from "@/lib/mca/phone";
-import { STAGE_GROUPS, STAGES, TIMER_LABELS } from "@/lib/mca/stages";
+import { stageDef, STAGE_GROUPS, STAGES, TIMER_LABELS } from "@/lib/mca/stages";
 import { formatMoney } from "@/lib/money";
 import { ContactStatusButton } from "./ContactStatus";
 import { ContactActions } from "../ContactActions";
@@ -14,6 +20,7 @@ import { SourceInput } from "../SourceInput";
 import { StageBadge } from "../StageBadge";
 import { useStageMove } from "../stage-move/useStageMove";
 import { useApp } from "../app-context";
+import { useCall } from "../overlay";
 import { Button, cn, Field, Input, Select } from "../ui";
 import { clientFieldsPayload, clientForm, dateInTz, dueTone, type ClientForm } from "./logic";
 import { FormDialog, Muted, Stat, useCopy, useFormState, useRun } from "./parts";
@@ -176,11 +183,29 @@ export function ClientDetails({ detail, className }: { detail: ClientDetail; cla
 
 function EditClientDialog({ card, onClose }: { card: ClientDetail["card"]; onClose: () => void }) {
   const run = useRun();
+  const call = useCall();
+  const router = useRouter();
   const { v, bind } = useFormState<ClientForm>(() => clientForm(card));
   const [busy, setBusy] = useState(false);
+  // Another card that looks like this one, found when the phone or name was changed (the same warning Add client gives).
+  const [dupes, setDupes] = useState<DuplicateMatch[] | null>(null);
+  const [merging, setMerging] = useState<DuplicateMatch | null>(null);
+  const identityChanged =
+    normalizeUS(v.phone) !== normalizeUS(card.phone) ||
+    v.businessName.trim().toLowerCase() !== card.business_name.trim().toLowerCase();
 
-  async function save() {
+  async function save(force = false) {
     setBusy(true);
+    if (!force && identityChanged) {
+      const found = await call(
+        findDuplicatesAction({ phone: v.phone, businessName: v.businessName, excludeId: card.id }),
+      );
+      if (found && found.length > 0) {
+        setDupes(found);
+        setBusy(false);
+        return;
+      }
+    }
     const ok = await run(
       updateClientAction({ clientId: card.id, fields: clientFieldsPayload(v) }),
       "Details saved",
@@ -189,12 +214,26 @@ function EditClientDialog({ card, onClose }: { card: ClientDetail["card"]; onClo
     if (ok) onClose();
   }
 
+  async function merge(other: DuplicateMatch) {
+    setBusy(true);
+    const ok = await run(
+      mergeClientsAction({ keepId: card.id, dropId: other.id }),
+      `Merged ${other.business_name} into ${card.business_name}`,
+    );
+    setBusy(false);
+    if (ok) {
+      onClose();
+      router.refresh();
+    }
+  }
+
   return (
     <FormDialog
       title="Edit details"
       onClose={onClose}
-      onSubmit={() => void save()}
+      onSubmit={() => void save(dupes !== null)}
       busy={busy}
+      submitLabel={dupes ? "Save anyway" : "Save"}
       wide
     >
       <div className="grid gap-3 sm:grid-cols-2">
@@ -239,6 +278,63 @@ function EditClientDialog({ card, onClose }: { card: ClientDetail["card"]; onClo
           <Input {...bind("applicationReceivedOn")} type="date" />
         </Field>
       </div>
+      {dupes ? (
+        <div
+          role="alert"
+          className="space-y-2 rounded-lg border border-warn bg-warn-soft p-3 text-sm"
+        >
+          <p className="font-semibold text-warn">This looks like someone you already have:</p>
+          <ul className="space-y-2">
+            {dupes.map((d) => (
+              <li key={d.id} className="space-y-1">
+                <a href={`/clients/${d.id}`} className="font-medium text-accent underline">
+                  {d.business_name}
+                </a>{" "}
+                <span className="text-muted">
+                  ({stageDef(d.stage).label}) — {d.reason}
+                  {d.trashed ? " — removed, but marked do-not-contact." : ""}
+                </span>
+                {d.trashed ? null : merging?.id === d.id ? (
+                  <div className="space-y-2 rounded-md bg-surface p-2">
+                    <p>
+                      This moves every note, advance, stip and offer from{" "}
+                      <strong>{d.business_name}</strong> onto <strong>{card.business_name}</strong>,
+                      then removes the other card. It can&apos;t be undone.
+                    </p>
+                    <div className="flex flex-wrap gap-2">
+                      <Button
+                        size="sm"
+                        variant="primary"
+                        disabled={busy}
+                        onClick={() => void merge(d)}
+                      >
+                        {busy ? "Merging…" : "Yes, merge them"}
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        disabled={busy}
+                        onClick={() => setMerging(null)}
+                      >
+                        Back
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
+                  <div>
+                    <Button size="sm" onClick={() => setMerging(d)}>
+                      Same merchant — merge into this card
+                    </Button>
+                  </div>
+                )}
+              </li>
+            ))}
+          </ul>
+          <p className="text-muted">
+            Not the same business? Choose <em>Save anyway</em> and both cards stay.
+          </p>
+        </div>
+      ) : null}
     </FormDialog>
   );
 }

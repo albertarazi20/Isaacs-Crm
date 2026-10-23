@@ -15,6 +15,16 @@ export function parseISODate(s: ISODate): Date {
   return d;
 }
 
+/** A YYYY-MM-DD that is a day on the calendar: 2026-02-30 and 2026-13-01 are not. */
+export function isRealDate(s: string): boolean {
+  try {
+    parseISODate(s);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export function addDays(s: ISODate, n: number): ISODate {
   const d = parseISODate(s);
   d.setUTCDate(d.getUTCDate() + n);

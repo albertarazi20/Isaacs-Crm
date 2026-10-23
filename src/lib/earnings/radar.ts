@@ -154,7 +154,8 @@ export function buildRadar(input: RadarInput): Radar {
         card,
         advance: last,
         daysSincePaidOff: days,
-        hot: days <= HOT_DAYS,
+        // still listed (the buttons are what is disabled), but never "hot": a do-not-contact merchant is not a lead to call
+        hot: days <= HOT_DAYS && card.contact_status !== "dnc",
         expected: last ? expectedCommission(last, commission) : null,
         ...contactOf(card, today, timezone),
       });

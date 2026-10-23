@@ -15,7 +15,7 @@ import {
   FundingDialog,
   type Submit,
 } from "./dialogs";
-import { isDefaultStage, needsInput, undoInput, type FundingPrefill } from "./forms";
+import { isDefaultStage, needsInput, undoInput, wroteRecord, type FundingPrefill } from "./forms";
 import { MoveToasts, type RecentMove } from "./MoveToasts";
 
 export interface MoveOptions {
@@ -80,7 +80,7 @@ export function useStageMove(): StageMove {
       const updated = await call(moveClientAction({ clientId: card.id, stage, ...extra }));
       if (!updated) return null;
       const key = nextKey.current++;
-      const undo = undoInput(card, stage, "funding" in extra || "competitor" in extra, {
+      const undo = undoInput(card, stage, wroteRecord(extra), {
         today,
         timezone,
       });

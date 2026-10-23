@@ -11,7 +11,7 @@ import {
   type FundingTerms,
 } from "../mca/funding";
 import { parseFactor, parseMoney } from "../money";
-import { centsFromPoints, formatPoints, pointsOf } from "./commission";
+import { centsFromPoints, formatPoints, parseCommissionText, pointsOf } from "./commission";
 
 /** A funding row as the client page loads it. The two commission-received columns are new (migration 0020). */
 export type EditableFunding = FundingRow & {
@@ -33,6 +33,12 @@ export interface TermsForm {
   termDays: string;
   commissionMode: CommissionMode;
   commission: string;
+  /**
+   * Set when the dollars/points switch rewrote the box: the exact cents it stood for, and the text it produced. While
+   * the box still holds that text, those cents are the commission — flipping the switch must not change money
+   * (rounding $2,533 to 5.07 points would otherwise save $2,535).
+   */
+  commissionBase?: { cents: number; text: string };
   commissionReceived: string;
   commissionReceivedOn: string;
   paidBackOverride: string;
@@ -87,7 +93,7 @@ const LOCAL_DT_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/;
 
 /** Payoff beyond this many days is a mistyped remittance (the database refuses it too). */
 export const MAX_PAYOFF_DAYS = 1830;
-const DAYS_PER_REMITTANCE: Record<Frequency, number> = {
+export const DAYS_PER_REMITTANCE: Record<Frequency, number> = {
   daily: 7 / 5,
   weekly: 7,
   biweekly: 14,
@@ -167,7 +173,13 @@ export function checkTerms(f: TermsForm, today: ISODate): CheckedTerms {
 
   // commission, in dollars or points
   let commissionCents: number | null = null;
-  if (f.commission.trim() !== "") {
+  if (f.commissionBase && f.commission === f.commissionBase.text) {
+    commissionCents = f.commissionBase.cents;
+    if (amount !== null && commissionCents > amount) {
+      errors.commission = "Commission can't be more than the advance";
+      commissionCents = null;
+    }
+  } else if (f.commission.trim() !== "") {
     if (f.commissionMode === "points") {
       const pts = Number(f.commission.trim().replace(/%$/, ""));
       if (!Number.isFinite(pts) || pts < 0 || pts > 100)
@@ -176,8 +188,10 @@ export function checkTerms(f: TermsForm, today: ISODate): CheckedTerms {
         errors.commission = "Enter the advance amount first to turn points into dollars";
       else commissionCents = centsFromPoints(pts, amount);
     } else {
-      commissionCents = parseMoney(f.commission);
-      if (commissionCents === null) errors.commission = "Use an amount like 2500 or $2,500";
+      // the same reading as the Funded dialog: "6" is a question, "6%" and "$3k" are answers
+      const parsed = parseCommissionText(f.commission, amount);
+      if (parsed.ok) commissionCents = parsed.cents;
+      else errors.commission = parsed.error;
     }
     if (commissionCents !== null && amount !== null && commissionCents > amount) {
       errors.commission = "Commission can't be more than the advance";
@@ -226,18 +240,26 @@ export function checkTerms(f: TermsForm, today: ISODate): CheckedTerms {
 export function switchCommissionMode(f: TermsForm, mode: CommissionMode): TermsForm {
   if (mode === f.commissionMode) return f;
   const amount = parseMoney(f.amount);
-  let commission = f.commission;
-  if (commission.trim() !== "" && amount !== null && amount > 0) {
-    if (mode === "points") {
-      const cents = parseMoney(commission);
-      const p = cents === null ? null : pointsOf(cents, amount);
-      if (p !== null) commission = formatPoints(p);
-    } else {
-      const pts = Number(commission.trim().replace(/%$/, ""));
-      if (Number.isFinite(pts)) commission = moneyInput(centsFromPoints(pts, amount));
-    }
+  const typed = f.commission.trim();
+  if (typed === "" || amount === null || amount <= 0) return { ...f, commissionMode: mode };
+  // the exact cents this box stands for: remembered from the last switch while he has not typed since
+  const pts = Number(typed.replace(/%$/, ""));
+  const cents =
+    f.commissionBase && f.commission === f.commissionBase.text
+      ? f.commissionBase.cents
+      : f.commissionMode === "dollars"
+        ? parseMoney(typed)
+        : Number.isFinite(pts)
+          ? centsFromPoints(pts, amount)
+          : null;
+  if (cents === null) {
+    const rest: TermsForm = { ...f, commissionMode: mode };
+    delete rest.commissionBase;
+    return rest;
   }
-  return { ...f, commissionMode: mode, commission };
+  const commission =
+    mode === "points" ? formatPoints(pointsOf(cents, amount) ?? 0) : moneyInput(cents);
+  return { ...f, commissionMode: mode, commission, commissionBase: { cents, text: commission } };
 }
 
 export interface TermsPreview {

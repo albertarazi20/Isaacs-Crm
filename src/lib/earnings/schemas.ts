@@ -1,9 +1,13 @@
 import "../zod-setup";
 import { z } from "zod";
 import { findSensitive } from "../data/sensitive";
+import { isRealDate } from "../mca/dates";
 import { parseFactor, parseMoney } from "../money";
 
-const isoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Use a YYYY-MM-DD date");
+const isoDate = z
+  .string()
+  .regex(/^\d{4}-\d{2}-\d{2}$/, "Use a YYYY-MM-DD date")
+  .refine(isRealDate, "That isn't a real calendar date");
 const localDateTime = z.string().regex(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/, "Pick a date and time");
 const id = z.string().uuid();
 const frequency = z.enum(["daily", "weekly", "biweekly", "monthly"]);

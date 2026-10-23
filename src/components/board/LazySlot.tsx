@@ -97,7 +97,12 @@ function subscribe(onChange: () => void): () => void {
   };
 }
 
-const ESTIMATED_HEIGHT = 150;
+/**
+ * What an unseen card is guessed to be until it has been on screen once: roughly the median real card (about 170px
+ * on a desktop column, 215px on a phone, where the 40px tap targets make cards taller). A low guess made every card
+ * that mounted push the ones below it down by the difference, so a card scrolled to the top of its column slid away.
+ */
+const GUESSED_HEIGHT = "h-[170px] max-sm:h-[215px]";
 
 export function LazySlot({
   id,
@@ -112,7 +117,7 @@ export function LazySlot({
   children: ReactNode;
 }) {
   const [shown, setShown] = useState(eager);
-  const [height, setHeight] = useState(ESTIMATED_HEIGHT);
+  const [height, setHeight] = useState<number | null>(null);
   const node = useRef<HTMLDivElement>(null);
   const wantFocus = useRef(false);
   const dragging = useSyncExternalStore(
@@ -152,7 +157,11 @@ export function LazySlot({
   }, []);
 
   return (
-    <div ref={node} style={live ? undefined : { height }}>
+    <div
+      ref={node}
+      className={live || height !== null ? undefined : GUESSED_HEIGHT}
+      style={live || height === null ? undefined : { height }}
+    >
       {live ? (
         children
       ) : (

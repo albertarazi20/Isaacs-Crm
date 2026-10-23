@@ -332,7 +332,7 @@ export default async function fundersFlow({ email }) {
     funder: await val("Funder"),
     position: await val("Position"),
     term: await val("Estimated term (days)"),
-    commission: await val("Commission points ($)"),
+    commission: await val("Your commission"),
   };
   check(
     "the Funded dialog is pre-filled from the accepted offer",

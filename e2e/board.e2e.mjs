@@ -894,7 +894,7 @@ export default async function boardFlow({ email }) {
       funder: "Libertas",
     });
     await field(d, /^Estimated term/).fill("120");
-    await field(d, /^Commission points/).fill("3.5k");
+    await field(d, /^Your commission/).fill("3.5k");
     const preview = (await d.innerText()).replace(/\s+/g, " ");
     check(
       "preview shows payback $67,500 and the 30-day check-in",
@@ -965,21 +965,25 @@ export default async function boardFlow({ email }) {
     const name = "Crescent Pharmacy";
     const c = await clientOf(name);
     await dragInto(page, name, "Phone call scheduled");
-    const asked = await dialogOf(page)
-      .isVisible()
-      .catch(() => false);
-    if (asked)
-      await dialogOf(page)
-        .getByRole("button", { name: /Cancel|Skip/ })
-        .first()
-        .click();
-    await until(async () => (await clientOf(name)).stage === "call_scheduled", 4000);
+    const d = dialogOf(page);
+    await d.getByRole("heading", { name: /when is the call/ }).waitFor({ timeout: 4000 });
+    check(
+      "a card dropped on 'Phone call scheduled' asks when the call is, and has not moved yet",
+      (await clientOf(name)).stage !== "call_scheduled",
+    );
+    const day = addDays(today, 2);
+    await d.getByLabel(/^When/).fill(`${day}T10:30`);
+    await d.getByLabel(/^What it's about/).fill("go over the offers");
+    await d.getByRole("button", { name: "Book the call" }).click();
+    await waitDialogGone(page);
+    await until(async () => (await clientOf(name)).stage === "call_scheduled", 5000);
     const row = await one("select scheduled_call_at from clients where id = $1", [c.id]);
     const t = await openTimers(c.id);
     check(
-      "a card dropped on 'Phone call scheduled' either asks for the time or has a booked call (the column says 'Time is booked')",
-      asked || row.scheduled_call_at !== null || t.some((x) => x.kind === "scheduled_call"),
-      `dialog asked: ${asked}; scheduled_call_at ${row.scheduled_call_at}; timers ${t.map((x) => x.kind)}`,
+      "DB: stage is call_scheduled, the call time is stored, and a scheduled_call timer is on that day",
+      row.scheduled_call_at !== null &&
+        t.some((x) => x.kind === "scheduled_call" && x.due_on === day),
+      `scheduled_call_at ${row.scheduled_call_at}; timers ${t.map((x) => `${x.kind}:${x.due_on}`)}`,
     );
     check("…and it still has a follow-up either way", t.length >= 1);
   });
@@ -994,19 +998,35 @@ export default async function boardFlow({ email }) {
     await fillFunded(d, { amount: "50k", factor: "1.3", remit: "400" });
     const label = await d
       .locator("label")
-      .filter({ hasText: /^Commission/ })
+      .filter({ hasText: /^Your commission/ })
       .first()
       .innerText();
-    await field(d, /^Commission/).fill("6");
+    check("the commission box is not labelled 'points ($)' any more", !/\$\)/.test(label), label);
+    // A bare "6" is a question, never a guess.
+    await field(d, /^Your commission/).fill("6");
+    await d.getByRole("button", { name: "Mark funded" }).click();
+    await until(async () => false, 500);
+    check(
+      "typing a bare '6' asks whether it is points or dollars, and nothing is stored",
+      (await d.getByText(/points or dollars/).count()) > 0 &&
+        (await d.isVisible()) &&
+        (await clientOf(name)).stage !== "funded" &&
+        (await latestFunding(c.id)) === undefined,
+    );
+    // "6%" is six points of the advance: $3,000 on $50k, shown before saving.
+    await field(d, /^Your commission/).fill("6%");
+    check(
+      "'6%' shows what it comes to ($3,000) before he saves",
+      (await d.innerText()).replace(/\s+/g, " ").includes("= $3,000"),
+    );
     await d.getByRole("button", { name: "Mark funded" }).click();
     await waitDialogGone(page);
     await until(async () => (await clientOf(name)).stage === "funded");
     const f = await latestFunding(c.id);
-    const refused = (await clientOf(name)).stage !== "funded";
     check(
-      "typing '6' in the commission box (brokers say '6 points') is read as 6 points ($3,000 on $50k), or refused, never stored as $6",
-      refused || f?.commission === 300_000,
-      `label "${label.replace(/\s+/g, " ")}"; stored commission_cents = ${f?.commission}`,
+      "DB: '6%' of $50,000 is stored as 300000 cents ($3,000), never $6",
+      f?.commission === 300_000,
+      `stored commission_cents = ${f?.commission}`,
     );
   });
 
@@ -1101,7 +1121,7 @@ export default async function boardFlow({ email }) {
     const rules = {
       spoke_with_owner: ["Spoke with owner", { b: 2 }],
       interested: ["Interested", { b: 2 }],
-      call_scheduled: ["Phone call scheduled", { b: 1 }],
+      call_scheduled: ["Phone call scheduled", { b: 1, ask: true }],
       application_sent: ["Application sent", { b: 3 }],
       application_in: ["Application in", { b: 1 }],
       stips: ["Collecting stips", { b: 2 }],
@@ -1132,6 +1152,10 @@ export default async function boardFlow({ email }) {
         await d.waitFor({ timeout: 4000 }).catch(() => undefined);
         await fillFunded(d, { amount: "30k", factor: "1.4", remit: "300" });
         await d.getByRole("button", { name: "Mark funded" }).click();
+      } else if (r.ask) {
+        // dropping on "Phone call scheduled" asks when the call is; the walk moves him without a time
+        const d = dialogOf(page);
+        await d.getByRole("button", { name: "Move without a time" }).click();
       } else if (r.skip) {
         const d = dialogOf(page);
         const asked = await d

@@ -205,7 +205,7 @@ describe("A-8: accepting an offer, and undoing it", () => {
     expect(await states(offers)).toEqual({ [o1]: "open", [o2]: "declined", [o3]: "open" });
   });
 
-  it("switching the accepted offer works, and undoing the switch puts the first one back", async () => {
+  it("switching the accepted offer works, and undoing the switch reopens both (the first is open again, not accepted)", async () => {
     const { offers } = await threeOffers();
     const [o1, o2, o3] = offers as [string, string, string];
     await accept(o1);

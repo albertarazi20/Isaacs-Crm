@@ -123,6 +123,12 @@ export async function removeSubmission(q: Db, submissionId: string): Promise<voi
 
 /** An offer typed wrong: remove it and enter it again. (A funder's yes stays a yes.) */
 export async function removeOffer(q: Db, offerId: string): Promise<void> {
-  const res = await q.query("delete from offers where id = $1", [offerId]);
-  if (res.rowCount === 0) throw new UserError("That offer no longer exists");
+  // remove_offer locks the merchant first, brings back the offers turned down by this one's acceptance, and logs it
+  try {
+    await q.query("select remove_offer($1)", [offerId]);
+  } catch (e) {
+    if ((e as { code?: string } | null)?.code === "P0002")
+      throw new UserError("That offer no longer exists");
+    throw e;
+  }
 }

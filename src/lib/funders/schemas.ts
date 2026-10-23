@@ -1,6 +1,7 @@
 import "../zod-setup";
 import { z } from "zod";
 import { findSensitive } from "../data/sensitive";
+import { isRealDate } from "../mca/dates";
 import { parseFactor, parseMoney } from "../money";
 import { parseStateList, splitList } from "./states";
 import { DECLINE_REASONS, OFFER_STATUSES, SUBMISSION_STATUSES } from "./types";
@@ -8,7 +9,10 @@ import { DECLINE_REASONS, OFFER_STATUSES, SUBMISSION_STATUSES } from "./types";
 // Same rules as src/lib/data/schemas.ts (not exported there, and that file is not ours to edit):
 // single-line fields have no control characters, free text refuses SSNs / card / account numbers.
 
-const isoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Use a YYYY-MM-DD date");
+const isoDate = z
+  .string()
+  .regex(/^\d{4}-\d{2}-\d{2}$/, "Use a YYYY-MM-DD date")
+  .refine(isRealDate, "That isn't a real calendar date");
 const id = z.string().uuid();
 
 const text = (max = 2000) =>
