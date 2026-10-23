@@ -45,6 +45,9 @@ export async function findDuplicatesAction(
 export async function addClientAction(input: unknown): Promise<ActionResult<Card>> {
   return run((q, ctx) => m.createClient(q, s.newClientSchema.parse(input), ctx));
 }
+export async function mergeClientsAction(input: unknown): Promise<ActionResult<Card>> {
+  return run((q) => m.mergeClients(q, s.mergeSchema.parse(input)));
+}
 export async function moveClientAction(input: unknown): Promise<ActionResult<Card>> {
   return run((q, ctx) => m.moveClient(q, s.moveSchema.parse(input), ctx));
 }

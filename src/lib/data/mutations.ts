@@ -18,6 +18,7 @@ import type { ClientCard, UserContext } from "./types";
 import type { z } from "zod";
 import type {
   askSchema,
+  mergeSchema,
   bucketSchema,
   contactStatusSchema,
   followUpSchema,
@@ -291,6 +292,14 @@ export async function scheduleCall(
   const at = await localToInstant(q, input.at, ctx.timezone);
   await q.query("select * from schedule_call($1, $2, $3)", [input.clientId, at, input.note]);
   return mustCard(q, input.clientId);
+}
+
+export async function mergeClients(
+  q: Db,
+  input: z.output<typeof mergeSchema>,
+): Promise<ClientCard> {
+  await q.query("select * from merge_clients($1, $2)", [input.keepId, input.dropId]);
+  return mustCard(q, input.keepId);
 }
 
 export async function cancelCall(q: Db, clientId: string): Promise<ClientCard> {

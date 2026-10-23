@@ -69,13 +69,7 @@ function CopyValue({ value, shown, label }: { value: string; shown: string; labe
   );
 }
 
-export function ClientDetails({
-  detail,
-  className,
-}: {
-  detail: ClientDetail;
-  className?: string;
-}) {
+export function ClientDetails({ detail, className }: { detail: ClientDetail; className?: string }) {
   const { card } = detail;
   const { today, timezone } = useApp();
   const { requestMove, dialogs } = useStageMove();

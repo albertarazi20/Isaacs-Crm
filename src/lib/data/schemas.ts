@@ -266,6 +266,8 @@ export const offerSchema = z.object({
 
 export const idSchema = z.object({ id });
 export const clientIdSchema = z.object({ clientId: id });
+/** Two cards for one merchant: everything on `dropId` moves to `keepId`, and `dropId` is deleted. */
+export const mergeSchema = z.object({ keepId: id, dropId: id });
 export const stipSchema = z.object({ stipId: id, received: z.boolean() });
 
 export const emailSchema = z.object({

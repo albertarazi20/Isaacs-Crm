@@ -273,7 +273,6 @@ export default async function mobileUi({ email }) {
     const geo = await p.evaluate(() => {
       const li = document.querySelector("ul[aria-label=Clients] > li");
       const r = li?.getBoundingClientRect();
-      const badge = li?.querySelector("span.rounded-md");
       const links = [...document.querySelectorAll("ul[aria-label=Clients] > li")].length;
       const over = document.documentElement.scrollWidth - innerWidth;
       return {
