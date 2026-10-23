@@ -1,5 +1,10 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
-import { runReminders, sendTestDigest, type DigestSender } from "@/lib/system/reminders";
+import {
+  runCallReminders,
+  runReminders,
+  sendTestDigest,
+  type DigestSender,
+} from "@/lib/system/reminders";
 import { createTestDb, insertUser, type TestDb } from "./helpers/db";
 
 let t: TestDb;
@@ -211,5 +216,93 @@ describe("test digest", () => {
         send: boom,
       }),
     ).rejects.toThrow(/domain not verified/);
+  });
+});
+
+describe("booked-call reminders", () => {
+  const NOW = new Date("2026-11-10T18:00:00Z"); // 1:00 PM in New York
+  let callClient: string;
+
+  const book = async (name: string, at: string, userId = ny) => {
+    const { rows } = await t.pool.query<{ id: string }>(
+      "insert into clients (user_id, business_name, contact_name, phone, scheduled_call_at) values ($1, $2, 'Pat', '5551230000', $3) returning id",
+      [userId, name, at],
+    );
+    return rows[0]?.id as string;
+  };
+  const callRows = async () =>
+    (await t.pool.query("select ref from reminders_sent where kind = 'call'")).rows;
+
+  it("emails a heads-up for a call starting within 90 minutes, with the facts he needs", async () => {
+    callClient = await book("Call Soon Bakery", "2026-11-10T19:30:00Z"); // 2:30 PM New York, 90 min away
+    await t.pool.query(
+      "insert into client_asks (user_id, client_id, wanted_amount_cents) values ($1, $2, 5000000)",
+      [ny, callClient],
+    );
+    await t.pool.query(
+      "insert into activities (user_id, client_id, kind, body) values ($1, $2, 'call', 'Wants it for a new oven')",
+      [ny, callClient],
+    );
+    const send = ok();
+    const r = await runCallReminders({ db: t.db, now: NOW, appUrl: "https://app.test", send });
+    expect(r).toEqual({ sent: 1, failed: 0 });
+    const [to, msg] = send.mock.calls[0] ?? [];
+    expect(to).toBe("alerts@x.com");
+    expect(msg.subject).toBe("Call at 2:30 PM: Call Soon Bakery");
+    expect(msg.text).toContain("Wants $50k");
+    expect(msg.text).toContain("Last call: Wants it for a new oven");
+    expect(msg.text).toContain(`https://app.test/clients/${callClient}`);
+  });
+  it("sends it once per booking", async () => {
+    const send = ok();
+    expect(
+      await runCallReminders({ db: t.db, now: NOW, appUrl: "https://app.test", send }),
+    ).toEqual({ sent: 0, failed: 0 });
+    expect(send).not.toHaveBeenCalled();
+    expect(await callRows()).toHaveLength(1);
+  });
+  it("sends a fresh reminder when the call is rebooked to a new time", async () => {
+    await t.pool.query(
+      "update clients set scheduled_call_at = '2026-11-10T19:00:00Z' where id = $1",
+      [callClient],
+    );
+    const send = ok();
+    expect(
+      (await runCallReminders({ db: t.db, now: NOW, appUrl: "https://app.test", send })).sent,
+    ).toBe(1);
+    expect(send.mock.calls[0]?.[1].subject).toBe("Call at 2:00 PM: Call Soon Bakery");
+  });
+  it("ignores calls further out than 90 minutes and calls already past", async () => {
+    await book("Far Call Co", "2026-11-10T21:00:00Z");
+    await book("Missed Call Co", "2026-11-10T17:00:00Z");
+    const send = ok();
+    expect(
+      await runCallReminders({ db: t.db, now: NOW, appUrl: "https://app.test", send }),
+    ).toEqual({ sent: 0, failed: 0 });
+  });
+  it("skips users who turned reminders off", async () => {
+    await book("Muted Call Co", "2026-11-10T19:00:00Z", off);
+    const send = ok();
+    await runCallReminders({ db: t.db, now: NOW, appUrl: "https://app.test", send });
+    expect(send.mock.calls.some((c) => (c as unknown[])[0] === "off@x.com")).toBe(false);
+  });
+  it("rolls the claim back on a provider failure so the next run retries", async () => {
+    const id = await book("Retry Call Co", "2026-11-10T19:15:00Z");
+    const boom: DigestSender = async () => {
+      throw new Error("resend down");
+    };
+    const errSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const failed = await runCallReminders({
+      db: t.db,
+      now: NOW,
+      appUrl: "https://app.test",
+      send: boom,
+    });
+    errSpy.mockRestore();
+    expect(failed.failed).toBe(1);
+    expect((await callRows()).some((r) => String(r.ref).startsWith(id))).toBe(false);
+    expect(
+      (await runCallReminders({ db: t.db, now: NOW, appUrl: "https://app.test", send: ok() })).sent,
+    ).toBe(1);
   });
 });

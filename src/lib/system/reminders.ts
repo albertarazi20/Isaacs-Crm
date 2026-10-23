@@ -1,6 +1,7 @@
 import type { Db, DbAccess } from "../db";
 import { todayIn } from "../mca/dates";
-import { buildDigest, type DueTimer } from "../mca/digest";
+import { buildCallReminder, buildDigest, type DueTimer } from "../mca/digest";
+import { formatMoneyCompact } from "../money";
 import type { StageKey, TimerKind } from "../mca/stages";
 
 export type DigestSender = (
@@ -185,3 +186,93 @@ export async function sendTestDigest(args: {
 
 /** Thrown inside the transaction to roll back the claim when there is nothing to send. */
 class NothingDue extends Error {}
+
+export interface CallReminderSummary {
+  sent: number;
+  failed: number;
+}
+
+interface CallRow {
+  user_id: string;
+  client_id: string;
+  business_name: string;
+  contact_name: string;
+  phone: string;
+  scheduled_call_at: Date;
+  timezone: string;
+  to_email: string;
+  wanted_amount_cents: number | null;
+  last_call_note: string | null;
+  position_count: number;
+}
+
+/** How far ahead the hourly job looks. 90 minutes means a 3:30 call is caught by the 2:00 run. */
+export const CALL_REMINDER_WINDOW_MIN = 90;
+
+/**
+ * Emails a heads-up for every booked call starting within the next 90 minutes, once per booking.
+ * Claim-then-send like the digest; rebooking a call changes the claim key, so the new time gets its own email.
+ */
+export async function runCallReminders(args: {
+  db: DbAccess;
+  now: Date;
+  appUrl: string;
+  send: DigestSender;
+}): Promise<CallReminderSummary> {
+  const due = await args.db.withSystem(
+    async (q) =>
+      (
+        await q.query<CallRow>(
+          `select c.user_id, c.id as client_id, c.business_name, c.contact_name, c.phone, c.scheduled_call_at,
+                u.timezone, coalesce(u.notify_email, u.email) as to_email,
+                (select k.wanted_amount_cents from client_asks k where k.client_id = c.id order by k.created_at desc limit 1) as wanted_amount_cents,
+                (select a.body from activities a where a.client_id = c.id and a.kind = 'call' and a.body <> '' order by a.occurred_at desc limit 1) as last_call_note,
+                (select count(*) from positions p where p.client_id = c.id)::int as position_count
+           from clients c join app_users u on u.id = c.user_id
+          where u.digest_enabled and c.scheduled_call_at > $1
+            and c.scheduled_call_at <= $1::timestamptz + make_interval(mins => $2)`,
+          [args.now, CALL_REMINDER_WINDOW_MIN],
+        )
+      ).rows,
+  );
+  const summary: CallReminderSummary = { sent: 0, failed: 0 };
+  for (const c of due) {
+    const ref = `${c.client_id}@${c.scheduled_call_at.toISOString()}`;
+    try {
+      const sent = await args.db.withSystem(async (q) => {
+        const claim = await q.query(
+          "insert into reminders_sent (user_id, kind, for_date, ref) values ($1, 'call', $2, $3) on conflict do nothing",
+          [c.user_id, todayIn(c.timezone, c.scheduled_call_at), ref],
+        );
+        if (claim.rowCount === 0) return false;
+        const msg = buildCallReminder(
+          {
+            clientId: c.client_id,
+            businessName: c.business_name,
+            contactName: c.contact_name,
+            phone: c.phone,
+            callTime: localTime(c.timezone, c.scheduled_call_at),
+            wantedAmount: c.wanted_amount_cents ? formatMoneyCompact(c.wanted_amount_cents) : null,
+            lastCallNote: c.last_call_note,
+            positionCount: c.position_count,
+          },
+          args.appUrl,
+        );
+        const providerId = await args.send(c.to_email, msg);
+        await q.query(
+          "update reminders_sent set provider_id = $4 where user_id = $1 and kind = 'call' and for_date = $2 and ref = $3",
+          [c.user_id, todayIn(c.timezone, c.scheduled_call_at), ref, providerId],
+        );
+        return true;
+      });
+      if (sent) summary.sent += 1;
+    } catch (e) {
+      summary.failed += 1;
+      console.error(
+        `call reminder failed for client ${c.client_id}:`,
+        e instanceof Error ? e.message : e,
+      );
+    }
+  }
+  return summary;
+}

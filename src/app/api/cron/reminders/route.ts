@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { sendViaResend } from "@/lib/email/resend";
 import { env } from "@/lib/env";
-import { runReminders } from "@/lib/system/reminders";
+import { runCallReminders, runReminders } from "@/lib/system/reminders";
 
 export const dynamic = "force-dynamic";
 
@@ -26,13 +26,12 @@ async function handle(req: Request): Promise<NextResponse> {
     );
   }
   const cfg = { apiKey: e.RESEND_API_KEY, from: e.RESEND_FROM };
-  const summary = await runReminders({
-    db,
-    now: new Date(),
-    appUrl: e.APP_URL,
-    send: (to, d) => sendViaResend(cfg, { to, ...d }),
-  });
-  return NextResponse.json(summary);
+  const now = new Date();
+  const send = (to: string, d: { subject: string; text: string; html: string }) =>
+    sendViaResend(cfg, { to, ...d });
+  const digest = await runReminders({ db, now, appUrl: e.APP_URL, send });
+  const calls = await runCallReminders({ db, now, appUrl: e.APP_URL, send });
+  return NextResponse.json({ ...digest, calls });
 }
 
 export const GET = handle;

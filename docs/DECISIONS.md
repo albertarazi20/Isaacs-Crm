@@ -84,3 +84,23 @@ external scheduler (not GitHub Actions — CI minutes cost money). It sends one 
 at their local `digest_hour`, idempotent via `reminders_sent (user_id, kind, for_date)`. Resend free
 tier: 100/day, 3,000/month, which is far above one user's digest. Vercel Hobby cron is daily-only,
 so it cannot be the hourly trigger.
+
+## 2026-10-23 — booked calls get their own "get ready" email
+
+The same hourly job also emails a short heads-up for any booked call starting within 90 minutes (so a
+3:30 call is caught by the 2:00 run): who, phone, what he wants, other advances, and the last call note.
+One email per booking — rebooking to a new time sends a fresh one. Same claim-before-send rule as the
+digest. It shares the digest on/off switch; add a separate switch only if Isaac asks.
+
+## 2026-10-23 — import is part of v1
+
+Not in the owner's list, added because Isaac already has clients: day one without import is hand-typing
+them. Re-importing the same file never duplicates (matched by phone, or by business name when there is
+no phone). Funded and default clients cannot be imported as such — they need advance terms — so they
+land in "Name in" with an "Imported status: Funded" note for Isaac to finish.
+
+## 2026-10-23 — MCA language is enforced by a test
+
+`tests/language.test.ts` fails if visible UI text says loan, lender, borrower, installment, interest
+rate, principal, APR, amount due, customer, or "payment" (use remittance). Identifiers such as
+`paymentCents` may keep their names.

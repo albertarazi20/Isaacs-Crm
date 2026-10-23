@@ -92,3 +92,35 @@ export function buildDigest(
     html: `<div style="font-family:system-ui,sans-serif">${a.html}${b.html}<p><a href="${esc(appUrl)}/">Open your list</a></p></div>`,
   };
 }
+
+export interface CallReminderInput {
+  clientId: string;
+  businessName: string;
+  contactName: string;
+  phone: string;
+  /** Already formatted in Isaac's timezone, e.g. "3:30 PM". */
+  callTime: string;
+  wantedAmount: string | null;
+  lastCallNote: string | null;
+  positionCount: number;
+}
+
+/** A short "get ready" email an hour or so before a booked call, with what he needs to say hello properly. */
+export function buildCallReminder(c: CallReminderInput, appUrl: string): Omit<Digest, "count"> {
+  const href = `${appUrl}/clients/${c.clientId}`;
+  const phone = c.phone ? formatUS(c.phone) : "no phone on file";
+  const facts = [
+    c.wantedAmount ? `Wants ${c.wantedAmount}` : "",
+    c.positionCount > 0
+      ? `${c.positionCount} other advance${c.positionCount === 1 ? "" : "s"}`
+      : "",
+    c.lastCallNote ? `Last call: ${c.lastCallNote}` : "",
+  ].filter(Boolean);
+  return {
+    subject: `Call at ${c.callTime}: ${c.businessName}`,
+    text: `Call at ${c.callTime} — ${c.businessName} (${c.contactName || "merchant"}), ${phone}\n${facts.join("\n")}${facts.length ? "\n" : ""}\n${href}\n`,
+    html: `<div style="font-family:system-ui,sans-serif"><h3>Call at ${esc(c.callTime)}</h3><p><a href="${esc(href)}"><strong>${esc(c.businessName)}</strong></a> — ${esc(
+      c.contactName || "merchant",
+    )}<br>${esc(phone)}</p>${facts.length ? `<ul>${facts.map((f) => `<li>${esc(f)}</li>`).join("")}</ul>` : ""}</div>`,
+  };
+}
