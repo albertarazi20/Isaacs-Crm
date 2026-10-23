@@ -1,6 +1,7 @@
-import { ClientRow } from "@/components/ClientRow";
-import { EmptyState, SectionTitle } from "@/components/ui";
+import { TodayLists } from "@/components/power/TodayLists";
+import { EmptyState, LinkButton } from "@/components/ui";
 import { requireSession } from "@/lib/auth/server";
+import { snoozeCounts } from "@/lib/data/overdue";
 import { listCards, userContext } from "@/lib/data/queries";
 import { buildToday } from "@/lib/data/views";
 import { db } from "@/lib/db";
@@ -37,11 +38,16 @@ function Kpi({
 
 export default async function TodayPage() {
   const session = await requireSession();
-  const { cards, ctx } = await db.withUser(session.userId, async (q) => ({
-    cards: await listCards(q),
-    ctx: await userContext(q),
-  }));
-  const view = buildToday(cards, ctx.today);
+  const { cards, ctx, view, snoozed } = await db.withUser(session.userId, async (q) => {
+    const cards = await listCards(q);
+    const ctx = await userContext(q);
+    const view = buildToday(cards, ctx.today);
+    // One query for every visible row: how often each had its date pushed in the last 14 days.
+    const visible = [...view.scheduled, ...view.overdue, ...view.dueToday, ...view.upcoming];
+    const ids = visible.map((c) => c.id);
+    return { cards, ctx, view, snoozed: await snoozeCounts(q, ids) };
+  });
+  const dialable = view.scheduled.length + view.overdue.length + view.dueToday.length;
   const { kpis } = view;
   const allClear = view.overdue.length + view.dueToday.length + view.scheduled.length === 0;
   const nextUp = cards
@@ -51,11 +57,18 @@ export default async function TodayPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight">Today</h1>
-        <p className="text-sm text-muted">
-          {WEEKDAYS[parseISODate(ctx.today).getUTCDay()]}, {formatDate(ctx.today)}
-        </p>
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight">Today</h1>
+          <p className="text-sm text-muted">
+            {WEEKDAYS[parseISODate(ctx.today).getUTCDay()]}, {formatDate(ctx.today)}
+          </p>
+        </div>
+        {dialable > 0 ? (
+          <LinkButton href="/dial" variant="primary">
+            Start dialing ({dialable})
+          </LinkButton>
+        ) : null}
       </div>
 
       <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
@@ -85,53 +98,13 @@ export default async function TodayPage() {
         </EmptyState>
       ) : null}
 
-      {view.scheduled.length > 0 ? (
-        <section className="space-y-2">
-          <SectionTitle>Calls booked today ({view.scheduled.length})</SectionTitle>
-          <div className="grid gap-3 xl:grid-cols-2">
-            {view.scheduled.map((c) => (
-              <ClientRow key={c.id} card={c} />
-            ))}
-          </div>
-        </section>
-      ) : null}
-
-      {view.overdue.length > 0 ? (
-        <section className="space-y-2">
-          <SectionTitle>
-            <span className="text-bad">Overdue ({view.overdue.length})</span>
-          </SectionTitle>
-          <div className="grid gap-3 xl:grid-cols-2">
-            {view.overdue.map((c) => (
-              <ClientRow key={c.id} card={c} />
-            ))}
-          </div>
-        </section>
-      ) : null}
-
-      {view.dueToday.length > 0 ? (
-        <section className="space-y-2">
-          <SectionTitle>Due today ({view.dueToday.length})</SectionTitle>
-          <div className="grid gap-3 xl:grid-cols-2">
-            {view.dueToday.map((c) => (
-              <ClientRow key={c.id} card={c} />
-            ))}
-          </div>
-        </section>
-      ) : null}
-
-      {view.upcoming.length > 0 ? (
-        <details className="group space-y-2">
-          <summary className="cursor-pointer text-sm font-semibold tracking-wide text-muted uppercase">
-            Coming up in the next 7 days ({view.upcoming.length})
-          </summary>
-          <div className="mt-2 grid gap-3 xl:grid-cols-2">
-            {view.upcoming.map((c) => (
-              <ClientRow key={c.id} card={c} />
-            ))}
-          </div>
-        </details>
-      ) : null}
+      <TodayLists
+        scheduled={view.scheduled}
+        overdue={view.overdue}
+        dueToday={view.dueToday}
+        upcoming={view.upcoming}
+        snoozeCounts={snoozed}
+      />
     </div>
   );
 }

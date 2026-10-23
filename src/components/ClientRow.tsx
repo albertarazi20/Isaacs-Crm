@@ -2,70 +2,61 @@
 
 import Link from "next/link";
 import { memo, useState } from "react";
-import { setFollowUpAction } from "@/app/actions";
+import type { Priority } from "@/lib/data/priority";
 import type { ClientCard } from "@/lib/data/types";
 import { cardFundingTerms } from "@/lib/data/views";
-import { formatDate, relativeDay, timeAgo } from "@/lib/format";
-import { addDays, addMonths, type ISODate } from "@/lib/mca/dates";
+import { relativeDay, timeAgo } from "@/lib/format";
 import { balanceCents, paydownPct } from "@/lib/mca/funding";
 import { formatUS } from "@/lib/mca/phone";
 import { TIMER_LABELS } from "@/lib/mca/stages";
 import { formatMoney, formatMoneyCompact } from "@/lib/money";
 import { useApp } from "./app-context";
 import { ContactActions } from "./ContactActions";
-import { useCall } from "./overlay";
+import { toggleHot } from "./power/prefs";
+import { SnoozeMenu } from "./power/SnoozeMenu";
 import { StageBadge } from "./StageBadge";
 import { Badge, cn } from "./ui";
 
-const SNOOZES: { label: string; to: (today: ISODate) => ISODate }[] = [
-  { label: "Tomorrow", to: (t) => addDays(t, 1) },
-  { label: "3 days", to: (t) => addDays(t, 3) },
-  { label: "1 week", to: (t) => addDays(t, 7) },
-  { label: "2 weeks", to: (t) => addDays(t, 14) },
-  { label: "1 month", to: (t) => addMonths(t, 1) },
-  { label: "3 months", to: (t) => addMonths(t, 3) },
-  { label: "6 months", to: (t) => addMonths(t, 6) },
-  { label: "12 months", to: (t) => addMonths(t, 12) },
-];
-
-function Snooze({ card }: { card: ClientCard }) {
-  const { today } = useApp();
-  const call = useCall();
+/** "$80k at stake": click it for the working. A tooltip alone would never show on a phone. */
+function Stake({ priority }: { priority: Priority }) {
   const [open, setOpen] = useState(false);
   return (
-    <details open={open} onToggle={(e) => setOpen(e.currentTarget.open)} className="relative">
-      <summary className="inline-flex h-8 cursor-pointer list-none items-center rounded-lg px-2.5 text-sm font-medium text-muted hover:bg-surface-2 hover:text-text">
-        Snooze ▾
-      </summary>
-      <div className="absolute right-0 z-20 mt-1 grid w-44 gap-0.5 rounded-xl border border-border bg-surface p-1 shadow-xl">
-        {SNOOZES.map((s) => (
-          <button
-            key={s.label}
-            type="button"
-            className="rounded-lg px-3 py-1.5 text-left text-sm hover:bg-surface-2"
-            onClick={async () => {
-              const dueOn = s.to(today);
-              setOpen(false);
-              await call(
-                setFollowUpAction({ clientId: card.id, dueOn }),
-                `${card.business_name} — snoozed until ${formatDate(dueOn, today)}`,
-              );
-            }}
-          >
-            {s.label}
-          </button>
-        ))}
-      </div>
-    </details>
+    <>
+      <button
+        type="button"
+        aria-expanded={open}
+        title={priority.explanation}
+        onClick={() => setOpen((v) => !v)}
+        className="rounded-md bg-accent-soft px-1.5 py-0.5 text-xs font-semibold text-accent tabular-nums hover:opacity-80"
+      >
+        {priority.basis === "unknown"
+          ? "amount not set"
+          : `${formatMoneyCompact(priority.atStakeCents)} at stake`}
+      </button>
+      {open ? (
+        <p className="basis-full text-xs text-muted" role="note">
+          {priority.explanation}
+        </p>
+      ) : null}
+    </>
   );
 }
 
 export const ClientRow = memo(function ClientRow({
   card,
   showPaydown = false,
+  priority,
+  hot = false,
+  snoozeCount = 0,
 }: {
   card: ClientCard;
   showPaydown?: boolean;
+  /** Today only: the money-first score, shown as "$ at stake". */
+  priority?: Priority;
+  /** Today only: starred clients go to the top. Per browser. */
+  hot?: boolean;
+  /** Times this client's date was pushed in the last 14 days. */
+  snoozeCount?: number;
 }) {
   const { today, nowMs } = useApp();
   const due = card.next_due_on;
@@ -81,8 +72,8 @@ export const ClientRow = memo(function ClientRow({
         overdue ? "border-bad/50" : "border-border",
       )}
     >
-      <div className="flex flex-wrap items-start justify-between gap-2">
-        <div className="min-w-0 space-y-1">
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0 flex-1 space-y-1">
           <div className="flex flex-wrap items-center gap-2">
             <Link
               href={`/clients/${card.id}`}
@@ -91,12 +82,20 @@ export const ClientRow = memo(function ClientRow({
               {card.business_name}
             </Link>
             <StageBadge stage={card.stage} />
+            {snoozeCount >= 2 ? (
+              <Badge tone={snoozeCount >= 3 ? "warn" : "neutral"} className="whitespace-nowrap">
+                <span title="Times this client's date was pushed in the last 14 days">
+                  snoozed {snoozeCount}×
+                </span>
+              </Badge>
+            ) : null}
             {due ? (
               <Badge tone={overdue ? "bad" : isToday ? "warn" : "neutral"}>
                 {card.next_due_kind ? `${TIMER_LABELS[card.next_due_kind]} · ` : ""}
                 {relativeDay(due, today)}
               </Badge>
             ) : null}
+            {priority ? <Stake priority={priority} /> : null}
           </div>
           <p className="text-sm text-muted">
             {[card.contact_name, card.phone ? formatUS(card.phone) : "", card.industry]
@@ -116,7 +115,24 @@ export const ClientRow = memo(function ClientRow({
             ) : null}
           </p>
         </div>
-        <Snooze card={card} />
+        <div className="flex shrink-0 items-center gap-1">
+          {priority ? (
+            <button
+              type="button"
+              aria-pressed={hot}
+              aria-label={hot ? `Unstar ${card.business_name}` : `Star ${card.business_name}`}
+              title={hot ? "Starred: always on top" : "Star: always on top of Today"}
+              onClick={() => toggleHot(card.id)}
+              className={cn(
+                "inline-flex size-8 items-center justify-center rounded-lg text-base hover:bg-surface-2",
+                hot ? "text-warn" : "text-muted",
+              )}
+            >
+              {hot ? "★" : "☆"}
+            </button>
+          ) : null}
+          <SnoozeMenu card={card} />
+        </div>
       </div>
 
       {card.last_call_at ? (

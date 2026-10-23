@@ -1,17 +1,18 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
-import { cache } from "react";
 import { AppProvider } from "@/components/app-context";
 import { LogoutButton } from "@/components/LogoutButton";
 import { NavLink } from "@/components/NavLink";
 import { ToastProvider } from "@/components/overlay";
 import { PendingTouchPrompt } from "@/components/ContactActions";
+import { GlobalSearch } from "@/components/power/GlobalSearch";
+import { MobileTabBar } from "@/components/power/MobileTabBar";
 import { QuickAdd } from "@/components/QuickAdd";
 import { requireSession } from "@/lib/auth/server";
-import { dueCount, userContext } from "@/lib/data/queries";
-import { db } from "@/lib/db";
+import { loadShell } from "@/lib/data/shell";
 import { requestTimeMs } from "@/lib/server-time";
 import { gmailStatus } from "@/lib/system/gmail";
+import { reminderStatus } from "@/lib/system/heartbeat";
 
 export const dynamic = "force-dynamic";
 
@@ -24,16 +25,6 @@ const NAV = [
   { href: "/settings", label: "Settings" },
 ];
 
-const loadShell = cache(async (userId: string) =>
-  db.withUser(userId, async (q) => {
-    const ctx = await userContext(q);
-    const { rows } = await q.query<{ name: string; email: string }>(
-      "select name, email from app_users where id = app.current_user_id()",
-    );
-    return { ctx, user: rows[0], due: await dueCount(q, ctx.today) };
-  }),
-);
-
 /** "(12) Isaac" in the tab. Set here, on the server, because Next re-applies page metadata after hydration. */
 export async function generateMetadata(): Promise<Metadata> {
   const session = await requireSession();
@@ -45,7 +36,14 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const session = await requireSession();
   const me = await loadShell(session.userId);
   if (!me.user) redirect("/login?error=session_expired");
-  const gmail = await gmailStatus(session.userId);
+  const [gmail, reminders] = await Promise.all([
+    gmailStatus(session.userId),
+    // The banner is a safety net: if the heartbeat can't be read, the page still renders.
+    reminderStatus(session.userId, { now: new Date(requestTimeMs()) }).catch((e: unknown) => {
+      console.error("reminder heartbeat unreadable:", e);
+      return null;
+    }),
+  ]);
 
   return (
     <AppProvider
@@ -59,20 +57,37 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       }}
     >
       <ToastProvider>
-        <header className="sticky top-0 z-30 border-b border-border bg-surface/90 backdrop-blur">
+        <header
+          data-app-header
+          className="sticky top-0 z-30 border-b border-border bg-surface/90 backdrop-blur"
+        >
           <div className="mx-auto flex max-w-[1600px] items-center gap-3 px-4 py-2">
             <span className="text-base font-bold tracking-tight">Isaac</span>
-            <nav aria-label="Main" className="flex flex-1 gap-1 overflow-x-auto">
+            <nav aria-label="Main" className="hidden flex-1 gap-1 overflow-x-auto sm:flex">
               {NAV.map((n) => (
                 <NavLink key={n.href} href={n.href} badge={n.href === "/" ? me.due : undefined}>
                   {n.label}
                 </NavLink>
               ))}
             </nav>
+            <div className="flex-1 sm:hidden" />
+            <GlobalSearch />
             <QuickAdd />
-            <LogoutButton email={me.user.email} />
+            <div className="hidden sm:block">
+              <LogoutButton email={me.user.email} />
+            </div>
           </div>
         </header>
+        {reminders?.stale ? (
+          <div
+            role="status"
+            className="border-b border-bad/40 bg-bad-soft px-4 py-2 text-center text-sm font-medium text-bad"
+          >
+            {reminders.neverRan
+              ? "Reminder emails have never gone out — check the hourly scheduler."
+              : `Reminder emails haven't gone out for ${reminders.hoursSince} hours — check the hourly scheduler.`}
+          </div>
+        ) : null}
         {gmail.needsReconnect ? (
           <div className="bg-warn-soft px-4 py-2 text-center text-sm text-warn">
             Gmail needs to be reconnected —{" "}
@@ -82,7 +97,9 @@ export default async function AppLayout({ children }: { children: React.ReactNod
             . Until then, emails open in Gmail instead of sending.
           </div>
         ) : null}
-        <main className="mx-auto max-w-[1600px] px-4 py-5">{children}</main>
+        {/* pb-24 on a phone keeps the last card clear of the fixed tab bar */}
+        <main className="mx-auto max-w-[1600px] px-4 py-5 pb-24 sm:pb-5">{children}</main>
+        <MobileTabBar due={me.due} email={me.user.email} />
         <PendingTouchPrompt />
       </ToastProvider>
     </AppProvider>

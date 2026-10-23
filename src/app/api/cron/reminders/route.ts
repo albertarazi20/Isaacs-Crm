@@ -32,7 +32,16 @@ async function handle(req: Request): Promise<NextResponse> {
     sendViaResend(cfg, { to, ...d });
   const digest = await runReminders({ db, now, appUrl: e.APP_URL, send });
   const calls = await runCallReminders({ db, now, appUrl: e.APP_URL, send });
-  // Dead-man's switch: written after every run that completes, even when nothing needed sending.
+  // A run in which any email failed to send (a wrong RESEND_FROM, a dead key) is not a healthy run: leave the
+  // heartbeat alone so the banner fires, and answer 502 so the external scheduler alerts too. The failed sends
+  // rolled their claims back, so the next hourly run retries them.
+  if (digest.failed > 0 || calls.failed > 0) {
+    return NextResponse.json(
+      { ...digest, calls, error: "some reminder emails failed to send" },
+      { status: 502 },
+    );
+  }
+  // Dead-man's switch: written after every run that sent cleanly, even when nothing needed sending.
   await recordHeartbeat(undefined, { now });
   return NextResponse.json({ ...digest, calls });
 }

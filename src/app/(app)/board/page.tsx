@@ -3,9 +3,15 @@ import { Board } from "@/components/board/Board";
 import { parseView } from "@/components/board/logic";
 import { requireSession } from "@/lib/auth/server";
 import { listCards } from "@/lib/data/queries";
+import { loadShell } from "@/lib/data/shell";
 import { db } from "@/lib/db";
 
-export const metadata: Metadata = { title: "Board — Isaac" };
+/** "(12) Board — Isaac": the due count rides in the tab title like every other page. */
+export async function generateMetadata(): Promise<Metadata> {
+  const session = await requireSession();
+  const { due } = await loadShell(session.userId);
+  return { title: due > 0 ? `(${due}) Board — Isaac` : "Board — Isaac" };
+}
 
 export default async function BoardPage({
   searchParams,
