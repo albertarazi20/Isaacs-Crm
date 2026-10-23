@@ -26,7 +26,7 @@ export async function importClients(
 ): Promise<ImportResult> {
   const all = (
     await q.query<{ phone: string; business_name: string }>(
-      "select phone, business_name from clients",
+      "select phone, business_name from clients where not exists (select 1 from trashed_clients t where t.client_id = clients.id)",
     )
   ).rows;
   const existing = new Set(

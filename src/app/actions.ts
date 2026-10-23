@@ -69,9 +69,21 @@ export async function addNoteAction(input: unknown): Promise<ActionResult<null>>
 export async function updateClientAction(input: unknown): Promise<ActionResult<Card>> {
   return run((q) => m.updateClient(q, s.updateClientSchema.parse(input)));
 }
-export async function deleteClientAction(input: unknown): Promise<ActionResult<null>> {
+export async function trashClientAction(input: unknown): Promise<ActionResult<null>> {
   return run(async (q) => {
-    await m.deleteClient(q, s.clientIdSchema.parse(input).clientId);
+    await m.trashClient(q, s.clientIdSchema.parse(input).clientId);
+    return null;
+  });
+}
+export async function restoreClientAction(input: unknown): Promise<ActionResult<null>> {
+  return run(async (q) => {
+    await m.restoreClient(q, s.clientIdSchema.parse(input).clientId);
+    return null;
+  });
+}
+export async function purgeClientAction(input: unknown): Promise<ActionResult<null>> {
+  return run(async (q) => {
+    await m.purgeClient(q, s.clientIdSchema.parse(input).clientId);
     return null;
   });
 }

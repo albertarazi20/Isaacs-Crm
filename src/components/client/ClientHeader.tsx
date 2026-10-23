@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { deleteClientAction, updateClientAction } from "@/app/actions";
+import { trashClientAction, updateClientAction } from "@/app/actions";
 import type { ClientDetail } from "@/lib/data/types";
 import { formatDate, relativeDay } from "@/lib/format";
 import { formatUS } from "@/lib/mca/phone";
@@ -161,7 +161,7 @@ export function ClientDetails({ detail }: { detail: ClientDetail }) {
           </Button>
           <ContactStatusButton card={card} />
           <Button size="sm" variant="danger" onClick={() => setDeleting(true)}>
-            Delete client
+            Move to trash
           </Button>
         </div>
       </div>
@@ -251,8 +251,8 @@ function DeleteClientDialog({ detail, onClose }: { detail: ClientDetail; onClose
   async function remove() {
     setBusy(true);
     const ok = await run(
-      deleteClientAction({ clientId: card.id }),
-      `${card.business_name} deleted`,
+      trashClientAction({ clientId: card.id }),
+      `${card.business_name} moved to the trash`,
     );
     if (ok) router.push("/clients");
     else setBusy(false);
@@ -260,16 +260,17 @@ function DeleteClientDialog({ detail, onClose }: { detail: ClientDetail; onClose
 
   return (
     <FormDialog
-      title={`Delete ${card.business_name}?`}
+      title={`Move ${card.business_name} to the trash?`}
       onClose={onClose}
       onSubmit={() => void remove()}
       busy={busy}
-      submitLabel="Delete for good"
+      submitLabel="Move to trash"
       danger
     >
       <p className="text-sm">
-        This removes <strong>{card.business_name}</strong> and everything attached to it
-        {attached.length > 0 ? `: ${attached.join(", ")}` : ""}. It can&apos;t be undone.
+        <strong>{card.business_name}</strong> disappears from your lists and every reminder stops.
+        {attached.length > 0 ? ` Kept in the trash: ${attached.join(", ")}.` : ""} You can restore
+        it any time from <em>Clients → Trash</em>.
       </p>
       <p className="rounded-lg bg-surface-2 p-3 text-sm text-muted">
         Not ready to lose the notes? Close this and use <em>Move to…</em> instead (Not interested,

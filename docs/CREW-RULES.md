@@ -51,3 +51,7 @@ DATABASE_URL=postgres://postgres@localhost:5433/isaac_dev pnpm -s e2e <feature>`
 
 Files created/edited; what you verified in the browser vs only by tests; what you could NOT do; changes needed in files you don't
 own. Do not claim anything works unless you ran it.
+
+## Trash (added with migration 0040)
+A client moved to the trash is hidden from `client_cards` and has every timer closed. Read merchants through
+`client_cards`, never `from clients` directly, unless you add `and not exists (select 1 from trashed_clients t where t.client_id = clients.id)`.

@@ -512,19 +512,22 @@ describe("client record", () => {
       "First thing",
     ]);
   });
-  it("deleting a client removes everything attached to it, and only that client", async () => {
+  it("deleting forever removes everything attached, only that client, only from the trash", async () => {
     const doomed = await newClient("Doomed Pizza");
     const keeper = await newClient("Keeper Pizza");
     await asA((q) => m.addNote(q, { clientId: doomed.id, body: "bye" }));
     await asA((q) => m.seedStips(q, doomed.id, ctx));
-    await asA((q) => m.deleteClient(q, doomed.id));
+    await expect(asA((q) => m.purgeClient(q, doomed.id))).rejects.toThrow(/not in the trash/);
+    expect(await rows("select 1 from clients where id = $1", [doomed.id])).toHaveLength(1);
+    await asA((q) => m.trashClient(q, doomed.id));
+    await asA((q) => m.purgeClient(q, doomed.id));
     for (const table of ["timers", "activities", "stips"]) {
       expect(await rows(`select 1 from ${table} where client_id = $1`, [doomed.id]), table).toEqual(
         [],
       );
     }
     expect(await rows("select 1 from clients where id = $1", [keeper.id])).toHaveLength(1);
-    await expect(t.db.withUser(b, (q) => m.deleteClient(q, keeper.id))).rejects.toThrow(
+    await expect(t.db.withUser(b, (q) => m.trashClient(q, keeper.id))).rejects.toThrow(
       /no longer exists/,
     );
     expect(await rows("select 1 from clients where id = $1", [keeper.id])).toHaveLength(1);

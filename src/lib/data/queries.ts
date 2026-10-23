@@ -114,8 +114,9 @@ export async function findDuplicates(
     `select id, business_name, contact_name, stage,
             ($1::text is not null and right(regexp_replace(phone, '[^0-9]', '', 'g'), 10) = $1) as by_phone
        from clients
-      where ($1::text is not null and right(regexp_replace(phone, '[^0-9]', '', 'g'), 10) = $1)
-         or ($2 <> '' and regexp_replace(lower(business_name), '[^[:alnum:]]+', '', 'g') = $2)
+      where not exists (select 1 from trashed_clients t where t.client_id = clients.id)
+        and (($1::text is not null and right(regexp_replace(phone, '[^0-9]', '', 'g'), 10) = $1)
+         or ($2 <> '' and regexp_replace(lower(business_name), '[^[:alnum:]]+', '', 'g') = $2))
       order by by_phone desc, business_name
       limit 5`,
     [digits, name],
@@ -127,4 +128,24 @@ export async function findDuplicates(
     stage: r.stage,
     reason: r.by_phone ? "same phone" : "same business name",
   }));
+}
+
+export interface TrashedClient {
+  id: string;
+  business_name: string;
+  contact_name: string;
+  phone: string;
+  stage: StageKey;
+  trashed_at: string;
+}
+
+/** Newest first. Reads through row-level security like everything else. */
+export async function listTrashed(q: Db): Promise<TrashedClient[]> {
+  return json<TrashedClient>(
+    q,
+    `select jsonb_build_object('id', c.id, 'business_name', c.business_name, 'contact_name', c.contact_name,
+                              'phone', c.phone, 'stage', c.stage, 'trashed_at', t.trashed_at) as j
+       from trashed_clients t join clients c on c.id = t.client_id
+      order by t.trashed_at desc`,
+  );
 }

@@ -124,7 +124,8 @@ async function loadDueTimers(
     `select t.id as timer_id, t.client_id, c.business_name, c.contact_name, c.phone, c.stage,
             t.kind, t.due_on, t.note, c.scheduled_call_at
        from timers t join clients c on c.id = t.client_id
-      where t.user_id = $1 and t.done_at is null and t.due_on <= $2::date`,
+      where t.user_id = $1 and t.done_at is null and t.due_on <= $2::date
+        and not exists (select 1 from trashed_clients tc where tc.client_id = c.id)`,
     [userId, today],
   );
   return rows.map((r) => ({
@@ -230,7 +231,8 @@ export async function runCallReminders(args: {
                 (select count(*) from positions p where p.client_id = c.id)::int as position_count
            from clients c join app_users u on u.id = c.user_id
           where u.digest_enabled and c.scheduled_call_at > $1
-            and c.scheduled_call_at <= $1::timestamptz + make_interval(mins => $2)`,
+            and c.scheduled_call_at <= $1::timestamptz + make_interval(mins => $2)
+            and not exists (select 1 from trashed_clients tc where tc.client_id = c.id)`,
           [args.now, CALL_REMINDER_WINDOW_MIN],
         )
       ).rows,

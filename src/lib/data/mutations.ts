@@ -318,9 +318,27 @@ export async function updateClient(
   return mustCard(q, input.clientId);
 }
 
-export async function deleteClient(q: Db, clientId: string): Promise<void> {
-  const res = await q.query("delete from clients where id = $1", [clientId]);
-  if (res.rowCount === 0) throw new UserError("That client no longer exists");
+/** Hides the client everywhere and closes every timer; the history stays. Undo with restoreClient. */
+export async function trashClient(q: Db, clientId: string): Promise<void> {
+  await trashCall(q, "trash_client", clientId, "That client no longer exists");
+}
+
+export async function restoreClient(q: Db, clientId: string): Promise<void> {
+  await trashCall(q, "restore_client", clientId, "That client is not in the trash");
+}
+
+/** Removes a trashed client and everything attached to it. Refuses a client that is not in the trash. */
+export async function purgeClient(q: Db, clientId: string): Promise<void> {
+  await trashCall(q, "purge_client", clientId, "That client is not in the trash");
+}
+
+async function trashCall(q: Db, fn: string, clientId: string, missing: string): Promise<void> {
+  try {
+    await q.query(`select ${fn}($1)`, [clientId]);
+  } catch (e) {
+    if ((e as { code?: string }).code === "P0002") throw new UserError(missing);
+    throw e;
+  }
 }
 
 export async function saveAsk(q: Db, input: z.output<typeof askSchema>): Promise<void> {

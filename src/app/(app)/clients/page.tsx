@@ -22,6 +22,9 @@ export default async function ClientsPage() {
           <Link href="/import" className={buttonClass("secondary", "md")}>
             Import from spreadsheet
           </Link>
+          <Link href="/trash" className={buttonClass("secondary", "md")}>
+            Trash
+          </Link>
         </div>
       </div>
       <ClientsTable cards={cards} />
