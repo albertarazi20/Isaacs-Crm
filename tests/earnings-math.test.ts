@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { paybackCents } from "@/lib/mca/funding";
 import {
   averagePoints,
   centsFromPoints,
@@ -373,5 +374,22 @@ describe("what is on its way: renewals still to come", () => {
 
   it("is empty when nothing is active", () => {
     expect(renewalForecast([], TODAY, ctx)).toMatchObject({ rows: [], totalCents: 0, unknown: 0 });
+  });
+});
+
+describe("review-3A A-18: payback rounds half-up on integers", () => {
+  it("$1,385 × 1.251 is $1,732.64 — the database's answer, not 173,263¢", () => {
+    expect(paybackCents(138_500, 1.251)).toBe(173_264);
+  });
+
+  it("matches exact half-up on every whole-dollar amount and 3-decimal factor in a grid", () => {
+    let bad = 0;
+    for (let dollars = 1_000; dollars <= 150_000; dollars += 1_373) {
+      for (let t = 1100; t <= 1600; t += 7) {
+        const exact = Math.floor((dollars * 100 * t + 500) / 1000);
+        if (paybackCents(dollars * 100, t / 1000) !== exact) bad += 1;
+      }
+    }
+    expect(bad).toBe(0);
   });
 });

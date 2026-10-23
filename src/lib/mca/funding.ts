@@ -19,9 +19,16 @@ export interface FundingTerms {
   paidBackOverrideCents?: number | null;
 }
 
-/** payback = amount × factor. Never "interest" — an MCA buys receivables at a discount. */
+/**
+ * payback = amount × factor, rounded half-up to the cent exactly as the database's generated column does
+ * (`round(amount_cents * factor_rate)` on numeric). Done on integers: the factor is read in thousandths, so a
+ * half-cent product such as $1,385 × 1.251 does not drift in floating point. Never "interest" — an MCA buys
+ * receivables at a discount.
+ */
 export function paybackCents(amountCents: number, factorRate: number): number {
-  return Math.round(amountCents * factorRate);
+  const thousandths = Math.round(factorRate * 1000);
+  if (Math.abs(factorRate * 1000 - thousandths) > 1e-6) return Math.round(amountCents * factorRate);
+  return Math.floor((amountCents * thousandths + 500) / 1000);
 }
 
 /** Remittances that have come due in the half-open range (fundedOn, asOf]. */

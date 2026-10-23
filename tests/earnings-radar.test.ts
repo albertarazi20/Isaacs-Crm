@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import type { ClientCard } from "@/lib/data/types";
 import type { CommissionContext } from "@/lib/earnings/commission";
+import { excludedLine } from "@/lib/earnings/eligible";
+import { pipelineDeals, renewalForecast } from "@/lib/earnings/expected";
 import { advanceProgress, renewalThreshold } from "@/lib/earnings/progress";
 import { buildRadar, contactOf, HOT_DAYS } from "@/lib/earnings/radar";
 import type { AdvanceRow } from "@/lib/earnings/types";
@@ -321,5 +323,60 @@ describe("advances past their estimated payoff", () => {
       ],
     );
     expect(r.pastPayoff.map((p) => p.card.id)).toEqual([soon.id]);
+  });
+});
+
+describe("review-3A: who counts as a renewal call", () => {
+  const today = "2026-10-23";
+  const base = () => {
+    const real = card({ business_name: "Real Renewal" });
+    const said = card({ business_name: "Said No", stage: "not_interested" });
+    const dnc = card({ business_name: "Do Not Call", contact_status: "dnc" });
+    const deal = card({ business_name: "In Deal", stage: "offers_in" });
+    const cards = [real, said, dnc, deal];
+    return { cards, advances: cards.map((c) => adv(c)) };
+  };
+
+  it("A-4: the renewal radar drops merchants who said no or are do-not-contact, and says how many", () => {
+    const { cards, advances } = base();
+    const r = radar(cards, advances);
+    expect(r.ready.map((x) => x.card.business_name).sort()).toEqual(["In Deal", "Real Renewal"]);
+    expect(r.excluded).toEqual({ dnc: 1, exit: 1, inDeal: 0 });
+    // the dollars are only the calls he can make: two merchants at $50,000 × 5 points
+    expect(r.totals.expectedCents).toBe(2 * 250_000);
+  });
+
+  it("A-4: the forecast drops the same merchants", () => {
+    const { cards, advances } = base();
+    const f = renewalForecast(advances, today, CTX, new Map(), null, cards);
+    expect(f.rows.map((x) => x.advance.businessName)).toEqual(["Real Renewal"]);
+    expect(f.excluded).toEqual({ dnc: 1, exit: 1, inDeal: 1 });
+    expect(f.totalCents).toBe(250_000);
+  });
+
+  it("A-5: a merchant already working a renewal deal is priced once — in the pipeline, not the forecast", () => {
+    const { cards, advances } = base();
+    const f = renewalForecast(advances, today, CTX, new Map(), null, cards);
+    expect(f.rows.some((x) => x.advance.businessName === "In Deal")).toBe(false);
+    const deals = cards.map((c) => ({
+      id: c.id,
+      businessName: c.business_name,
+      stage: c.stage,
+      estApprovalCents: 6_000_000,
+    }));
+    const p = pipelineDeals(deals, [], CTX);
+    expect(p.deals.map((d) => d.deal.businessName)).toEqual(["In Deal"]);
+  });
+
+  it("without cards the forecast behaves as before (nothing to exclude by)", () => {
+    const { advances } = base();
+    expect(renewalForecast(advances, today, CTX).rows).toHaveLength(4);
+  });
+
+  it("excludedLine is null when nothing was left out", () => {
+    expect(excludedLine({ dnc: 0, exit: 0, inDeal: 0 })).toBeNull();
+    expect(excludedLine({ dnc: 1, exit: 2, inDeal: 0 })).toBe(
+      "Left out: 2 said no or went elsewhere, 1 marked do-not-contact.",
+    );
   });
 });

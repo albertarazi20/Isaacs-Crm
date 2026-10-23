@@ -6,6 +6,7 @@ import { requireSession } from "@/lib/auth/server";
 import { userContext } from "@/lib/data/queries";
 import { db } from "@/lib/db";
 import { loadEarningsData } from "@/lib/earnings/queries";
+import { excludedLine } from "@/lib/earnings/eligible";
 import { buildRadar } from "@/lib/earnings/radar";
 import { funderThresholdMap } from "@/lib/earnings/progress";
 import { commissionContext } from "@/lib/earnings/view";
@@ -108,6 +109,9 @@ export default async function RenewalsPage({
           <p className="text-sm text-warn">
             {plural(totals.neverContacted, "merchant")} not contacted since becoming eligible.
           </p>
+        ) : null}
+        {excludedLine(radar.excluded) ? (
+          <p className="text-sm text-muted">{excludedLine(radar.excluded)}</p>
         ) : null}
         {radar.ready.length === 0 ? (
           <EmptyState

@@ -1,5 +1,6 @@
 import Link from "next/link";
 import type { AveragePoints } from "@/lib/earnings/commission";
+import { excludedLine } from "@/lib/earnings/eligible";
 import {
   AWAITING_WINDOW_DAYS,
   HORIZON_LABELS,
@@ -225,6 +226,9 @@ export function RenewalForecastPanel({
               </div>
             ))}
           </dl>
+          {excludedLine(forecast.excluded) ? (
+            <p className="mt-2 text-xs text-muted">{excludedLine(forecast.excluded)}</p>
+          ) : null}
           <ul className="mt-2 divide-y divide-border">
             {shown.map((r) => (
               <li

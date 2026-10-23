@@ -13,6 +13,7 @@ import {
   type FunderThresholds,
   type Progress,
 } from "./progress";
+import { noExclusions, notRenewable, tally, type Excluded } from "./eligible";
 import type { AdvanceRow } from "./types";
 
 /** A merchant who paid off in the last 30 days is the hottest lead the shop owns. */
@@ -73,6 +74,8 @@ export interface Radar {
   ready: RadarRow[];
   paidInFull: PaidRow[];
   pastPayoff: PastPayoffRow[];
+  /** Merchants with an active advance left off the list, and why. */
+  excluded: Excluded;
   totals: {
     outstandingCents: number;
     expectedCents: number;
@@ -102,13 +105,18 @@ export function buildRadar(input: RadarInput): Radar {
   const ready: RadarRow[] = [];
   const pastPayoff: PastPayoffRow[] = [];
   const paidInFull: PaidRow[] = [];
+  const excluded = noExclusions();
 
   for (const card of cards) {
     const mine = byClient.get(card.id) ?? [];
     const active = mine.find((a) => a.status === "active");
     if (active) {
       const p = advanceProgress(active, renewalThreshold(active, thresholds, minPct), today);
-      if (p.eligible) {
+      // Said no / went elsewhere / do-not-contact: not a call he can make, so not on the list and not in the dollars.
+      // (A merchant already working a renewal deal stays: that is the renewal in progress.)
+      const why = p.eligible ? notRenewable(card, { pipeline: false }) : null;
+      if (why) tally(excluded, why);
+      else if (p.eligible) {
         const contact = contactOf(card, today, timezone);
         const eligibleOn = p.crossesOn ?? today;
         const eligibleDays = daysBetween(eligibleOn, today);
@@ -177,6 +185,7 @@ export function buildRadar(input: RadarInput): Radar {
     ready,
     paidInFull,
     pastPayoff,
+    excluded,
     totals: {
       outstandingCents: ready.reduce((s, r) => s + r.progress.balanceCents, 0),
       expectedCents: sum.cents,

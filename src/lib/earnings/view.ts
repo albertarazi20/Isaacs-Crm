@@ -60,7 +60,14 @@ export function buildEarnings(data: EarningsData, today: ISODate): EarningsView 
     advanceCount: data.advances.length,
     awaiting: awaitingCommission(data.advances, today, ctx),
     pipeline: pipelineDeals(data.deals, data.offers, ctx),
-    renewals: renewalForecast(data.advances, today, ctx, funderThresholdMap(data.funders)),
+    renewals: renewalForecast(
+      data.advances,
+      today,
+      ctx,
+      funderThresholdMap(data.funders),
+      null,
+      data.cards,
+    ),
     price: {
       observations: observations({
         advances: data.advances,

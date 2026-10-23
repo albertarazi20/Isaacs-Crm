@@ -1,5 +1,5 @@
+import type { ClientCard } from "../data/types";
 import { addDays, diffDays, type ISODate } from "../mca/dates";
-import type { StageKey } from "../mca/stages";
 import {
   estimateCommission,
   expectedCommission,
@@ -7,18 +7,14 @@ import {
   type CommissionAmount,
   type CommissionContext,
 } from "./commission";
+import { noExclusions, notRenewable, PIPELINE_STAGES, tally, type Excluded } from "./eligible";
 import { advanceProgress, renewalThreshold, type FunderThresholds } from "./progress";
 import type { AdvanceRow, DealRow, OfferRow } from "./types";
 
 /** Commission is normally paid within weeks of funding; past this a missing entry is "not recorded", not "coming". */
 export const AWAITING_WINDOW_DAYS = 90;
 
-/** Deals that have an offer in hand or a contract out: close enough to count as coming. */
-export const PIPELINE_STAGES: readonly StageKey[] = [
-  "offers_in",
-  "offer_presented",
-  "contract_out",
-];
+export { PIPELINE_STAGES };
 
 // ---------------------------------------------------------------------------------------------
 // (a) funded, commission not yet received
@@ -163,6 +159,8 @@ export interface RenewalForecastRow {
 
 export interface RenewalForecast {
   rows: RenewalForecastRow[];
+  /** Active advances left out of the forecast, and why. */
+  excluded: Excluded;
   totalCents: number;
   unknown: number;
   byHorizon: Record<Horizon, { count: number; cents: number }>;
@@ -175,19 +173,31 @@ function horizonOf(renewalOn: ISODate, today: ISODate): Horizon {
   return "later";
 }
 
-/** Every active advance, renewed at the same terms the day it crosses its renewal line. */
+/**
+ * Every active advance, renewed at the same terms the day it crosses its renewal line. Merchants who said no, are
+ * do-not-contact, or are already in a funding deal (the Pipeline tile prices that) are left out and counted.
+ */
 export function renewalForecast(
   advances: readonly AdvanceRow[],
   today: ISODate,
   ctx: CommissionContext,
   thresholds: FunderThresholds = new Map(),
   override: number | null = null,
+  cards: readonly Pick<ClientCard, "id" | "stage" | "contact_status">[] = [],
 ): RenewalForecast {
   const rows: RenewalForecastRow[] = [];
+  const excluded = noExclusions();
+  const cardOf = new Map(cards.map((c) => [c.id, c]));
   for (const advance of advances) {
     if (advance.status !== "active") continue;
     const p = advanceProgress(advance, renewalThreshold(advance, thresholds, override), today);
     if (p.crossesOn === null) continue;
+    const card = cardOf.get(advance.clientId);
+    const why = card ? notRenewable(card, { pipeline: true }) : null;
+    if (why) {
+      tally(excluded, why);
+      continue;
+    }
     // already crossed: the day to call is today
     const renewalOn = p.crossesOn < today ? today : p.crossesOn;
     rows.push({
@@ -214,5 +224,5 @@ export function renewalForecast(
     byHorizon[r.horizon].cents += r.expected?.cents ?? 0;
   }
   const sum = sumCommission(rows.map((r) => r.expected));
-  return { rows, totalCents: sum.cents, unknown: sum.unknown, byHorizon };
+  return { rows, excluded, totalCents: sum.cents, unknown: sum.unknown, byHorizon };
 }

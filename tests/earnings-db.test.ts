@@ -534,6 +534,32 @@ describe("database dates agree with src/lib/mca/funding.ts", () => {
   });
 });
 
+describe("review-3A A-18: the payback in TypeScript is the payback in the database", () => {
+  it("25 exact half-cent cases: fundings.payback_cents equals paybackCents", async () => {
+    const cases: [number, number][] = [[1385, 1251]];
+    for (let d = 1001; cases.length < 25; d += 37) {
+      for (let f = 1101; f <= 1599 && cases.length < 25; f += 13) {
+        if ((d * f) % 10 === 5) cases.push([d, f]);
+      }
+    }
+    for (const [dollars, thousandths] of cases) {
+      const c = await insertClient(t.db, a, `Half cent ${dollars} ${thousandths}`);
+      const id = await fund(a, c, {
+        amount: String(dollars),
+        factorRate: (thousandths / 1000).toFixed(3),
+        payment: "100",
+      });
+      const { rows } = await t.pool.query<{ payback_cents: string }>(
+        "select payback_cents::text from fundings where id = $1",
+        [id],
+      );
+      expect(Number(rows[0]?.payback_cents), `$${dollars} × ${thousandths / 1000}`).toBe(
+        paybackCents(dollars * 100, thousandths / 1000),
+      );
+    }
+  });
+});
+
 describe("earnings queries", () => {
   it("lists advances with commission fields and keeps users apart", async () => {
     const client = await insertClient(t.db, a, "Listed Co");
