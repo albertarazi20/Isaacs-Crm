@@ -59,7 +59,7 @@ const A11Y = {
   },
 } as const;
 
-const AUTO_SCROLL = { threshold: { x: 0.15, y: 0.12 }, acceleration: 14 } as const;
+const AUTO_SCROLL = { threshold: { x: 0.15, y: 0.12 }, acceleration: 7 } as const;
 
 function ViewLink({
   view,
@@ -96,7 +96,7 @@ function Toggle({
   children: string;
 }) {
   return (
-    <label className="inline-flex h-10 cursor-pointer items-center gap-2 rounded-lg border border-border bg-surface px-3 text-sm select-none has-checked:border-accent has-checked:bg-accent-soft">
+    <label className="order-4 inline-flex h-9 cursor-pointer items-center gap-2 rounded-lg border border-border bg-surface px-3 text-sm select-none has-checked:border-accent has-checked:bg-accent-soft sm:h-10">
       <input
         type="checkbox"
         className="size-4 accent-(--accent)"
@@ -227,7 +227,7 @@ export function Board({ initialCards, view }: { initialCards: ClientCard[]; view
   return (
     <div className="flex h-[calc(100dvh-6.75rem)] min-h-[30rem] flex-col gap-3">
       <div className="flex flex-wrap items-center gap-2">
-        <nav aria-label="Board view" className="inline-flex rounded-lg bg-surface-2 p-0.5">
+        <nav aria-label="Board view" className="order-1 inline-flex rounded-lg bg-surface-2 p-0.5">
           <ViewLink view="pipeline" current={view}>
             Pipeline
           </ViewLink>
@@ -239,7 +239,7 @@ export function Board({ initialCards, view }: { initialCards: ClientCard[]; view
           type="search"
           aria-label="Search merchants"
           placeholder="Search business, merchant, DBA or phone"
-          className="w-full sm:w-80"
+          className="order-3 w-full sm:w-80"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
         />
@@ -251,7 +251,7 @@ export function Board({ initialCards, view }: { initialCards: ClientCard[]; view
         <Toggle checked={overdueOnly} onChange={setOverdueOnly}>
           Overdue only
         </Toggle>
-        <p className="ml-auto text-sm text-muted" aria-live="polite">
+        <p className="order-2 ml-auto text-sm text-muted sm:order-5" aria-live="polite">
           {count}
         </p>
       </div>

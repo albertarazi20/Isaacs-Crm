@@ -1,5 +1,7 @@
 import type { Db } from "../db";
 import { todayIn } from "../mca/dates";
+import { normalizeUS } from "../mca/phone";
+import type { StageKey } from "../mca/stages";
 import type { ClientCard, ClientDetail, UserContext } from "./types";
 
 export async function userContext(q: Db, now: Date = new Date()): Promise<UserContext> {
@@ -78,4 +80,51 @@ export async function dueCount(q: Db, today: string): Promise<number> {
     [today],
   );
   return rows[0]?.n ?? 0;
+}
+
+export interface DuplicateMatch {
+  id: string;
+  business_name: string;
+  contact_name: string;
+  stage: StageKey;
+  /** Why it matched, in words Isaac can check at a glance. */
+  reason: "same phone" | "same business name";
+}
+
+/**
+ * Clients that look like the one being added: same phone number (however it was typed) or the same
+ * business name ignoring case and punctuation. The same merchant comes back under a slightly
+ * different name constantly — this is how a second card never quietly appears.
+ */
+export async function findDuplicates(
+  q: Db,
+  input: { phone?: string; businessName?: string },
+): Promise<DuplicateMatch[]> {
+  const e164 = input.phone ? normalizeUS(input.phone) : null;
+  const digits = e164 ? e164.slice(2) : null;
+  const name = (input.businessName ?? "").toLowerCase().replace(/[^\p{L}\p{N}]+/gu, "");
+  if (!digits && !name) return [];
+  const { rows } = await q.query<{
+    id: string;
+    business_name: string;
+    contact_name: string;
+    stage: StageKey;
+    by_phone: boolean;
+  }>(
+    `select id, business_name, contact_name, stage,
+            ($1::text is not null and right(regexp_replace(phone, '[^0-9]', '', 'g'), 10) = $1) as by_phone
+       from clients
+      where ($1::text is not null and right(regexp_replace(phone, '[^0-9]', '', 'g'), 10) = $1)
+         or ($2 <> '' and regexp_replace(lower(business_name), '[^[:alnum:]]+', '', 'g') = $2)
+      order by by_phone desc, business_name
+      limit 5`,
+    [digits, name],
+  );
+  return rows.map((r) => ({
+    id: r.id,
+    business_name: r.business_name,
+    contact_name: r.contact_name,
+    stage: r.stage,
+    reason: r.by_phone ? "same phone" : "same business name",
+  }));
 }

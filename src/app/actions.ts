@@ -10,7 +10,7 @@ import { GmailReconnectError } from "@/lib/email/gmail";
 import { toActionError } from "@/lib/data/errors";
 import { importClients, type ImportResult } from "@/lib/data/import";
 import * as m from "@/lib/data/mutations";
-import { getCard, userContext } from "@/lib/data/queries";
+import { findDuplicates, getCard, userContext, type DuplicateMatch } from "@/lib/data/queries";
 import * as s from "@/lib/data/schemas";
 import type { ActionResult, ClientCard, UserContext } from "@/lib/data/types";
 import { env } from "@/lib/env";
@@ -31,6 +31,11 @@ async function run<T>(fn: (q: Db, ctx: UserContext) => Promise<T>): Promise<Acti
 
 type Card = ClientCard;
 
+export async function findDuplicatesAction(
+  input: unknown,
+): Promise<ActionResult<DuplicateMatch[]>> {
+  return run((q) => findDuplicates(q, s.duplicateCheckSchema.parse(input)));
+}
 export async function addClientAction(input: unknown): Promise<ActionResult<Card>> {
   return run((q, ctx) => m.createClient(q, s.newClientSchema.parse(input), ctx));
 }

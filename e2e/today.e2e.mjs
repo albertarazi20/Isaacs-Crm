@@ -114,12 +114,39 @@ export default async function todayFlow({ email }) {
     JSON.stringify(row),
   );
 
+  // Adding someone who is already in the CRM warns instead of quietly making a second card.
+  await page.getByRole("button", { name: "+ Add client" }).click();
+  await page.getByLabel("Business name *").fill("Totally Different Name");
+  await page.getByLabel("Phone", { exact: true }).fill("305-555-0999");
+  await page.getByRole("button", { name: "Add client" }).last().click();
+  await page.getByText("This looks like someone you already have").waitFor({ timeout: 8000 });
+  check(
+    "duplicate phone is flagged by name",
+    (await page.getByRole("alert").filter({ hasText: "looks like someone" }).innerText()).includes(
+      "E2E Test Bakery",
+    ),
+  );
+  const dupeCount = () =>
+    withDb((db) =>
+      one(
+        db,
+        "select count(*)::int n from clients c join app_users u on u.id = c.user_id where u.email = $1 and c.business_name = 'Totally Different Name'",
+        [email],
+      ),
+    );
+  check("nothing was created while the warning is up", (await dupeCount()).n === 0);
+  await page.getByRole("button", { name: "Add as a new client anyway" }).click();
+  await page.getByText(/Added Totally Different Name/).waitFor({ timeout: 8000 });
+  check("'add anyway' does create it", (await dupeCount()).n === 1);
+
   // Clients search by phone digits.
   await page.goto(`${BASE}/clients`, { waitUntil: "networkidle" });
   await page.getByLabel("Search clients").fill("0999");
+  const found = await page.locator("tbody tr").allInnerTexts();
   check(
-    "clients search finds a merchant by phone digits",
-    (await page.locator("tbody tr").count()) === 1,
+    "clients search finds merchants by phone digits",
+    found.length === 2 && found.some((r) => r.includes("E2E Test Bakery")),
+    `${found.length} rows`,
   );
 
   // Settings persist.

@@ -265,3 +265,8 @@ export const importSchema = z.object({
     .min(1, "Nothing to import")
     .max(2000, "Import up to 2,000 clients at a time"),
 });
+
+export const duplicateCheckSchema = z.object({
+  phone: text(40).optional(),
+  businessName: text(200).optional(),
+});

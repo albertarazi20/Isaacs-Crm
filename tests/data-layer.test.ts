@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { toActionError } from "@/lib/data/errors";
 import * as m from "@/lib/data/mutations";
-import { getClientDetail, listCards, userContext } from "@/lib/data/queries";
+import { findDuplicates, getClientDetail, listCards, userContext } from "@/lib/data/queries";
 import {
   bucketSchema,
   fundingInputSchema,
@@ -604,5 +604,39 @@ describe("error messages", () => {
         }),
       ),
     ).toBe("Something went wrong — try again");
+  });
+});
+
+describe("duplicate detection when adding", () => {
+  it("finds the same phone however it was typed, and the same name ignoring punctuation and case", async () => {
+    const c = await newClient("Dupe Check Pizza & Grill, LLC", { phone: "(305) 555-7777" });
+    const byPhone = await asA((q) =>
+      findDuplicates(q, { phone: "1-305-555-7777", businessName: "Totally Different" }),
+    );
+    expect(byPhone).toEqual([
+      expect.objectContaining({ id: c.id, reason: "same phone", stage: "name_in" }),
+    ]);
+    const byName = await asA((q) =>
+      findDuplicates(q, { businessName: "dupe check pizza grill llc" }),
+    );
+    expect(byName).toEqual([expect.objectContaining({ id: c.id, reason: "same business name" })]);
+  });
+  it("finds nothing for a new merchant, a short junk phone, or empty input", async () => {
+    expect(
+      await asA((q) =>
+        findDuplicates(q, { phone: "555-12", businessName: "Never Seen Before Co" }),
+      ),
+    ).toEqual([]);
+    expect(await asA((q) => findDuplicates(q, {}))).toEqual([]);
+  });
+  it("never reveals another user's clients", async () => {
+    expect(
+      await t.db.withUser(b, (q) =>
+        findDuplicates(q, {
+          phone: "(305) 555-7777",
+          businessName: "Dupe Check Pizza & Grill, LLC",
+        }),
+      ),
+    ).toEqual([]);
   });
 });

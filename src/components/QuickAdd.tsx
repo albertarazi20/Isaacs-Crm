@@ -1,9 +1,11 @@
 "use client";
 
 import { useState } from "react";
-import { addClientAction } from "@/app/actions";
+import Link from "next/link";
+import { addClientAction, findDuplicatesAction } from "@/app/actions";
+import type { DuplicateMatch } from "@/lib/data/queries";
 import { formatDate } from "@/lib/format";
-import { defaultTimers, STAGES, type StageKey } from "@/lib/mca/stages";
+import { defaultTimers, stageDef, STAGES, type StageKey } from "@/lib/mca/stages";
 import type { ISODate } from "@/lib/mca/dates";
 import { useApp } from "./app-context";
 import { Dialog, useCall, useToast } from "./overlay";
@@ -37,16 +39,18 @@ function QuickAddDialog({ onClose }: { onClose: () => void }) {
   const [pickedDate, setPickedDate] = useState(false);
   const [busy, setBusy] = useState(false);
 
-  async function submit(form: HTMLFormElement) {
-    const f = new FormData(form);
+  const [dupes, setDupes] = useState<DuplicateMatch[] | null>(null);
+  const [pending, setPending] = useState<Record<string, FormDataEntryValue | null> | null>(null);
+
+  async function create(values: Record<string, FormDataEntryValue | null>) {
     setBusy(true);
     const card = await call(
       addClientAction({
-        businessName: f.get("businessName"),
-        contactName: f.get("contactName"),
-        phone: f.get("phone"),
-        email: f.get("email"),
-        wantedAmount: f.get("wantedAmount"),
+        businessName: values.businessName,
+        contactName: values.contactName,
+        phone: values.phone,
+        email: values.email,
+        wantedAmount: values.wantedAmount,
         stage,
         followUpOn: dueOn,
       }),
@@ -58,6 +62,31 @@ function QuickAddDialog({ onClose }: { onClose: () => void }) {
       message: `Added ${card.business_name} — follow up ${formatDate(dueOn, today)}`,
       tone: "success",
     });
+  }
+
+  async function submit(form: HTMLFormElement) {
+    const f = new FormData(form);
+    const values = {
+      businessName: f.get("businessName"),
+      contactName: f.get("contactName"),
+      phone: f.get("phone"),
+      email: f.get("email"),
+      wantedAmount: f.get("wantedAmount"),
+    };
+    setBusy(true);
+    const found = await call(
+      findDuplicatesAction({
+        phone: String(values.phone ?? ""),
+        businessName: String(values.businessName ?? ""),
+      }),
+    );
+    setBusy(false);
+    if (found && found.length > 0) {
+      setPending(values);
+      setDupes(found);
+      return;
+    }
+    await create(values);
   }
 
   return (
@@ -127,6 +156,33 @@ function QuickAddDialog({ onClose }: { onClose: () => void }) {
             }}
           />
         </Field>
+        {dupes && pending ? (
+          <div
+            role="alert"
+            className="space-y-2 rounded-lg border border-warn bg-warn-soft p-3 text-sm"
+          >
+            <p className="font-semibold text-warn">This looks like someone you already have:</p>
+            <ul className="space-y-1">
+              {dupes.map((d) => (
+                <li key={d.id}>
+                  <Link
+                    href={`/clients/${d.id}`}
+                    className="font-medium text-accent underline"
+                    onClick={onClose}
+                  >
+                    {d.business_name}
+                  </Link>{" "}
+                  <span className="text-muted">
+                    ({stageDef(d.stage).label}) — {d.reason}
+                  </span>
+                </li>
+              ))}
+            </ul>
+            <Button size="sm" disabled={busy} onClick={() => void create(pending)}>
+              Add as a new client anyway
+            </Button>
+          </div>
+        ) : null}
       </form>
     </Dialog>
   );
