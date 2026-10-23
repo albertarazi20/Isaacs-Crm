@@ -49,16 +49,16 @@ Legend: **DB** = verify the row. **Both** = verify in light _and_ dark mode and 
 
 ## D. Client page
 
-| #   | Case                                    | Expected                                                                  |
-| --- | --------------------------------------- | ------------------------------------------------------------------------- |
-| D1  | Add a note; reload                      | Note persists, newest first.                                              |
-| D2  | Edit the ask twice                      | History shows both; card shows the newest. **DB** two `client_asks` rows. |
-| D3  | Add 2 positions, edit one, delete one   | Rollup updates; **DB** matches.                                           |
-| D4  | Position with no payback                | Shows "add payback to see % paid down", never a made-up %.                |
-| D5  | Log a competing offer; mark won         | **DB** row; insight line appears at 2+ offers.                            |
-| D6  | Start stip checklist; tick all required | "Ready to submit"; unticking one names the missing month.                 |
-| D7  | Funding card: enter collected-so-far    | Paydown uses the override and says it was entered by hand.                |
-| D8  | Delete client                           | Confirm dialog; **DB** client, timers, notes, stips all gone.             |
+| #   | Case                                    | Expected                                                                                                                                                                                   |
+| --- | --------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| D1  | Add a note; reload                      | Note persists, newest first.                                                                                                                                                               |
+| D2  | Edit the ask twice                      | History shows both; card shows the newest. **DB** two `client_asks` rows.                                                                                                                  |
+| D3  | Add 2 positions, edit one, delete one   | Rollup updates; **DB** matches.                                                                                                                                                            |
+| D4  | Position with no payback                | Shows "add payback to see % paid down", never a made-up %.                                                                                                                                 |
+| D5  | Log a competing offer; mark won         | **DB** row; insight line appears at 2+ offers.                                                                                                                                             |
+| D6  | Start stip checklist; tick all required | "Ready to submit"; unticking one names the missing month.                                                                                                                                  |
+| D7  | Funding card: enter collected-so-far    | Paydown uses the override and says it was entered by hand.                                                                                                                                 |
+| D8  | Move a client to the trash              | Confirm dialog; **DB** in `trashed_clients`, every timer closed, history kept. Restore reopens the follow-ups. "Delete forever" only from the trash (never for a do-not-contact merchant). |
 
 ## E. Board
 
@@ -94,3 +94,25 @@ Legend: **DB** = verify the row. **Both** = verify in light _and_ dark mode and 
 
 Google sign-in end to end, Gmail send, Resend delivery, Google Voice deep links.
 Those have mocked-network unit tests only.
+
+## I. Added during the build (each is covered by an automated test; the browser ones assert the database)
+
+| #   | Area                                         | What must be true                                                                                                                                              | Where it is proven                                                                                             |
+| --- | -------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| I1  | Trash and restore                            | Hidden everywhere, no reminders; restore returns the follow-ups it closed; do-not-contact merchants stay on file; nothing can add timers to a trashed merchant | `tests/trash.test.ts`, `tests/review-fixes.test.ts`, `e2e/trash`                                               |
+| I2  | Sign out of all devices                      | Every cookie dies on its next request; a deleted user's cookie dies                                                                                            | `tests/session-epoch.test.ts`, `e2e/session`                                                                   |
+| I3  | Lead intake                                  | Token-only; plain-words refusals; duplicates become a note; do-not-contact never scheduled; 30/min; revoke is immediate                                        | `tests/leads-*.test.ts`, `e2e/leads`                                                                           |
+| I4  | Instant new-lead alert, Monday scorecard     | One email per lead / per Monday; failed send rolls back; capped; off when the reminder switch is off; off the allowlist means off                              | `tests/lead-alert.test.ts`, `tests/weekly.test.ts`                                                             |
+| I5  | Funders, submissions, offers, chase timers   | Fit check; chase survives a stage move inside the pipeline; accepting an offer pre-fills Funded and does not fund                                              | `tests/funders-*.test.ts`, `tests/chase-move.test.ts`, `e2e/funders`                                           |
+| I6  | Earnings, renewals, editable terms           | Typo fix recomputes payback and ONLY the latest advance's renewal date; DB date equals TypeScript date                                                         | `tests/earnings-*.test.ts`, `e2e/earnings`                                                                     |
+| I7  | Power dial, ranking, bulk reschedule         | Ranking never hides a merchant; bulk move is one transaction and keeps each reason; booked calls are appointments                                              | `tests/priority.test.ts`, `tests/power-*.test.ts`, `tests/booked.test.ts`, `e2e/power`                         |
+| I8  | Win-back, snippets, note hints, calendar     | Limited merchants excluded; hints change nothing without a tap; unfilled `{fields}` block a send                                                               | `tests/winback*.test.ts`, `tests/notehints.test.ts`, `e2e/winback`, `e2e/text-guard`                           |
+| I9  | Reports, filters, export, import with source | Numbers equal the database; trash excluded; CSV formula-safe; a secret in a sheet is dropped from the row, not the file                                        | `tests/reports*.test.ts`, `tests/client-filters.test.ts`, `tests/export.test.ts`, `e2e/reports`, `e2e/clients` |
+| I10 | Secrets (SSN, card, account, tax ID)         | Refused in notes AND every one-line field, with or without dashes                                                                                              | `tests/sensitive.test.ts`                                                                                      |
+| I11 | Production build                             | 15 pages and the dialogs open with zero CSP violations; `/api/dev-login` is 404; exports 401 without a session; cron 401/503; leads survive a failing Resend   | `scripts/bench/pages.mjs` for speed; the smoke is recorded in `docs/DECISIONS.md`                              |
+| I12 | Performance at 5,000 merchants               | See `docs/DECISIONS.md` ("performance at 5,000 merchants") — commands next to the numbers                                                                      | `scripts/bench/*`                                                                                              |
+
+## J. Still manual (cannot be proven from here)
+
+Real Google sign-in and Gmail send; real Resend delivery (digest, call heads-up, new-lead alert, scorecard); the hourly
+scheduler calling the cron route; a phone opening `sms:` / Google Voice; installing the app on a phone; push is not built.
