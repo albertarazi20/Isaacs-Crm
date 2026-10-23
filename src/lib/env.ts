@@ -37,5 +37,12 @@ export function googleConfigured(e: Env = env()): boolean {
 
 /** The dev login skips Google. It can never switch on in production. */
 export function devLoginEnabled(e: Env = env()): boolean {
-  return process.env.NODE_ENV !== "production" && e.DEV_LOGIN === "1";
+  if (process.env.NODE_ENV === "production" || e.DEV_LOGIN !== "1") return false;
+  // Skips Google AND the allowlist, so it must be impossible to leave on for a public URL.
+  try {
+    const host = new URL(e.APP_URL).hostname;
+    return host === "localhost" || host === "127.0.0.1";
+  } catch {
+    return false;
+  }
 }

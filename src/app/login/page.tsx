@@ -32,7 +32,7 @@ export default async function LoginPage({
       </div>
       {error ? (
         <p role="alert" className="rounded-lg bg-bad-soft p-3 text-sm text-bad">
-          {MESSAGES[error] ?? "Couldn't sign you in."}
+          {Object.hasOwn(MESSAGES, error) ? MESSAGES[error] : "Couldn't sign you in."}
         </p>
       ) : null}
       {googleConfigured() ? (

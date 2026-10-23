@@ -1,7 +1,14 @@
 import { randomBytes } from "node:crypto";
 import { describe, expect, it, vi } from "vitest";
 import { decryptSecret, encryptSecret } from "@/lib/crypto";
-import { buildAuthUrl, exchangeCode, GMAIL_SEND_SCOPE, isAllowedEmail } from "@/lib/auth/google";
+import {
+  buildAuthUrl,
+  exchangeCode,
+  GMAIL_SEND_SCOPE,
+  isAllowedEmail,
+  signOAuthState,
+  verifyOAuthState,
+} from "@/lib/auth/google";
 import { signSession, verifySession } from "@/lib/auth/session";
 import { accessTokenFor, GmailReconnectError, sendViaGmail } from "@/lib/email/gmail";
 import { sendViaResend } from "@/lib/email/resend";
@@ -155,5 +162,22 @@ describe("Resend", () => {
         (async () => json({ message: "domain not verified" }, 403)) as never,
       ),
     ).rejects.toThrow(/domain not verified/);
+  });
+});
+
+describe("OAuth state cookie", () => {
+  const secret = "s".repeat(40);
+  it("round-trips and cannot be forged or tampered with", () => {
+    const c = signOAuthState({ state: "abc", purpose: "gmail" }, secret);
+    expect(verifyOAuthState(c, secret)).toEqual({ state: "abc", purpose: "gmail" });
+    expect(verifyOAuthState(c, "t".repeat(40))).toBeNull();
+    const [body, sig] = c.split(".");
+    const forged = Buffer.from(JSON.stringify({ state: "abc", purpose: "login" })).toString(
+      "base64url",
+    );
+    expect(verifyOAuthState(`${forged}.${sig}`, secret)).toBeNull();
+    expect(verifyOAuthState(`${body}.`, secret)).toBeNull();
+    expect(verifyOAuthState(undefined, secret)).toBeNull();
+    expect(verifyOAuthState(JSON.stringify({ state: "abc", purpose: "login" }), secret)).toBeNull(); // the old unsigned form
   });
 });

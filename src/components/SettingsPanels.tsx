@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { disconnectGmailAction, sendTestReminderAction, updateSettingsAction } from "@/app/actions";
 import { useCall, useToast } from "./overlay";
-import { Button, buttonClass, Card, Field, Input, Select } from "./ui";
+import { Button, buttonClass, Card, Field, Select } from "./ui";
 
 const ZONES = [
   ["America/New_York", "Eastern"],
@@ -17,7 +17,7 @@ const ZONES = [
 
 interface Props {
   loginEmail: string;
-  settings: { timezone: string; digestEnabled: boolean; digestHour: number; notifyEmail: string };
+  settings: { timezone: string; digestEnabled: boolean; digestHour: number };
   gmail: {
     connected: boolean;
     needsReconnect: boolean;
@@ -103,14 +103,9 @@ export function SettingsPanels({ loginEmail, settings, gmail, resendReady }: Pro
             </Select>
           </Field>
         </div>
-        <Field label="Send reminders to" hint={`Leave blank to use ${loginEmail}`}>
-          <Input
-            type="email"
-            value={form.notifyEmail}
-            onChange={(e) => setForm({ ...form, notifyEmail: e.target.value })}
-            placeholder={loginEmail}
-          />
-        </Field>
+        <p className="text-sm text-muted">
+          Reminders go to <strong>{loginEmail}</strong> — the Google account you signed in with.
+        </p>
         <div className="flex flex-wrap items-center gap-2">
           <Button variant="primary" disabled={busy !== null} onClick={() => void save()}>
             {busy === "save" ? "Saving…" : "Save"}

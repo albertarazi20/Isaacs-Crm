@@ -5,6 +5,7 @@ import {
   isAllowedEmail,
   OAUTH_COOKIE,
   verifyIdToken,
+  verifyOAuthState,
 } from "@/lib/auth/google";
 import { getSession, sessionCookie } from "@/lib/auth/server";
 import { env } from "@/lib/env";
@@ -27,12 +28,7 @@ export async function GET(req: NextRequest) {
   if (params.get("error"))
     return fail(params.get("error") === "access_denied" ? "access_denied" : "google_error");
 
-  let saved: { state: string; purpose: "login" | "gmail" } | null = null;
-  try {
-    saved = JSON.parse(req.cookies.get(OAUTH_COOKIE)?.value ?? "null");
-  } catch {
-    saved = null;
-  }
+  const saved = verifyOAuthState(req.cookies.get(OAUTH_COOKIE)?.value, e.SESSION_SECRET);
   const code = params.get("code");
   if (!saved || !code || params.get("state") !== saved.state) return fail("bad_state");
 

@@ -2,12 +2,11 @@ import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { cache } from "react";
 import { AppProvider } from "@/components/app-context";
-import { logoutAction } from "@/app/actions";
+import { LogoutButton } from "@/components/LogoutButton";
 import { NavLink } from "@/components/NavLink";
 import { ToastProvider } from "@/components/overlay";
 import { PendingTouchPrompt } from "@/components/ContactActions";
 import { QuickAdd } from "@/components/QuickAdd";
-import { Button } from "@/components/ui";
 import { requireSession } from "@/lib/auth/server";
 import { dueCount, userContext } from "@/lib/data/queries";
 import { db } from "@/lib/db";
@@ -71,11 +70,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
               ))}
             </nav>
             <QuickAdd />
-            <form action={logoutAction}>
-              <Button variant="ghost" size="sm" type="submit" title={me.user.email}>
-                Log out
-              </Button>
-            </form>
+            <LogoutButton email={me.user.email} />
           </div>
         </header>
         {gmail.needsReconnect ? (

@@ -1,6 +1,7 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import { env } from "../env";
+import { devLoginEnabled, env } from "../env";
+import { isAllowedEmail } from "./google";
 import {
   SESSION_COOKIE,
   SESSION_DAYS,
@@ -11,7 +12,11 @@ import {
 
 export async function getSession(): Promise<SessionClaims | null> {
   const store = await cookies();
-  return verifySession(store.get(SESSION_COOKIE)?.value, env().SESSION_SECRET);
+  const claims = await verifySession(store.get(SESSION_COOKIE)?.value, env().SESSION_SECRET);
+  if (!claims) return null;
+  // Removing someone from ALLOWED_EMAILS must end their session now, not in 14 days. (Dev login has no allowlist.)
+  if (!devLoginEnabled() && !isAllowedEmail(claims.email, env().ALLOWED_EMAILS)) return null;
+  return claims;
 }
 
 export async function requireSession(): Promise<SessionClaims> {

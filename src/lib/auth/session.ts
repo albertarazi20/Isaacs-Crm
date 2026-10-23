@@ -1,7 +1,7 @@
 import { jwtVerify, SignJWT } from "jose";
 
 export const SESSION_COOKIE = "isaac_session";
-export const SESSION_DAYS = 30;
+export const SESSION_DAYS = 14;
 
 export interface SessionClaims {
   userId: string;

@@ -1,5 +1,6 @@
 import type { Db } from "../db";
 import { normalizeUS } from "../mca/phone";
+import { toActionError } from "./errors";
 import { addNote, createClient } from "./mutations";
 import { newClientSchema, type ImportRowInput } from "./schemas";
 import type { UserContext } from "./types";
@@ -68,7 +69,7 @@ export async function importClients(
       await q.query("rollback to savepoint import_row");
       result.failed.push({
         line: row.line,
-        message: e instanceof Error ? e.message : "Couldn't import this row",
+        message: toActionError(e),
       });
     }
   }

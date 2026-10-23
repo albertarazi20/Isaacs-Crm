@@ -35,15 +35,15 @@ export default async function SettingsPage({
       timezone: string;
       digest_enabled: boolean;
       digest_hour: number;
-      notify_email: string | null;
     }>(
-      "select email, timezone, digest_enabled, digest_hour, notify_email from app_users where id = app.current_user_id()",
+      "select email, timezone, digest_enabled, digest_hour from app_users where id = app.current_user_id()",
     );
     return rows[0];
   });
   const gmail = await gmailStatus(session.userId);
   const e = env();
-  const notice = NOTICES[sp.gmail ?? sp.error ?? ""];
+  const key = sp.gmail ?? sp.error ?? "";
+  const notice = Object.hasOwn(NOTICES, key) ? NOTICES[key] : undefined;
 
   return (
     <div className="mx-auto max-w-2xl space-y-6">
@@ -62,7 +62,6 @@ export default async function SettingsPage({
           timezone: user?.timezone ?? "America/New_York",
           digestEnabled: user?.digest_enabled ?? true,
           digestHour: user?.digest_hour ?? 8,
-          notifyEmail: user?.notify_email ?? "",
         }}
         gmail={{
           connected: gmail.connected,

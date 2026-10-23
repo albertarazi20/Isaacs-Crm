@@ -418,9 +418,25 @@ export async function updateFunding(
 }
 
 export async function updateSettings(q: Db, input: z.output<typeof settingsSchema>): Promise<void> {
+  // Postgres, not Intl, decides what a time zone is: "+05:00" and a few legacy names pass one and fail the other.
+  const known = await q.query("select 1 from pg_timezone_names where name = $1", [input.timezone]);
+  if (known.rowCount === 0) throw new UserError("Pick a time zone from the list");
   await q.query(
-    `update app_users set timezone = $1, digest_enabled = $2, digest_hour = $3, notify_email = nullif($4, '')
-      where id = app.current_user_id()`,
-    [input.timezone, input.digestEnabled, input.digestHour, input.notifyEmail],
+    "update app_users set timezone = $1, digest_enabled = $2, digest_hour = $3 where id = app.current_user_id()",
+    [input.timezone, input.digestEnabled, input.digestHour],
   );
+}
+
+/** A stolen session can't turn Isaac's own Gmail into a spam cannon: at most this many emails a day. */
+export const DAILY_EMAIL_LIMIT = 100;
+
+export async function assertEmailQuota(q: Db, limit: number = DAILY_EMAIL_LIMIT): Promise<void> {
+  const { rows } = await q.query<{ n: number }>(
+    "select count(*)::int as n from activities where kind = 'email' and occurred_at > now() - interval '24 hours'",
+  );
+  if ((rows[0]?.n ?? 0) >= limit) {
+    throw new UserError(
+      `Daily email limit reached (${limit}). It resets 24 hours after your oldest email today.`,
+    );
+  }
 }

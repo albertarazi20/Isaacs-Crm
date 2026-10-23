@@ -545,7 +545,7 @@ describe("queries and settings", () => {
     expect(dates).toEqual([...dates].sort());
     expect(await t.db.withUser(b, (q) => listCards(q))).toEqual([]);
   });
-  it("saves settings, and rejects an unknown timezone at the schema", async () => {
+  it("saves settings, and rejects a time zone Postgres doesn't know even when Intl accepts it", async () => {
     const { settingsSchema } = await import("@/lib/data/schemas");
     await asA((q) =>
       m.updateSettings(
@@ -554,31 +554,52 @@ describe("queries and settings", () => {
           timezone: "America/Chicago",
           digestEnabled: false,
           digestHour: "7",
-          notifyEmail: "me@x.com",
         }),
       ),
     );
     expect(
       (
-        await rows(
-          "select timezone, digest_enabled, digest_hour, notify_email from app_users where id = $1",
-          [a],
-        )
+        await rows("select timezone, digest_enabled, digest_hour from app_users where id = $1", [a])
       )[0],
-    ).toEqual({
-      timezone: "America/Chicago",
-      digest_enabled: false,
-      digest_hour: 7,
-      notify_email: "me@x.com",
-    });
+    ).toEqual({ timezone: "America/Chicago", digest_enabled: false, digest_hour: 7 });
     expect(() =>
-      settingsSchema.parse({
-        timezone: "Mars/Base",
-        digestEnabled: true,
-        digestHour: 8,
-        notifyEmail: "",
-      }),
+      settingsSchema.parse({ timezone: "Mars/Base", digestEnabled: true, digestHour: 8 }),
     ).toThrow(/timezone/);
+    // Intl may accept a name Postgres rejects, and a bad zone would break every booked call.
+    const intlOk = settingsSchema.safeParse({
+      timezone: "America/Argentina/ComodRivadavia",
+      digestEnabled: true,
+      digestHour: 8,
+    });
+    if (intlOk.success) {
+      await expect(asA((q) => m.updateSettings(q, intlOk.data))).rejects.toThrow(/time zone/);
+    }
+    expect((await rows("select timezone from app_users where id = $1", [a]))[0].timezone).toBe(
+      "America/Chicago",
+    );
+  });
+  it("cannot point the reminder digest at another address, and cannot create temp tables", async () => {
+    await expect(
+      asA((q) =>
+        q.query("update app_users set notify_email = 'attacker@evil.test' where id = $1", [a]),
+      ),
+    ).rejects.toThrow(/permission denied/);
+    await expect(asA((q) => q.query("create temp table clients (id int)"))).rejects.toThrow(
+      /permission denied/,
+    );
+  });
+  it("caps how many emails a session can send in a day", async () => {
+    const c = await newClient("Quota Pizza");
+    for (let i = 0; i < 3; i += 1) {
+      await asA((q) =>
+        q.query(
+          "insert into activities (user_id, client_id, kind, body) values ($1, $2, 'email', 'x')",
+          [a, c.id],
+        ),
+      );
+    }
+    await expect(asA((q) => m.assertEmailQuota(q, 3))).rejects.toThrow(/Daily email limit/);
+    await asA((q) => m.assertEmailQuota(q, 4));
   });
 });
 

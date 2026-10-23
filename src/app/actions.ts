@@ -135,6 +135,7 @@ export async function sendEmailAction(input: unknown): Promise<ActionResult<Card
     const client = await db.withUser(session.userId, (q) => getCard(q, i.clientId));
     if (!client) throw new m.UserError("That client no longer exists");
     if (!client.email.trim()) throw new m.UserError("This client has no email address yet");
+    await db.withUser(session.userId, (q) => m.assertEmailQuota(q));
     try {
       await sendEmailAsUser(session.userId, {
         to: client.email.trim(),
@@ -177,11 +178,17 @@ export async function disconnectGmailAction(): Promise<ActionResult<null>> {
 }
 
 /** Sends the real digest (or a sample) to the notification address right now. */
+const lastTestEmail = new Map<string, number>();
+
 export async function sendTestReminderAction(): Promise<
   ActionResult<{ to: string; usedSample: boolean; count: number }>
 > {
   const session = await requireSession();
   const e = env();
+  const last = lastTestEmail.get(session.userId) ?? 0;
+  if (Date.now() - last < 60_000)
+    return { ok: false, error: "Wait a minute before sending another test email" };
+  lastTestEmail.set(session.userId, Date.now());
   if (!e.RESEND_API_KEY || !e.RESEND_FROM) {
     return {
       ok: false,

@@ -1,3 +1,4 @@
+import { createHmac, timingSafeEqual } from "node:crypto";
 import { createRemoteJWKSet, jwtVerify } from "jose";
 
 export const LOGIN_SCOPES = ["openid", "email", "profile"];
@@ -6,6 +7,33 @@ export const GMAIL_SEND_SCOPE = "https://www.googleapis.com/auth/gmail.send";
 export const OAUTH_COOKIE = "isaac_oauth";
 
 export type OAuthPurpose = "login" | "gmail";
+
+export interface OAuthState {
+  state: string;
+  purpose: OAuthPurpose;
+}
+
+/** The state cookie is signed, so only this server can mint one — a forged cookie can't trigger a token exchange. */
+export function signOAuthState(p: OAuthState, secret: string): string {
+  const body = Buffer.from(JSON.stringify(p)).toString("base64url");
+  return `${body}.${createHmac("sha256", secret).update(body).digest("base64url")}`;
+}
+
+export function verifyOAuthState(cookie: string | undefined, secret: string): OAuthState | null {
+  const [body, sig] = (cookie ?? "").split(".");
+  if (!body || !sig) return null;
+  const want = createHmac("sha256", secret).update(body).digest();
+  const got = Buffer.from(sig, "base64url");
+  if (got.length !== want.length || !timingSafeEqual(got, want)) return null;
+  try {
+    const p = JSON.parse(Buffer.from(body, "base64url").toString("utf8")) as Partial<OAuthState>;
+    if (typeof p.state !== "string" || (p.purpose !== "login" && p.purpose !== "gmail"))
+      return null;
+    return { state: p.state, purpose: p.purpose };
+  } catch {
+    return null;
+  }
+}
 
 export function buildAuthUrl(args: {
   clientId: string;
@@ -59,6 +87,7 @@ export async function exchangeCode(
   const res = await fetchImpl("https://oauth2.googleapis.com/token", {
     method: "POST",
     headers: { "content-type": "application/x-www-form-urlencoded" },
+    signal: AbortSignal.timeout(10_000),
     body: new URLSearchParams({
       code: args.code,
       client_id: args.clientId,

@@ -1,6 +1,6 @@
 import { randomBytes } from "node:crypto";
 import { NextResponse, type NextRequest } from "next/server";
-import { buildAuthUrl, OAUTH_COOKIE, type OAuthPurpose } from "@/lib/auth/google";
+import { buildAuthUrl, OAUTH_COOKIE, signOAuthState, type OAuthPurpose } from "@/lib/auth/google";
 import { cookieOptions, getSession } from "@/lib/auth/server";
 import { env, googleConfigured } from "@/lib/env";
 
@@ -25,6 +25,10 @@ export async function GET(req: NextRequest) {
     loginHint: purpose === "gmail" ? session?.email : undefined,
   });
   const res = NextResponse.redirect(url);
-  res.cookies.set(OAUTH_COOKIE, JSON.stringify({ state, purpose }), cookieOptions(600));
+  res.cookies.set(
+    OAUTH_COOKIE,
+    signOAuthState({ state, purpose }, e.SESSION_SECRET),
+    cookieOptions(600),
+  );
   return res;
 }

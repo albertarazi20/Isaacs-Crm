@@ -263,7 +263,6 @@ export const settingsSchema = z.object({
   }, "Unknown timezone"),
   digestEnabled: z.boolean(),
   digestHour: z.coerce.number().int().min(0).max(23),
-  notifyEmail: z.union([z.literal(""), z.string().email()]),
 });
 
 export const importRowSchema = z.object({

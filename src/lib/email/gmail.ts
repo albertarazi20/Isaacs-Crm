@@ -30,6 +30,7 @@ export async function accessTokenFor(
   const res = await fetchImpl("https://oauth2.googleapis.com/token", {
     method: "POST",
     headers: { "content-type": "application/x-www-form-urlencoded" },
+    signal: AbortSignal.timeout(10_000),
     body: new URLSearchParams({
       client_id: cfg.clientId,
       client_secret: cfg.clientSecret,
@@ -62,6 +63,7 @@ export async function sendViaGmail(
   const res = await fetchImpl("https://gmail.googleapis.com/gmail/v1/users/me/messages/send", {
     method: "POST",
     headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+    signal: AbortSignal.timeout(10_000),
     body: JSON.stringify({ raw }),
   });
   if (res.status === 401 || res.status === 403)

@@ -36,6 +36,8 @@ export function makeDb(pool: pg.Pool): DbAccess {
         pool,
         async (db) => {
           await db.query("set local role isaac_app");
+          // ALTER ROLE ... SET does not apply through SET ROLE, so the cap has to be set here.
+          await db.query("set local statement_timeout = '15s'");
           await db.query("select set_config('app.user_id', $1, true)", [userId]);
         },
         fn,

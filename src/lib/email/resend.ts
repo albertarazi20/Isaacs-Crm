@@ -14,6 +14,7 @@ export async function sendViaResend(
   const res = await fetchImpl("https://api.resend.com/emails", {
     method: "POST",
     headers: { authorization: `Bearer ${cfg.apiKey}`, "content-type": "application/json" },
+    signal: AbortSignal.timeout(10_000),
     body: JSON.stringify({
       from: cfg.from,
       to: [message.to],

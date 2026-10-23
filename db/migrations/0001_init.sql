@@ -304,9 +304,15 @@ alter table gmail_connections enable row level security;
 -- grants
 
 grant usage on schema public, app to isaac_app;
+do $$
+begin
+  execute format('revoke temp on database %I from public', current_database());
+end $$;
 grant select on stages to isaac_app;
 grant select on app_users to isaac_app;
-grant update (name, timezone, digest_enabled, digest_hour, notify_email) on app_users to isaac_app;
+-- notify_email is deliberately NOT writable here: an unverified address would let anyone with a session
+-- point the morning digest (client names, phones, notes) at a stranger.
+grant update (name, timezone, digest_enabled, digest_hour) on app_users to isaac_app;
 grant select, insert, update, delete on clients, client_asks, positions, competing_offers, fundings, stips, timers to isaac_app;
 grant select, insert on activities to isaac_app;
 
@@ -349,7 +355,7 @@ grant select on client_cards to isaac_app;
 -- functions. SECURITY INVOKER on purpose: they run as isaac_app, so RLS applies to every statement.
 
 create function app.assert_due_on(p_due date) returns void
-language plpgsql stable as $$
+language plpgsql stable set search_path = public, pg_temp as $$
 begin
   if p_due is null then
     raise exception 'due date is required' using errcode = '22023';
@@ -367,7 +373,7 @@ end $$;
 -- no client may ever be left without a next date.
 create function app.replace_timers(p_client uuid, p_user uuid, p_timers jsonb, p_reason text)
 returns void
-language plpgsql as $$
+language plpgsql set search_path = public, pg_temp as $$
 declare t jsonb;
 begin
   if p_timers is null or jsonb_typeof(p_timers) <> 'array' or jsonb_array_length(p_timers) = 0 then
@@ -389,7 +395,7 @@ end $$;
 -- can never exist without a next date.
 create function public.create_client(p_fields jsonb, p_timers jsonb)
 returns clients
-language plpgsql set search_path = public as $$
+language plpgsql set search_path = public, pg_temp as $$
 declare c clients;
 begin
   insert into clients (user_id, business_name, dba, contact_name, phone, email, industry, state, source,
@@ -409,7 +415,7 @@ end $$;
 
 create function public.move_client(p_client uuid, p_stage text, p_timers jsonb, p_reason text default '')
 returns clients
-language plpgsql set search_path = public as $$
+language plpgsql set search_path = public, pg_temp as $$
 declare c clients; old_stage text;
 begin
   select * into c from clients where id = p_client for update;
@@ -431,7 +437,7 @@ end $$;
 -- renewal call, and never touches a booked call (an appointment doesn't move because he snoozed).
 create function public.set_follow_up(p_client uuid, p_due_on date, p_note text default '')
 returns timers
-language plpgsql set search_path = public as $$
+language plpgsql set search_path = public, pg_temp as $$
 declare c clients; t timers;
 begin
   select * into c from clients where id = p_client for update;
@@ -453,7 +459,7 @@ end $$;
 -- One tap after a call / text / email: log what happened and set the next date in the same breath.
 create function public.log_touch(p_client uuid, p_kind text, p_outcome text, p_body text, p_next_due_on date)
 returns activities
-language plpgsql set search_path = public as $$
+language plpgsql set search_path = public, pg_temp as $$
 declare c clients; a activities; call_is_now boolean;
 begin
   if p_kind not in ('call','text','email') then
@@ -487,7 +493,7 @@ end $$;
 -- The call fell through. Clears the booking; the client keeps a next date.
 create function public.cancel_call(p_client uuid)
 returns clients
-language plpgsql set search_path = public as $$
+language plpgsql set search_path = public, pg_temp as $$
 declare c clients; n int;
 begin
   select * into c from clients where id = p_client for update;
@@ -512,7 +518,7 @@ end $$;
 -- "Phone call scheduled" only while the client is still early in prospecting.
 create function public.schedule_call(p_client uuid, p_at timestamptz, p_note text default '')
 returns clients
-language plpgsql set search_path = public as $$
+language plpgsql set search_path = public, pg_temp as $$
 declare c clients; tz text; call_day date;
 begin
   select * into c from clients where id = p_client for update;
@@ -538,7 +544,7 @@ end $$;
 -- Seed the stip checklist (the defaults are computed in TypeScript and passed in).
 create function public.add_stips(p_client uuid, p_stips jsonb)
 returns int
-language plpgsql set search_path = public as $$
+language plpgsql set search_path = public, pg_temp as $$
 declare c clients; s jsonb; n int := 0;
 begin
   select * into c from clients where id = p_client for update;
@@ -556,7 +562,7 @@ end $$;
 
 create function public.set_stip_received(p_stip uuid, p_received boolean)
 returns stips
-language plpgsql set search_path = public as $$
+language plpgsql set search_path = public, pg_temp as $$
 declare s stips;
 begin
   update stips set received_at = case when p_received then coalesce(received_at, now()) else null end
@@ -585,7 +591,7 @@ end $$;
 -- check-in + renewal) in one transaction. Any earlier active advance is marked renewed.
 create function public.record_funding(p_client uuid, p_funding jsonb, p_timers jsonb)
 returns fundings
-language plpgsql set search_path = public as $$
+language plpgsql set search_path = public, pg_temp as $$
 declare c clients; f fundings;
 begin
   select * into c from clients where id = p_client for update;
@@ -612,7 +618,7 @@ create function public.record_default(p_client uuid, p_stage text, p_defaulted_o
                                       p_promise_at timestamptz, p_promise_amount_cents bigint,
                                       p_timers jsonb, p_note text default '')
 returns clients
-language plpgsql set search_path = public as $$
+language plpgsql set search_path = public, pg_temp as $$
 declare c clients; fid uuid;
 begin
   if p_stage not in ('default_workable','default_bad','legal_collections','written_off') then
