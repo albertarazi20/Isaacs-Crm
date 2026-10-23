@@ -19,17 +19,30 @@ const stageDue = (stage: StageKey, today: ISODate): ISODate =>
   defaultTimers(stage, { today })[0]?.dueOn ?? today;
 
 const SOURCE_KEY = "isaac:lastSource";
-/** Entering a batch from one list? The last source is already filled in. Storage may be blocked. */
+const SOURCE_FRESH_MS = 30 * 60_000;
+/**
+ * Entering a batch from one list? The last source is already filled in — but only for half an hour, so a
+ * walk-in added after lunch isn't silently credited to the morning's lead vendor. Storage may be blocked.
+ */
 function lastSource(): string {
   try {
-    return localStorage.getItem(SOURCE_KEY) ?? "";
+    const saved = JSON.parse(localStorage.getItem(SOURCE_KEY) ?? "null") as {
+      v?: unknown;
+      at?: unknown;
+    } | null;
+    return typeof saved?.v === "string" &&
+      typeof saved.at === "number" &&
+      Date.now() - saved.at < SOURCE_FRESH_MS
+      ? saved.v
+      : "";
   } catch {
     return "";
   }
 }
 function rememberSource(source: string): void {
   try {
-    if (source.trim()) localStorage.setItem(SOURCE_KEY, source.trim());
+    if (source.trim())
+      localStorage.setItem(SOURCE_KEY, JSON.stringify({ v: source.trim(), at: Date.now() }));
   } catch {
     /* storage blocked — nothing to remember */
   }
@@ -151,7 +164,12 @@ function QuickAddDialog({ onClose }: { onClose: () => void }) {
             <Input name="wantedAmount" placeholder="50k" />
           </Field>
           <Field label="Where they came from">
-            <SourceInput name="source" defaultValue={lastSource()} placeholder="Referral" />
+            <SourceInput
+              name="source"
+              defaultValue={lastSource()}
+              placeholder="Referral"
+              onFocus={(e) => e.currentTarget.select()}
+            />
           </Field>
         </div>
         <Field label="Stage">
@@ -198,6 +216,9 @@ function QuickAddDialog({ onClose }: { onClose: () => void }) {
                   </Link>{" "}
                   <span className="text-muted">
                     ({stageDef(d.stage).label}) — {d.reason}
+                    {d.trashed
+                      ? " — removed, but marked do-not-contact. Check before adding them again."
+                      : ""}
                   </span>
                 </li>
               ))}

@@ -15,7 +15,20 @@ export function SecurityPanel() {
         with Google afterwards.
       </p>
       {sure ? (
-        <form action={logoutEverywhereAction} className="flex gap-2">
+        <form
+          action={logoutEverywhereAction}
+          className="flex gap-2"
+          onSubmit={() => {
+            // Forget what this browser remembered too (a pending call's business name, board filters, last source).
+            try {
+              Object.keys(localStorage)
+                .filter((k) => k.startsWith("isaac:"))
+                .forEach((k) => localStorage.removeItem(k));
+            } catch {
+              /* storage blocked — nothing to clear */
+            }
+          }}
+        >
           <Button type="submit" variant="danger" size="sm">
             Yes, sign out everywhere
           </Button>

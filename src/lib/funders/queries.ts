@@ -52,6 +52,7 @@ export async function funderScoreboard(
        select s.funder_id, s.status, s.decline_reason, s.sent_on::text as sent_on,
               (s.responded_at at time zone u.timezone)::date::text as responded_on
          from submissions s join app_users u on u.id = s.user_id
+        where not exists (select 1 from trashed_clients t where t.client_id = s.client_id)
      ) x`,
   );
   const offers = await json<OfferStat>(
@@ -59,6 +60,7 @@ export async function funderScoreboard(
     `select to_jsonb(x) as j from (
        select s.funder_id, o.factor_rate
          from offers o join submissions s on s.id = o.submission_id
+        where not exists (select 1 from trashed_clients t where t.client_id = s.client_id)
      ) x`,
   );
   return buildScoreboard(funderIds, subs, offers);

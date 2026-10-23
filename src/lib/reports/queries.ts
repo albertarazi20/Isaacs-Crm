@@ -20,16 +20,24 @@ interface ClientRow {
   id: string;
   source: string;
   stage: StageKey;
-  created_at: string;
+  initial_stage: StageKey | null;
+  created_at: Date | string;
   reached: Partial<Record<StageKey, string>>;
   funded_cents: number;
   advances: number;
 }
 
 /** Merchants ADDED in the period (a cohort), with the first time each reached each stage. Trash is left out. */
-export async function loadCohort(q: Db, since: ISODate | null): Promise<ReportClient[]> {
+export async function loadCohort(
+  q: Db,
+  since: ISODate | null,
+  timezone = "UTC",
+): Promise<ReportClient[]> {
   const { rows } = await q.query<ClientRow>(
     `select c.id, c.source, c.stage, c.created_at,
+            (select a.to_stage from activities a
+              where a.client_id = c.id and a.to_stage is not null
+              order by a.occurred_at, a.id limit 1) as initial_stage,
             coalesce((select jsonb_object_agg(s.to_stage, s.first_at)
                         from (select a.to_stage, min(a.occurred_at) as first_at
                                 from activities a
@@ -38,16 +46,17 @@ export async function loadCohort(q: Db, since: ISODate | null): Promise<ReportCl
             (select coalesce(sum(f.amount_cents), 0) from fundings f where f.client_id = c.id) as funded_cents,
             (select count(*) from fundings f where f.client_id = c.id)::int as advances
        from clients c
-      where ($1::date is null or c.created_at >= $1::date)
+      where ($1::date is null or c.created_at >= ($1::date::timestamp at time zone $2))
         and not exists (select 1 from trashed_clients t where t.client_id = c.id)
       order by c.created_at`,
-    [since],
+    [since, timezone],
   );
   return rows.map((r) => ({
     id: r.id,
     source: r.source,
     stage: r.stage,
-    createdAt: r.created_at,
+    initialStage: r.initial_stage ?? r.stage,
+    createdAt: new Date(r.created_at).toISOString(),
     reached: r.reached,
     fundedCents: Number(r.funded_cents),
     advances: r.advances,

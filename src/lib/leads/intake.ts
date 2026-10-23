@@ -33,7 +33,8 @@ export async function ingestLead(q: Db, lead: LeadInput, ctx: UserContext): Prom
       clientId: dupe.id,
       body: `Came in again${from(lead)}${lead.notes ? `: ${lead.notes}` : ""}`,
     });
-    const blocked = !contactAllowed(status, "call").ok;
+    // A trashed match is a do-not-contact (or limited) merchant kept on file: note only, no follow-up.
+    const blocked = dupe.trashed || !contactAllowed(status, "call").ok;
     if (!blocked)
       await q.query("select * from set_follow_up($1, $2, $3)", [
         dupe.id,

@@ -259,3 +259,37 @@ describe("where a merchant came from", () => {
     expect(buildRows([["Alpha", "3055550001"]], m, opts).rows[0]?.source).toBe("");
   });
 });
+
+describe("values too long for the server are cut, not allowed to sink the whole import", () => {
+  const m = guessMapping(["Business", "Phone", "Source", "Notes"]);
+  const opts = { today: TODAY, spreadDays: 3 };
+  it("cuts a 150-character source to 100 and says which line", () => {
+    const { rows, problems } = buildRows([["Alpha", "3055550001", "s".repeat(150), ""]], m, opts);
+    expect(rows[0]?.source).toHaveLength(100);
+    expect(problems).toEqual([
+      { line: 2, message: '"Where they came from" is longer than 100 characters — cut to fit' },
+    ]);
+  });
+  it("reports each cut value once, even though it is read more than once", () => {
+    const { problems } = buildRows([["Alpha", "3055550001", "", "n".repeat(6000)]], m, opts);
+    expect(problems.filter((p) => p.message.includes("Notes"))).toHaveLength(1);
+  });
+  it("turns line breaks in a one-line field into spaces", () => {
+    const { rows } = buildRows(
+      [["Alpha\nDiner", "3055550001", "Lead\tvendor\r\nOct", ""]],
+      m,
+      opts,
+    );
+    expect(rows[0]?.businessName).toBe("Alpha Diner");
+    expect(rows[0]?.source).toBe("Lead vendor Oct");
+  });
+  it("keeps the line breaks in notes", () => {
+    const { rows } = buildRows([["Alpha", "3055550001", "", "line one\nline two"]], m, opts);
+    expect(rows[0]?.notes).toBe("line one\nline two");
+  });
+  it("leaves ordinary values alone", () => {
+    const { rows, problems } = buildRows([["Alpha", "3055550001", "Referral", "fine"]], m, opts);
+    expect(rows[0]).toMatchObject({ businessName: "Alpha", source: "Referral", notes: "fine" });
+    expect(problems).toEqual([]);
+  });
+});

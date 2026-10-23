@@ -128,6 +128,8 @@ export interface FundingRow {
   last_payment_on: ISODate | null;
   promise_to_pay_at: string | null;
   promise_amount_cents: number | null;
+  commission_received_cents?: number | null;
+  commission_received_on?: ISODate | null;
   note: string;
 }
 

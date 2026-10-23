@@ -236,15 +236,6 @@ export const idSchema = z.object({ id });
 export const clientIdSchema = z.object({ clientId: id });
 export const stipSchema = z.object({ stipId: id, received: z.boolean() });
 
-export const fundingUpdateSchema = z.object({
-  fundingId: id,
-  paidBackOverride: optMoney,
-  lastPaymentOn: isoDate.nullable().optional(),
-  promiseToPayAt: localDateTime.nullable().optional(),
-  promiseAmount: optMoney,
-  note: text().optional(),
-});
-
 export const emailSchema = z.object({
   clientId: id,
   subject: line(200).min(1, "Add a subject"),

@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { epochMatches } from "@/lib/auth/epoch";
+import { resolveSession } from "@/lib/auth/resolve";
 import { signSession, verifySession } from "@/lib/auth/session";
 import { createTestDb, insertUser, type TestDb } from "./helpers/db";
 
@@ -81,5 +82,48 @@ describe("session_epoch in the database", () => {
     expect(
       await epochMatches({ userId: user, email: "isaac@x.com", epoch: 1 }, async () => current),
     ).toBe(true);
+  });
+});
+
+describe("resolveSession — every rule that makes a cookie count", () => {
+  const SECRET2 = "s".repeat(40);
+  const deps = (over: Partial<Parameters<typeof resolveSession>[1]> = {}) => ({
+    secret: SECRET2,
+    allowed: () => true,
+    currentEpoch: async () => 0,
+    ...over,
+  });
+  const token = (epoch?: number) =>
+    signSession({ userId: "u1", email: "isaac@x.com", epoch }, SECRET2);
+
+  it("accepts a good cookie", async () => {
+    expect(await resolveSession(await token(0), deps())).toMatchObject({ userId: "u1", epoch: 0 });
+  });
+  it("refuses no cookie, a forged one, and one signed with another secret", async () => {
+    expect(await resolveSession(undefined, deps())).toBeNull();
+    expect(await resolveSession("a.b.c", deps())).toBeNull();
+    expect(await resolveSession(await token(0), deps({ secret: "t".repeat(40) }))).toBeNull();
+  });
+  it("refuses an address that has been taken off the allowlist", async () => {
+    expect(await resolveSession(await token(0), deps({ allowed: () => false }))).toBeNull();
+  });
+  it("after 'log out everywhere' (epoch moved on) the old cookie is dead, a new one works", async () => {
+    expect(await resolveSession(await token(0), deps({ currentEpoch: async () => 1 }))).toBeNull();
+    expect(
+      await resolveSession(await token(1), deps({ currentEpoch: async () => 1 })),
+    ).not.toBeNull();
+  });
+  it("a cookie issued before epochs existed counts as epoch 0 — and dies at the first bump", async () => {
+    expect(
+      await resolveSession(await token(undefined), deps({ currentEpoch: async () => 0 })),
+    ).not.toBeNull();
+    expect(
+      await resolveSession(await token(undefined), deps({ currentEpoch: async () => 1 })),
+    ).toBeNull();
+  });
+  it("a deleted user's cookie is dead", async () => {
+    expect(
+      await resolveSession(await token(0), deps({ currentEpoch: async () => null })),
+    ).toBeNull();
   });
 });

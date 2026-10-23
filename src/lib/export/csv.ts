@@ -1,4 +1,5 @@
 import type { ActivityRow, ClientCard } from "../data/types";
+import { formatUS } from "../mca/phone";
 import { stageDef, TIMER_LABELS } from "../mca/stages";
 
 /**
@@ -7,7 +8,8 @@ import { stageDef, TIMER_LABELS } from "../mca/stages";
  */
 export function csvCell(value: unknown): string {
   let s = value === null || value === undefined ? "" : String(value);
-  if (/^[=+\-@\t\r]/.test(s)) s = `'${s}`;
+  // Some spreadsheets skip leading spaces before deciding a cell is a formula, so look past them.
+  if (/^[\t\r]/.test(s) || /^[=+\-@]/.test(s.trimStart())) s = `'${s}`;
   return /[",\r\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
 }
 
@@ -54,7 +56,8 @@ export function clientRows(cards: readonly ClientCard[]): unknown[][] {
     c.business_name,
     c.dba,
     c.contact_name,
-    c.phone,
+    // Stored as +1305…; shown as (305) …, which a spreadsheet can never read as a formula.
+    formatUS(c.phone),
     c.email,
     c.industry,
     c.state,
@@ -81,17 +84,19 @@ export function clientRows(cards: readonly ClientCard[]): unknown[][] {
   ]);
 }
 
-export const ACTIVITY_HEADER = ["When", "Business", "Type", "Result", "Note"] as const;
+export const ACTIVITY_HEADER = ["When", "Business", "In trash", "Type", "Result", "Note"] as const;
+
+export interface MerchantName {
+  name: string;
+  trashed: boolean;
+}
 
 export function activityRows(
   activities: readonly ActivityRow[],
-  nameById: ReadonlyMap<string, string>,
+  merchants: ReadonlyMap<string, MerchantName>,
 ): unknown[][] {
-  return activities.map((a) => [
-    a.occurred_at,
-    nameById.get(a.client_id) ?? "",
-    a.kind,
-    a.outcome,
-    a.body,
-  ]);
+  return activities.map((a) => {
+    const m = merchants.get(a.client_id);
+    return [a.occurred_at, m?.name ?? "", m?.trashed ? "yes" : "", a.kind, a.outcome, a.body];
+  });
 }

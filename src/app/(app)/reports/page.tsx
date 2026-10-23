@@ -25,7 +25,7 @@ export default async function ReportsPage({
     const since = days === null ? null : addDays(ctx.today, -days);
     return {
       today: ctx.today,
-      cohort: await loadCohort(q, since),
+      cohort: await loadCohort(q, since, ctx.timezone),
       timers: await loadTimerHistory(q, ctx.today, days, ctx.timezone),
     };
   });

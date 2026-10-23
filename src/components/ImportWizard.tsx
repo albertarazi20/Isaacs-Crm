@@ -76,6 +76,8 @@ export function ImportWizard() {
     if (!r) return;
     const parts = [`Imported ${r.created} client${r.created === 1 ? "" : "s"}`];
     if (r.skippedExisting) parts.push(`${r.skippedExisting} already in your CRM`);
+    if (r.skippedDoNotContact)
+      parts.push(`${r.skippedDoNotContact} match a do-not-contact merchant — not added`);
     if (r.failed.length) parts.push(`${r.failed.length} failed`);
     toast({ message: parts.join(" · "), tone: r.failed.length ? "error" : "success" });
     if (r.failed.length === 0) router.push("/clients");

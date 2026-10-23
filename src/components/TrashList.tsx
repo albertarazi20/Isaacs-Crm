@@ -61,30 +61,41 @@ export function TrashList({ items }: { items: TrashedClient[] }) {
               >
                 Restore
               </Button>
-              {confirming === c.id ? (
-                <>
-                  <Button
-                    size="sm"
-                    variant="danger"
-                    disabled={busy === c.id}
-                    onClick={() =>
-                      void act(
-                        c.id,
-                        () => purgeClientAction({ clientId: c.id }),
-                        `${c.business_name} deleted for good`,
-                      )
-                    }
-                  >
-                    Yes, delete for good
-                  </Button>
-                  <Button size="sm" onClick={() => setConfirming(null)}>
-                    Cancel
-                  </Button>
-                </>
+              {c.contact_status !== "ok" ? (
+                <span
+                  className="self-center text-sm text-muted"
+                  title="A merchant who asked not to be contacted stays on file so they can't be added again as a new lead."
+                >
+                  Kept on file — do-not-contact
+                </span>
               ) : (
-                <Button size="sm" variant="danger" onClick={() => setConfirming(c.id)}>
-                  Delete forever
-                </Button>
+                <>
+                  {confirming === c.id ? (
+                    <>
+                      <Button
+                        size="sm"
+                        variant="danger"
+                        disabled={busy === c.id}
+                        onClick={() =>
+                          void act(
+                            c.id,
+                            () => purgeClientAction({ clientId: c.id }),
+                            `${c.business_name} deleted for good`,
+                          )
+                        }
+                      >
+                        Yes, delete for good
+                      </Button>
+                      <Button size="sm" onClick={() => setConfirming(null)}>
+                        Cancel
+                      </Button>
+                    </>
+                  ) : (
+                    <Button size="sm" variant="danger" onClick={() => setConfirming(c.id)}>
+                      Delete forever
+                    </Button>
+                  )}
+                </>
               )}
             </div>
           </Card>

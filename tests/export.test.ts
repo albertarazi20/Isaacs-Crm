@@ -117,26 +117,57 @@ describe("clients export", () => {
 });
 
 describe("activity export", () => {
+  const activity = (over: Partial<ActivityRow> = {}): ActivityRow => ({
+    id: "a1",
+    client_id: "c1",
+    kind: "note",
+    outcome: null,
+    body: "first line\nsecond line",
+    from_stage: null,
+    to_stage: null,
+    occurred_at: "2026-10-20T15:00:00Z",
+    ...over,
+  });
   it("maps client ids to business names and keeps multi-line notes in one cell", () => {
-    const a: ActivityRow = {
-      id: "a1",
-      client_id: "c1",
-      kind: "note",
-      outcome: null,
-      body: "first line\nsecond line",
-      from_stage: null,
-      to_stage: null,
-      occurred_at: "2026-10-20T15:00:00Z",
-    };
-    const rows = activityRows([a], new Map([["c1", "Mike's Pizza"]]));
+    const rows = activityRows(
+      [activity()],
+      new Map([["c1", { name: "Mike's Pizza", trashed: false }]]),
+    );
     const [head, row = []] = parseCsv(toCsv(ACTIVITY_HEADER, rows));
     expect(head).toEqual([...ACTIVITY_HEADER]);
     expect(row).toEqual([
       "2026-10-20T15:00:00Z",
       "Mike's Pizza",
+      "",
       "note",
       "",
       "first line\nsecond line",
     ]);
+  });
+  it("keeps a trashed merchant's notes WITH its real name and says it is in the trash", () => {
+    const [row] = activityRows(
+      [activity()],
+      new Map([["c1", { name: "Gone Grill", trashed: true }]]),
+    );
+    expect(row?.[1]).toBe("Gone Grill");
+    expect(row?.[2]).toBe("yes");
+  });
+});
+
+describe("a stored phone number", () => {
+  it("is exported as (305) 555-0101, never with a visible apostrophe", () => {
+    const [row] = clientRows([card({ phone: "+13055550101" })]);
+    const phone = row?.[CLIENT_HEADER.indexOf("Phone")];
+    expect(phone).toBe("(305) 555-0101");
+    expect(toCsv(CLIENT_HEADER, [row ?? []])).not.toContain("'+1");
+  });
+});
+
+describe("the formula guard looks past leading spaces", () => {
+  it.each(["  =1+1", " +cmd", "   @SUM(A1)"])("neutralises %j", (v) => {
+    expect(csvCell(v).replace(/^"/, "").startsWith("'")).toBe(true);
+  });
+  it("leaves ordinary text with a space alone", () => {
+    expect(csvCell("  Mike's Pizza")).toBe("  Mike's Pizza");
   });
 });

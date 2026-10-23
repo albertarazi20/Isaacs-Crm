@@ -1,6 +1,7 @@
 import type { Db } from "../db";
 import { todayIn } from "../mca/dates";
 import { normalizeUS } from "../mca/phone";
+import type { ContactStatus } from "../mca/contact";
 import type { StageKey } from "../mca/stages";
 import type { ClientCard, ClientDetail, UserContext } from "./types";
 
@@ -89,6 +90,11 @@ export interface DuplicateMatch {
   stage: StageKey;
   /** Why it matched, in words Isaac can check at a glance. */
   reason: "same phone" | "same business name";
+  /**
+   * In the trash, but marked do-not-contact (or limited). Those stay matchable so a "stop" can't be undone
+   * by re-adding the same number as a fresh lead.
+   */
+  trashed: boolean;
 }
 
 /**
@@ -110,11 +116,13 @@ export async function findDuplicates(
     contact_name: string;
     stage: StageKey;
     by_phone: boolean;
+    trashed: boolean;
   }>(
     `select id, business_name, contact_name, stage,
-            ($1::text is not null and right(regexp_replace(phone, '[^0-9]', '', 'g'), 10) = $1) as by_phone
+            ($1::text is not null and right(regexp_replace(phone, '[^0-9]', '', 'g'), 10) = $1) as by_phone,
+            exists (select 1 from trashed_clients t where t.client_id = clients.id) as trashed
        from clients
-      where not exists (select 1 from trashed_clients t where t.client_id = clients.id)
+      where (contact_status <> 'ok' or not exists (select 1 from trashed_clients t where t.client_id = clients.id))
         and (($1::text is not null and right(regexp_replace(phone, '[^0-9]', '', 'g'), 10) = $1)
          or ($2 <> '' and regexp_replace(lower(business_name), '[^[:alnum:]]+', '', 'g') = $2))
       order by by_phone desc, business_name
@@ -127,6 +135,7 @@ export async function findDuplicates(
     contact_name: r.contact_name,
     stage: r.stage,
     reason: r.by_phone ? "same phone" : "same business name",
+    trashed: r.trashed,
   }));
 }
 
@@ -137,6 +146,8 @@ export interface TrashedClient {
   phone: string;
   stage: StageKey;
   trashed_at: string;
+  /** Anything but "ok": the record is kept for good so the merchant can't be re-added as a fresh lead. */
+  contact_status: ContactStatus;
 }
 
 /** Newest first. Reads through row-level security like everything else. */
@@ -144,7 +155,8 @@ export async function listTrashed(q: Db): Promise<TrashedClient[]> {
   return json<TrashedClient>(
     q,
     `select jsonb_build_object('id', c.id, 'business_name', c.business_name, 'contact_name', c.contact_name,
-                              'phone', c.phone, 'stage', c.stage, 'trashed_at', t.trashed_at) as j
+                              'phone', c.phone, 'stage', c.stage, 'trashed_at', t.trashed_at,
+                              'contact_status', c.contact_status) as j
        from trashed_clients t join clients c on c.id = t.client_id
       order by t.trashed_at desc`,
   );
@@ -153,7 +165,7 @@ export async function listTrashed(q: Db): Promise<TrashedClient[]> {
 /** The sources already in use, most used first. Trash is left out. */
 export async function listSources(q: Db): Promise<string[]> {
   const { rows } = await q.query<{ source: string }>(
-    `select min(c.source) as source
+    `select mode() within group (order by c.source) as source
        from clients c
       where c.source <> '' and c.source <> 'Imported'
         and not exists (select 1 from trashed_clients t where t.client_id = c.id)

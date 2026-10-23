@@ -12,6 +12,8 @@ export interface ImportResult {
   created: number;
   /** Rows already in the CRM (same phone, or same business name when there's no phone) — left alone. */
   skippedExisting: number;
+  /** Rows that match a do-not-contact merchant in the trash — never re-added as fresh leads. */
+  skippedDoNotContact: number;
   failed: { line: number; message: string }[];
 }
 
@@ -24,22 +26,40 @@ export async function importClients(
   rows: readonly ImportRowInput[],
   ctx: UserContext,
 ): Promise<ImportResult> {
+  // Live merchants, plus trashed ones that are do-not-contact or limited: a "stop" must survive a clean-up.
   const all = (
-    await q.query<{ phone: string; business_name: string }>(
-      "select phone, business_name from clients where not exists (select 1 from trashed_clients t where t.client_id = clients.id)",
+    await q.query<{ phone: string; business_name: string; trashed: boolean }>(
+      `select phone, business_name,
+              exists (select 1 from trashed_clients t where t.client_id = clients.id) as trashed
+         from clients
+        where contact_status <> 'ok'
+           or not exists (select 1 from trashed_clients t where t.client_id = clients.id)`,
     )
   ).rows;
-  const existing = new Set(
-    all.map((r) => normalizeUS(r.phone)).filter((p): p is string => p !== null),
-  );
+  const phonesOf = (list: typeof all) =>
+    new Set(list.map((r) => normalizeUS(r.phone)).filter((p): p is string => p !== null));
   // A row with no usable phone can only be matched by name — otherwise every re-import would duplicate it.
-  const existingNames = new Set(
-    all.filter((r) => normalizeUS(r.phone) === null).map((r) => nameKey(r.business_name)),
-  );
-  const result: ImportResult = { created: 0, skippedExisting: 0, failed: [] };
+  const namesOf = (list: typeof all) =>
+    new Set(list.filter((r) => normalizeUS(r.phone) === null).map((r) => nameKey(r.business_name)));
+  const live = all.filter((r) => !r.trashed);
+  const held = all.filter((r) => r.trashed);
+  const existing = phonesOf(live);
+  const existingNames = namesOf(live);
+  const heldPhones = phonesOf(held);
+  const heldNames = namesOf(held);
+  const result: ImportResult = {
+    created: 0,
+    skippedExisting: 0,
+    skippedDoNotContact: 0,
+    failed: [],
+  };
 
   for (const row of rows) {
     const e164 = row.phone ? normalizeUS(row.phone) : null;
+    if ((e164 && heldPhones.has(e164)) || (!e164 && heldNames.has(nameKey(row.businessName)))) {
+      result.skippedDoNotContact += 1;
+      continue;
+    }
     if ((e164 && existing.has(e164)) || (!e164 && existingNames.has(nameKey(row.businessName)))) {
       result.skippedExisting += 1;
       continue;

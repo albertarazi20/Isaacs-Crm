@@ -33,7 +33,7 @@ describe("listSources", () => {
       t.db.withUser(user, (q) =>
         m.createClient(q, newClientSchema.parse({ businessName: name, source }), ctx),
       );
-    await add(a, "One", "Lead vendor");
+    await add(a, "One", "lead vendor");
     await add(a, "Two", "lead vendor");
     await add(a, "Three", "Lead vendor");
     await add(a, "Four", "Referral");
@@ -50,7 +50,8 @@ describe("listSources", () => {
   it("lists sources most used first, one per spelling, without blanks, 'Imported', trash or other users", async () => {
     const out = await t.db.withUser(a, (q) => listSources(q));
     expect(out).toHaveLength(2);
-    expect(out[0]?.toLowerCase()).toBe("lead vendor");
+    // two typed it lowercase, one capitalised: the most used spelling wins, not the alphabetically first
+    expect(out[0]).toBe("lead vendor");
     expect(out[1]).toBe("Referral");
   });
 });

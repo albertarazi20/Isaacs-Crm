@@ -13,7 +13,6 @@ import type {
   bucketSchema,
   contactStatusSchema,
   followUpSchema,
-  fundingUpdateSchema,
   MoveInput,
   NewClientInput,
   noteSchema,
@@ -336,7 +335,10 @@ async function trashCall(q: Db, fn: string, clientId: string, missing: string): 
   try {
     await q.query(`select ${fn}($1)`, [clientId]);
   } catch (e) {
-    if ((e as { code?: string }).code === "P0002") throw new UserError(missing);
+    const code = (e as { code?: string }).code;
+    if (code === "P0002") throw new UserError(missing);
+    // A rule the database enforces, worded for the person (e.g. "that merchant is in the trash").
+    if (code === "22023" && e instanceof Error) throw new UserError(e.message);
     throw e;
   }
 }
@@ -438,29 +440,6 @@ export async function seedStips(q: Db, clientId: string, ctx: UserContext): Prom
 
 export async function setStip(q: Db, input: z.output<typeof stipSchema>): Promise<void> {
   await q.query("select * from set_stip_received($1, $2)", [input.stipId, input.received]);
-}
-
-export async function updateFunding(
-  q: Db,
-  input: z.output<typeof fundingUpdateSchema>,
-  ctx: UserContext,
-): Promise<void> {
-  const promiseAt = input.promiseToPayAt
-    ? await localToInstant(q, input.promiseToPayAt, ctx.timezone)
-    : null;
-  const res = await q.query(
-    `update fundings set paid_back_override_cents = $2, last_payment_on = $3, promise_to_pay_at = $4,
-            promise_amount_cents = $5, note = coalesce($6, note) where id = $1`,
-    [
-      input.fundingId,
-      input.paidBackOverride,
-      input.lastPaymentOn ?? null,
-      promiseAt,
-      input.promiseAmount,
-      input.note ?? null,
-    ],
-  );
-  if (res.rowCount === 0) throw new UserError("That funding no longer exists");
 }
 
 export async function updateSettings(q: Db, input: z.output<typeof settingsSchema>): Promise<void> {

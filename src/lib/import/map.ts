@@ -18,6 +18,17 @@ export const IMPORT_FIELDS = [
 ] as const;
 export type ImportField = (typeof IMPORT_FIELDS)[number];
 
+/** The server's limits per field. A longer value would reject the WHOLE import, so it is cut here, with a note. */
+const MAX_LENGTH: Partial<Record<ImportField, number>> = {
+  businessName: 200,
+  contactName: 200,
+  email: 200,
+  industry: 100,
+  state: 40,
+  source: 100,
+  notes: 5000,
+};
+
 export const FIELD_LABELS: Record<ImportField, string> = {
   businessName: "Business name",
   contactName: "Merchant's name",
@@ -253,13 +264,36 @@ export function buildRows(
   const seenPhones = new Set<string>();
   let duplicatesInFile = 0;
   let doNotContact = 0;
-  const get = (r: readonly string[], f: ImportField) =>
-    mapping[f] === null ? "" : (r[mapping[f] as number] ?? "").trim();
+  let currentLine = 0;
+  const cut = new Set<string>();
+  const get = (r: readonly string[], f: ImportField) => {
+    const raw = mapping[f] === null ? "" : (r[mapping[f] as number] ?? "").trim();
+    const max = MAX_LENGTH[f];
+    if (!max) return raw;
+    // One-line fields can't hold line breaks or control characters; notes keep theirs.
+    const text =
+      f === "notes"
+        ? raw
+        : raw
+            .replace(/[\u0000-\u001f\u007f]+/g, " ")
+            .replace(/\s+/g, " ")
+            .trim();
+    if (text.length <= max) return text;
+    if (!cut.has(`${currentLine}:${f}`)) {
+      cut.add(`${currentLine}:${f}`);
+      problems.push({
+        line: currentLine,
+        message: `"${FIELD_LABELS[f]}" is longer than ${max} characters — cut to fit`,
+      });
+    }
+    return text.slice(0, max);
+  };
   const spread = Math.max(1, opts.spreadDays);
   const horizon = addMonths(opts.today, 36);
 
   records.forEach((r, i) => {
     const line = i + 2; // header is line 1
+    currentLine = line;
     const businessName =
       get(r, "businessName") || (mapping.businessName === null ? get(r, "contactName") : "");
     if (!businessName) {

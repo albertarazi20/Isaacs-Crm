@@ -57,6 +57,8 @@ export interface ReportClient {
   id: string;
   source: string;
   stage: StageKey;
+  /** The stage the merchant was added at. Imported merchants start wherever the sheet said. */
+  initialStage: StageKey;
   createdAt: string;
   /** First time the merchant entered each stage (ISO timestamps), from the history. */
   reached: Partial<Record<StageKey, string>>;
@@ -153,7 +155,12 @@ function firstReached(c: ReportClient, rank: number): string | null {
   return best;
 }
 
-export function buildSpeed(clients: readonly ReportClient[]): SpeedRow[] {
+/**
+ * Only merchants added at the START of the pipeline are timed. An imported merchant who was already at
+ * "Application in" was added and "reached" it in the same second, which would drag every median to zero.
+ */
+export function buildSpeed(allClients: readonly ReportClient[]): SpeedRow[] {
+  const clients = allClients.filter((c) => c.initialStage === "name_in");
   const between = (label: string, fromRank: number | "added", toRank: number): SpeedRow => {
     const gaps: number[] = [];
     for (const c of clients) {

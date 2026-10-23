@@ -16,6 +16,7 @@ const client = (over: Partial<ReportClient> = {}): ReportClient => ({
   id: `c${(n += 1)}`,
   source: "Referral",
   stage: "name_in",
+  initialStage: "name_in",
   createdAt: "2026-09-01T12:00:00Z",
   reached: {},
   fundedCents: 0,
@@ -172,6 +173,23 @@ describe("buildSpeed", () => {
       }),
     ]).find((r) => r.label === "Added → Interested");
     expect(row?.n).toBe(0);
+  });
+});
+
+describe("buildSpeed leaves imported merchants out", () => {
+  it("a merchant added part-way through the pipeline isn't timed", () => {
+    const imported = (n: number) =>
+      client({
+        initialStage: "application_in",
+        createdAt: "2026-09-01T00:00:00Z",
+        stage: "funded",
+        reached: {
+          application_in: "2026-09-01T00:00:00Z",
+          funded: new Date(Date.UTC(2026, 8, 1 + n)).toISOString(),
+        },
+      });
+    const rows = buildSpeed([imported(5), imported(6), imported(7)]);
+    expect(rows.every((r) => r.n === 0 && r.medianDays === null)).toBe(true);
   });
 });
 

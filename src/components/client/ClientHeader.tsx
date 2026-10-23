@@ -272,6 +272,9 @@ function DeleteClientDialog({ detail, onClose }: { detail: ClientDetail; onClose
         <strong>{card.business_name}</strong> disappears from your lists and every reminder stops.
         {attached.length > 0 ? ` Kept in the trash: ${attached.join(", ")}.` : ""} You can restore
         it any time from <em>Clients → Trash</em>.
+        {detail.fundings.length > 0
+          ? " Its funded advances and commission also drop out of Earnings and Renewals until you restore it."
+          : ""}
       </p>
       <p className="rounded-lg bg-surface-2 p-3 text-sm text-muted">
         Not ready to lose the notes? Close this and use <em>Move to…</em> instead (Not interested,

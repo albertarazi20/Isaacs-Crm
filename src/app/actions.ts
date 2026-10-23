@@ -20,11 +20,15 @@ import { disconnectGmail, sendEmailAsUser } from "@/lib/system/gmail";
 import { bumpSessionEpoch } from "@/lib/system/users";
 import { sendTestDigest } from "@/lib/system/reminders";
 
-async function run<T>(fn: (q: Db, ctx: UserContext) => Promise<T>): Promise<ActionResult<T>> {
+/** `refresh: false` for read-only lookups, so they don't re-render the page behind the dialog. */
+async function run<T>(
+  fn: (q: Db, ctx: UserContext) => Promise<T>,
+  refresh = true,
+): Promise<ActionResult<T>> {
   const session = await requireSession();
   try {
     const data = await db.withUser(session.userId, async (q) => fn(q, await userContext(q)));
-    revalidatePath("/", "layout");
+    if (refresh) revalidatePath("/", "layout");
     return { ok: true, data };
   } catch (e) {
     return { ok: false, error: toActionError(e) };
@@ -36,7 +40,7 @@ type Card = ClientCard;
 export async function findDuplicatesAction(
   input: unknown,
 ): Promise<ActionResult<DuplicateMatch[]>> {
-  return run((q) => findDuplicates(q, s.duplicateCheckSchema.parse(input)));
+  return run((q) => findDuplicates(q, s.duplicateCheckSchema.parse(input)), false);
 }
 export async function addClientAction(input: unknown): Promise<ActionResult<Card>> {
   return run((q, ctx) => m.createClient(q, s.newClientSchema.parse(input), ctx));
@@ -72,7 +76,7 @@ export async function updateClientAction(input: unknown): Promise<ActionResult<C
   return run((q) => m.updateClient(q, s.updateClientSchema.parse(input)));
 }
 export async function listSourcesAction(): Promise<ActionResult<string[]>> {
-  return run(async (q) => mergeSources(await listSources(q)));
+  return run(async (q) => mergeSources(await listSources(q)), false);
 }
 export async function trashClientAction(input: unknown): Promise<ActionResult<null>> {
   return run(async (q) => {
@@ -128,12 +132,6 @@ export async function seedStipsAction(input: unknown): Promise<ActionResult<numb
 export async function setStipAction(input: unknown): Promise<ActionResult<null>> {
   return run(async (q) => {
     await m.setStip(q, s.stipSchema.parse(input));
-    return null;
-  });
-}
-export async function updateFundingAction(input: unknown): Promise<ActionResult<null>> {
-  return run(async (q, ctx) => {
-    await m.updateFunding(q, s.fundingUpdateSchema.parse(input), ctx);
     return null;
   });
 }

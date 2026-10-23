@@ -159,12 +159,61 @@ describe("the report cohort, read from a real database", () => {
     expect(d.overdue).toBeGreaterThanOrEqual(1);
   });
 
-  it("another user's timers never show up", async () => {
+  it("another user's timers never show up: each user gets exactly their own count", async () => {
+    await t.db.withUser(b, (q) =>
+      m.createClient(q, newClientSchema.parse({ businessName: "B Timer Co" }), {
+        today: t.today,
+        timezone: "UTC",
+      }),
+    );
+    await t.pool.query(
+      "update timers set due_on = current_date - 1 where user_id = $1 and done_at is null",
+      [b],
+    );
+    const count = async (user: string) =>
+      (
+        await t.pool.query(
+          "select count(*)::int n from timers where user_id = $1 and due_on <= current_date",
+          [user],
+        )
+      ).rows[0].n;
     const mine = await asA((q) => loadTimerHistory(q, t.today, null, TZ));
     const theirs = await t.db.withUser(b, (q) => loadTimerHistory(q, t.today, null, "UTC"));
-    const bTimers = (await t.pool.query("select 1 from timers where user_id = $1", [b])).rowCount;
-    expect(theirs.length).toBeLessThanOrEqual(bTimers ?? 0);
-    expect(mine.length).toBeGreaterThan(0);
+    expect(mine).toHaveLength(await count(a));
+    expect(theirs).toHaveLength(await count(b));
+    expect(theirs.length).toBeGreaterThan(0);
+  });
+
+  it("created dates come out as ISO strings, not Date objects", async () => {
+    const cohort = await asA((q) => loadCohort(q, null));
+    for (const c of cohort) {
+      expect(typeof c.createdAt).toBe("string");
+      expect(new Date(c.createdAt).toISOString()).toBe(c.createdAt);
+    }
+  });
+
+  it("the period starts at midnight in the USER's time zone, not the database's", async () => {
+    const edge = (await newClient("Edge Of Day")).id;
+    // 23:00 UTC on Sep 9 is 11:00 on Sep 10 in Auckland.
+    await t.pool.query("update clients set created_at = '2026-09-09 23:00:00+00' where id = $1", [
+      edge,
+    ]);
+    const inUtc = await asA((q) => loadCohort(q, "2026-09-10", "UTC"));
+    const inAuckland = await asA((q) => loadCohort(q, "2026-09-10", "Pacific/Auckland"));
+    expect(inUtc.map((c) => c.id)).not.toContain(edge);
+    expect(inAuckland.map((c) => c.id)).toContain(edge);
+  });
+
+  it("an imported merchant (added part-way) is flagged by its first stage, and isn't timed", async () => {
+    const c = await asA((q) =>
+      m.createClient(
+        q,
+        newClientSchema.parse({ businessName: "Imported Late", stage: "application_in" }),
+        ctx,
+      ),
+    );
+    const cohort = (await asA((q) => loadCohort(q, null))).filter((x) => x.id === c.id);
+    expect(cohort[0]?.initialStage).toBe("application_in");
   });
 });
 

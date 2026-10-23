@@ -63,7 +63,7 @@ describe("importing clients", () => {
 
   it("creates each client with its stage, ask, follow-up and note — in the database", async () => {
     const r = await run(a, rows());
-    expect(r).toEqual({ created: 3, skippedExisting: 0, failed: [] });
+    expect(r).toEqual({ created: 3, skippedExisting: 0, skippedDoNotContact: 0, failed: [] });
     const { rows: cards } = await t.pool.query(
       "select business_name, stage, wanted_amount_cents, next_due_on::text, source from client_cards where user_id = $1 order by business_name",
       [a],
@@ -101,7 +101,7 @@ describe("importing clients", () => {
   });
   it("importing the same file again creates nothing new", async () => {
     const r = await run(a, rows());
-    expect(r).toEqual({ created: 0, skippedExisting: 3, failed: [] });
+    expect(r).toEqual({ created: 0, skippedExisting: 3, skippedDoNotContact: 0, failed: [] });
     expect(
       (await t.pool.query("select count(*)::int as n from clients where user_id = $1", [a])).rows[0]
         .n,

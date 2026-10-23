@@ -97,6 +97,11 @@ function DisciplineCard({ d }: { d: Discipline }) {
           of {plural(d.total, "follow-up")} that came due were done on the day.
         </p>
       </div>
+      {d.total < 5 ? (
+        <p className="text-sm text-muted">
+          Only {plural(d.total, "follow-up")} so far — a first look, not a trend.
+        </p>
+      ) : null}
       <div
         role="img"
         aria-label={parts.map((p) => `${p.label}: ${p.n}`).join(", ")}
@@ -131,7 +136,8 @@ function FunnelCard({ rows, added }: { rows: FunnelRow[]; added: number }) {
     <Card className="space-y-3 p-4">
       <SectionTitle>From added to funded</SectionTitle>
       <p className="text-sm text-muted">
-        The {plural(added, "merchant")} you added in this period, and how far each one got.
+        The {plural(added, "merchant")} you added in this period, and how far each one got. Recent
+        merchants haven&apos;t had time to fund yet, so a short period looks worse than it is.
       </p>
       <ol className="space-y-2">
         {rows.map((r) => (
@@ -191,6 +197,10 @@ function SpeedCard({ rows }: { rows: SpeedRow[] }) {
   return (
     <Card className="space-y-3 p-4">
       <SectionTitle>How fast deals move</SectionTitle>
+      <p className="text-sm text-muted">
+        Only merchants you added at the start of the pipeline. Imported ones are left out — they
+        arrived already part-way.
+      </p>
       <ul className="space-y-1.5 text-sm">
         {rows.map((r) => (
           <li key={r.label} className="flex justify-between gap-3">
