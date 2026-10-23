@@ -46,8 +46,14 @@ const TABS: Tab[] = [
 
 const MORE_LINKS = [
   { href: "/dial", label: "Power dial" },
+  { href: "/winback", label: "Win-back" },
+  { href: "/funders", label: "Funders" },
+  { href: "/earnings", label: "Earnings" },
+  { href: "/reports", label: "Reports" },
   { href: "/long-game", label: "Long game" },
+  { href: "/lead-intake", label: "Lead intake" },
   { href: "/import", label: "Import" },
+  { href: "/trash", label: "Trash" },
   { href: "/settings", label: "Settings" },
 ];
 

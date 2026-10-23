@@ -1,8 +1,10 @@
 import { TodayLists } from "@/components/power/TodayLists";
+import { StreakBadge } from "@/components/StreakBadge";
 import { EmptyState, LinkButton } from "@/components/ui";
 import { requireSession } from "@/lib/auth/server";
 import { snoozeCounts } from "@/lib/data/overdue";
 import { listCards, userContext } from "@/lib/data/queries";
+import { loadStreak } from "@/lib/data/streak";
 import { buildToday } from "@/lib/data/views";
 import { db } from "@/lib/db";
 import { formatDate } from "@/lib/format";
@@ -38,14 +40,20 @@ function Kpi({
 
 export default async function TodayPage() {
   const session = await requireSession();
-  const { cards, ctx, view, snoozed } = await db.withUser(session.userId, async (q) => {
+  const { cards, ctx, view, snoozed, streak } = await db.withUser(session.userId, async (q) => {
     const cards = await listCards(q);
     const ctx = await userContext(q);
     const view = buildToday(cards, ctx.today);
     // One query for every visible row: how often each had its date pushed in the last 14 days.
     const visible = [...view.scheduled, ...view.overdue, ...view.dueToday, ...view.upcoming];
     const ids = visible.map((c) => c.id);
-    return { cards, ctx, view, snoozed: await snoozeCounts(q, ids) };
+    return {
+      cards,
+      ctx,
+      view,
+      snoozed: await snoozeCounts(q, ids),
+      streak: await loadStreak(q, ctx.today, ctx.timezone),
+    };
   });
   const dialable = view.scheduled.length + view.overdue.length + view.dueToday.length;
   const { kpis } = view;
@@ -70,6 +78,7 @@ export default async function TodayPage() {
           </LinkButton>
         ) : null}
       </div>
+      <StreakBadge streak={streak} className="-mt-3" />
 
       <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
         <Kpi label="Overdue" value={kpis.overdue} tone={kpis.overdue > 0 ? "bad" : undefined} />

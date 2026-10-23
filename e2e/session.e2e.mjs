@@ -26,6 +26,39 @@ export default async function sessionFlow({ email }) {
   await page.goto(`${BASE}/api/dev-login?email=${encodeURIComponent(email)}`);
   await page.goto(`${BASE}/`, { waitUntil: "networkidle" });
   check("signing back in works", !page.url().includes("/login"), page.url());
+  // Now the real button: Settings -> Sign out of all devices.
+  const epochBefore = await withDb((db) =>
+    db
+      .query("select session_epoch from app_users where email = $1", [email])
+      .then((r) => r.rows[0].session_epoch),
+  );
+  await phone.goto(`${BASE}/api/dev-login?email=${encodeURIComponent(email)}`);
+  await phone.goto(`${BASE}/clients`, { waitUntil: "networkidle" });
+  check("second device is signed in again", !phone.url().includes("/login"));
+  await page.goto(`${BASE}/settings`, { waitUntil: "networkidle" });
+  await page.getByRole("button", { name: "Sign out of all devices" }).click();
+  check(
+    "one click alone does not sign anyone out",
+    (await withDb((db) =>
+      db
+        .query("select session_epoch from app_users where email = $1", [email])
+        .then((r) => r.rows[0].session_epoch),
+    )) === epochBefore,
+  );
+  await page.getByRole("button", { name: "Yes, sign out everywhere" }).click();
+  await page.waitForURL("**/login", { timeout: 8000 });
+  const epochAfter = await withDb((db) =>
+    db
+      .query("select session_epoch from app_users where email = $1", [email])
+      .then((r) => r.rows[0].session_epoch),
+  );
+  check(
+    "DB: the session epoch went up by one",
+    epochAfter === epochBefore + 1,
+    `${epochBefore} -> ${epochAfter}`,
+  );
+  await phone.goto(`${BASE}/clients`, { waitUntil: "networkidle" });
+  check("the other device is signed out too", phone.url().includes("/login"), phone.url());
   await other.close();
   await browser.close();
 }

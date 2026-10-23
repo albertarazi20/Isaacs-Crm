@@ -1,10 +1,16 @@
+import Link from "next/link";
+import { SecurityPanel } from "@/components/SecurityPanel";
 import { SettingsPanels } from "@/components/SettingsPanels";
+import { Card, SectionTitle } from "@/components/ui";
 import { MessagesCard } from "@/components/winback/MessagesCard";
 import { requireSession } from "@/lib/auth/server";
 import { db } from "@/lib/db";
 import { env, googleConfigured } from "@/lib/env";
 import { getMessageSettings, listSnippets } from "@/lib/messaging/queries";
+import { timeAgo } from "@/lib/format";
+import { requestTimeMs } from "@/lib/server-time";
 import { gmailStatus } from "@/lib/system/gmail";
+import { reminderStatus } from "@/lib/system/heartbeat";
 
 const NOTICES: Record<string, { tone: "good" | "bad"; text: string }> = {
   connected: {
@@ -47,6 +53,9 @@ export default async function SettingsPage({
     settings: await getMessageSettings(q),
     snippets: await listSnippets(q),
   }));
+  const reminders = await reminderStatus(session.userId, { now: new Date(requestTimeMs()) }).catch(
+    () => null,
+  );
   const e = env();
   const key = sp.gmail ?? sp.error ?? "";
   const notice = Object.hasOwn(NOTICES, key) ? NOTICES[key] : undefined;
@@ -78,6 +87,27 @@ export default async function SettingsPage({
         resendReady={Boolean(e.RESEND_API_KEY && e.RESEND_FROM)}
       />
       <MessagesCard initial={messages.settings} initialSnippets={messages.snippets} />
+      <Card className="space-y-2 p-4">
+        <SectionTitle>Hourly reminder scheduler</SectionTitle>
+        <p className="text-sm text-muted">
+          {!reminders?.configured
+            ? "Not set up yet. Reminder emails need the email key and the scheduler secret on the server."
+            : reminders.lastRunAt
+              ? `Last ran ${timeAgo(reminders.lastRunAt, new Date(requestTimeMs()))}.${reminders.stale ? " That is too long ago — check the scheduler." : ""}`
+              : "Has not run yet."}
+        </p>
+      </Card>
+      <Card className="space-y-2 p-4">
+        <SectionTitle>Lead intake</SectionTitle>
+        <p className="text-sm text-muted">
+          Send new merchants in from a website form, Zapier or a lead vendor. They land on Today as
+          call-now.
+        </p>
+        <Link href="/lead-intake" className="text-sm font-medium text-accent underline">
+          Set up lead intake
+        </Link>
+      </Card>
+      <SecurityPanel />
     </div>
   );
 }

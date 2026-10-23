@@ -21,6 +21,10 @@ const NAV = [
   { href: "/board", label: "Board" },
   { href: "/clients", label: "Clients" },
   { href: "/renewals", label: "Renewals" },
+  { href: "/winback", label: "Win-back" },
+  { href: "/funders", label: "Funders" },
+  { href: "/earnings", label: "Earnings" },
+  { href: "/reports", label: "Reports" },
   { href: "/long-game", label: "Long game" },
   { href: "/settings", label: "Settings" },
 ];

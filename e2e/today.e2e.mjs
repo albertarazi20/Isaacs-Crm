@@ -22,6 +22,12 @@ export default async function todayFlow({ email }) {
   );
   await card.getByText("Snooze").click();
   await page.getByRole("button", { name: "1 month" }).first().click();
+  // Snoozing a deal that is in underwriting asks for a one-line reason first; give one if it shows.
+  const ask = page.getByRole("button", { name: /^Snooze until/ });
+  await ask
+    .waitFor({ timeout: 1500 })
+    .then(() => ask.click())
+    .catch(() => undefined);
   await page.getByText(/snoozed until/i).waitFor({ timeout: 8000 });
   const after = await withDb((db) =>
     one(
@@ -152,7 +158,7 @@ export default async function todayFlow({ email }) {
   // Settings persist.
   await page.goto(`${BASE}/settings`, { waitUntil: "networkidle" });
   await page.locator("select").first().selectOption("7");
-  await page.getByRole("button", { name: "Save" }).click();
+  await page.getByRole("button", { name: "Save", exact: true }).first().click();
   await page.getByText("Settings saved").waitFor({ timeout: 8000 });
   const hour = await withDb((db) =>
     one(db, "select digest_hour from app_users where email = $1", [email]),
