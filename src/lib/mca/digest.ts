@@ -19,13 +19,36 @@ export interface DigestGroups {
   dueToday: DueTimer[];
 }
 
+const KIND_RANK: Record<TimerKind, number> = {
+  scheduled_call: 0,
+  renewal: 1,
+  check_in: 2,
+  follow_up: 3,
+};
+
+/** One line per client — two timers landing on the same day (a snoozed check-in beside a follow-up) are one phone call. */
+function onePerClient(timers: readonly DueTimer[]): DueTimer[] {
+  const best = new Map<string, DueTimer>();
+  for (const t of timers) {
+    const cur = best.get(t.clientId);
+    if (
+      !cur ||
+      t.dueOn < cur.dueOn ||
+      (t.dueOn === cur.dueOn && KIND_RANK[t.kind] < KIND_RANK[cur.kind])
+    )
+      best.set(t.clientId, t);
+  }
+  return [...best.values()];
+}
+
 /** Only things that need a human today: overdue first (oldest first), then due today. */
 export function groupDue(timers: readonly DueTimer[], today: ISODate): DigestGroups {
   const byDueThenName = (a: DueTimer, b: DueTimer) =>
     a.dueOn.localeCompare(b.dueOn) || a.businessName.localeCompare(b.businessName);
+  const due = onePerClient(timers.filter((t) => t.dueOn <= today));
   return {
-    overdue: timers.filter((t) => t.dueOn < today).sort(byDueThenName),
-    dueToday: timers.filter((t) => t.dueOn === today).sort(byDueThenName),
+    overdue: due.filter((t) => t.dueOn < today).sort(byDueThenName),
+    dueToday: due.filter((t) => t.dueOn === today).sort(byDueThenName),
   };
 }
 

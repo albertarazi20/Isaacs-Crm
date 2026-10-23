@@ -376,8 +376,9 @@ begin
   for t in select * from jsonb_array_elements(p_timers) loop
     perform app.assert_due_on((t->>'due_on')::date);
   end loop;
+  -- A booked call is an appointment: it survives a stage move until its day has passed.
   update timers set done_at = now(), done_reason = p_reason
-   where client_id = p_client and done_at is null and kind <> 'scheduled_call';
+   where client_id = p_client and done_at is null and (kind <> 'scheduled_call' or due_on < current_date);
   for t in select * from jsonb_array_elements(p_timers) loop
     insert into timers (user_id, client_id, kind, due_on, note)
     values (p_user, p_client, t->>'kind', (t->>'due_on')::date, coalesce(t->>'note', ''));
@@ -425,6 +426,9 @@ begin
   return c;
 end $$;
 
+-- Snooze / drag-to-a-follow-up-column: "don't bother me before <date>". Replaces the follow-up and
+-- pushes any earlier funded check-in or renewal call out to that date. It never deletes a LATER
+-- renewal call, and never touches a booked call (an appointment doesn't move because he snoozed).
 create function public.set_follow_up(p_client uuid, p_due_on date, p_note text default '')
 returns timers
 language plpgsql set search_path = public as $$
@@ -434,13 +438,15 @@ begin
   if not found then
     raise exception 'client not found' using errcode = 'P0002';
   end if;
-  perform app.replace_timers(
-    p_client, c.user_id,
-    jsonb_build_array(jsonb_build_object('kind', 'follow_up', 'due_on', p_due_on, 'note', coalesce(p_note, ''))),
-    'replaced');
+  perform app.assert_due_on(p_due_on);
+  update timers set done_at = now(), done_reason = 'replaced'
+   where client_id = p_client and done_at is null and kind = 'follow_up';
+  update timers set due_on = p_due_on
+   where client_id = p_client and done_at is null and kind in ('check_in', 'renewal') and due_on < p_due_on;
+  insert into timers (user_id, client_id, kind, due_on, note)
+  values (c.user_id, p_client, 'follow_up', p_due_on, coalesce(p_note, '')) returning * into t;
   insert into activities (user_id, client_id, kind, body)
   values (c.user_id, p_client, 'timer', 'Follow up set for ' || to_char(p_due_on, 'FMMon FMDD, YYYY') || case when coalesce(p_note, '') <> '' then ' — ' || p_note else '' end);
-  select * into t from timers where client_id = p_client and done_at is null and kind = 'follow_up' order by created_at desc limit 1;
   return t;
 end $$;
 
@@ -448,7 +454,7 @@ end $$;
 create function public.log_touch(p_client uuid, p_kind text, p_outcome text, p_body text, p_next_due_on date)
 returns activities
 language plpgsql set search_path = public as $$
-declare c clients; a activities;
+declare c clients; a activities; call_is_now boolean;
 begin
   if p_kind not in ('call','text','email') then
     raise exception 'touch kind must be call, text or email' using errcode = '22023';
@@ -457,14 +463,49 @@ begin
   if not found then
     raise exception 'client not found' using errcode = 'P0002';
   end if;
-  perform app.replace_timers(
-    p_client, c.user_id,
-    jsonb_build_array(jsonb_build_object('kind', 'follow_up', 'due_on', p_next_due_on, 'note', '')),
-    'completed');
+  perform app.assert_due_on(p_next_due_on);
+  -- Only a call within a few hours of (or after) the booked time counts as THE booked call.
+  call_is_now := p_kind = 'call' and c.scheduled_call_at is not null and c.scheduled_call_at <= now() + interval '3 hours';
+  -- What this touch resolves: the follow-up he was chasing, a funded check-in or renewal call that
+  -- is due, and the booked call if this is it. A renewal call due in 80 days is NOT resolved by it.
+  update timers set done_at = now(), done_reason = 'completed'
+   where client_id = p_client and done_at is null and (
+         kind = 'follow_up'
+      or (kind in ('check_in', 'renewal') and due_on <= current_date)
+      or (kind = 'scheduled_call' and call_is_now));
+  if call_is_now then
+    update clients set scheduled_call_at = null where id = p_client;
+  end if;
+  insert into timers (user_id, client_id, kind, due_on, note)
+  values (c.user_id, p_client, 'follow_up', p_next_due_on, '');
   insert into activities (user_id, client_id, kind, outcome, body)
   values (c.user_id, p_client, p_kind, p_outcome, coalesce(p_body, '')) returning * into a;
   update clients set last_contact_at = now() where id = p_client;
   return a;
+end $$;
+
+-- The call fell through. Clears the booking; the client keeps a next date.
+create function public.cancel_call(p_client uuid)
+returns clients
+language plpgsql set search_path = public as $$
+declare c clients; n int;
+begin
+  select * into c from clients where id = p_client for update;
+  if not found then
+    raise exception 'client not found' using errcode = 'P0002';
+  end if;
+  update timers set done_at = now(), done_reason = 'cancelled'
+   where client_id = p_client and done_at is null and kind = 'scheduled_call';
+  get diagnostics n = row_count;
+  if n > 0 or c.scheduled_call_at is not null then
+    update clients set scheduled_call_at = null where id = p_client returning * into c;
+    insert into activities (user_id, client_id, kind, body) values (c.user_id, p_client, 'timer', 'Call cancelled');
+  end if;
+  if not exists (select 1 from timers where client_id = p_client and done_at is null) then
+    insert into timers (user_id, client_id, kind, due_on, note)
+    values (c.user_id, p_client, 'follow_up', current_date + 1, 'Call cancelled — follow up');
+  end if;
+  return c;
 end $$;
 
 -- Book a call. The reminder fires on the day (and the digest lists it); stage moves to

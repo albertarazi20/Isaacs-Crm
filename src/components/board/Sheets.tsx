@@ -2,12 +2,22 @@
 
 import { useApp } from "@/components/app-context";
 import { Dialog } from "@/components/overlay";
+import { needsInput } from "@/components/stage-move/forms";
 import { GROUP_COLOR } from "@/components/ui";
 import type { ClientCard } from "@/lib/data/types";
 import { formatDate } from "@/lib/format";
 import { FOLLOW_UP_PRESETS } from "@/lib/mca/dates";
 import { STAGE_GROUPS, STAGES, type StageKey } from "@/lib/mca/stages";
 import { bucketDueDate, timerText, type DropBucket } from "./logic";
+
+const AGAIN: Partial<Record<StageKey, string>> = {
+  funded: "Record a new advance (a renewal)",
+  lost: "Change who they went with",
+  default_workable: "Update the default date or promise to pay",
+  default_bad: "Update the default date or promise to pay",
+  legal_collections: "Update the default date or promise to pay",
+  written_off: "Update the default date or promise to pay",
+};
 
 const OPTION =
   "rounded-lg border border-border px-3 py-2 text-left text-sm transition hover:bg-surface-2 disabled:cursor-default disabled:opacity-60 disabled:hover:bg-transparent";
@@ -41,11 +51,14 @@ export function StageSheet({
             <div className="grid gap-1.5 sm:grid-cols-2">
               {STAGES.filter((s) => s.group === g.key).map((s) => {
                 const current = s.key === card.stage;
+                // Funded, lost and default stages can be re-entered to record a new advance,
+                // a different competitor or a new promise to pay.
+                const again = current && needsInput(card, s.key);
                 return (
                   <button
                     key={s.key}
                     type="button"
-                    disabled={current}
+                    disabled={current && !again}
                     aria-current={current ? "true" : undefined}
                     onClick={() => onPick(s.key)}
                     className={OPTION}
@@ -55,7 +68,7 @@ export function StageSheet({
                       {current ? " (current)" : ""}
                     </span>
                     <span className="block text-xs text-muted">
-                      {s.hint} · follow up {timerText(s.followUp)}
+                      {again ? AGAIN[s.key] : `${s.hint} · follow up ${timerText(s.followUp)}`}
                     </span>
                   </button>
                 );

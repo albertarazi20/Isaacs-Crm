@@ -158,8 +158,9 @@ export function Board({ initialCards, view }: { initialCards: ClientCard[]; view
 
   const moveCard = useCallback(
     async (card: ClientCard, stage: StageKey) => {
-      if (card.stage === stage) return;
-      if (stageNeedsInput(card, stage)) {
+      const needsDialog = stageNeedsInput(card, stage);
+      if (card.stage === stage && !needsDialog) return;
+      if (needsDialog) {
         // A dialog comes first, so nothing moves until the details are saved.
         const done = await requestMove(card, stage);
         if (done) setCards((cur) => replaceCard(cur, done));
@@ -215,7 +216,8 @@ export function Board({ initialCards, view }: { initialCards: ClientCard[]; view
     const card = byId.get(String(active.id));
     if (!card || !over) return;
     const [kind, key = ""] = String(over.id).split(":");
-    if (kind === "stage" && isStageKey(key)) void moveCard(card, key);
+    // Dropping a card back on its own column is never a move.
+    if (kind === "stage" && isStageKey(key) && key !== card.stage) void moveCard(card, key);
     if (kind === "bucket") {
       const bucket = BUCKET_ORDER.find((b) => b === key);
       if (bucket && isDropBucket(bucket) && bucketOf(card, today) !== bucket)

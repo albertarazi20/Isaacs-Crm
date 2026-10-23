@@ -54,7 +54,7 @@ function Shell({
       {...attributes}
       {...listeners}
       className={cn(
-        "group relative cursor-grab touch-manipulation rounded-lg border border-border bg-surface p-2.5 text-sm shadow-sm [contain-intrinsic-size:auto_9rem] [content-visibility:auto] pointer-coarse:select-none [-webkit-touch-callout:none]",
+        "group relative cursor-grab touch-manipulation rounded-lg border border-border bg-surface p-2.5 text-sm shadow-sm pointer-coarse:select-none [-webkit-touch-callout:none]",
         isDragging && "opacity-40",
       )}
     >

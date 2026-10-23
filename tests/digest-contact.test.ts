@@ -33,15 +33,32 @@ describe("digest", () => {
   it("lists overdue (oldest first) before today", () => {
     const g = groupDue(
       [
-        timer({ timerId: "a", dueOn: TODAY, businessName: "Zed" }),
-        timer({ timerId: "b", dueOn: "2026-10-20" }),
-        timer({ timerId: "c", dueOn: "2026-10-01" }),
-        timer({ timerId: "d", dueOn: "2026-11-01" }),
+        timer({ timerId: "a", clientId: "ca", dueOn: TODAY, businessName: "Zed" }),
+        timer({ timerId: "b", clientId: "cb", dueOn: "2026-10-20" }),
+        timer({ timerId: "c", clientId: "cc", dueOn: "2026-10-01" }),
+        timer({ timerId: "d", clientId: "cd", dueOn: "2026-11-01" }),
       ],
       TODAY,
     );
     expect(g.overdue.map((t) => t.timerId)).toEqual(["c", "b"]);
     expect(g.dueToday.map((t) => t.timerId)).toEqual(["a"]);
+  });
+  it("lists a client once when two timers are due, keeping the most specific one", () => {
+    const g = groupDue(
+      [
+        timer({ timerId: "a", clientId: "same", kind: "follow_up" }),
+        timer({ timerId: "b", clientId: "same", kind: "renewal" }),
+        timer({ timerId: "c", clientId: "same", kind: "check_in", dueOn: "2026-10-10" }),
+      ],
+      TODAY,
+    );
+    expect(g.overdue.map((t) => t.timerId)).toEqual(["c"]); // the oldest wins, so it is shown as overdue
+    expect(g.dueToday).toEqual([]);
+    const same = groupDue(
+      [timer({ timerId: "a", kind: "follow_up" }), timer({ timerId: "b", kind: "renewal" })],
+      TODAY,
+    );
+    expect(same.dueToday.map((t) => t.timerId)).toEqual(["b"]);
   });
   it("names the count and links straight to each client", () => {
     const d = buildDigest(
@@ -60,7 +77,7 @@ describe("digest", () => {
       "1 overdue follow-up",
     );
     expect(
-      buildDigest([timer({}), timer({ timerId: "t2" })], TODAY, "https://app.test")?.subject,
+      buildDigest([timer({}), timer({ timerId: "t2", clientId: "c2" })], TODAY, "https://app.test")?.subject,
     ).toBe("2 follow-ups due today");
   });
   it("escapes merchant-controlled text in the HTML body", () => {

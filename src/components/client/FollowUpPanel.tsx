@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { scheduleCallAction, setFollowUpAction } from "@/app/actions";
+import { cancelCallAction, scheduleCallAction, setFollowUpAction } from "@/app/actions";
 import type { ClientDetail } from "@/lib/data/types";
 import { addDays, type ISODate } from "@/lib/mca/dates";
 import { TIMER_LABELS } from "@/lib/mca/stages";
@@ -69,6 +69,7 @@ export function FollowUpPanel({ detail, className }: { detail: ClientDetail; cla
             Call booked
           </Badge>
           <span className="font-medium">{formatDateTime(card.scheduled_call_at, timezone)}</span>
+          <CancelCall clientId={card.id} />
         </p>
       ) : null}
     </Panel>
@@ -104,7 +105,9 @@ function SetFollowUp({
       <Button variant="primary" disabled={busy} onClick={() => void save()}>
         {busy ? "Saving…" : "Set follow-up"}
       </Button>
-      <Muted>This replaces the current follow-up. A booked call stays.</Muted>
+      <Muted>
+        This replaces the current follow-up. A booked call stays until you log it or cancel it.
+      </Muted>
     </div>
   );
 }
@@ -157,5 +160,24 @@ function ScheduleCall({ clientId }: { clientId: string }) {
         {busy ? "Booking…" : "Book the call"}
       </Button>
     </form>
+  );
+}
+
+function CancelCall({ clientId }: { clientId: string }) {
+  const run = useRun();
+  const [busy, setBusy] = useState(false);
+  return (
+    <Button
+      size="sm"
+      variant="ghost"
+      disabled={busy}
+      onClick={async () => {
+        setBusy(true);
+        await run(cancelCallAction({ clientId }), "Call cancelled");
+        setBusy(false);
+      }}
+    >
+      Cancel call
+    </Button>
   );
 }

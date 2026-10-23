@@ -244,6 +244,11 @@ export async function scheduleCall(
   return mustCard(q, input.clientId);
 }
 
+export async function cancelCall(q: Db, clientId: string): Promise<ClientCard> {
+  await q.query("select * from cancel_call($1)", [clientId]);
+  return mustCard(q, clientId);
+}
+
 export async function addNote(q: Db, input: z.output<typeof noteSchema>): Promise<void> {
   const res = await q.query(
     "insert into activities (user_id, client_id, kind, body) select user_id, id, 'note', $2 from clients where id = $1",

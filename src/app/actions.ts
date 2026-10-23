@@ -54,6 +54,9 @@ export async function logTouchAction(input: unknown): Promise<ActionResult<Card>
 export async function scheduleCallAction(input: unknown): Promise<ActionResult<Card>> {
   return run((q, ctx) => m.scheduleCall(q, s.scheduleCallSchema.parse(input), ctx));
 }
+export async function cancelCallAction(input: unknown): Promise<ActionResult<Card>> {
+  return run((q) => m.cancelCall(q, s.clientIdSchema.parse(input).clientId));
+}
 export async function addNoteAction(input: unknown): Promise<ActionResult<null>> {
   return run(async (q) => {
     await m.addNote(q, s.noteSchema.parse(input));

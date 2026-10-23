@@ -32,7 +32,7 @@ function Scroller({
       aria-label={label}
       className={cn(
         "flex min-h-0 flex-1 items-stretch gap-3 overflow-x-auto overflow-y-hidden pb-2",
-        !dragging && "snap-x snap-proximity",
+        !dragging && "snap-x snap-proximity md:snap-none",
       )}
     >
       <BoardScrollContext.Provider value={el}>{children}</BoardScrollContext.Provider>

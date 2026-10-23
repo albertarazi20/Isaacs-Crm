@@ -172,7 +172,7 @@ describe("move_client", () => {
 });
 
 describe("set_follow_up (dragging to a follow-up column)", () => {
-  it("replaces check-in, renewal and follow-up timers with the one new date", async () => {
+  it("moves the follow-up, pushes an earlier check-in out, and keeps a later renewal call", async () => {
     const id = await insertClient(t.db, a, "Drag Co");
     await t.db.withUser(a, (q) =>
       q.query("select * from move_client($1, 'funded', $2::jsonb)", [
@@ -185,7 +185,11 @@ describe("set_follow_up (dragging to a follow-up column)", () => {
     await t.db.withUser(a, (q) =>
       q.query("select * from set_follow_up($1, $2, 'busy till then')", [id, target]),
     );
-    expect(await openTimers(id)).toEqual([{ kind: "follow_up", due_on: target }]);
+    expect(await openTimers(id)).toEqual([
+      { kind: "check_in", due_on: target },
+      { kind: "follow_up", due_on: target },
+      { kind: "renewal", due_on: addDays(today(), 80) },
+    ]);
     const card = await t.db.withUser(a, (q) =>
       q.query("select next_due_on from client_cards where id = $1", [id]),
     );
