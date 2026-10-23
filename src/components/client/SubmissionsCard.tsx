@@ -13,7 +13,7 @@ import { offerToFundingPrefill } from "@/components/funders/prefill";
 import { QuietConfirm } from "@/components/funders/QuietConfirm";
 import { SendDialog } from "@/components/funders/SendDialog";
 import { DeclineDialog, OfferDialog, StipsDialog } from "@/components/funders/SubmissionDialogs";
-import type { ClientCard } from "@/lib/data/types";
+import type { ClientCard, PositionRow, StipRow } from "@/lib/data/types";
 import { formatDate } from "@/lib/format";
 import {
   offerChips,
@@ -28,13 +28,16 @@ import {
   OFFER_STATUS_LABELS,
   SUBMISSION_STATUS_LABELS,
   type ClientFundersData,
+  type FunderRow,
   type FunderOfferRow,
   type OfferStatus,
   type SubmissionRow,
   type SubmissionStatus,
 } from "@/lib/funders/types";
+import { buildSubmissionPackage, gmailComposeUrl } from "@/lib/funders/package";
 import { formatMoney } from "@/lib/money";
 import { useApp } from "../app-context";
+import { useToast } from "../overlay";
 import { useStageMove } from "../stage-move/useStageMove";
 import { Badge, Button, buttonClass, cn, EmptyState } from "../ui";
 import { Muted, Panel, useRun } from "./parts";
@@ -82,13 +85,19 @@ type Dialog =
 export function SubmissionsCard({
   card,
   data,
+  positions = [],
+  stips = [],
   className,
 }: {
   card: ClientCard;
   data: ClientFundersData;
+  /** For the funder summary: the merchant's other advances and which statements are in. */
+  positions?: readonly PositionRow[];
+  stips?: readonly StipRow[];
   className?: string;
 }) {
-  const { today } = useApp();
+  const { today, senderName } = useApp();
+  const toast = useToast();
   const run = useRun();
   const { requestMove, dialogs } = useStageMove();
   const [dialog, setDialog] = useState<Dialog>(null);
@@ -160,6 +169,19 @@ export function SubmissionsCard({
     });
   }
 
+  const summaryFor = (funderContact?: string) =>
+    buildSubmissionPackage({ card, positions, stips, senderName, funderContact });
+
+  async function copySummary() {
+    const pkg = summaryFor();
+    try {
+      await navigator.clipboard.writeText(`${pkg.subject}\n\n${pkg.body}`);
+      toast({ message: "Summary copied — paste it into your email", tone: "success" });
+    } catch {
+      toast({ message: "Couldn't copy — your browser blocked it", tone: "error" });
+    }
+  }
+
   const offerStatus = (offer: FunderOfferRow, status: OfferStatus, done: string) =>
     guarded(() => run(setOfferStatusAction({ offerId: offer.id, status }), done));
 
@@ -172,6 +194,13 @@ export function SubmissionsCard({
           <Link href="/funders" className={buttonClass("ghost", "sm")}>
             Funders
           </Link>
+          <Button
+            size="sm"
+            onClick={() => void copySummary()}
+            title="The merchant's facts as an email you can paste"
+          >
+            Copy summary
+          </Button>
           <Button size="sm" variant="primary" onClick={() => setDialog({ kind: "send" })}>
             Send to funders
           </Button>
@@ -215,6 +244,10 @@ export function SubmissionsCard({
                 <p className="min-w-0 truncate font-medium">{sub.funder_name}</p>
                 <Badge tone={STATUS_TONE[sub.status]}>{SUBMISSION_STATUS_LABELS[sub.status]}</Badge>
                 <span className="text-xs text-muted">Sent {formatDate(sub.sent_on, today)}</span>
+                <EmailPackageLink
+                  funder={funders.find((f) => f.id === sub.funder_id)}
+                  summaryFor={summaryFor}
+                />
               </div>
               <p className="mt-0.5 text-xs text-muted">
                 {[waitText(sub, today), chaseText(sub, today)].filter(Boolean).join(" · ")}
@@ -428,5 +461,28 @@ function OfferItem({
         </span>
       </div>
     </li>
+  );
+}
+
+/** Opens a Gmail compose window to the funder's submission address with the summary filled in. Statements are attached by hand. */
+function EmailPackageLink({
+  funder,
+  summaryFor,
+}: {
+  funder: FunderRow | undefined;
+  summaryFor: (funderContact?: string) => { subject: string; body: string };
+}) {
+  const to = funder?.submission_email.trim();
+  if (!funder || !to) return null;
+  return (
+    <a
+      href={gmailComposeUrl(to, summaryFor(funder.contact_name))}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="text-xs font-medium text-accent underline"
+      title={`Opens Gmail with the summary written for ${funder.name}. Attach the statements yourself.`}
+    >
+      Email package
+    </a>
   );
 }

@@ -39,7 +39,15 @@ export function ClientView({
           <div className="contents lg:flex lg:flex-col lg:gap-4">
             <FollowUpPanel detail={detail} className="order-1" />
             <FundingCard fundings={detail.fundings} timers={detail.timers} className="order-2" />
-            {funders ? <SubmissionsCard card={card} data={funders} className="order-4" /> : null}
+            {funders ? (
+              <SubmissionsCard
+                card={card}
+                data={funders}
+                positions={detail.positions}
+                stips={detail.stips}
+                className="order-4"
+              />
+            ) : null}
             <AskCard clientId={card.id} asks={detail.asks} className="order-4" />
             <PositionsCard clientId={card.id} positions={detail.positions} className="order-5" />
             <OffersCard clientId={card.id} offers={detail.offers} className="order-6" />
