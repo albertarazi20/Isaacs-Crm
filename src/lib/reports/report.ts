@@ -1,4 +1,5 @@
 import type { ISODate } from "../mca/dates";
+import { mostCommonSpelling } from "../mca/spelling";
 import { STAGE_KEYS, type StageKey } from "../mca/stages";
 
 /**
@@ -207,16 +208,7 @@ export function buildSources(clients: readonly ReportClient[]): SourceRow[] {
   for (const [key, g] of groups) {
     const ranks = g.rows.map(furthestRank);
     const funded = ranks.filter((r) => r >= 10).length;
-    const label =
-      key === ""
-        ? NO_SOURCE
-        : [...g.label].sort(
-            // Most common spelling; on a tie, the one that isn't all lowercase ("Referral" over "referral").
-            (a, b) =>
-              b[1] - a[1] ||
-              Number(a[0] === a[0].toLowerCase()) - Number(b[0] === b[0].toLowerCase()) ||
-              a[0].localeCompare(b[0]),
-          )[0]![0];
+    const label = key === "" ? NO_SOURCE : mostCommonSpelling(g.label);
     out.push({
       source: label,
       added: g.rows.length,
