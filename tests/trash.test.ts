@@ -2,7 +2,7 @@ import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { importClients } from "@/lib/data/import";
 import { listTrashed, findDuplicates } from "@/lib/data/queries";
 import * as m from "@/lib/data/mutations";
-import { importSchema } from "@/lib/data/schemas";
+import { importSchema, moveSchema } from "@/lib/data/schemas";
 import type { UserContext } from "@/lib/data/types";
 import { addDays, addMonths } from "@/lib/mca/dates";
 import { runReminders, type DigestSender } from "@/lib/system/reminders";
@@ -98,11 +98,60 @@ describe("moving a client to the trash", () => {
 });
 
 describe("restoring", () => {
-  it("brings the card back with ONE follow-up a week out, and says so in the history", async () => {
+  it("gives back the follow-ups the trash closed, exactly as they were", async () => {
     const id = await insertClient(t.db, a, "Back Pizza");
+    await t.pool.query(
+      "insert into timers (user_id, client_id, kind, due_on, note) values ($1, $2, 'check_in', current_date + 30, 'thirty days')",
+      [a, id],
+    );
+    const before = await openTimers(id);
     await asA((q) => m.trashClient(q, id));
+    expect(await openTimers(id)).toEqual([]);
     await asA((q) => m.restoreClient(q, id));
     expect(await inCards(id)).toBe(true);
+    expect(await openTimers(id)).toEqual(before);
+    expect(await rows("select 1 from trashed_clients where client_id = $1", [id])).toEqual([]);
+    const last = await rows(
+      "select body from activities where client_id = $1 order by occurred_at desc limit 1",
+      [id],
+    );
+    expect(last[0]?.body).toBe("Restored from trash");
+  });
+
+  it("a funded merchant keeps its renewal call", async () => {
+    const id = await insertClient(t.db, a, "Funded Back Pizza");
+    await asA((q) =>
+      m.moveClient(
+        q,
+        moveSchema.parse({
+          clientId: id,
+          stage: "funded",
+          funding: {
+            amount: "50k",
+            factorRate: "1.32",
+            payment: "550",
+            frequency: "daily",
+            funderName: "Alpha",
+          },
+        }),
+        ctx,
+      ),
+    );
+    const before = await openTimers(id);
+    expect(before.map((x) => x.kind).sort()).toEqual(["check_in", "renewal"]);
+    await asA((q) => m.trashClient(q, id));
+    await asA((q) => m.restoreClient(q, id));
+    expect(await openTimers(id)).toEqual(before);
+  });
+
+  it("a timer already past due is not brought back as overdue; a follow-up a week out replaces it", async () => {
+    const id = await insertClient(t.db, a, "Late Pizza");
+    await t.pool.query(
+      "update timers set due_on = current_date - 5 where client_id = $1 and done_at is null",
+      [id],
+    );
+    await asA((q) => m.trashClient(q, id));
+    await asA((q) => m.restoreClient(q, id));
     expect(await openTimers(id)).toEqual([
       {
         kind: "follow_up",
@@ -110,12 +159,24 @@ describe("restoring", () => {
         note: "Restored from trash — pick the next step",
       },
     ]);
-    expect(await rows("select 1 from trashed_clients where client_id = $1", [id])).toEqual([]);
-    const last = await rows(
-      "select body from activities where client_id = $1 order by occurred_at desc limit 1",
+  });
+
+  it("a booked call stays cancelled: no timer and no call time", async () => {
+    const id = await insertClient(t.db, a, "Booked Pizza");
+    await t.pool.query(
+      "insert into timers (user_id, client_id, kind, due_on) values ($1, $2, 'scheduled_call', current_date + 2)",
+      [a, id],
+    );
+    await t.pool.query(
+      "update clients set scheduled_call_at = now() + interval '2 days' where id = $1",
       [id],
     );
-    expect(last[0]?.body).toBe("Restored from trash");
+    await asA((q) => m.trashClient(q, id));
+    await asA((q) => m.restoreClient(q, id));
+    expect((await openTimers(id)).map((x) => x.kind)).toEqual(["follow_up"]);
+    expect((await rows("select scheduled_call_at from clients where id = $1", [id]))[0]).toEqual({
+      scheduled_call_at: null,
+    });
   });
 
   it("a do-not-contact merchant comes back 36 months out, never next week", async () => {
@@ -126,6 +187,23 @@ describe("restoring", () => {
     const [timer, ...rest] = await openTimers(id);
     expect(rest).toEqual([]);
     expect(timer?.due_on).toBe(addMonths(t.today, 36));
+  });
+
+  it("only reopens what THIS trash closed, not timers closed earlier", async () => {
+    const id = await insertClient(t.db, a, "History Pizza");
+    await asA((q) => m.setFollowUp(q, { clientId: id, dueOn: addDays(t.today, 20) }, ctx));
+    await asA((q) => m.trashClient(q, id));
+    await asA((q) => m.restoreClient(q, id));
+    const open = await openTimers(id);
+    expect(open).toHaveLength(1);
+    expect(open[0]?.due_on).toBe(addDays(t.today, 20));
+  });
+
+  it("every restored client has at least one open timer", async () => {
+    const id = await insertClient(t.db, a, "Always Pizza");
+    await asA((q) => m.trashClient(q, id));
+    await asA((q) => m.restoreClient(q, id));
+    expect((await openTimers(id)).length).toBeGreaterThanOrEqual(1);
   });
 
   it("refuses a client that is not in the trash", async () => {

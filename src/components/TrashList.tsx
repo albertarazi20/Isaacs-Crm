@@ -55,7 +55,7 @@ export function TrashList({ items }: { items: TrashedClient[] }) {
                   void act(
                     c.id,
                     () => restoreClientAction({ clientId: c.id }),
-                    `${c.business_name} restored — follow-up set for next week`,
+                    `${c.business_name} restored`,
                   )
                 }
               >

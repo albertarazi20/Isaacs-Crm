@@ -144,3 +144,36 @@ timer silently was the worst bug the review found.
 Stage defaults of 1–3 days are business days (a Friday "tomorrow" is Monday). 7 and 14 are calendar days.
 After a logged touch, "Reached" suggests the stage's own pace (Contract out stays next business day)
 capped at two weeks, not a flat 14 days.
+
+## 2026-10-23 — delete is a trash, not a one-tap wipe
+
+"Delete client" used to remove a merchant and every note, offer and funded advance at once. Now it moves the
+client to the trash (`trashed_clients`, migration 0040): hidden from `client_cards`, every timer closed so no
+reminder can fire, history kept. Restore reopens the follow-ups the trash closed (a funded merchant keeps its
+renewal call); anything already past due, and a booked call, are not reopened — if nothing is left, one
+follow-up a week out (36 months for do-not-contact). "Delete forever" only works from the trash and needs a
+second click. A separate table, not a column, because `client_cards` expands `c.*` and a new column would
+reorder it. New code reads merchants through `client_cards` (rule added to `docs/CREW-RULES.md`).
+No automatic purge: merchant data stays until the owner empties it, and that is his call.
+
+## 2026-10-23 — "log out everywhere"
+
+`app_users.session_epoch` (migration 0050); a session token carries the epoch it was issued under and
+`getSession` compares it on every request (one indexed read, cached per request). Bumping it signs out every
+device; a deleted user's tokens die the same way. The app role can read the column but has no UPDATE on it.
+Cost: one extra small query per request. Removing someone from `ALLOWED_EMAILS` still ends their session too.
+
+## 2026-10-23 — hosted Postgres roles are locked out
+
+Migration 0060 revokes table access from the `anon` and `authenticated` roles when they exist (Supabase
+creates them and auto-grants new tables to them, which an HTTP data API can serve). This app reaches the
+database only through its own server. Recommendation in `docs/DEPLOY.md`: Neon (plain Postgres) is the
+simpler fit. Schema usage and function execute stay with PUBLIC as in any Postgres — without table access
+they do nothing. Not verified against a real Supabase project.
+
+## 2026-10-23 — lead source is first-class
+
+Reports compare lead sources, so the source must be filled in and consistent. Import stamps every row with
+the sheet's source column, else the list name typed in the wizard ("Lead vendor, Oct 2026"), else
+"Imported". Add client and Edit details suggest sources already in use (so "Referral" and "referral" stay
+one — reports also group case-insensitively), and Add client remembers the last source for batch entry.

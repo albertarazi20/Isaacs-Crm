@@ -11,7 +11,8 @@ export default async function TrashPage() {
       <div>
         <h1 className="text-2xl font-bold tracking-tight">Trash</h1>
         <p className="mt-1 text-sm text-muted">
-          Hidden everywhere, no reminders. Restore brings a client back with a follow-up in a week.
+          Hidden everywhere, no reminders. Restore brings a client back with the follow-ups it had;
+          anything already past due becomes one follow-up in a week.
         </p>
       </div>
       <TrashList items={trashed} />

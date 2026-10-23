@@ -24,6 +24,8 @@ export default async function trashFlow({ email }) {
       exists: (await db.query("select 1 from clients where id = $1", [client.id])).rowCount,
     }));
 
+  const before = (await state()).open;
+
   // Move to trash from the client page.
   await page.goto(`${BASE}/clients/${client.id}`, { waitUntil: "networkidle" });
   await page.getByRole("button", { name: "Move to trash" }).click();
@@ -46,15 +48,17 @@ export default async function trashFlow({ email }) {
   await page.goto(`${BASE}/trash`, { waitUntil: "networkidle" });
   check("shows in the Trash", await page.getByText("Rivera Auto Repair").first().isVisible());
   await page.getByRole("button", { name: "Restore" }).first().click();
-  await page.getByText(/restored — follow-up set for next week/).waitFor({ timeout: 8000 });
+  await page.getByText(/Rivera Auto Repair restored/).waitFor({ timeout: 8000 });
   s = await state();
+  const key = (rows) => JSON.stringify(rows.map((r) => `${r.kind}:${r.days}`).sort());
+  // Future follow-ups come back as they were; anything already past due becomes one follow-up in a week.
+  const expected = before.every((r) => r.days >= 0)
+    ? key(before)
+    : key([{ kind: "follow_up", days: 7 }]);
   check(
-    "DB: restored with exactly one follow-up 7 days out",
-    s.trashed === 0 &&
-      s.open.length === 1 &&
-      s.open[0].kind === "follow_up" &&
-      s.open[0].days === 7,
-    JSON.stringify(s.open),
+    "DB: restore gives back the follow-ups it closed (or one a week out if they were past due)",
+    s.trashed === 0 && s.open.length >= 1 && key(s.open) === expected,
+    `before=${key(before)} after=${key(s.open)}`,
   );
   await page.goto(`${BASE}/clients`, { waitUntil: "networkidle" });
   check("back in the Clients list", (await page.getByText("Rivera Auto Repair").count()) > 0);

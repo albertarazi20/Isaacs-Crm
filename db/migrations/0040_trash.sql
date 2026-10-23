@@ -60,36 +60,42 @@ begin
   if exists (select 1 from trashed_clients where client_id = p_client) then
     return;
   end if;
+  -- now() is the transaction's start, so the closed timers and the trash row share one timestamp.
   update timers set done_at = now(), done_reason = 'cancelled' where client_id = p_client and done_at is null;
   update clients set scheduled_call_at = null where id = p_client;
-  insert into trashed_clients (client_id, user_id) values (p_client, c.user_id);
+  insert into trashed_clients (client_id, user_id, trashed_at) values (p_client, c.user_id, now());
   insert into activities (user_id, client_id, kind, body)
   values (c.user_id, p_client, 'system', 'Moved to trash');
 end $$;
 
--- Back from the trash with a follow-up in a week (36 months for do-not-contact), so the
--- "every client always has a next date" rule holds the moment it reappears.
+-- Back from the trash. The follow-ups the trash closed come back as they were — a funded merchant keeps
+-- its renewal call — except ones already past due (they'd land as a wall of overdue) and a booked call
+-- (the appointment was cancelled with the client). If nothing is left open, a follow-up in a week
+-- (36 months for do-not-contact) keeps the "every client always has a next date" rule.
 create function public.restore_client(p_client uuid)
 returns void
 language plpgsql set search_path = public, pg_temp as $$
-declare c clients;
+declare c clients; trashed timestamptz;
 begin
   select * into c from clients where id = p_client for update;
-  if not found or not exists (select 1 from trashed_clients where client_id = p_client) then
+  select trashed_at into trashed from trashed_clients where client_id = p_client;
+  if not found or c.id is null then
     raise exception 'client not in the trash' using errcode = 'P0002';
   end if;
   delete from trashed_clients where client_id = p_client;
-  perform app.replace_timers(
-    p_client, c.user_id,
-    jsonb_build_array(jsonb_build_object(
-      'kind', 'follow_up',
-      'due_on', case when c.contact_status = 'dnc'
-                     then (current_date + interval '36 months')::date
-                     else current_date + 7 end,
-      'note', case when c.contact_status = 'dnc'
-                   then 'Do-not-contact — review this status'
-                   else 'Restored from trash — pick the next step' end)),
-    'replaced');
+  update timers set done_at = null, done_reason = null
+   where client_id = p_client and done_reason = 'cancelled' and done_at = trashed
+     and kind <> 'scheduled_call' and due_on >= current_date;
+  if not exists (select 1 from timers where client_id = p_client and done_at is null) then
+    insert into timers (user_id, client_id, kind, due_on, note)
+    values (c.user_id, p_client, 'follow_up',
+            case when c.contact_status = 'dnc'
+                 then (current_date + interval '36 months')::date
+                 else current_date + 7 end,
+            case when c.contact_status = 'dnc'
+                 then 'Do-not-contact — review this status'
+                 else 'Restored from trash — pick the next step' end);
+  end if;
   insert into activities (user_id, client_id, kind, body)
   values (c.user_id, p_client, 'system', 'Restored from trash');
 end $$;
