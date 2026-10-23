@@ -148,7 +148,8 @@ export function ImportWizard() {
           <div>
             <h2 className="text-base font-semibold">2. Check the columns</h2>
             <p className="text-sm text-muted">
-              {parsed.records.length} rows found. Fix any column that was guessed wrong.
+              {parsed.records.length} {parsed.records.length === 1 ? "row" : "rows"} found. Fix any
+              column that was guessed wrong.
             </p>
           </div>
           <div className="grid gap-3 sm:grid-cols-2">

@@ -23,6 +23,16 @@ const shot = (page, name, full = false) =>
 const ONLY = process.env.E2E_ONLY ?? "";
 const on = (name) => !ONLY || ONLY.split("|").some((o) => name.includes(o));
 const PHONE = { width: 390, height: 844 };
+/** Waits for a smooth scroll to stop (the same scrollLeft twice, 120ms apart). */
+async function settled(el) {
+  let last = -1;
+  await until(async () => {
+    const now = await el.evaluate((b) => b.scrollLeft);
+    const same = now === last;
+    last = now;
+    return same;
+  }, 4000);
+}
 /** A phone shrinks a too-wide page to fit (innerWidth grows past 390), so compare against 390 itself, not innerWidth. */
 const pageFits = (p) =>
   p
@@ -107,6 +117,7 @@ export default async function mobileUi({ email }) {
       !!(await until(async () => /Funded/.test(await lit()), 2500)),
       await lit(),
     );
+    await settled(board);
     await shot(p, "board-tabs-funded");
 
     await tabs.getByRole("button", { name: /^Exits/ }).tap();
@@ -115,6 +126,7 @@ export default async function mobileUi({ email }) {
       !!(await until(async () => /Exits/.test(await lit()), 4000)),
       await lit(),
     );
+    await settled(board);
     await shot(p, "board-tabs-exits");
 
     // A swipe back to the start lights Prospecting again.
@@ -504,6 +516,30 @@ export default async function mobileUi({ email }) {
     check("the Board card says why on a phone too", await cardHint.isVisible());
     await shot(p, "board-card-bad-phone");
     await rows("update clients set phone = $2 where id = $1", [rivera.id, rivera.phone]);
+    await m.browser.close();
+  }
+
+  // ======================= dark mode at 390px (screenshots only; the checks above ran in light) =======================
+  if (on("dark")) {
+    console.log("\n-- dark mode screenshots");
+    const m = await openBrowser(email, PHONE, { ...TOUCH, colorScheme: "dark" });
+    const p = m.page;
+    const rivera = await client("Rivera Auto Repair");
+    for (const [name, path, ready] of [
+      ["board-tabs-dark", "/board?view=pipeline", "article"],
+      ["clients-dark", "/clients", "ul[aria-label=Clients] > li"],
+      ["import-dark", "/import", "label"],
+      ["client-dark", `/clients/${rivera.id}`, "#new-note"],
+    ]) {
+      await p.goto(`${BASE}${path}`, { waitUntil: "domcontentloaded" });
+      await p.locator(ready).first().waitFor({ timeout: 15000 });
+      await p.waitForTimeout(600);
+      await shot(p, name);
+    }
+    await p.goto(`${BASE}/clients`, { waitUntil: "domcontentloaded" });
+    await p.getByRole("button", { name: "More actions" }).tap();
+    await shot(p, "clients-menu-dark");
+    check("dark screenshots taken", true);
     await m.browser.close();
   }
 }

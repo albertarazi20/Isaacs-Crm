@@ -169,37 +169,70 @@ export function MessagesCard({
             </ul>
           </>
         ) : (
-          <ul className="divide-y divide-border rounded-xl border border-border">
-            {snippets.map((s) => (
-              <li key={s.id} className="flex items-start justify-between gap-3 p-3">
-                <div className="min-w-0">
-                  <p className="text-sm font-medium">
-                    {s.title} <Badge tone="accent">{KIND_LABEL[s.kind]}</Badge>
+          <>
+            <ul className="divide-y divide-border rounded-xl border border-border">
+              {snippets.map((s) => (
+                <li key={s.id} className="flex items-start justify-between gap-3 p-3">
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium">
+                      {s.title} <Badge tone="accent">{KIND_LABEL[s.kind]}</Badge>
+                    </p>
+                    <p className="line-clamp-2 text-sm whitespace-pre-line text-muted">{s.body}</p>
+                  </div>
+                  <div className="flex shrink-0 gap-1">
+                    <Button
+                      size="sm"
+                      onClick={() =>
+                        setEditing({ id: s.id, title: s.title, kind: s.kind, body: s.body })
+                      }
+                    >
+                      Edit
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="danger"
+                      disabled={deleting === s.id}
+                      aria-label={`Delete ${s.title}`}
+                      onClick={() => void remove(s.id)}
+                    >
+                      {deleting === s.id ? "Deleting…" : "Delete"}
+                    </Button>
+                  </div>
+                </li>
+              ))}
+            </ul>
+            {/* A kind with no saved snippet still uses the built-ins in its picker; show them so they can be seen and edited. */}
+            {(["text", "email"] as const)
+              .filter((kind) => !snippets.some((s) => s.kind === kind))
+              .map((kind) => (
+                <div key={kind} className="space-y-2">
+                  <p className="rounded-lg bg-surface-2 p-3 text-sm text-muted">
+                    You haven&apos;t saved any {kind} snippets, so the {kind} picker still uses the
+                    built-in ones. “Customize” starts you from one.
                   </p>
-                  <p className="line-clamp-2 text-sm whitespace-pre-line text-muted">{s.body}</p>
+                  <ul className="divide-y divide-border rounded-xl border border-border">
+                    {defaultSnippets(kind).map((d) => (
+                      <li key={d.id} className="flex items-start justify-between gap-3 p-3">
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium">
+                            {d.title} <Badge>Built-in {kind}</Badge>
+                          </p>
+                          <p className="line-clamp-2 text-sm whitespace-pre-line text-muted">
+                            {d.body}
+                          </p>
+                        </div>
+                        <Button
+                          size="sm"
+                          onClick={() => setEditing({ title: d.title, kind, body: d.body })}
+                        >
+                          Customize
+                        </Button>
+                      </li>
+                    ))}
+                  </ul>
                 </div>
-                <div className="flex shrink-0 gap-1">
-                  <Button
-                    size="sm"
-                    onClick={() =>
-                      setEditing({ id: s.id, title: s.title, kind: s.kind, body: s.body })
-                    }
-                  >
-                    Edit
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="danger"
-                    disabled={deleting === s.id}
-                    aria-label={`Delete ${s.title}`}
-                    onClick={() => void remove(s.id)}
-                  >
-                    {deleting === s.id ? "Deleting…" : "Delete"}
-                  </Button>
-                </div>
-              </li>
-            ))}
-          </ul>
+              ))}
+          </>
         )}
       </div>
 
