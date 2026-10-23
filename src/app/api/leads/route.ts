@@ -6,7 +6,7 @@ import { toActionError } from "@/lib/data/errors";
 import { UserError } from "@/lib/data/mutations";
 import { db } from "@/lib/db";
 import { devLoginEnabled, env } from "@/lib/env";
-import { ingestLead } from "@/lib/leads/intake";
+import { ingestLead, LeadCapError } from "@/lib/leads/intake";
 import { describeLeadProblem, leadSchema } from "@/lib/leads/schema";
 import { parseBearer, readLimitedJson } from "@/lib/leads/token";
 import { sendViaResend } from "@/lib/email/resend";
@@ -43,7 +43,7 @@ export async function POST(req: Request) {
 
   try {
     const result = await db.withUser(check.userId, async (q) =>
-      ingestLead(q, parsed.data, await userContext(q)),
+      ingestLead(q, parsed.data, await userContext(q), check.tokenId),
     );
     // The lead is saved. A failed alert must never turn that into an error for the sender.
     const e = env();
@@ -63,6 +63,14 @@ export async function POST(req: Request) {
     return json({ ok: true, ...result }, result.status === "created" ? 201 : 200);
   } catch (e) {
     // The sender's mistake is a 400. A busy database is "try again" (503): a retry will work. Anything else is ours.
+    if (e instanceof LeadCapError)
+      return json(
+        {
+          error: `${e.message}. If you didn't send these, turn the connection off in Lead intake.`,
+        },
+        429,
+        { "retry-after": "3600" },
+      );
     if (e instanceof UserError || e instanceof ZodError)
       return json({ error: toActionError(e) }, 400);
     const code = (e as { code?: string } | null)?.code;

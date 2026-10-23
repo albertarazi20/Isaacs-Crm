@@ -196,7 +196,10 @@ the Board closes chase timers (existing `replace_timers` behaviour); the card of
 `POST /api/leads` with a per-connection bearer token adds a merchant as "call now" (due today). Speed to lead
 is the metric in this business and a CSV is too slow. Tokens are 256-bit random, shown once, stored only as
 SHA-256 (`lead_tokens`; the app role can't even select the hash column). A token can only add a merchant to its
-owner's account — it reads nothing. Limits: 30 a minute per token (counted on the row, refused tries included),
+owner's account and cannot read the CRM — but its reply does say whether a phone number is already on file
+(`created` vs `duplicate`, the card id, and `doNotContact`), and a duplicate adds a note and moves that merchant's
+follow-up to today (review-3A A-10; accepted: the caller already holds the number, and answering both the same way
+would hide a real duplicate from a form that wants to say "we already have you"). Limits: 30 a minute per token (counted on the row, refused tries included),
 20 KB body, a phone or email required, SSN/card guard on notes, unknown fields ignored (no setting a stage or
 owner). A merchant already in the CRM is not duplicated: note + follow-up today, and do-not-contact merchants
 only get the note. Revoking, removing the owner from `ALLOWED_EMAILS`, or deleting the user kills the token at
@@ -294,3 +297,31 @@ page the Clients list and slim the card payload. Reports and win-back stay fast 
 - **A text with an unfilled `{field}` can't be sent**, the same rule email already had.
 - Not changed: the snooze-reason question still isn't asked on a Board drop, the Set-follow-up button, note chips or
   win-back "Not now" (it never blocks; it only asks). Recorded in the backlog.
+
+## 2026-10-23 — third review round (docs/REVIEW-3A.md): what changed
+
+- **Renewal list and forecast only count calls he can make.** Merchants who said no or went elsewhere (exit
+  stages) and do-not-contact merchants are left out of the radar, its dollar total and the Earnings forecast; the
+  forecast also leaves out merchants already in a funding deal (the Pipeline tile prices them). Both pages say how
+  many were left out. A merchant working a renewal deal stays on the radar — that is the renewal in progress.
+- **Price book: a sample is merchants, not prices.** An offer he took and then funded counts once (as the advance).
+  The average needs prices from three different merchants. (No `offer_id` on fundings: matching on merchant +
+  amount + factor is the same thing without a schema change.)
+- **Correcting a funded date:** "latest advance" is judged on the row as it was. A date change that would swap
+  which advance is current is refused when other things change in the same save, and goes through as the only change
+  (the Funding dialog now sends only what he changed, so that is one click away).
+- **A stale Funding dialog can't erase money recorded elsewhere:** the dialog sends only the boxes he changed.
+- **Undo accept brings the other offers back** (`offers.declined_by/declined_from`); an expired offer, one he turned
+  down himself, or one from a funder that said no can't be accepted. Switching straight from one accepted offer to
+  another still works.
+- **One lock order everywhere (the client first)** — the record_default / update_funding_terms deadlock is gone
+  (40 parallel rounds: 3 of 3 runs failed before, 0 after; `tests/review-3a.test.ts`).
+- **Default date:** re-entering a default stage saves the date he gives (QA I-2).
+- **Payback rounds half-up on integers**, the same as the database column (a $1,385 × 1.251 advance was 1¢ apart).
+- **Lead token:** daily cap of 200 new merchants per token (migration 0140), a timeline line on every card it adds,
+  and the docs no longer say it "reads nothing" — it can tell a sender whether a phone number is on file.
+- **Duplicate names are compared as ASCII letters and digits in both TypeScript and SQL**, so the check no longer
+  depends on the database's locale. A name with no ASCII letter or digit (e.g. all Chinese) is matched by phone only.
+- Not changed (recorded in BACKLOG): A-11 (three definitions of "when to call about a renewal"), A-13 (a trashed
+  merchant's advance can still be edited from a stale tab), A-14, A-17 (RLS keyed on a setting the app role can
+  change — the app role never receives user input as SQL), A-19..A-22.

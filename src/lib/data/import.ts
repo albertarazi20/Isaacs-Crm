@@ -5,8 +5,7 @@ import { addNote, createClient } from "./mutations";
 import { newClientSchema, type ImportRowInput } from "./schemas";
 import type { UserContext } from "./types";
 
-/** "Mike's Pizza, LLC" and "mikes pizza llc" are the same business. */
-const nameKey = (s: string) => s.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, "");
+import { nameKey } from "./nameKey";
 
 export interface ImportResult {
   created: number;

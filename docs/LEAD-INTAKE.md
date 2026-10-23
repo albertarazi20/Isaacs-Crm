@@ -33,12 +33,18 @@ Send a phone or an email, and a business or contact name. Anything else (a stage
   serialises on the phone and name key inside the database.
 - `null` for an optional field is the same as leaving it out (Zapier sends `null` for empty fields).
 - Answers: `201` created, `200` duplicate, `400` plain-words problem naming the field, `401` bad/revoked token,
-  `413` too big, `429` more than 30 a minute, `503` + `Retry-After` when the database was briefly busy (retry the
+  `413` too big, `429` more than 30 a minute or 200 new merchants a day, `503` + `Retry-After` when the database was briefly busy (retry the
   same request; it is safe), `500` anything else.
 
 ## Safety
 
-- The token can do exactly one thing: add a merchant to its owner's account. It can't read anything.
+- The token adds a merchant to its owner's account. It can't read the CRM, but the reply does tell the sender whether
+  that phone number is already on file (`created` vs `duplicate`), and a duplicate adds a note and moves that
+  merchant's follow-up to today. Give a token only to a sender you trust with that.
+- **Daily cap:** one token adds at most 200 new merchants a UTC day (`429`, retry after an hour). Duplicates don't
+  count. A leaked token can't bury Today in junk past that.
+- **Marked on the card:** every new merchant gets a timeline line `Added by lead connection "<name>"`, so after
+  you turn a leaked connection off you can find what it added.
 - **Keep it on a server or inside Zapier — never in a web page** (anyone could view-source it). Turn it off from the
   Lead intake page at any time; it stops working immediately. Removing the owner from `ALLOWED_EMAILS` does too.
 - SSNs and card numbers in `notes` are refused, like everywhere else in the app.

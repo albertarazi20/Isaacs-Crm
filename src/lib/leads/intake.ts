@@ -1,10 +1,12 @@
 import type { Db } from "../db";
 import { addNote, createClient } from "../data/mutations";
+import { nameKey } from "../data/nameKey";
 import { findDuplicates } from "../data/queries";
 import type { UserContext } from "../data/types";
 import { contactAllowed, type ContactStatus } from "../mca/contact";
 import { normalizeUS } from "../mca/phone";
 import { toNewClient, type LeadInput } from "./schema";
+import { MAX_NEW_PER_DAY } from "./token";
 
 export interface IntakeResult {
   status: "created" | "duplicate";
@@ -13,6 +15,13 @@ export interface IntakeResult {
   doNotContact?: boolean;
   /** Duplicate only: what matched. */
   matchedOn?: "phone" | "name";
+}
+
+/** The token has already added its day's worth of new merchants. */
+export class LeadCapError extends Error {
+  constructor() {
+    super(`This connection has already added ${MAX_NEW_PER_DAY} new merchants today`);
+  }
 }
 
 const from = (lead: LeadInput) => (lead.source ? ` via ${lead.source}` : "");
@@ -29,8 +38,6 @@ function details(lead: LeadInput): string {
   ].filter(Boolean);
   return bits.length ? ` (${bits.join(", ")})` : "";
 }
-
-const nameKey = (s: string) => s.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, "");
 
 /**
  * Two requests for the same lead at the same moment (a Zapier retry, a double-submit) must become ONE card.
@@ -58,7 +65,12 @@ async function serialise(q: Db, phone: string, businessName: string): Promise<vo
  * is do-not-contact, in which case only the note is added. Trashed merchants count as gone.
  * A name match only counts when one side has no phone: "Subway" with a different number is a different Subway.
  */
-export async function ingestLead(q: Db, lead: LeadInput, ctx: UserContext): Promise<IntakeResult> {
+export async function ingestLead(
+  q: Db,
+  lead: LeadInput,
+  ctx: UserContext,
+  tokenId?: string,
+): Promise<IntakeResult> {
   const input = toNewClient(lead, ctx.today);
   await serialise(q, input.phone, input.businessName);
   const matches = await findDuplicates(q, { phone: input.phone, businessName: input.businessName });
@@ -92,7 +104,21 @@ export async function ingestLead(q: Db, lead: LeadInput, ctx: UserContext): Prom
     };
   }
 
+  if (tokenId) {
+    const { rows: slot } = await q.query<{ ok: boolean }>(
+      "select lead_token_take_slot($1, $2) as ok",
+      [tokenId, MAX_NEW_PER_DAY],
+    );
+    if (!slot[0]?.ok) throw new LeadCapError();
+  }
   const card = await createClient(q, input, ctx);
+  if (tokenId)
+    await q.query(
+      `insert into activities (user_id, client_id, kind, body)
+       select c.user_id, c.id, 'system', 'Added by lead connection "' || t.label || '"'
+         from clients c, lead_tokens t where c.id = $1 and t.id = $2`,
+      [card.id, tokenId],
+    );
   await q.query("select * from set_follow_up($1, $2, $3)", [
     card.id,
     ctx.today,

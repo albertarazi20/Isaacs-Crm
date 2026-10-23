@@ -1,5 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { addDays } from "@/lib/mca/dates";
+import { findDuplicates } from "@/lib/data/queries";
+import { NAME_KEY_SQL, nameKey } from "@/lib/data/nameKey";
 import { termsJson } from "@/lib/earnings/mutations";
 import { termsUpdateSchema } from "@/lib/earnings/schemas";
 import { changedTermsPayload, checkTerms, termsForm } from "@/lib/earnings/terms";
@@ -410,5 +412,36 @@ describe("A-12: the Funding dialog sends only what changed", () => {
     const row = await fundingRow(f);
     expect(row.note).toBe("from the laptop");
     expect(Number(row.commission_received_cents)).toBe(400_000);
+  });
+});
+
+describe("A-15: the duplicate check reads names the same way in TypeScript and in the database", () => {
+  const NAMES = [
+    "Mike's Pizza, LLC",
+    "MIKES PIZZA LLC",
+    "Café Núñez",
+    "CAFÉ NÚÑEZ",
+    "Peña's Taquería",
+    "7-Eleven #4412",
+    "A&B Auto (Miami)",
+    "王记餐厅",
+    "  spaced   out  ",
+    "O'Brien & Sons",
+  ];
+  it("nameKey equals the SQL expression for every name", async () => {
+    for (const n of NAMES) {
+      const { rows } = await t.pool.query<{ k: string }>(
+        `select ${NAME_KEY_SQL("$1::text")} as k`,
+        [n],
+      );
+      expect(rows[0]?.k, n).toBe(nameKey(n));
+    }
+  });
+  it("accented spellings of one business find each other; a name with no letters has no key", async () => {
+    await insertClient(t.db, a, "Café Núñez");
+    const hit = await asA((q) => findDuplicates(q, { businessName: "CAFÉ  NÚÑEZ!" }));
+    expect(hit.map((m) => m.business_name)).toEqual(["Café Núñez"]);
+    expect(nameKey("王记餐厅")).toBe("");
+    expect(await asA((q) => findDuplicates(q, { businessName: "王记餐厅" }))).toEqual([]);
   });
 });

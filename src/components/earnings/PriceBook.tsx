@@ -77,7 +77,7 @@ function GroupTable({
                     {g.average === null ? (
                       <span
                         className="font-normal text-muted"
-                        title={`Needs at least ${MIN_SAMPLE} prices before an average means anything`}
+                        title={`Needs prices from at least ${MIN_SAMPLE} different merchants before an average means anything`}
                       >
                         too few
                       </span>
@@ -202,6 +202,7 @@ export function PriceBook({
   const byIndustry = useMemo(() => groupFactors(chosen, industrySlice), [chosen]);
   const byFunder = useMemo(() => groupFactors(chosen, funderSlice), [chosen]);
   const overall = meanFactor(chosen.map((o) => o.factor));
+  const chosenMerchants = new Set(chosen.map((o) => o.clientId)).size;
 
   function toggle(s: PriceSource) {
     setOn((cur) => {
@@ -246,16 +247,16 @@ export function PriceBook({
             ))}
           </div>
           <p className="text-sm">
-            {chosen.length >= MIN_SAMPLE && overall !== null ? (
+            {chosenMerchants >= MIN_SAMPLE && overall !== null ? (
               <>
-                Based on {plural(chosen.length, "price")}, the average factor rate is{" "}
-                <strong>{factorInput(overall)}</strong>.
+                Based on {plural(chosen.length, "price")} from {plural(chosenMerchants, "merchant")}
+                , the average factor rate is <strong>{factorInput(overall)}</strong>.
               </>
             ) : (
               <span className="text-muted">
                 {chosen.length === 0
                   ? "Pick at least one kind of price above."
-                  : `Only ${plural(chosen.length, "price")} so far — at least ${MIN_SAMPLE} are needed before an average means anything.`}
+                  : `Only ${plural(chosen.length, "price")} from ${plural(chosenMerchants, "merchant")} so far — prices from at least ${MIN_SAMPLE} different merchants are needed before an average means anything.`}
               </span>
             )}
           </p>

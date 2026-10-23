@@ -4,6 +4,7 @@ import { normalizeUS } from "../mca/phone";
 import type { ContactStatus } from "../mca/contact";
 import type { StageKey } from "../mca/stages";
 import type { ClientCard, ClientDetail, UserContext } from "./types";
+import { NAME_KEY_SQL, nameKey } from "./nameKey";
 
 export async function userContext(q: Db, now: Date = new Date()): Promise<UserContext> {
   const { rows } = await q.query<{ timezone: string }>(
@@ -113,7 +114,7 @@ export async function findDuplicates(
 ): Promise<DuplicateMatch[]> {
   const e164 = input.phone ? normalizeUS(input.phone) : null;
   const digits = e164 ? e164.slice(2) : null;
-  const name = (input.businessName ?? "").toLowerCase().replace(/[^\p{L}\p{N}]+/gu, "");
+  const name = nameKey(input.businessName ?? "");
   if (!digits && !name) return [];
   const { rows } = await q.query<{
     id: string;
@@ -130,7 +131,7 @@ export async function findDuplicates(
        from clients
       where (contact_status <> 'ok' or not exists (select 1 from trashed_clients t where t.client_id = clients.id))
         and (($1::text is not null and right(regexp_replace(phone, '[^0-9]', '', 'g'), 10) = $1)
-         or ($2 <> '' and regexp_replace(lower(business_name), '[^[:alnum:]]+', '', 'g') = $2))
+         or ($2 <> '' and ${NAME_KEY_SQL("business_name")} = $2))
       order by by_phone desc, business_name
       limit 5`,
     [digits, name],

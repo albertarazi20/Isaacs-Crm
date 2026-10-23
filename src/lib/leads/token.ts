@@ -31,6 +31,9 @@ export const tokenHint = (token: string): string => `${token.slice(0, 8)}…${to
 
 export const MAX_BODY_BYTES = 20_000;
 export const MAX_PER_MINUTE = 30;
+
+/** New merchants one token may add in a (UTC) day. Duplicates that only add a note don't count. */
+export const MAX_NEW_PER_DAY = 200;
 export const MAX_ACTIVE_TOKENS = 10;
 
 /** Read a JSON body without trusting Content-Length, refusing anything over the cap. */

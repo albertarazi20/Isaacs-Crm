@@ -15,8 +15,11 @@ import {
 } from "@/lib/earnings/pricebook";
 import type { AdvanceRow, CompetingOfferRow, OfferRow } from "@/lib/earnings/types";
 
+let merchantSeq = 0;
+/** Every observation is a different merchant unless a test says otherwise. */
 const obs = (over: Partial<PriceObservation> = {}): PriceObservation => ({
   source: "funded",
+  clientId: `m${(merchantSeq += 1)}`,
   factor: 1.3,
   positionNo: 1,
   industry: "Restaurant",
@@ -36,7 +39,15 @@ describe("averages", () => {
     const g = groupFactors([obs({ factor: 1.3 }), obs({ factor: 1.4 })], industrySlice);
     expect(MIN_SAMPLE).toBe(3);
     expect(g).toEqual([
-      { key: "restaurant", label: "Restaurant", n: 2, average: null, low: 1.3, high: 1.4 },
+      {
+        key: "restaurant",
+        label: "Restaurant",
+        n: 2,
+        merchants: 2,
+        average: null,
+        low: 1.3,
+        high: 1.4,
+      },
     ]);
     const three = groupFactors(
       [obs({ factor: 1.3 }), obs({ factor: 1.4 }), obs({ factor: 1.5 })],
@@ -151,6 +162,44 @@ const competing = (
   positionNo: 1,
   won: true,
   ...over,
+});
+
+describe("review-3A A-6: one deal is one price, and a sample is merchants", () => {
+  it("an offer he took and then funded is counted once, as the advance", () => {
+    const o = observations({
+      advances: [advance({ clientId: "e", amountCents: 4_000_000, factorRate: 1.35 })],
+      offers: [
+        offer("e", 1.35, { amountCents: 4_000_000, status: "accepted" }),
+        offer("e", 1.38, { amountCents: 4_000_000, funderName: "Other" }),
+      ],
+      competing: [],
+    });
+    expect(o.map((x) => [x.source, x.factor])).toEqual([
+      ["funded", 1.35],
+      ["offer", 1.38],
+    ]);
+  });
+
+  it("three prices from ONE merchant show no average", () => {
+    const g = groupFactors(
+      [1.3, 1.35, 1.4].map((factor) => obs({ factor, clientId: "same" })),
+      industrySlice,
+    );
+    expect(g[0]).toMatchObject({ n: 3, merchants: 1, average: null });
+  });
+
+  it("three merchants are enough, even when one of them has two prices", () => {
+    const g = groupFactors(
+      [
+        obs({ factor: 1.3, clientId: "a" }),
+        obs({ factor: 1.4, clientId: "a" }),
+        obs({ factor: 1.3, clientId: "b" }),
+        obs({ factor: 1.5, clientId: "c" }),
+      ],
+      industrySlice,
+    );
+    expect(g[0]).toMatchObject({ n: 4, merchants: 3, average: 1.375 });
+  });
 });
 
 describe("the observations behind the price book", () => {

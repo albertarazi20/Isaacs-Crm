@@ -1,9 +1,9 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import * as m from "@/lib/data/mutations";
 import type { UserContext } from "@/lib/data/types";
-import { ingestLead } from "@/lib/leads/intake";
+import { ingestLead, LeadCapError } from "@/lib/leads/intake";
 import { leadSchema } from "@/lib/leads/schema";
-import { generateToken, hashToken, MAX_PER_MINUTE } from "@/lib/leads/token";
+import { generateToken, hashToken, MAX_NEW_PER_DAY, MAX_PER_MINUTE } from "@/lib/leads/token";
 import { addMonths } from "@/lib/mca/dates";
 import { checkLeadToken } from "@/lib/system/leads";
 import { createTestDb, insertUser, type TestDb } from "./helpers/db";
@@ -98,7 +98,7 @@ describe("checkLeadToken", () => {
   it("accepts a live token and says whose it is, and records the use", async () => {
     const token = await makeToken(a, "Live");
     const r = await checkLeadToken(token, t.db);
-    expect(r).toEqual({ ok: true, userId: a, email: "isaac@x.com" });
+    expect(r).toMatchObject({ ok: true, userId: a, email: "isaac@x.com" });
     const [row] = await rows(
       "select last_used_at, window_count from lead_tokens where token_hash = $1",
       [hashToken(token)],
@@ -383,6 +383,83 @@ describe("lead intake under real-world delivery (review 3A: A-1, A-2)", () => {
       status: "duplicate",
       clientId: first.clientId,
       matchedOn: "phone",
+    });
+  });
+});
+
+describe("a token has a daily cap on new merchants and leaves its mark (review 3A: A-10)", () => {
+  const tokenIdOf = async (token: string) =>
+    (
+      (await rows("select id from lead_tokens where token_hash = $1", [hashToken(token)]))[0] as {
+        id: string;
+      }
+    ).id;
+  const slot = (id: string, cap: number) =>
+    asA((q) =>
+      q.query<{ ok: boolean }>("select lead_token_take_slot($1, $2) as ok", [id, cap]),
+    ).then((r) => r.rows[0]?.ok);
+
+  it("hands out exactly `cap` slots a day, then none, and starts again the next day", async () => {
+    const id = await tokenIdOf(await makeToken(a, "Cap me"));
+    expect([await slot(id, 3), await slot(id, 3), await slot(id, 3), await slot(id, 3)]).toEqual([
+      true,
+      true,
+      true,
+      false,
+    ]);
+    expect((await rows("select created_today from lead_tokens where id = $1", [id]))[0]).toEqual({
+      created_today: 3,
+    });
+    await t.pool.query("update lead_tokens set created_day = current_date - 1 where id = $1", [id]);
+    expect(await slot(id, 3)).toBe(true);
+    expect((await rows("select created_today from lead_tokens where id = $1", [id]))[0]).toEqual({
+      created_today: 1,
+    });
+  });
+
+  it("a revoked token gets no slot, and one user can't use another's token", async () => {
+    const id = await tokenIdOf(await makeToken(a, "Revoke me"));
+    await asA((q) => q.query("update lead_tokens set revoked_at = now() where id = $1", [id]));
+    expect(await slot(id, 3)).toBe(false);
+    const bId = await tokenIdOf(await makeToken(b, "B's"));
+    expect(await slot(bId, 3)).toBe(false);
+    expect((await rows("select created_today from lead_tokens where id = $1", [bId]))[0]).toEqual({
+      created_today: 0,
+    });
+  });
+
+  it("a created card records which connection made it; a duplicate takes no slot", async () => {
+    const id = await tokenIdOf(await makeToken(a, "Website form"));
+    const first = await asA((q) =>
+      ingestLead(q, lead({ businessName: "Marked Pizza", phone: "3055550311" }), ctx, id),
+    );
+    expect(first.status).toBe("created");
+    const note = await rows(
+      "select body from activities where client_id = $1 and kind = 'system'",
+      [first.clientId],
+    );
+    expect(note.map((r) => r.body)).toContain('Added by lead connection "Website form"');
+    const again = await asA((q) =>
+      ingestLead(q, lead({ businessName: "Marked Pizza", phone: "3055550311" }), ctx, id),
+    );
+    expect(again.status).toBe("duplicate");
+    expect((await rows("select created_today from lead_tokens where id = $1", [id]))[0]).toEqual({
+      created_today: 1,
+    });
+  });
+
+  it("over the cap nothing is created, and the failed attempt does not eat a slot", async () => {
+    const id = await tokenIdOf(await makeToken(a, "Full"));
+    await t.pool.query(
+      "update lead_tokens set created_day = current_date, created_today = $2 where id = $1",
+      [id, MAX_NEW_PER_DAY],
+    );
+    await expect(
+      asA((q) => ingestLead(q, lead({ businessName: "Over Cap", phone: "3055550322" }), ctx, id)),
+    ).rejects.toBeInstanceOf(LeadCapError);
+    expect(await rows("select 1 from clients where business_name = 'Over Cap'")).toHaveLength(0);
+    expect((await rows("select created_today from lead_tokens where id = $1", [id]))[0]).toEqual({
+      created_today: MAX_NEW_PER_DAY,
     });
   });
 });

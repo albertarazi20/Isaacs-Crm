@@ -1,7 +1,11 @@
 import { funderKey } from "./commission";
 import type { AdvanceRow, CompetingOfferRow, OfferRow } from "./types";
 
-/** Below this many observations an average is shown as a count only — three points is the least that is not an anecdote. */
+/**
+ * Below this many DIFFERENT MERCHANTS an average is shown as a count only — three is the least that is not an
+ * anecdote, and one merchant's accepted offer, the advance funded from it and the other funder's lower offer are
+ * one deal, not three.
+ */
 export const MIN_SAMPLE = 3;
 
 export type PriceSource = "funded" | "offer" | "competitor";
@@ -15,6 +19,8 @@ export const SOURCE_LABELS: Record<PriceSource, string> = {
 /** One price he has seen: a factor rate, with the details it can be sliced by. */
 export interface PriceObservation {
   source: PriceSource;
+  /** Whose deal it was; the sample size counts these, not prices. */
+  clientId: string;
   factor: number;
   positionNo: number | null;
   industry: string;
@@ -31,9 +37,14 @@ export interface PriceBookInput {
 
 export function observations(input: PriceBookInput): PriceObservation[] {
   const out: PriceObservation[] = [];
+  // An offer he took and then funded is the same price as that advance: counted once, as the advance.
+  const funded = new Set(
+    input.advances.map((a) => `${a.clientId}|${a.amountCents}|${Math.round(a.factorRate * 1000)}`),
+  );
   for (const a of input.advances) {
     out.push({
       source: "funded",
+      clientId: a.clientId,
       factor: a.factorRate,
       positionNo: a.positionNo,
       industry: a.industry,
@@ -42,8 +53,10 @@ export function observations(input: PriceBookInput): PriceObservation[] {
     });
   }
   for (const o of input.offers) {
+    if (funded.has(`${o.clientId}|${o.amountCents}|${Math.round(o.factorRate * 1000)}`)) continue;
     out.push({
       source: "offer",
+      clientId: o.clientId,
       factor: o.factorRate,
       positionNo: o.positionNo,
       industry: o.industry,
@@ -55,6 +68,7 @@ export function observations(input: PriceBookInput): PriceObservation[] {
     if (c.factorRate === null) continue;
     out.push({
       source: "competitor",
+      clientId: c.clientId,
       factor: c.factorRate,
       positionNo: c.positionNo,
       industry: c.industry,
@@ -70,7 +84,9 @@ export interface PriceGroup {
   label: string;
   /** How many prices the average is built from. */
   n: number;
-  /** Mean factor rate, three decimals. Null while n is below MIN_SAMPLE: no conclusion from one or two. */
+  /** How many different merchants those prices come from. */
+  merchants: number;
+  /** Mean factor rate, three decimals. Null while fewer than MIN_SAMPLE merchants: no conclusion from one or two. */
   average: number | null;
   low: number;
   high: number;
@@ -89,12 +105,13 @@ export function groupFactors(
   obs: readonly PriceObservation[],
   slice: (o: PriceObservation) => Slice,
 ): PriceGroup[] {
-  const buckets = new Map<string, { label: string; factors: number[] }>();
+  const buckets = new Map<string, { label: string; factors: number[]; merchants: Set<string> }>();
   for (const o of obs) {
     const s = slice(o);
     if (!s) continue;
-    const b = buckets.get(s.key) ?? { label: s.label, factors: [] };
+    const b = buckets.get(s.key) ?? { label: s.label, factors: [], merchants: new Set<string>() };
     b.factors.push(o.factor);
+    b.merchants.add(o.clientId);
     buckets.set(s.key, b);
   }
   return [...buckets.entries()]
@@ -102,7 +119,8 @@ export function groupFactors(
       key,
       label: b.label,
       n: b.factors.length,
-      average: b.factors.length >= MIN_SAMPLE ? meanFactor(b.factors) : null,
+      merchants: b.merchants.size,
+      average: b.merchants.size >= MIN_SAMPLE ? meanFactor(b.factors) : null,
       low: Math.min(...b.factors),
       high: Math.max(...b.factors),
     }))
