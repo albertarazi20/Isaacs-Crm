@@ -302,6 +302,24 @@ export async function mergeClients(
   return mustCard(q, input.keepId);
 }
 
+/** Star or unstar a merchant: starred ones sit at the top of Today and the dial. */
+export async function setHot(q: Db, input: { clientId: string; hot: boolean }): Promise<void> {
+  const res = await q.query("update clients set hot = $2 where id = $1", [
+    input.clientId,
+    input.hot,
+  ]);
+  if (res.rowCount === 0) throw new UserError("That client no longer exists");
+}
+
+/** One-time move of the stars a browser kept for itself to the server. Ids that are not his are skipped. */
+export async function importHot(q: Db, ids: readonly string[]): Promise<number> {
+  const res = await q.query(
+    "update clients set hot = true where id = any($1::uuid[]) and not hot",
+    [ids],
+  );
+  return res.rowCount ?? 0;
+}
+
 export async function cancelCall(q: Db, clientId: string): Promise<ClientCard> {
   await q.query("select * from cancel_call($1)", [clientId]);
   return mustCard(q, clientId);

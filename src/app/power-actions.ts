@@ -12,6 +12,7 @@ import {
   type DirectoryRow,
 } from "@/lib/data/overdue";
 import { MAX_BULK_DAYS } from "@/lib/data/priority";
+import { importHot, setHot } from "@/lib/data/mutations";
 import { userContext } from "@/lib/data/queries";
 import type { ActionResult, ClientCard, UserContext } from "@/lib/data/types";
 import { db, type Db } from "@/lib/db";
@@ -43,6 +44,21 @@ const bulkSchema = z.object({
  */
 export async function bulkRescheduleAction(input: unknown): Promise<ActionResult<BulkResult>> {
   return run((q, ctx) => bulkReschedule(q, ctx, bulkSchema.parse(input)));
+}
+
+const hotSchema = z.object({ clientId: z.string().uuid(), hot: z.boolean() });
+
+/** Star or unstar a merchant. The star lives on the merchant, so every device sees it. */
+export async function setHotAction(input: unknown): Promise<ActionResult<null>> {
+  return run(async (q) => {
+    await setHot(q, hotSchema.parse(input));
+    return null;
+  });
+}
+
+/** The stars this browser kept before they lived on the server, sent once. */
+export async function importHotAction(ids: unknown): Promise<ActionResult<number>> {
+  return run((q) => importHot(q, z.array(z.string().uuid()).max(1000).parse(ids)));
 }
 
 const snoozeSchema = z.object({

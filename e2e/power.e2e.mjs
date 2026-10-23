@@ -158,12 +158,36 @@ export default async function powerFlow({ email }) {
   const lastName = (await last.locator('a[href^="/clients/"]').first().innerText()).trim();
   await last.getByRole("button", { name: new RegExp(`^Star ${esc(lastName)}$`) }).click();
   await until(async () => (await firstOverdue()) === lastName);
+  const starredInDb = () =>
+    withDb((db) =>
+      db
+        .query(
+          "select c.hot from clients c join app_users u on u.id = c.user_id where u.email = $1 and c.business_name = $2",
+          [email, lastName],
+        )
+        .then((r) => r.rows[0]?.hot),
+    );
   check(
-    "a starred client jumps to the top of its section and is stored",
-    (await page.evaluate(() => localStorage.getItem("isaac:hot")))?.length > 5,
+    "a starred client jumps to the top of its section and the star is stored on the merchant",
+    !!(await until(async () => (await starredInDb()) === true)),
   );
   await page.reload({ waitUntil: "networkidle" });
   check("the star survives a reload", (await firstOverdue()) === lastName);
+  // another device: a fresh browser with nothing saved sees the same star, first
+  const other = await openBrowser(email);
+  await other.page.goto(`${BASE}/`, { waitUntil: "networkidle" });
+  const otherFirst = await other.page
+    .locator("section", { has: other.page.getByRole("heading", { name: /^Overdue/ }) })
+    .locator('article a[href^="/clients/"]')
+    .first()
+    .innerText()
+    .then((t) => t.trim());
+  check(
+    "a second browser with nothing saved shows the star first",
+    otherFirst === lastName,
+    otherFirst,
+  );
+  await other.browser.close();
   await section("Overdue")
     .locator("article")
     .first()
@@ -172,6 +196,10 @@ export default async function powerFlow({ email }) {
   check(
     "unstarring puts it back where the score says",
     await until(async () => (await firstOverdue()) !== lastName),
+  );
+  check(
+    "…and clears the star on the merchant",
+    !!(await until(async () => (await starredInDb()) === false)),
   );
 
   // The explanation is on the page, not only in a tooltip.

@@ -1,10 +1,12 @@
 "use client";
 
 import { useMemo, useSyncExternalStore } from "react";
+import { importHotAction, setHotAction } from "@/app/power-actions";
 import type { SortMode } from "@/lib/data/priority";
+import { useApp } from "../app-context";
 
 /**
- * Two small per-browser preferences: how Today is ordered, and which clients are starred.
+ * One small per-browser preference: how Today is ordered. (Stars used to be here too; they live on the merchant now.)
  * Stored in localStorage under `isaac:` (log out clears them) but never required: every read and write is
  * guarded, and an in-memory copy keeps the buttons working when storage is blocked (private mode).
  */
@@ -71,19 +73,68 @@ function parseIds(raw: string | null): string[] {
   }
 }
 
-/** Starred clients. A fresh Set only when the stored list actually changes. */
-export function useHotIds(): ReadonlySet<string> {
-  const raw = useSyncExternalStore(
-    subscribe,
-    () => read(HOT_KEY),
-    () => null,
-  );
-  return useMemo(() => new Set(parseIds(raw)), [raw]);
+// ---------------------------------------------------------------------------------------------
+// Stars live on the merchant (clients.hot), so they follow him from device to device. The page gets the starred ids from
+// the server; a tap shows at once through `taps` and is sent in the background. A tap is dropped when the server has
+// answered, by which time the refreshed page carries the real list.
+
+const taps = new Map<string, boolean>();
+const tapListeners = new Set<() => void>();
+let tapsKey = "[]";
+const changed = () => {
+  tapsKey = JSON.stringify([...taps]);
+  tapListeners.forEach((l) => l());
+};
+const subscribeTaps = (onChange: () => void) => {
+  tapListeners.add(onChange);
+  return () => {
+    tapListeners.delete(onChange);
+  };
+};
+
+/** The server's starred ids, with any tap that has not been answered yet laid over them. */
+export function mergeHot(
+  server: readonly string[],
+  pendingTaps: ReadonlyMap<string, boolean> | readonly (readonly [string, boolean])[],
+): ReadonlySet<string> {
+  const out = new Set(server);
+  for (const [id, on] of pendingTaps) {
+    if (on) out.add(id);
+    else out.delete(id);
+  }
+  return out;
 }
 
-export function toggleHot(id: string): void {
-  const cur = new Set(parseIds(read(HOT_KEY)));
-  if (cur.has(id)) cur.delete(id);
-  else cur.add(id);
-  write(HOT_KEY, JSON.stringify([...cur]));
+/** Starred clients. A fresh Set only when the server's list or a pending tap changes. */
+export function useHotIds(): ReadonlySet<string> {
+  const { hotIds } = useApp();
+  const key = useSyncExternalStore(
+    subscribeTaps,
+    () => tapsKey,
+    () => "[]",
+  );
+  return useMemo(() => mergeHot(hotIds, JSON.parse(key) as [string, boolean][]), [hotIds, key]);
+}
+
+/** Star or unstar. Shows at once; the server keeps it, so every device agrees. */
+export async function toggleHot(id: string, currentlyHot: boolean): Promise<void> {
+  taps.set(id, !currentlyHot);
+  changed();
+  try {
+    await setHotAction({ clientId: id, hot: !currentlyHot });
+  } finally {
+    taps.delete(id);
+    changed();
+  }
+}
+
+/**
+ * Stars this browser kept before they lived on the server: sent once, then forgotten. Safe to call on every load; it does
+ * nothing when there are none or when storage is blocked.
+ */
+export async function importLocalStars(): Promise<void> {
+  const ids = parseIds(read(HOT_KEY));
+  if (ids.length === 0) return;
+  const res = await importHotAction(ids);
+  if (res.ok) write(HOT_KEY, "[]");
 }

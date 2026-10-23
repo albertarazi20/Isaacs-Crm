@@ -5,6 +5,7 @@ import { LogoutButton } from "@/components/LogoutButton";
 import { NavLink } from "@/components/NavLink";
 import { ToastProvider } from "@/components/overlay";
 import { PendingTouchPrompt } from "@/components/ContactActions";
+import { HotImport } from "@/components/power/HotImport";
 import { GlobalSearch } from "@/components/power/GlobalSearch";
 import { MobileTabBar } from "@/components/power/MobileTabBar";
 import { QuickAdd } from "@/components/QuickAdd";
@@ -57,6 +58,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         senderName: me.user.name || me.user.email.split("@")[0] || "Isaac",
         gmailConnected: gmail.connected,
         gmailNeedsReconnect: gmail.needsReconnect,
+        hotIds: me.hotIds,
         nowMs: requestTimeMs(),
       }}
     >
@@ -107,6 +109,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         <main className="mx-auto max-w-[1600px] px-4 py-5 pb-24 sm:pb-5">{children}</main>
         <MobileTabBar due={me.due} email={me.user.email} />
         <PendingTouchPrompt />
+        <HotImport />
       </ToastProvider>
     </AppProvider>
   );

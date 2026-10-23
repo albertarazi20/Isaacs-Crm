@@ -10,6 +10,8 @@ export interface AppInfo {
   senderName: string;
   gmailConnected: boolean;
   gmailNeedsReconnect: boolean;
+  /** Starred merchants: pinned to the top of Today. Kept on the server so they follow him from device to device. */
+  hotIds: readonly string[];
   /** Server's clock at render. Relative times (\"5 min ago\") must use this, or server and browser disagree and React logs a hydration mismatch. */
   nowMs: number;
 }

@@ -54,7 +54,7 @@ export const ClientRow = memo(function ClientRow({
   showPaydown?: boolean;
   /** Today only: the money-first score, shown as "$ at stake". */
   priority?: Priority;
-  /** Today only: starred clients go to the top. Per browser. */
+  /** Today only: starred clients go to the top. Kept on the merchant, so every device agrees. */
   hot?: boolean;
   /** Times this client's date was pushed in the last 14 days. */
   snoozeCount?: number;
@@ -125,7 +125,7 @@ export const ClientRow = memo(function ClientRow({
               aria-pressed={hot}
               aria-label={hot ? `Unstar ${card.business_name}` : `Star ${card.business_name}`}
               title={hot ? "Starred: always on top" : "Star: always on top of Today"}
-              onClick={() => toggleHot(card.id)}
+              onClick={() => void toggleHot(card.id, hot)}
               className={cn(
                 "inline-flex size-8 items-center justify-center rounded-lg text-base hover:bg-surface-2",
                 hot ? "text-warn" : "text-muted",
