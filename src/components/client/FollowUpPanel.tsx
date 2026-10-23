@@ -9,6 +9,7 @@ import { formatDate, formatDateTime, relativeDay } from "@/lib/format";
 import { useApp } from "../app-context";
 import { TimerPicker } from "../TimerPicker";
 import { Badge, Button, cn, Field, Input } from "../ui";
+import { AddToCalendar } from "../winback/AddToCalendar";
 import { dueTone } from "./logic";
 import { Muted, Panel, useNowMs, useRun } from "./parts";
 
@@ -70,6 +71,10 @@ export function FollowUpPanel({ detail, className }: { detail: ClientDetail; cla
           </Badge>
           <span className="font-medium">{formatDateTime(card.scheduled_call_at, timezone)}</span>
           <CancelCall clientId={card.id} />
+          <AddToCalendar
+            card={card}
+            topic={timers.find((t) => t.kind === "scheduled_call")?.note || undefined}
+          />
         </p>
       ) : null}
     </Panel>

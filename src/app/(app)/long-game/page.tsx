@@ -1,5 +1,5 @@
 import { ClientRow } from "@/components/ClientRow";
-import { EmptyState, SectionTitle } from "@/components/ui";
+import { EmptyState, LinkButton, SectionTitle } from "@/components/ui";
 import { requireSession } from "@/lib/auth/server";
 import { listCards, userContext } from "@/lib/data/queries";
 import { groupLongGame } from "@/lib/data/views";
@@ -16,12 +16,15 @@ export default async function LongGamePage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight">Long game</h1>
-        <p className="text-sm text-muted">
-          {total} client{total === 1 ? "" : "s"} parked more than a year out. They aren&apos;t gone
-          — each one comes back on its date.
-        </p>
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight">Long game</h1>
+          <p className="text-sm text-muted">
+            {total} client{total === 1 ? "" : "s"} parked more than a year out. They aren&apos;t
+            gone — each one comes back on its date.
+          </p>
+        </div>
+        <LinkButton href="/winback">Win-back: who&apos;s due now →</LinkButton>
       </div>
       {groups.length === 0 ? (
         <EmptyState title="Nothing parked beyond a year">

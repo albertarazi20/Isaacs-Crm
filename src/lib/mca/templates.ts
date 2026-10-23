@@ -10,18 +10,18 @@ export interface TemplateArgs {
 const HONORIFIC = /^(dr|mr|mrs|ms|miss|mx|prof)\.?$/i;
 
 /** What to call the merchant: "Mike", or "Dr. Weiss" — never just "Dr.". */
-function greetingName(full: string): string {
+export function greetingName(full: string): string {
   const [first = "", ...rest] = full.trim().split(/\s+/);
   if (HONORIFIC.test(first) && rest.length > 0) return `${first} ${rest[rest.length - 1]}`;
   return first;
 }
 
-function firstName(full: string): string {
+export function firstName(full: string): string {
   return full.trim().split(/\s+/)[0] ?? "";
 }
 
 /** "isaac" → "Isaac". Names typed in all lowercase (an email prefix, a fast typist) shouldn't go out that way. */
-function tidy(name: string): string {
+export function tidy(name: string): string {
   return name === name.toLowerCase()
     ? name.replace(/(^|\s)(\p{L})/gu, (_, sp: string, c: string) => sp + c.toUpperCase())
     : name;
@@ -95,9 +95,105 @@ export function emailSubject(a: TemplateArgs): string {
   return subjects[TONE[a.stage]];
 }
 
-export function emailBody(a: TemplateArgs): string {
+export function emailBody(a: TemplateArgs, opts: { signOff?: boolean } = {}): string {
   const name = greetingName(a.contactName);
   const me = tidy(firstName(a.senderName)) || "Isaac";
   const line = LINES[TONE[a.stage]](name ? `Hi ${name},\n\n` : "Hi,\n\n", a.businessName, me);
+  // The email dialog adds the signature itself, so it asks for the body without the "Thanks, Name" ending.
+  if (opts.signOff === false) return line;
   return `${line}\n\nThanks,\n${tidy(a.senderName.trim()) || "Isaac"}`;
+}
+
+// ---------------------------------------------------------------------------------------------
+// Win-back: a first text to a merchant who said no, went quiet, was declined or funded elsewhere.
+
+/** What the shop knows about a lost deal's competing offer. Everything but the funder may be missing. */
+export interface WinbackOffer {
+  funderName: string;
+  factorRate: number | null;
+  termDays: number | null;
+  offeredOn: string | null;
+  /** True when this is the offer the merchant took ("Lost deal" logs it that way). */
+  won: boolean;
+}
+
+export interface WinbackArgs {
+  contactName: string;
+  businessName: string;
+  stage: StageKey;
+  senderName: string;
+  /** Their latest ask in cents, when known. */
+  wantedAmountCents?: number | null;
+  /** Lost deals only: what the competitor offered. */
+  offer?: WinbackOffer | null;
+  /** Isaac's today, "YYYY-MM-DD". */
+  today: string;
+}
+
+/** 1.42, 1.4 → "1.40", 1.345. */
+export function factorText(f: number): string {
+  const s = f.toFixed(3);
+  return s.endsWith("0") ? s.slice(0, -1) : s;
+}
+
+const dollars = (cents: number): string => `$${Math.round(cents / 100).toLocaleString("en-US")}`;
+
+/** How far through its term a competitor's advance should be (0 to 1+), or null when we can't tell. */
+export function offerProgress(offer: WinbackOffer, today: string): number | null {
+  if (!offer.offeredOn || !offer.termDays || offer.termDays <= 0) return null;
+  const from = Date.parse(`${offer.offeredOn}T00:00:00Z`);
+  const to = Date.parse(`${today}T00:00:00Z`);
+  if (Number.isNaN(from) || Number.isNaN(to)) return null;
+  return (to - from) / 86_400_000 / offer.termDays;
+}
+
+/**
+ * A reason-aware win-back text. It only says what the system knows and hedges the rest ("may", "should"):
+ * we never claim a merchant's revenue grew or that an advance is half paid when we haven't checked.
+ */
+export function winbackText(a: WinbackArgs): string {
+  const name = greetingName(a.contactName);
+  const me = tidy(firstName(a.senderName)) || "Isaac";
+  const hi = name ? `Hey ${name}, ` : "Hey, ";
+  const opener = `${hi}it's ${me}. `;
+  const biz = a.businessName;
+
+  switch (a.stage) {
+    case "lost": {
+      const o = a.offer;
+      if (!o) {
+        return `${opener}Your advance with the other funder may be about half paid by now — want me to look at a renewal elsewhere?`;
+      }
+      const rival = o.factorRate
+        ? `${o.funderName}'s ${factorText(o.factorRate)} advance`
+        : `${o.funderName}'s advance`;
+      if (!o.won) {
+        // A quote we logged, not a deal we know they signed.
+        return `${opener}If you went with ${rival}, it may be about half paid by now — want me to look at a renewal elsewhere?`;
+      }
+      const progress = offerProgress(o, a.today);
+      if (progress === null) {
+        return `${opener}${rival} may be about half paid by now — want me to look at a renewal elsewhere?`;
+      }
+      if (progress >= 0.9) {
+        return `${opener}${rival} should be close to paid off by now — want me to look at a renewal elsewhere?`;
+      }
+      if (progress >= 0.4) {
+        return `${opener}${rival} should be about half paid by now — want me to look at a renewal elsewhere?`;
+      }
+      return `${opener}${rival} may still have a way to go, but if you'd like a second look at better terms for ${biz}, I'm glad to run fresh numbers.`;
+    }
+    case "declined": {
+      const ask = a.wantedAmountCents ? ` your ${dollars(a.wantedAmountCents)} request` : "";
+      return `${opener}Your revenue may have grown since we last looked at ${biz} — want me to resubmit${ask}?`;
+    }
+    case "killed":
+      return `${opener}We put ${biz} on hold a while back. If funding is back on your radar, I'm glad to run fresh numbers.`;
+    case "not_interested":
+      return `${opener}No pressure at all — just checking in in case things have changed for ${biz}. If you ever want fresh numbers, just say the word.`;
+    case "written_off":
+      return `${opener}I hope business is treating you better. If you'd like to talk about where things stand, or what funding could look like going forward, I'm glad to help.`;
+    default:
+      return `${opener}Been a while — still looking for funding? Glad to run fresh numbers for ${biz}.`;
+  }
 }

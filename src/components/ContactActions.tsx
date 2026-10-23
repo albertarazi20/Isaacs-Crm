@@ -33,6 +33,18 @@ import { useApp } from "./app-context";
 import { Dialog, useCall, useToast } from "./overlay";
 import { TimerPicker } from "./TimerPicker";
 import { Button, buttonClass, cn, Field, Input, Textarea } from "./ui";
+import { HintChips } from "./winback/HintChips";
+import { SnippetPicker, type PickedSnippet } from "./winback/SnippetPicker";
+import { useMessagingContext } from "./winback/useMessagingContext";
+import { recordTextSent, useTextCount } from "./winback/useTextCount";
+import {
+  appendSignature,
+  describeLeftovers,
+  effectiveSignature,
+  leftoverFields,
+  mergeValues,
+} from "@/lib/messaging/merge";
+import { textCountWarning } from "@/lib/messaging/textCounter";
 
 export interface ContactTarget {
   id: string;
@@ -101,9 +113,12 @@ async function copy(text: string): Promise<boolean> {
 export function ContactActions({
   client,
   size = "sm",
+  suggestedText,
 }: {
   client: ContactTarget;
   size?: "sm" | "md";
+  /** A ready-made message for the Text dialog to start from (win-back uses a reason-aware one). */
+  suggestedText?: string;
 }) {
   const { senderName } = useApp();
   const toast = useToast();
@@ -182,6 +197,7 @@ export function ContactActions({
         onClose={() => setTextOpen(false)}
         client={client}
         senderName={senderName}
+        suggestedText={suggestedText}
       />
       <EmailDialog
         open={emailOpen}
@@ -201,6 +217,7 @@ function TextDialog({
   onClose: () => void;
   client: ContactTarget;
   senderName: string;
+  suggestedText?: string;
 }) {
   // The body mounts fresh on every open, so its state always starts from the template.
   return open ? <TextDialogBody {...rest} /> : null;
@@ -210,25 +227,45 @@ function TextDialogBody({
   onClose,
   client,
   senderName,
+  suggestedText,
 }: {
   onClose: () => void;
   client: ContactTarget;
   senderName: string;
+  suggestedText?: string;
 }) {
   const toast = useToast();
+  const { today } = useApp();
   const e164 = normalizeUS(client.phone);
   const quiet = quietHours(client.state ?? "");
-  const [message, setMessage] = useState(() =>
-    textTemplate({
-      contactName: client.contact_name,
-      businessName: client.business_name,
-      stage: client.stage,
-      senderName,
-    }),
+  const [message, setMessage] = useState(
+    () =>
+      suggestedText ??
+      textTemplate({
+        contactName: client.contact_name,
+        businessName: client.business_name,
+        stage: client.stage,
+        senderName,
+      }),
   );
+  const ctx = useMessagingContext(client.id);
+  const textsToday = useTextCount(today);
+  const countWarning = textCountWarning(textsToday);
   if (!e164) return null;
+  const values = mergeValues({
+    contactName: client.contact_name,
+    businessName: client.business_name,
+    senderName,
+    applicationLink: ctx?.applicationLink ?? "",
+    wantedAmountCents: ctx?.wantedAmountCents ?? null,
+    bestOffer: ctx?.bestOffer ?? null,
+  });
+  const leftover = describeLeftovers(message, {
+    applicationLinkSet: Boolean(ctx?.applicationLink),
+  });
 
   const sent = () => {
+    recordTextSent(today);
     setPending({
       clientId: client.id,
       stage: client.stage,
@@ -262,9 +299,35 @@ function TextDialogBody({
             9 PM are unwelcome and can be a compliance problem — consider waiting.
           </p>
         ) : null}
-        <Field label="Message">
-          <Textarea value={message} onChange={(e) => setMessage(e.target.value)} rows={5} />
-        </Field>
+        <div className="space-y-1">
+          <div className="flex items-center justify-between gap-2">
+            <label htmlFor="text-message" className="text-xs font-medium text-muted">
+              Message
+            </label>
+            <SnippetPicker
+              kind="text"
+              ctx={ctx}
+              values={values}
+              onPick={(p: PickedSnippet) => setMessage(p.body)}
+            />
+          </div>
+          <Textarea
+            id="text-message"
+            value={message}
+            onChange={(e) => setMessage(e.target.value)}
+            rows={5}
+          />
+          {leftover ? (
+            <p role="alert" className="rounded-lg bg-warn-soft p-2 text-sm text-warn">
+              {leftover}
+            </p>
+          ) : null}
+        </div>
+        {countWarning ? (
+          <p role="note" className="rounded-lg bg-warn-soft p-3 text-sm text-warn">
+            {countWarning}
+          </p>
+        ) : null}
         <div className="flex flex-wrap gap-2">
           <a className={buttonClass("secondary", "md")} href={smsHref(e164, message)}>
             Open in Messages (phone)
@@ -334,15 +397,43 @@ function EmailDialogBody({
     senderName,
   };
   const [subject, setSubject] = useState(() => emailSubject(template));
-  const [body, setBody] = useState(() => emailBody(template));
+  // No "Thanks, Name" at the end of the starting text: the signature below it does that job.
+  const [body, setBody] = useState(() => emailBody(template, { signOff: false }));
   const [next, setNext] = useState<ISODate>(() => suggestAfterEmail(today, client.stage));
   const [busy, setBusy] = useState(false);
   const [reconnect, setReconnect] = useState(gmailNeedsReconnect);
+  const ctx = useMessagingContext(client.id);
   const to = client.email.trim();
+  const values = mergeValues({
+    contactName: client.contact_name,
+    businessName: client.business_name,
+    senderName,
+    applicationLink: ctx?.applicationLink ?? "",
+    wantedAmountCents: ctx?.wantedAmountCents ?? null,
+    bestOffer: ctx?.bestOffer ?? null,
+  });
+  const signature = effectiveSignature(ctx?.signature ?? "", senderName);
+  // What actually goes out: the message with the signature on the end, once.
+  const fullBody = appendSignature(body, signature);
+  const leftoverText = `${subject}\n${body}`;
+  const leftover = describeLeftovers(leftoverText, {
+    applicationLinkSet: Boolean(ctx?.applicationLink),
+  });
+  // Until the signature has loaded the email would go out with the stand-in one, so wait for it.
+  const loading = ctx === null;
+  const blocked = loading || leftoverFields(leftoverText).length > 0;
+  const blockedReason = loading
+    ? "Loading your signature…"
+    : "Fill in the highlighted fields first";
 
   async function send() {
     setBusy(true);
-    const res = await sendEmailAction({ clientId: client.id, subject, body, nextDueOn: next });
+    const res = await sendEmailAction({
+      clientId: client.id,
+      subject,
+      body: fullBody,
+      nextDueOn: next,
+    });
     setBusy(false);
     if (!res.ok && res.reconnect) setReconnect(true);
     const card = await call(
@@ -363,10 +454,18 @@ function EmailDialogBody({
           <Button variant="ghost" onClick={onClose}>
             Cancel
           </Button>
-          {to ? (
+          {to && blocked ? (
+            <span
+              aria-disabled="true"
+              title={blockedReason}
+              className={buttonClass("secondary", "md", "pointer-events-none opacity-50")}
+            >
+              Open in Gmail instead
+            </span>
+          ) : to ? (
             <a
               className={buttonClass("secondary", "md")}
-              href={gmailComposeHref({ to, subject, body })}
+              href={gmailComposeHref({ to, subject, body: fullBody })}
               target="_blank"
               rel="noopener noreferrer"
               onClick={() => {
@@ -384,7 +483,12 @@ function EmailDialogBody({
             </a>
           ) : null}
           {gmailConnected && !reconnect ? (
-            <Button variant="primary" disabled={busy || !to} onClick={() => void send()}>
+            <Button
+              variant="primary"
+              disabled={busy || !to || blocked}
+              title={blocked ? blockedReason : undefined}
+              onClick={() => void send()}
+            >
               {busy ? "Sending…" : "Send from my Gmail"}
             </Button>
           ) : (
@@ -403,9 +507,44 @@ function EmailDialogBody({
           <Field label="Subject">
             <Input value={subject} onChange={(e) => setSubject(e.target.value)} />
           </Field>
-          <Field label="Message">
-            <Textarea rows={8} value={body} onChange={(e) => setBody(e.target.value)} />
-          </Field>
+          <div className="space-y-1">
+            <div className="flex items-center justify-between gap-2">
+              <label htmlFor="email-message" className="text-xs font-medium text-muted">
+                Message
+              </label>
+              <SnippetPicker
+                kind="email"
+                ctx={ctx}
+                values={values}
+                onPick={(p: PickedSnippet) => {
+                  setBody(p.body);
+                  if (p.subject !== null) setSubject(p.subject);
+                }}
+              />
+            </div>
+            <Textarea
+              id="email-message"
+              rows={8}
+              value={body}
+              onChange={(e) => setBody(e.target.value)}
+            />
+            {leftover ? (
+              <p role="alert" className="rounded-lg bg-warn-soft p-2 text-sm text-warn">
+                {leftover}
+              </p>
+            ) : null}
+          </div>
+          <div className="rounded-lg border border-dashed border-border p-3">
+            <p className="text-xs font-medium text-muted">
+              Signature (added to the end automatically)
+            </p>
+            <p className="mt-1 text-sm whitespace-pre-wrap" data-testid="email-signature">
+              {signature}
+            </p>
+            <Link className="mt-1 inline-block text-xs text-accent underline" href="/settings">
+              Change it in Settings
+            </Link>
+          </div>
           <Field label="Follow up again">
             <TimerPicker value={next} onChange={setNext} today={today} />
           </Field>
@@ -533,6 +672,17 @@ export function PendingTouchPrompt() {
         <Field label="Notes (what he said, what he wants)">
           <Textarea rows={4} value={note} onChange={(e) => setNote(e.target.value)} autoFocus />
         </Field>
+        <HintChips
+          note={note}
+          today={today}
+          stage={pending?.stage}
+          selected={pickedDate ? next : null}
+          heading="Follow up on"
+          onPick={(d) => {
+            setNext(d);
+            setPickedDate(true);
+          }}
+        />
         <Field label="Follow up again">
           <TimerPicker
             value={next}

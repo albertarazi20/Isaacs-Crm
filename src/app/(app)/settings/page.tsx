@@ -1,7 +1,9 @@
 import { SettingsPanels } from "@/components/SettingsPanels";
+import { MessagesCard } from "@/components/winback/MessagesCard";
 import { requireSession } from "@/lib/auth/server";
 import { db } from "@/lib/db";
 import { env, googleConfigured } from "@/lib/env";
+import { getMessageSettings, listSnippets } from "@/lib/messaging/queries";
 import { gmailStatus } from "@/lib/system/gmail";
 
 const NOTICES: Record<string, { tone: "good" | "bad"; text: string }> = {
@@ -41,6 +43,10 @@ export default async function SettingsPage({
     return rows[0];
   });
   const gmail = await gmailStatus(session.userId);
+  const messages = await db.withUser(session.userId, async (q) => ({
+    settings: await getMessageSettings(q),
+    snippets: await listSnippets(q),
+  }));
   const e = env();
   const key = sp.gmail ?? sp.error ?? "";
   const notice = Object.hasOwn(NOTICES, key) ? NOTICES[key] : undefined;
@@ -71,6 +77,7 @@ export default async function SettingsPage({
         }}
         resendReady={Boolean(e.RESEND_API_KEY && e.RESEND_FROM)}
       />
+      <MessagesCard initial={messages.settings} initialSnippets={messages.snippets} />
     </div>
   );
 }

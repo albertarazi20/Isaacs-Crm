@@ -1,13 +1,15 @@
 "use client";
 
 import { useState } from "react";
-import { addNoteAction } from "@/app/actions";
+import { addNoteAction, setFollowUpAction } from "@/app/actions";
 import type { ActivityRow, ClientCard } from "@/lib/data/types";
-import { timeAgo } from "@/lib/format";
+import { formatDate, timeAgo } from "@/lib/format";
+import type { ISODate } from "@/lib/mca/dates";
 import { stageDef } from "@/lib/mca/stages";
 import { outcomeLabel } from "@/lib/mca/touch";
 import { useApp } from "../app-context";
 import { Badge, Button, cn, EmptyState, Textarea } from "../ui";
+import { HintChips } from "../winback/HintChips";
 import {
   activityBody,
   countByFilter,
@@ -50,7 +52,7 @@ export function Timeline({ card, activities }: { card: ClientCard; activities: A
   return (
     <section aria-label="Notes and history" className="space-y-4">
       <LastContact card={card} activities={activities} />
-      <NoteComposer clientId={card.id} />
+      <NoteComposer card={card} />
       <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label="Show">
         {TIMELINE_FILTERS.map((f) => (
           <button
@@ -140,18 +142,39 @@ function LastContact({ card, activities }: { card: ClientCard; activities: Activ
   );
 }
 
-function NoteComposer({ clientId }: { clientId: string }) {
+function NoteComposer({ card }: { card: ClientCard }) {
+  const clientId = card.id;
+  const { today } = useApp();
   const run = useRun();
   const [body, setBody] = useState("");
   const [busy, setBusy] = useState(false);
+  // The note that was just saved, so its date suggestions stay tappable after the box clears.
+  const [savedNote, setSavedNote] = useState("");
+  const [applied, setApplied] = useState<ISODate | null>(null);
+  const [settingDate, setSettingDate] = useState(false);
 
   async function save() {
     if (busy || !body.trim()) return;
     setBusy(true);
     const ok = await run(addNoteAction({ clientId, body }), "Note saved");
     setBusy(false);
-    if (ok) setBody("");
+    if (ok) {
+      setSavedNote(body);
+      setBody("");
+    }
   }
+
+  async function setDate(dueOn: ISODate) {
+    setSettingDate(true);
+    const ok = await run(
+      setFollowUpAction({ clientId, dueOn }),
+      `Follow-up set for ${formatDate(dueOn, today)}`,
+    );
+    setSettingDate(false);
+    if (ok) setApplied(dueOn);
+  }
+
+  const hintSource = body.trim() ? body : savedNote;
 
   return (
     <form
@@ -184,6 +207,20 @@ function NoteComposer({ clientId }: { clientId: string }) {
           {busy ? "Saving…" : "Save note"}
         </Button>
       </div>
+      {hintSource.trim() ? (
+        <div className="mt-2 border-t border-border pt-2">
+          <HintChips
+            note={hintSource}
+            today={today}
+            stage={card.stage}
+            selected={applied}
+            alreadySet={card.next_due_on}
+            busy={settingDate}
+            heading={body.trim() ? "Set the follow-up to" : "From the note you just saved:"}
+            onPick={setDate}
+          />
+        </div>
+      ) : null}
     </form>
   );
 }
