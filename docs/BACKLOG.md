@@ -67,7 +67,7 @@ new it finds. `[x]` done and tested · `[~]` in progress · `[ ]` queued · `[!]
 
 - [x] Instant "new lead" email alert (capped 20/day) — push notifications still to do; delivery needs the Resend account
 - [ ] Web push notifications for the installed PWA (needs a phone to prove)
-- [ ] Merge duplicate merchants (move notes, timers, advances onto one card)
+- [x] Merge duplicate merchants (`merge_clients`; from Edit details when the phone or name matches another card)
 - [ ] Cross-device ★ (a `clients.hot` column; today the star is per browser)
 - [ ] Stips upload link texted to the merchant [!] needs a storage decision (private bucket) from the owner
 - [x] A true backup: full export incl. advances, offers, submissions, stips — and a restore that reads it back (`docs/BACKUP.md`)

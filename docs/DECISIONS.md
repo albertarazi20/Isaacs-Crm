@@ -325,3 +325,28 @@ page the Clients list and slim the card payload. Reports and win-back stay fast 
 - Not changed (recorded in BACKLOG): A-11 (three definitions of "when to call about a renewal"), A-13 (a trashed
   merchant's advance can still be edited from a stale tab), A-14, A-17 (RLS keyed on a setting the app role can
   change — the app role never receives user input as SQL), A-19..A-22.
+
+## 2026-10-23 — fourth review (docs/REVIEW-4.md) and the QA pass (docs/ISSUES.md): what changed
+
+- **A drag moves only the follow-up.** Dragging a funded merchant to "36 months" no longer pushes his renewal call or
+  check-in out (`set_follow_up(..., keep_calls)`); the toast says which call stayed and has Undo. Snooze still pushes
+  them, because there he chose a date on purpose.
+- **"Today" in the database is the user's day** (`app.local_today()`, migrations 0160 and 0210), not the server's UTC
+  date. The one deliberate exception is the lead-token daily cap, which is a UTC-day count.
+- **Commission is never guessed.** In both funding dialogs a bare "6" is a question ("6 points or $6?"); "6%" is
+  points of the advance, "$3k" is dollars. Flipping the Dollars/Points switch can't change the stored amount.
+- **Phone call scheduled asks when the call is** (or lets him move the card without a time). Cancelling a booked call
+  puts the merchant back in the stage he was in.
+- **Merging duplicates** (`merge_clients`, 0190) keeps one card and moves everything onto it. A stop wins (either card
+  do-not-contact ⇒ merged card do-not-contact). It is reachable from Edit details when the new phone or name matches
+  another card. It deletes the other card, so the dialog says so and asks twice.
+- **Removing the accepted offer** brings the offers it had turned down back (`remove_offer`). Undoing an acceptance
+  that replaced an earlier one reopens both; it does not re-accept the first (choosing which one is his call).
+- **A trashed merchant is frozen** against edits and direct deletes of his advance, submissions and offers. Purge
+  still cascades.
+- **Backup is one SQL statement** (one snapshot), restores time zone/signature/link/digest hour with the rows, and the
+  restore script refuses a non-empty account or another account's file without `--other-account`.
+- **A paid-in-full do-not-contact merchant stays on the Renewals list but is never "hot".** (Review-4 C-14 asked; the
+  buttons are disabled for him either way.)
+- Not changed: C-6 older-backup column handling is fixed, but backups are still a version-1 file — a schema change that
+  renames or drops a column needs a restore note in `docs/BACKUP.md`.
