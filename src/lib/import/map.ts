@@ -14,6 +14,7 @@ export const IMPORT_FIELDS = [
   "notes",
   "stage",
   "followUpOn",
+  "source",
 ] as const;
 export type ImportField = (typeof IMPORT_FIELDS)[number];
 
@@ -28,6 +29,7 @@ export const FIELD_LABELS: Record<ImportField, string> = {
   notes: "Notes",
   stage: "Status / stage",
   followUpOn: "Follow-up date",
+  source: "Where they came from",
 };
 
 const SYNONYMS: Record<ImportField, string[]> = {
@@ -80,6 +82,18 @@ const SYNONYMS: Record<ImportField, string[]> = {
     "callback",
     "call back",
     "next contact",
+  ],
+  source: [
+    "source",
+    "lead source",
+    "origin",
+    "campaign",
+    "list",
+    "list name",
+    "vendor",
+    "lead vendor",
+    "referral source",
+    "referred by",
   ],
 };
 
@@ -200,6 +214,8 @@ export interface ImportRow {
   notes: string;
   stage: StageKey;
   followUpOn: ISODate;
+  /** Where the merchant came from: the sheet's column, else the list name typed in the wizard. */
+  source: string;
   /** Set when the sheet's status couldn't be imported as-is (e.g. "Funded"), so the note says so. */
   statusNote: string;
 }
@@ -222,6 +238,8 @@ export interface BuildOptions {
   today: ISODate;
   /** Imported rows with no date are spread over this many days so Isaac isn't buried on day one. */
   spreadDays: number;
+  /** Used for rows whose sheet has no source of its own — e.g. "Lead vendor, Oct 2026". */
+  defaultSource?: string;
 }
 
 /** Turn parsed CSV records (header row excluded) into validated rows. Never throws on bad data — it reports it. */
@@ -311,6 +329,7 @@ export function buildRows(
       notes: get(r, "notes"),
       stage: stage ?? "name_in",
       followUpOn,
+      source: get(r, "source") || (opts.defaultSource ?? "").trim(),
       statusNote,
     });
   });

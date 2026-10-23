@@ -153,6 +153,22 @@ describe("importing clients", () => {
       /2,000/,
     );
   });
+  it("stores each merchant's source, and says Imported when there is none", async () => {
+    await run(a, [
+      row({ businessName: "Sourced Co", phone: "3055559001", source: "Lead vendor Oct" }),
+      row({ businessName: "Unsourced Co", phone: "3055559002" }),
+    ]);
+    const got = (
+      await t.pool.query(
+        "select business_name, source from clients where user_id = $1 and business_name in ('Sourced Co','Unsourced Co') order by business_name",
+        [a],
+      )
+    ).rows;
+    expect(got).toEqual([
+      { business_name: "Sourced Co", source: "Lead vendor Oct" },
+      { business_name: "Unsourced Co", source: "Imported" },
+    ]);
+  });
   it("keeps each user's import to themselves", async () => {
     expect(
       (

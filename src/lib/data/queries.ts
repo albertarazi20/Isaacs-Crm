@@ -149,3 +149,17 @@ export async function listTrashed(q: Db): Promise<TrashedClient[]> {
       order by t.trashed_at desc`,
   );
 }
+
+/** The sources already in use, most used first. Trash is left out. */
+export async function listSources(q: Db): Promise<string[]> {
+  const { rows } = await q.query<{ source: string }>(
+    `select min(c.source) as source
+       from clients c
+      where c.source <> '' and c.source <> 'Imported'
+        and not exists (select 1 from trashed_clients t where t.client_id = c.id)
+      group by lower(btrim(c.source))
+      order by count(*) desc, lower(btrim(c.source))
+      limit 40`,
+  );
+  return rows.map((r) => r.source);
+}

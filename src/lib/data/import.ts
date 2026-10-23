@@ -56,7 +56,7 @@ export async function importClients(
         stage: row.stage,
         followUpOn: row.followUpOn,
         wantedAmount: row.wantedAmount,
-        source: "Imported",
+        source: row.source || "Imported",
       });
       const card = await createClient(q, input, ctx);
       const note = [row.statusNote, row.notes].filter(Boolean).join("\n");

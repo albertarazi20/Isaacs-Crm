@@ -279,6 +279,7 @@ export const importRowSchema = z.object({
     .enum(STAGE_KEYS)
     .refine((s) => s !== "funded", "Funded clients can't be imported without terms"),
   followUpOn: isoDate,
+  source: line(100).default(""),
   statusNote: line(200).default(""),
 });
 export type ImportRowInput = z.output<typeof importRowSchema>;

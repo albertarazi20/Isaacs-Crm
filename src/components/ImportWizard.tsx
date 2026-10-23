@@ -15,7 +15,7 @@ import { stageDef } from "@/lib/mca/stages";
 import { formatDate } from "@/lib/format";
 import { useApp } from "./app-context";
 import { useCall, useToast } from "./overlay";
-import { Badge, Button, Card, Field, Select, Textarea } from "./ui";
+import { Badge, Button, Card, Field, Input, Select, Textarea } from "./ui";
 
 const SAMPLE =
   "Business,Owner,Phone,Amount,Status,Follow up,Notes\nMike's Pizza,Mike Ross,(305) 555-0101,50k,Interested,,Wants it for payroll";
@@ -29,6 +29,7 @@ export function ImportWizard() {
   const [fileError, setFileError] = useState<string | null>(null);
   const [mapping, setMapping] = useState<Record<ImportField, number | null> | null>(null);
   const [spreadDays, setSpreadDays] = useState(10);
+  const [defaultSource, setDefaultSource] = useState("");
   const [busy, setBusy] = useState(false);
 
   const parsed = useMemo(() => {
@@ -53,9 +54,9 @@ export function ImportWizard() {
   const built = useMemo(
     () =>
       parsed && effective && !parsed.error
-        ? buildRows(parsed.records, effective, { today, spreadDays })
+        ? buildRows(parsed.records, effective, { today, spreadDays, defaultSource })
         : null,
-    [parsed, effective, today, spreadDays],
+    [parsed, effective, today, spreadDays, defaultSource],
   );
 
   async function onFile(file: File | undefined) {
@@ -152,6 +153,18 @@ export function ImportWizard() {
               </Field>
             ))}
           </div>
+          <Field
+            label="Where is this list from?"
+            hint="Applied to rows with no source column. Reports use it to show which lead sources pay."
+          >
+            <Input
+              className="sm:max-w-sm"
+              placeholder="e.g. Lead vendor, Oct 2026"
+              maxLength={100}
+              value={defaultSource}
+              onChange={(e) => setDefaultSource(e.target.value)}
+            />
+          </Field>
           <Field
             label="Rows with no follow-up date get one spread over the next…"
             hint="So you start with a manageable list, not 400 calls due tomorrow."

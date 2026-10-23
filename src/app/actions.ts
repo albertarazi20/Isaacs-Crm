@@ -9,8 +9,9 @@ import { db, type Db } from "@/lib/db";
 import { GmailReconnectError } from "@/lib/email/gmail";
 import { toActionError } from "@/lib/data/errors";
 import { importClients, type ImportResult } from "@/lib/data/import";
+import { mergeSources } from "@/lib/data/sources";
 import * as m from "@/lib/data/mutations";
-import { findDuplicates, userContext, type DuplicateMatch } from "@/lib/data/queries";
+import { findDuplicates, listSources, userContext, type DuplicateMatch } from "@/lib/data/queries";
 import * as s from "@/lib/data/schemas";
 import type { ActionResult, ClientCard, UserContext } from "@/lib/data/types";
 import { env } from "@/lib/env";
@@ -69,6 +70,9 @@ export async function addNoteAction(input: unknown): Promise<ActionResult<null>>
 }
 export async function updateClientAction(input: unknown): Promise<ActionResult<Card>> {
   return run((q) => m.updateClient(q, s.updateClientSchema.parse(input)));
+}
+export async function listSourcesAction(): Promise<ActionResult<string[]>> {
+  return run(async (q) => mergeSources(await listSources(q)));
 }
 export async function trashClientAction(input: unknown): Promise<ActionResult<null>> {
   return run(async (q) => {

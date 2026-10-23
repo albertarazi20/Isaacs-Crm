@@ -42,6 +42,7 @@ export default async function importFlow({ email }) {
     ready,
   );
 
+  await page.getByLabel("Where is this list from?").fill("E2E lead vendor");
   await page.getByRole("button", { name: /^Import 4 clients/ }).click();
   await page.waitForURL("**/clients", { timeout: 10000 });
   const rows = await withDb((db) =>
@@ -54,6 +55,17 @@ export default async function importFlow({ email }) {
     "four clients created",
     rows.length === 4,
     rows.map((r) => `${r.business_name}:${r.stage}`).join(", "),
+  );
+  const sources = await withDb((db) =>
+    db.query(
+      "select distinct c.source from clients c join app_users u on u.id = c.user_id where u.email = $1 and c.business_name in ('Zed''s, Pizza','Zeta Nails','Zulu Auto','Zero Phone Co')",
+      [email],
+    ),
+  ).then((r) => r.rows.map((x) => x.source));
+  check(
+    "the list name typed in the wizard is stored as every merchant's source",
+    sources.length === 1 && sources[0] === "E2E lead vendor",
+    JSON.stringify(sources),
   );
   check(
     "Funded came in as Name in with a note, not as a fake advance",

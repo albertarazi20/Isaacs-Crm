@@ -223,3 +223,39 @@ describe("do-not-contact detection", () => {
     expect(parseStageWord("Not Interested").stage).toBe("not_interested");
   });
 });
+
+describe("where a merchant came from", () => {
+  const header = ["Business", "Phone", "Lead Source"];
+  const opts = { today: TODAY, spreadDays: 3 };
+
+  it("finds a source column under the names lead lists use", () => {
+    for (const name of ["Source", "Lead Source", "Origin", "Campaign", "List Name", "Vendor"]) {
+      const m = guessMapping(["Business", "Phone", name]);
+      expect(m.source, name).toBe(2);
+    }
+  });
+  it("a sheet's own source wins over the list name typed in", () => {
+    const m = guessMapping(header);
+    const { rows } = buildRows(
+      [
+        ["Alpha", "3055550001", "Referral"],
+        ["Beta", "3055550002", ""],
+      ],
+      m,
+      { ...opts, defaultSource: "Vendor Oct 2026" },
+    );
+    expect(rows.map((r) => r.source)).toEqual(["Referral", "Vendor Oct 2026"]);
+  });
+  it("uses the list name for every row when the sheet has no source column", () => {
+    const m = guessMapping(["Business", "Phone"]);
+    const { rows } = buildRows([["Alpha", "3055550001"]], m, {
+      ...opts,
+      defaultSource: "  Vendor Oct 2026 ",
+    });
+    expect(rows[0]?.source).toBe("Vendor Oct 2026");
+  });
+  it("stays blank when there is neither (the writer then says Imported)", () => {
+    const m = guessMapping(["Business", "Phone"]);
+    expect(buildRows([["Alpha", "3055550001"]], m, opts).rows[0]?.source).toBe("");
+  });
+});

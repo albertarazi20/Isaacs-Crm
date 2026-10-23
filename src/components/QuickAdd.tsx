@@ -9,6 +9,7 @@ import { defaultTimers, stageDef, STAGES, type StageKey } from "@/lib/mca/stages
 import type { ISODate } from "@/lib/mca/dates";
 import { useApp } from "./app-context";
 import { Dialog, useCall, useToast } from "./overlay";
+import { SourceInput } from "./SourceInput";
 import { TimerPicker } from "./TimerPicker";
 import { Button, Field, Input, Select } from "./ui";
 
@@ -16,6 +17,23 @@ const START_STAGES = STAGES.filter((s) => s.group === "prospecting" || s.group =
 
 const stageDue = (stage: StageKey, today: ISODate): ISODate =>
   defaultTimers(stage, { today })[0]?.dueOn ?? today;
+
+const SOURCE_KEY = "isaac:lastSource";
+/** Entering a batch from one list? The last source is already filled in. Storage may be blocked. */
+function lastSource(): string {
+  try {
+    return localStorage.getItem(SOURCE_KEY) ?? "";
+  } catch {
+    return "";
+  }
+}
+function rememberSource(source: string): void {
+  try {
+    if (source.trim()) localStorage.setItem(SOURCE_KEY, source.trim());
+  } catch {
+    /* storage blocked — nothing to remember */
+  }
+}
 
 /** Add a client in five seconds: a name and a number is enough. */
 export function QuickAdd() {
@@ -51,12 +69,14 @@ function QuickAddDialog({ onClose }: { onClose: () => void }) {
         phone: values.phone,
         email: values.email,
         wantedAmount: values.wantedAmount,
+        source: values.source,
         stage,
         followUpOn: dueOn,
       }),
     );
     setBusy(false);
     if (!card) return;
+    rememberSource(String(values.source ?? ""));
     onClose();
     toast({
       message: `Added ${card.business_name} — follow up ${formatDate(dueOn, today)}`,
@@ -72,6 +92,7 @@ function QuickAddDialog({ onClose }: { onClose: () => void }) {
       phone: f.get("phone"),
       email: f.get("email"),
       wantedAmount: f.get("wantedAmount"),
+      source: f.get("source"),
     };
     setBusy(true);
     const found = await call(
@@ -128,6 +149,9 @@ function QuickAddDialog({ onClose }: { onClose: () => void }) {
           </Field>
           <Field label="Funding they want">
             <Input name="wantedAmount" placeholder="50k" />
+          </Field>
+          <Field label="Where they came from">
+            <SourceInput name="source" defaultValue={lastSource()} placeholder="Referral" />
           </Field>
         </div>
         <Field label="Stage">

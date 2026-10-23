@@ -10,6 +10,7 @@ import { STAGE_GROUPS, STAGES, TIMER_LABELS } from "@/lib/mca/stages";
 import { formatMoney } from "@/lib/money";
 import { ContactStatusButton } from "./ContactStatus";
 import { ContactActions } from "../ContactActions";
+import { SourceInput } from "../SourceInput";
 import { StageBadge } from "../StageBadge";
 import { useStageMove } from "../stage-move/useStageMove";
 import { useApp } from "../app-context";
@@ -219,7 +220,7 @@ function EditClientDialog({ card, onClose }: { card: ClientDetail["card"]; onClo
           <Input {...bind("state")} />
         </Field>
         <Field label="Source (who sent them)">
-          <Input {...bind("source")} />
+          <SourceInput {...bind("source")} />
         </Field>
         <Field label="Monthly revenue" hint="Like 50k or $75,000">
           <Input {...bind("monthlyRevenue")} inputMode="decimal" />
