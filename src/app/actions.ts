@@ -10,7 +10,7 @@ import { GmailReconnectError } from "@/lib/email/gmail";
 import { toActionError } from "@/lib/data/errors";
 import { importClients, type ImportResult } from "@/lib/data/import";
 import * as m from "@/lib/data/mutations";
-import { findDuplicates, getCard, userContext, type DuplicateMatch } from "@/lib/data/queries";
+import { findDuplicates, userContext, type DuplicateMatch } from "@/lib/data/queries";
 import * as s from "@/lib/data/schemas";
 import type { ActionResult, ClientCard, UserContext } from "@/lib/data/types";
 import { env } from "@/lib/env";
@@ -53,6 +53,9 @@ export async function logTouchAction(input: unknown): Promise<ActionResult<Card>
 }
 export async function scheduleCallAction(input: unknown): Promise<ActionResult<Card>> {
   return run((q, ctx) => m.scheduleCall(q, s.scheduleCallSchema.parse(input), ctx));
+}
+export async function setContactStatusAction(input: unknown): Promise<ActionResult<Card>> {
+  return run((q) => m.setContactStatus(q, s.contactStatusSchema.parse(input)));
 }
 export async function cancelCallAction(input: unknown): Promise<ActionResult<Card>> {
   return run((q) => m.cancelCall(q, s.clientIdSchema.parse(input).clientId));
@@ -132,8 +135,9 @@ export async function sendEmailAction(input: unknown): Promise<ActionResult<Card
   const session = await requireSession();
   try {
     const i = s.emailSchema.parse(input);
-    const client = await db.withUser(session.userId, (q) => getCard(q, i.clientId));
-    if (!client) throw new m.UserError("That client no longer exists");
+    const client = await db.withUser(session.userId, (q) =>
+      m.assertContactAllowed(q, i.clientId, "email"),
+    );
     if (!client.email.trim()) throw new m.UserError("This client has no email address yet");
     await db.withUser(session.userId, (q) => m.assertEmailQuota(q));
     try {

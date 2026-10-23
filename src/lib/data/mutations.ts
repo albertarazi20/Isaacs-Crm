@@ -1,6 +1,7 @@
 import type { Db } from "../db";
 import { dueFromPreset, validateFollowUpDate, type ISODate } from "../mca/dates";
 import type { FundingTerms } from "../mca/funding";
+import { contactAllowed } from "../mca/contact";
 import { defaultTimers, type PlannedTimer, type StageKey } from "../mca/stages";
 import { defaultStips } from "../mca/stips";
 import { suggestNextFollowUp } from "../mca/touch";
@@ -10,6 +11,7 @@ import type { z } from "zod";
 import type {
   askSchema,
   bucketSchema,
+  contactStatusSchema,
   followUpSchema,
   fundingUpdateSchema,
   MoveInput,
@@ -221,7 +223,33 @@ export async function moveToBucket(
   );
 }
 
+/** Server-side backstop: the buttons are disabled in the UI, but "stop" has to mean stop even if one is not. */
+export async function assertContactAllowed(
+  q: Db,
+  clientId: string,
+  kind: "call" | "text" | "email",
+): Promise<ClientCard> {
+  const card = await mustCard(q, clientId);
+  const check = contactAllowed(card.contact_status, kind);
+  if (!check.ok)
+    throw new UserError(`${check.reason} — ${card.business_name} can't be contacted that way`);
+  return card;
+}
+
+export async function setContactStatus(
+  q: Db,
+  input: z.output<typeof contactStatusSchema>,
+): Promise<ClientCard> {
+  await q.query("select * from set_contact_status($1, $2, $3)", [
+    input.clientId,
+    input.status,
+    input.note,
+  ]);
+  return mustCard(q, input.clientId);
+}
+
 export async function logTouch(q: Db, input: TouchInput, ctx: UserContext): Promise<ClientCard> {
+  await assertContactAllowed(q, input.clientId, input.kind);
   const next = input.nextDueOn ?? suggestNextFollowUp(input.outcome ?? null, ctx.today);
   checkDate(next, ctx.today);
   await q.query("select * from log_touch($1, $2, $3, $4, $5)", [

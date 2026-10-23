@@ -71,8 +71,10 @@ export interface TodayView {
 }
 
 export function buildToday(cards: readonly ClientCard[], today: ISODate): TodayView {
+  // A do-not-contact merchant is never on the call list, however their timer reads.
   const due = cards.filter(
-    (c): c is ClientCard & { next_due_on: ISODate } => c.next_due_on !== null,
+    (c): c is ClientCard & { next_due_on: ISODate } =>
+      c.next_due_on !== null && c.contact_status !== "dnc",
   );
   const scheduled = due
     .filter((c) => c.next_due_on === today && c.next_due_kind === "scheduled_call")

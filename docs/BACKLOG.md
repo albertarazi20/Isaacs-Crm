@@ -32,7 +32,7 @@ new it finds. `[x]` done and tested · `[~]` in progress · `[ ]` queued · `[!]
 
 ## 2. Features nobody should have to ask for (approved overnight)
 
-- [ ] **Do-not-contact** flag + consent source/date + quiet hours (hide Text outside 8am–9pm merchant-local); excluded from reminders [R21–22]
+- [x] **Do-not-contact** status (none / no text / no call / no email / DNC): buttons disabled with the reason, server refuses, Today excludes, all timers cancelled; quiet-hours warning by merchant state [R21–22]. Not built: consent source/date, daily text counter
 - [ ] **Funders, submissions, offers-in** — the biggest functional gap: funder list with appetite, per-merchant submissions (sent / stips-requested / approved / declined + reason), offers hang off a submission, Accept pre-fills the Funded dialog, chase timer for a silent funder, fit check [R13]
 - [ ] **Money-first queue + power-dial mode**: rank by dollars at stake, one card at a time, ~3 taps per client [R5, I1]
 - [ ] Commission and earnings view (expected vs received, this month, renewal pipeline $) [R14]

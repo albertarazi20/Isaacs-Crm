@@ -22,6 +22,12 @@ import {
   type TouchKind,
   type TouchOutcome,
 } from "@/lib/mca/touch";
+import {
+  CONTACT_STATUS_LABELS,
+  contactAllowed,
+  quietHours,
+  type ContactStatus,
+} from "@/lib/mca/contact";
 import type { StageKey } from "@/lib/mca/stages";
 import { useApp } from "./app-context";
 import { Dialog, useCall, useToast } from "./overlay";
@@ -35,6 +41,9 @@ export interface ContactTarget {
   phone: string;
   email: string;
   stage: StageKey;
+  /** Where the merchant is — for quiet-hours warnings. Free text ("TX", "Texas"); unknown means no warning. */
+  state?: string;
+  contact_status?: ContactStatus;
 }
 
 const PENDING_KEY = "isaac:pending-touch";
@@ -101,10 +110,20 @@ export function ContactActions({
   const [textOpen, setTextOpen] = useState(false);
   const [emailOpen, setEmailOpen] = useState(false);
   const e164 = normalizeUS(client.phone);
+  const status = client.contact_status ?? "ok";
+  const callOk = contactAllowed(status, "call");
+  const textOk = contactAllowed(status, "text");
+  const emailOk = contactAllowed(status, "email");
 
   function call() {
     if (!e164)
       return toast({ message: "No valid phone number on file for this client", tone: "error" });
+    const quiet = quietHours(client.state ?? "");
+    if (quiet) {
+      toast({
+        message: `It's ${quiet.localTime} where ${client.business_name} is — a call now may not be welcome`,
+      });
+    }
     if (isTouchDevice()) {
       window.location.href = telHref(e164);
     } else {
@@ -128,7 +147,8 @@ export function ContactActions({
         variant="secondary"
         onClick={call}
         aria-label={`Call ${client.business_name}`}
-        disabled={!e164}
+        disabled={!e164 || !callOk.ok}
+        title={callOk.ok ? undefined : callOk.reason}
       >
         📞 Call
       </Button>
@@ -137,7 +157,8 @@ export function ContactActions({
         variant="secondary"
         onClick={() => setTextOpen(true)}
         aria-label={`Text ${client.business_name}`}
-        disabled={!e164}
+        disabled={!e164 || !textOk.ok}
+        title={textOk.ok ? undefined : textOk.reason}
       >
         💬 Text
       </Button>
@@ -146,9 +167,16 @@ export function ContactActions({
         variant="secondary"
         onClick={() => setEmailOpen(true)}
         aria-label={`Email ${client.business_name}`}
+        disabled={!emailOk.ok}
+        title={emailOk.ok ? undefined : emailOk.reason}
       >
         ✉️ Email
       </Button>
+      {status !== "ok" ? (
+        <span className="rounded-md bg-bad-soft px-1.5 py-0.5 text-xs font-semibold whitespace-nowrap text-bad">
+          {CONTACT_STATUS_LABELS[status]}
+        </span>
+      ) : null}
       <TextDialog
         open={textOpen}
         onClose={() => setTextOpen(false)}
@@ -189,6 +217,7 @@ function TextDialogBody({
 }) {
   const toast = useToast();
   const e164 = normalizeUS(client.phone);
+  const quiet = quietHours(client.state ?? "");
   const [message, setMessage] = useState(() =>
     textTemplate({
       contactName: client.contact_name,
@@ -227,6 +256,12 @@ function TextDialogBody({
       }
     >
       <div className="space-y-3">
+        {quiet ? (
+          <p role="note" className="rounded-lg bg-warn-soft p-3 text-sm text-warn">
+            It&apos;s {quiet.localTime} where {client.business_name} is. Texts before 8 AM or after
+            9 PM are unwelcome and can be a compliance problem — consider waiting.
+          </p>
+        ) : null}
         <Field label="Message">
           <Textarea value={message} onChange={(e) => setMessage(e.target.value)} rows={5} />
         </Field>

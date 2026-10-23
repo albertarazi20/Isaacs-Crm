@@ -1,5 +1,6 @@
 import type { ISODate } from "../mca/dates";
 import type { Frequency } from "../mca/funding";
+import type { ContactStatus } from "../mca/contact";
 import type { StageKey, TimerKind } from "../mca/stages";
 import type { StipKind } from "../mca/stips";
 import type { TouchOutcome } from "../mca/touch";
@@ -22,6 +23,9 @@ export interface ClientCard {
   application_received_on: ISODate | null;
   scheduled_call_at: string | null;
   last_contact_at: string | null;
+  contact_status: ContactStatus;
+  contact_status_note: string;
+  contact_status_at: string | null;
   created_at: string;
   next_due_on: ISODate | null;
   next_due_kind: TimerKind | null;

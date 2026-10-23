@@ -294,3 +294,9 @@ export const duplicateCheckSchema = z.object({
   phone: line(40).optional(),
   businessName: line(200).optional(),
 });
+
+export const contactStatusSchema = z.object({
+  clientId: id,
+  status: z.enum(["ok", "no_text", "no_call", "no_email", "dnc"]),
+  note: text(500).default(""),
+});

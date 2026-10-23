@@ -120,3 +120,27 @@ restricted `isaac_app` role with RLS on, `to_jsonb` of every row forced:
 Fine for Isaac's size (hundreds, maybe a couple of thousand). **Past ~3,000 active clients** the board
 should load per-column and the payload should drop columns the board doesn't draw. Do that when the
 number is real, not before.
+
+## 2026-10-23 — "stop" means stop (do-not-contact)
+
+`clients.contact_status`: ok / no_text / no_call / no_email / dnc, set only through `set_contact_status()`.
+The Call/Text/Email buttons are disabled with the reason, AND `logTouch`/`sendEmailAction` refuse on the
+server, so a stale tab can't contact someone who said stop. `dnc` cancels every timer and booked call and
+leaves one review reminder 36 months out (a client always has a next date); Today and the morning email
+skip them. Imports never create a lead from a row marked do-not-call. Texting before 8 AM or after 9 PM
+in the merchant's state shows a warning (a warning, not a block — and unknown states warn about nothing).
+Not built: consent source/date capture and a daily text counter (Google Voice may throttle bulk-looking
+texting; counsel should confirm TCPA posture for one-to-one texts to sole proprietors).
+
+## 2026-10-23 — a booked call is an appointment, not a timer
+
+`scheduled_call` timers survive a stage move and a snooze. A logged _call_ near the booked time closes
+it; a stale one is closed by the next stage move; `cancel_call()` clears it. Snoozing pushes an earlier
+funded check-in/renewal out to the snooze date and NEVER deletes a later renewal call — losing the renewal
+timer silently was the worst bug the review found.
+
+## 2026-10-23 — short timers are business days
+
+Stage defaults of 1–3 days are business days (a Friday "tomorrow" is Monday). 7 and 14 are calendar days.
+After a logged touch, "Reached" suggests the stage's own pace (Contract out stays next business day)
+capped at two weeks, not a flat 14 days.

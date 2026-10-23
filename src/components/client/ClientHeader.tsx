@@ -8,6 +8,7 @@ import { formatDate, relativeDay } from "@/lib/format";
 import { formatUS } from "@/lib/mca/phone";
 import { STAGE_GROUPS, STAGES, TIMER_LABELS } from "@/lib/mca/stages";
 import { formatMoney } from "@/lib/money";
+import { ContactStatusButton } from "./ContactStatus";
 import { ContactActions } from "../ContactActions";
 import { StageBadge } from "../StageBadge";
 import { useStageMove } from "../stage-move/useStageMove";
@@ -158,6 +159,7 @@ export function ClientDetails({ detail }: { detail: ClientDetail }) {
           <Button size="sm" onClick={() => setEditing(true)}>
             Edit details
           </Button>
+          <ContactStatusButton card={card} />
           <Button size="sm" variant="danger" onClick={() => setDeleting(true)}>
             Delete client
           </Button>
