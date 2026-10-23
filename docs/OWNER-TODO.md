@@ -1,0 +1,38 @@
+# Owner to-do — only the things Claude cannot do
+
+Never paste secrets (API keys, client secrets) into chat. Put them in the hosting provider's
+environment variables; Claude only needs to be told they are set.
+
+## A. You, this week (about 2–3 hours of your own time in total)
+
+| #   | Do this                                                                                                                                                                                                                                                                                                                                                            | Time                                | Why it blocks                        | Needed before  |
+| --- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------- | ------------------------------------ | -------------- |
+| 1   | GitHub → Settings → Billing → Actions: look for a spending limit or used-up minutes. CI jobs stopped starting (see PR #1 comment).                                                                                                                                                                                                                                 | 5 min                               | CI can't run                         | anything       |
+| 2   | **Hosting, separate from BH.** New Vercel project for the app and a **new** Postgres project (Supabase or Neon). Do not reuse any BH project or database. Send Claude only the project names.                                                                                                                                                                      | 20–30 min                           | Nothing is live                      | Isaac using it |
+| 3   | **Google Cloud project for Isaac's app:** OAuth consent screen + "Web application" client. Redirect URI `<your-app-url>/api/auth/callback`. Scopes: `openid email profile` and `gmail.send`. Put the client ID and secret into the hosting env vars (`GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`). Also set `ALLOWED_EMAILS` to Isaac's Google address (and yours). | 20–30 min                           | Login and Gmail sending are unproven | Login          |
+| 4   | **Choose the Google mode** (see DECISIONS.md). Testing mode makes Isaac reconnect Gmail every 7 days. Try "In production, unverified" first; if the permission still expires weekly, use verification or a Workspace-internal app.                                                                                                                                 | 5 min decision                      | Reconnect nagging                    | Gmail send     |
+| 5   | **Resend:** account, API key, and verify a sending domain (add the DNS records Resend shows). Use a domain for Isaac's business, **not** a BH domain. Set `RESEND_API_KEY` and `RESEND_FROM`.                                                                                                                                                                      | 15 min + DNS wait (1 hour to 1 day) | Reminder emails are unproven         | Reminders      |
+| 6   | **Hourly trigger:** create a free scheduler job (e.g. cron-job.org) that calls `GET <your-app-url>/api/cron/reminders` every hour with header `Authorization: Bearer <CRON_SECRET>`.                                                                                                                                                                               | 10 min, after #2                    | No reminders without it              | Reminders      |
+
+## B. Isaac (one 30–45 minute call with him)
+
+| #   | Ask him                                                                                                                                                                                                                       | Time   |
+| --- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ |
+| 7   | Read the 23 stage names and default timers in `docs/DOMAIN.md`. Right names? Right order? Right timers?                                                                                                                       | 15 min |
+| 8   | At what % paid down do funders let him renew? (the app assumes **50%**)                                                                                                                                                       | 2 min  |
+| 9   | Does he submit to outside funders, fund himself, or both? Which states does he write business in? (state disclosure rules)                                                                                                    | 5 min  |
+| 10  | Does he have Google Workspace or a regular Gmail? (changes the Google mode in #4) What time zone and what hour does he want the morning email?                                                                                | 3 min  |
+| 11  | His existing clients as a spreadsheet (CSV export from wherever they live now).                                                                                                                                               | 15 min |
+| 12  | **Phone test with Isaac holding his phone:** tap Call and Text on a test client and tell Claude what opens (Messages? Google Voice?). Google gives no official Voice link, so this is the one thing only his phone can prove. | 15 min |
+
+## C. Decisions for Claude to act on (reply yes/no)
+
+- Build **per-funder submissions** (who it was sent to, approved/declined, offer terms)? The "Offers in" stage has nowhere to put offers today. Biggest gap. About 1 session.
+- Build a **do-not-contact flag** that blocks Call/Text/Email and reminders for a merchant? Texting from a personal number has consent rules. About 2 hours.
+- Keep lint/typecheck/format in CI? CLAUDE.md says CI runs "unit tests + a real build. Nothing else." They add about 20 seconds. Say the word and I drop them.
+
+## Rough timeline if you start today
+
+You (A): 2–3 hours of effort, longest wait is the Resend DNS. Isaac (B): one call. After A and B are done, Claude needs
+about 1–2 hours to wire the real keys, prove login, Gmail and reminders end to end, and fix what breaks.
+**Isaac on real clients: about 2–3 days from the day you do A.**
