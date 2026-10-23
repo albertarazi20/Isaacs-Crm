@@ -22,6 +22,16 @@ describe("sensitive data guard", () => {
     ["acct # 123456789012", "account"],
     ["Routing: 021000021", "account"],
     ["account number 00012345678", "account"],
+    ["SSN 123456789", "ssn"],
+    ["his social security number is 123456789", "ssn"],
+    ["social: 123-45-6789", "ssn"],
+    ["EIN 12-3456789", "ssn"],
+    ["tax id 123456789", "ssn"],
+    ["number is 1234 5678 9012 3456", "card"],
+    ["1234-5678-9012-3456", "card"],
+    ["amex 3782 822463 10005", "card"],
+    ["visa 1234567890123456", "card"],
+    ["his card: 1234 5678 9012 345", "card"],
   ])("refuses %j as %s", (text, kind) => {
     expect(findSensitive(text)?.kind).toBe(kind);
   });
@@ -35,6 +45,12 @@ describe("sensitive data guard", () => {
     "2nd position behind Libertas, balance 21,000",
     "Called at 3:30pm, left message, he's at the shop until 5",
     "ref 1234567890123456 (not a card — fails the checksum)",
+    "Order #123456789 shipped, social media lead",
+    "Wants $123,456,789? no — $123,456",
+    "call 305 555 0100 or 3055550100",
+    "Lead list A, Oct 2026 (batch 1234)",
+    "6 months, daily remittance 550",
+    "ID 12345678 on the lease",
   ])("lets ordinary notes through: %j", (text) => {
     expect(findSensitive(text)).toBeNull();
   });
@@ -106,5 +122,30 @@ describe("single-line fields and email addresses", () => {
       "https://app.test",
     );
     expect(r.subject).not.toMatch(/[\r\n]/);
+  });
+});
+
+describe("the guard covers one-line fields too (I-4)", () => {
+  it("refuses an SSN typed into source, terms or a name, in plain words", () => {
+    expect(() =>
+      newClientSchema.parse({ businessName: "X", source: "referred by 123-45-6789" }),
+    ).toThrow(/Social Security/);
+    expect(() =>
+      newClientSchema.parse({ businessName: "X", contactName: "Mike SSN 123456789" }),
+    ).toThrow(/Social Security/);
+    expect(() =>
+      newClientSchema.parse({ businessName: "X", industry: "card 4111 1111 1111 1111" }),
+    ).toThrow(/card number/);
+  });
+  it("lets ordinary one-line values through", () => {
+    const ok = newClientSchema.parse({
+      businessName: "Mike's Pizza #2",
+      contactName: "Mike Ross",
+      phone: "(305) 555-0100",
+      source: "Lead vendor Oct 2026",
+      industry: "Restaurant",
+      state: "TX",
+    });
+    expect(ok.source).toBe("Lead vendor Oct 2026");
   });
 });

@@ -1,3 +1,4 @@
+import { findSensitive } from "../data/sensitive";
 import { addDays, addMonths, parseISODate, toISODate, type ISODate } from "../mca/dates";
 import { normalizeUS } from "../mca/phone";
 import { STAGES, type StageKey } from "../mca/stages";
@@ -278,6 +279,18 @@ export function buildRows(
             .replace(/[\u0000-\u001f\u007f]+/g, " ")
             .replace(/\s+/g, " ")
             .trim();
+    // What the shop never stores (SSNs, card and account numbers) is dropped from the row, not the whole file.
+    const secret = findSensitive(text);
+    if (secret) {
+      if (!cut.has(`${currentLine}:${f}:secret`)) {
+        cut.add(`${currentLine}:${f}:secret`);
+        problems.push({
+          line: currentLine,
+          message: `"${FIELD_LABELS[f]}" looks like it holds a ${secret.kind === "card" ? "card" : secret.kind === "account" ? "bank account" : "Social Security"} number — left out`,
+        });
+      }
+      return "";
+    }
     if (text.length <= max) return text;
     if (!cut.has(`${currentLine}:${f}`)) {
       cut.add(`${currentLine}:${f}`);

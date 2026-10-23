@@ -24,7 +24,12 @@ const line = (max = 200) =>
     .string()
     .trim()
     .max(max)
-    .regex(/^[^\p{Cc}]*$/u, "That field can't contain line breaks or control characters");
+    .regex(/^[^\p{Cc}]*$/u, "That field can't contain line breaks or control characters")
+    // The same guard as notes: an SSN typed into "Source" or "terms" is as stored as one typed into a note.
+    .superRefine((v, ctx) => {
+      const hit = findSensitive(v);
+      if (hit) ctx.addIssue({ code: "custom", message: hit.message });
+    });
 
 const EMAIL = /^[^\s@,;<>"]+@[^\s@,;<>"]+\.[^\s@,;<>"]+$/;
 /** Blank, or exactly one plain address — never "a@b.com,c@d.com". */

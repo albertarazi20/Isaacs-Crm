@@ -293,3 +293,33 @@ describe("values too long for the server are cut, not allowed to sink the whole 
     expect(problems).toEqual([]);
   });
 });
+
+describe("secrets in a sheet are left out of the row, not the whole import", () => {
+  const m = guessMapping(["Business", "Phone", "Notes"]);
+  const opts = { today: TODAY, spreadDays: 3 };
+  it("drops a note holding an SSN and says which line", () => {
+    const { rows, problems } = buildRows(
+      [
+        ["Alpha", "3055550001", "SSN 123-45-6789, wants 50k"],
+        ["Beta", "3055550002", "wants 30k"],
+      ],
+      m,
+      opts,
+    );
+    expect(rows.map((r) => [r.businessName, r.notes])).toEqual([
+      ["Alpha", ""],
+      ["Beta", "wants 30k"],
+    ]);
+    expect(problems).toEqual([
+      { line: 2, message: '"Notes" looks like it holds a Social Security number — left out' },
+    ]);
+  });
+  it("a card number in the business-name column drops the name, so the row is skipped", () => {
+    const { rows, problems } = buildRows([["4111 1111 1111 1111", "3055550003", ""]], m, opts);
+    expect(rows).toEqual([]);
+    expect(problems.map((p) => p.message)).toEqual([
+      '"Business name" looks like it holds a card number — left out',
+      "No business name",
+    ]);
+  });
+});
