@@ -50,7 +50,11 @@ export function getPool(): pg.Pool {
   if (!globalForPool.__isaacPool) {
     const connectionString = process.env.DATABASE_URL;
     if (!connectionString) throw new Error("DATABASE_URL is not set");
-    globalForPool.__isaacPool = new pg.Pool({ connectionString, max: 10 });
+    const pool = new pg.Pool({ connectionString, max: 10 });
+    // An idle connection the server drops (restart, failover) emits 'error'; with no listener Node
+    // would crash the whole process. Log it — pg discards the dead client and the next query reconnects.
+    pool.on("error", (e) => console.error("idle database connection error:", e.message));
+    globalForPool.__isaacPool = pool;
   }
   return globalForPool.__isaacPool;
 }

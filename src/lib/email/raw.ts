@@ -10,6 +10,9 @@ function assertHeaderSafe(name: string, value: string): void {
   if (/[\r\n]/.test(value)) throw new Error(`${name} contains a line break`);
 }
 
+/** One plain address. "a@b.com,c@d.com" would silently email a second person from Isaac's own Gmail. */
+const SINGLE_ADDRESS = /^[^\s@,;<>"]+@[^\s@,;<>"]+\.[^\s@,;<>"]+$/;
+
 function encodeSubject(subject: string): string {
   return /^[\x20-\x7e]*$/.test(subject)
     ? subject
@@ -26,6 +29,7 @@ export function buildRawEmail(m: RawEmail): string {
   })) {
     assertHeaderSafe(k, v);
   }
+  if (!SINGLE_ADDRESS.test(m.to)) throw new Error("to must be exactly one email address");
   const body = Buffer.from(m.text, "utf8")
     .toString("base64")
     .replace(/(.{76})/g, "$1\r\n");

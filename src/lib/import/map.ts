@@ -137,7 +137,7 @@ const STAGE_WORDS: [RegExp, StageKey][] = [
   [/^lost|went (with|elsewhere)|funded elsewhere|competitor/, "lost"],
   [/killed|withdrew|pulled/, "killed"],
   [/dead|no response|ghost/, "dead"],
-  [/not interested|no thanks|do not call|dnc/, "not_interested"],
+  [/not interested|no thanks/, "not_interested"],
 ];
 
 /** Stages that can be imported with no extra data. Funded and default stages need terms, so they can't be. */
@@ -180,6 +180,14 @@ export function parseLooseDate(raw: string): ISODate | null {
   }
 }
 
+/** A status that means "stop contacting this person". Those rows are never imported as leads. */
+const DO_NOT_CONTACT =
+  /\b(do not|don'?t) (call|contact|text|email)\b|\bdnc\b|\bcease\b|\bstop (calling|texting|contacting)\b|\bremove me\b|\bunsubscribe/i;
+
+export function isDoNotContact(raw: string): boolean {
+  return DO_NOT_CONTACT.test(raw);
+}
+
 export interface ImportRow {
   line: number;
   businessName: string;
@@ -206,6 +214,8 @@ export interface BuildResult {
   problems: RowProblem[];
   /** Rows dropped because the same phone appeared earlier in the file. */
   duplicatesInFile: number;
+  /** Rows the sheet marked do-not-call / do-not-contact: never imported, so they can't be texted by a timer. */
+  doNotContact: number;
 }
 
 export interface BuildOptions {
@@ -224,6 +234,7 @@ export function buildRows(
   const problems: RowProblem[] = [];
   const seenPhones = new Set<string>();
   let duplicatesInFile = 0;
+  let doNotContact = 0;
   const get = (r: readonly string[], f: ImportField) =>
     mapping[f] === null ? "" : (r[mapping[f] as number] ?? "").trim();
   const spread = Math.max(1, opts.spreadDays);
@@ -235,6 +246,15 @@ export function buildRows(
       get(r, "businessName") || (mapping.businessName === null ? get(r, "contactName") : "");
     if (!businessName) {
       problems.push({ line, message: "No business name" });
+      return;
+    }
+    const statusRaw = `${get(r, "stage")} ${get(r, "notes")}`;
+    if (isDoNotContact(statusRaw)) {
+      doNotContact += 1;
+      problems.push({
+        line,
+        message: `${businessName} is marked do-not-contact in your sheet — NOT imported`,
+      });
       return;
     }
     const phoneRaw = get(r, "phone");
@@ -294,5 +314,5 @@ export function buildRows(
       statusNote,
     });
   });
-  return { rows, problems, duplicatesInFile };
+  return { rows, problems, duplicatesInFile, doNotContact };
 }

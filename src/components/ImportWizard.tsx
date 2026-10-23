@@ -181,6 +181,9 @@ export function ImportWizard() {
             {built.duplicatesInFile > 0 ? (
               <Badge tone="warn">{built.duplicatesInFile} repeated phone numbers skipped</Badge>
             ) : null}
+            {built.doNotContact > 0 ? (
+              <Badge tone="bad">{built.doNotContact} marked do-not-contact — not imported</Badge>
+            ) : null}
             {built.problems.length > 0 ? (
               <Badge tone="warn">{built.problems.length} to look at</Badge>
             ) : null}

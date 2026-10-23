@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
 import { parseCsv } from "@/lib/import/csv";
-import { buildRows, guessMapping, parseLooseDate, parseStageWord } from "@/lib/import/map";
+import {
+  buildRows,
+  guessMapping,
+  isDoNotContact,
+  parseLooseDate,
+  parseStageWord,
+} from "@/lib/import/map";
 
 const TODAY = "2026-10-23";
 
@@ -176,5 +182,44 @@ describe("building import rows", () => {
     });
     expect(rows[1]?.wantedAmount).toBe("");
     expect(problems[0]?.message).toMatch(/isn't an amount/);
+  });
+
+  it("never imports a do-not-contact row as a lead, and says how many it held back", () => {
+    const { rows, problems, doNotContact } = buildRows(
+      [
+        ["Keep Me", "", "3055550001", "", "Interested", "", ""],
+        ["Stop Me", "", "3055550002", "", "DNC", "", ""],
+        ["Stop Me Too", "", "3055550003", "", "", "", "asked us not to call again - Do Not Call"],
+        ["Also Out", "", "3055550004", "", "Do not contact", "", ""],
+      ],
+      map,
+      opts,
+    );
+    expect(rows.map((r) => r.businessName)).toEqual(["Keep Me"]);
+    expect(doNotContact).toBe(3);
+    expect(problems.filter((p) => /do-not-contact/.test(p.message))).toHaveLength(3);
+  });
+});
+
+describe("do-not-contact detection", () => {
+  it.each([
+    "DNC",
+    "do not call",
+    "Do Not Contact",
+    "don't text me",
+    "STOP CALLING",
+    "unsubscribe",
+    "cease and desist",
+  ])("catches %j", (w) => {
+    expect(isDoNotContact(w)).toBe(true);
+  });
+  it.each(["Interested", "Not interested", "Declined", "called, no answer", "dead", "Funded"])(
+    "leaves %j alone",
+    (w) => {
+      expect(isDoNotContact(w)).toBe(false);
+    },
+  );
+  it("'not interested' is still a normal exit stage", () => {
+    expect(parseStageWord("Not Interested").stage).toBe("not_interested");
   });
 });

@@ -1,11 +1,36 @@
 import { z } from "zod";
+import { findSensitive } from "./sensitive";
 import { STAGE_KEYS } from "../mca/stages";
 import { parseFactor, parseMoney } from "../money";
 
 const isoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Use a YYYY-MM-DD date");
 const localDateTime = z.string().regex(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/, "Pick a date and time");
 const id = z.string().uuid();
-const text = (max = 2000) => z.string().trim().max(max);
+/** Multi-line text (notes, bodies). Refuses SSNs and card/account numbers — see sensitive.ts. */
+const text = (max = 2000) =>
+  z
+    .string()
+    .trim()
+    .max(max)
+    .superRefine((v, ctx) => {
+      const hit = findSensitive(v);
+      if (hit) ctx.addIssue({ code: "custom", message: hit.message });
+    });
+
+/** Single-line field: no line breaks or control characters (they would become email header injection). */
+const line = (max = 200) =>
+  z
+    .string()
+    .trim()
+    .max(max)
+    .regex(/^[^\p{Cc}]*$/u, "That field can't contain line breaks or control characters");
+
+const EMAIL = /^[^\s@,;<>"]+@[^\s@,;<>"]+\.[^\s@,;<>"]+$/;
+/** Blank, or exactly one plain address — never "a@b.com,c@d.com". */
+const emailField = line(200).refine(
+  (v) => v === "" || EMAIL.test(v),
+  "Enter one valid email address",
+);
 const frequency = z.enum(["daily", "weekly", "biweekly", "monthly"]);
 
 const money = z.union([z.string(), z.number()]).transform((v, ctx) => {
@@ -62,13 +87,13 @@ const optInt = z
   });
 
 export const newClientSchema = z.object({
-  businessName: text(200).min(1, "Business name is required"),
-  contactName: text(200).default(""),
-  phone: text(40).default(""),
-  email: text(200).default(""),
-  industry: text(100).default(""),
-  state: text(40).default(""),
-  source: text(100).default(""),
+  businessName: line(200).min(1, "Business name is required"),
+  contactName: line(200).default(""),
+  phone: line(40).default(""),
+  email: emailField.default(""),
+  industry: line(100).default(""),
+  state: line(40).default(""),
+  source: line(100).default(""),
   stage: z
     .enum(STAGE_KEYS)
     .refine((s) => s !== "funded", "Add the client first, then record the funding")
@@ -85,14 +110,14 @@ export const fundingInputSchema = z.object({
   factorRate: factor,
   payment: money,
   frequency,
-  funderName: text(200).default(""),
+  funderName: line(200).default(""),
   positionNo: optInt.optional(),
   termDays: optInt.optional(),
   commission: optMoney.optional(),
 });
 
 export const competitorInputSchema = z.object({
-  funderName: text(200).min(1, "Who was the competitor?"),
+  funderName: line(200).min(1, "Who was the competitor?"),
   amount: optMoney.optional(),
   factorRate: optFactor.optional(),
   payment: optMoney.optional(),
@@ -154,14 +179,14 @@ export const noteSchema = z.object({
 
 export const clientFieldsSchema = z
   .object({
-    businessName: text(200).min(1, "Business name is required"),
-    dba: text(200),
-    contactName: text(200),
-    phone: text(40),
-    email: text(200),
-    industry: text(100),
-    state: text(40),
-    source: text(100),
+    businessName: line(200).min(1, "Business name is required"),
+    dba: line(200),
+    contactName: line(200),
+    phone: line(40),
+    email: emailField,
+    industry: line(100),
+    state: line(40),
+    source: line(100),
     monthlyRevenue: optMoney,
     timeInBusinessMonths: optInt,
     applicationReceivedOn: isoDate.nullable(),
@@ -173,7 +198,7 @@ export type ClientFieldsInput = z.output<typeof clientFieldsSchema>;
 export const askSchema = z.object({
   clientId: id,
   wantedAmount: optMoney,
-  wantedTerms: text().default(""),
+  wantedTerms: line(500).default(""),
   estApproval: optMoney,
   estApprovalNote: text().default(""),
 });
@@ -182,7 +207,7 @@ export const positionSchema = z.object({
   clientId: id,
   id: id.optional(),
   positionNo: z.coerce.number().int().min(1).max(20),
-  funderName: text(200).default(""),
+  funderName: line(200).default(""),
   fundedAmount: optMoney,
   payback: optMoney,
   balance: optMoney,
@@ -195,7 +220,7 @@ export const positionSchema = z.object({
 export const offerSchema = z.object({
   clientId: id,
   id: id.optional(),
-  funderName: text(200).min(1, "Who made the offer?"),
+  funderName: line(200).min(1, "Who made the offer?"),
   amount: optMoney,
   factorRate: optFactor,
   payment: optMoney,
@@ -222,7 +247,7 @@ export const fundingUpdateSchema = z.object({
 
 export const emailSchema = z.object({
   clientId: id,
-  subject: text(200).min(1, "Add a subject"),
+  subject: line(200).min(1, "Add a subject"),
   body: text(10_000).min(1, "Write the email first"),
   nextDueOn: isoDate.optional(),
 });
@@ -243,19 +268,19 @@ export const settingsSchema = z.object({
 
 export const importRowSchema = z.object({
   line: z.number().int().min(1),
-  businessName: text(200).min(1),
-  contactName: text(200).default(""),
-  phone: text(40).default(""),
-  email: text(200).default(""),
-  wantedAmount: text(40).default(""),
-  industry: text(100).default(""),
-  state: text(40).default(""),
+  businessName: line(200).min(1),
+  contactName: line(200).default(""),
+  phone: line(40).default(""),
+  email: emailField.default(""),
+  wantedAmount: line(40).default(""),
+  industry: line(100).default(""),
+  state: line(40).default(""),
   notes: text(5000).default(""),
   stage: z
     .enum(STAGE_KEYS)
     .refine((s) => s !== "funded", "Funded clients can't be imported without terms"),
   followUpOn: isoDate,
-  statusNote: text(200).default(""),
+  statusNote: line(200).default(""),
 });
 export type ImportRowInput = z.output<typeof importRowSchema>;
 
@@ -267,6 +292,6 @@ export const importSchema = z.object({
 });
 
 export const duplicateCheckSchema = z.object({
-  phone: text(40).optional(),
-  businessName: text(200).optional(),
+  phone: line(40).optional(),
+  businessName: line(200).optional(),
 });

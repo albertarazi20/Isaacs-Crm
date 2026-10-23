@@ -129,6 +129,9 @@ export interface CallReminderInput {
 }
 
 /** A short "get ready" email an hour or so before a booked call, with what he needs to say hello properly. */
+/** Subjects go into email headers: strip anything that could break one. */
+const oneLine = (s: string): string => s.replace(/\p{Cc}+/gu, " ").trim();
+
 export function buildCallReminder(c: CallReminderInput, appUrl: string): Omit<Digest, "count"> {
   const href = `${appUrl}/clients/${c.clientId}`;
   const phone = c.phone ? formatUS(c.phone) : "no phone on file";
@@ -140,7 +143,7 @@ export function buildCallReminder(c: CallReminderInput, appUrl: string): Omit<Di
     c.lastCallNote ? `Last call: ${c.lastCallNote}` : "",
   ].filter(Boolean);
   return {
-    subject: `Call at ${c.callTime}: ${c.businessName}`,
+    subject: oneLine(`Call at ${c.callTime}: ${c.businessName}`),
     text: `Call at ${c.callTime} — ${c.businessName} (${c.contactName || "merchant"}), ${phone}\n${facts.join("\n")}${facts.length ? "\n" : ""}\n${href}\n`,
     html: `<div style="font-family:system-ui,sans-serif"><h3>Call at ${esc(c.callTime)}</h3><p><a href="${esc(href)}"><strong>${esc(c.businessName)}</strong></a> — ${esc(
       c.contactName || "merchant",

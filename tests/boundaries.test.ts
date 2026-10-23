@@ -46,3 +46,10 @@ describe("architecture boundaries", () => {
     expect(offenders).toEqual([]);
   });
 });
+
+describe("production safety", () => {
+  it("the connection pool handles idle-connection errors instead of crashing the process", () => {
+    const src = readFileSync(join(SRC, "lib/db/index.ts"), "utf8");
+    expect(src).toMatch(/pool\.on\(\s*"error"/);
+  });
+});
