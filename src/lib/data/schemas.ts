@@ -1,3 +1,4 @@
+import "../zod-setup";
 import { z } from "zod";
 import { findSensitive } from "./sensitive";
 import { STAGE_KEYS } from "../mca/stages";

@@ -1,3 +1,4 @@
+import "../zod-setup";
 import { z } from "zod";
 import { findSensitive } from "../data/sensitive";
 import { MERGE_FIELDS, leftoverFields, isMergeField, splitSubject } from "./merge";

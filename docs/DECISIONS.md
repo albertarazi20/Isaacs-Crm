@@ -234,3 +234,13 @@ disables Send. Note hints are rules, not AI: "call Friday", "after the 15th", "a
 one-tap chips and NEVER change a date without a tap; a note with no date gives nothing. The win-back list excludes
 anyone with a contact limit entirely. The "texts today" counter is per browser — a soft warning, not enforcement.
 The calendar file (.ics) is built by hand and tested for folding, escaping and DST.
+
+## 2026-10-23 — zod runs without eval
+
+Zod compiles object parsers with `new Function` and the production CSP forbids eval, so the browser logged a
+"script-src eval" violation on every page with a form (found by the production-build smoke test: Client page,
+Funders, Settings, the Add-client dialog). Harmless but noisy. `src/lib/zod-setup.ts` sets `jitless` and is the
+first import of every schema file the browser loads; `tests/zod-csp.test.ts` fails if one forgets. The CSP keeps
+`script-src 'self' 'unsafe-inline'` with no `unsafe-eval`. Verified on a real production build: 15 pages, the
+Add-client dialog and the ⌘K palette — zero violations. (Command: `scratchpad/prod-smoke.mjs`, a minted session
+against `next start`; build made in a copy so the dev server's `.next` is untouched.)
