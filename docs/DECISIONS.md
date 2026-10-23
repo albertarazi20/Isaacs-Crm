@@ -244,3 +244,15 @@ first import of every schema file the browser loads; `tests/zod-csp.test.ts` fai
 `script-src 'self' 'unsafe-inline'` with no `unsafe-eval`. Verified on a real production build: 15 pages, the
 Add-client dialog and the ⌘K palette — zero violations. (Command: `scratchpad/prod-smoke.mjs`, a minted session
 against `next start`; build made in a copy so the dev server's `.next` is untouched.)
+
+## 2026-10-23 — instant lead alert and the Monday scorecard (migrations 0100, 0110)
+
+Two more emails on the same claim-then-send table (`reminders_sent`), so a retry or two overlapping hourly runs
+can't send one twice and a failed send rolls its claim back. **New-lead alert:** sent by the lead-intake route
+after the lead is saved; never fails the request; at most 20 a day per user; off when the reminder switch is off;
+proven on a production build with a failing Resend key (lead saved, failure logged, no claim left). **Monday
+scorecard:** the user's own Monday, after their digest hour, covering Mon–Sun before: follow-ups done on time /
+late / pushed back / overdue (same definitions as Reports), merchants added, advances funded, commission
+received, and the five biggest overdue deals to start with. Facts only — no targets, no scolding. Gathered
+through row-level security (`withUser`), trashed merchants excluded, do-not-contact merchants left out of the
+"start here" list. The cron route answers 502 if any of the three email jobs failed.

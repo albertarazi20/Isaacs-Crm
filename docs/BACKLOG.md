@@ -56,6 +56,7 @@ new it finds. `[x]` done and tested · `[~]` in progress · `[ ]` queued · `[!]
 - [x] Reports: follow-ups done on time, funnel, where deals ended, speed, lead-source results
 - [x] Lead source is first-class: import column + list name, Add client field with suggestions
 - [x] Lead intake: `POST /api/leads` with a revocable token puts a new merchant on Today as call-now (`docs/LEAD-INTAKE.md`)
+- [x] Monday scorecard email (last week: follow-ups on time, funded, new merchants, commission, biggest overdue deals to start with)
 - [x] Follow-up streak (business days in a row with nothing overdue at close) on Today
 - [x] Clients list filters (stage, source, state, industry, amount, not-contacted-in) and download of the filtered list
 - [x] A stage move keeps chase timers while the deal is in the funding pipeline
