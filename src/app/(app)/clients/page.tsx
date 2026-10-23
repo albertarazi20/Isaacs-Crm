@@ -22,6 +22,9 @@ export default async function ClientsPage() {
           <Link href="/import" className={buttonClass("secondary", "md")}>
             Import from spreadsheet
           </Link>
+          <Link href="/lead-intake" className={buttonClass("secondary", "md")}>
+            Lead intake
+          </Link>
           <Link href="/reports" className={buttonClass("secondary", "md")}>
             Reports
           </Link>

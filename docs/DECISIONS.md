@@ -190,3 +190,14 @@ does. A late approval moves a Declined deal back to Offers in. Accepting an offe
 pre-filled and does NOT fund by itself; "Mark funded" writes the advance. Funders hold business contacts only,
 free text goes through the sensitive-data guard, and every table is row-level secured. A manual stage move from
 the Board closes chase timers (existing `replace_timers` behaviour); the card offers "Remind me to chase".
+
+## 2026-10-23 — lead intake (migration 0080)
+
+`POST /api/leads` with a per-connection bearer token adds a merchant as "call now" (due today). Speed to lead
+is the metric in this business and a CSV is too slow. Tokens are 256-bit random, shown once, stored only as
+SHA-256 (`lead_tokens`; the app role can't even select the hash column). A token can only add a merchant to its
+owner's account — it reads nothing. Limits: 30 a minute per token (counted on the row, refused tries included),
+20 KB body, a phone or email required, SSN/card guard on notes, unknown fields ignored (no setting a stage or
+owner). A merchant already in the CRM is not duplicated: note + follow-up today, and do-not-contact merchants
+only get the note. Revoking, removing the owner from `ALLOWED_EMAILS`, or deleting the user kills the token at
+once. Not built: instant email/push on a new lead, hosted form page.
