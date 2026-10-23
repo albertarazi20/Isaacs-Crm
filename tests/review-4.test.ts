@@ -7,6 +7,7 @@ import { BACKUP_TABLES, buildBackup, type Backup } from "@/lib/export/backup";
 import { restoreBackup } from "@/lib/export/restore";
 import { parseCommissionText } from "@/lib/earnings/commission";
 import {
+  blockingErrors,
   changedTermsPayload,
   checkTerms,
   switchCommissionMode,
@@ -562,5 +563,26 @@ describe("C-14: a do-not-contact merchant is listed but never marked hot", () =>
       ["DNC Co", false],
       ["OK Co", true],
     ]);
+  });
+});
+
+describe("C-8 follow-up: which problems stop a save of the Funding dialog", () => {
+  const TODAY = "2026-10-23";
+  it("an old advance's out-of-range box does not stop an unrelated edit", () => {
+    const before = termsForm(funding({ position_no: 25 }), "UTC");
+    const now = { ...before, note: "called the funder" };
+    const errors = checkTerms(now, TODAY).errors;
+    expect(errors.positionNo).toBeDefined();
+    expect(blockingErrors(errors, now, before)).toEqual([]);
+  });
+  it("but a box he touched, or one checked against a box he touched, does", () => {
+    const before = termsForm(funding(), "UTC");
+    const bad = { ...before, positionNo: "25" };
+    expect(blockingErrors(checkTerms(bad, TODAY).errors, bad, before)).toEqual(["positionNo"]);
+    // an amount received with no day it arrived: the problem is on the day box, which he did not touch
+    const half = { ...before, commissionReceived: "2,500" };
+    const errors = checkTerms(half, TODAY).errors;
+    expect(errors.commissionReceivedOn).toBeDefined();
+    expect(blockingErrors(errors, half, before)).toContain("commissionReceivedOn");
   });
 });

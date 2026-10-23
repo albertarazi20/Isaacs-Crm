@@ -9,6 +9,7 @@ import {
   renewalMove,
   switchCommissionMode,
   termsForm,
+  blockingErrors,
   changedTermsPayload,
   termsPreview,
   type CommissionMode,
@@ -336,10 +337,7 @@ function FundingDialog({
   async function save() {
     // Only a problem in a box he touched blocks the save: an old advance with a value this form would not accept today
     // (a position of 25, say) must not stop him recording the commission that just arrived. The database checks again.
-    const blocking = (Object.keys(errors) as (keyof TermsForm)[]).filter(
-      (k) => v[k] !== initial[k],
-    );
-    if (blocking.length > 0) {
+    if (blockingErrors(errors, v, initial).length > 0) {
       setTried(true);
       return;
     }

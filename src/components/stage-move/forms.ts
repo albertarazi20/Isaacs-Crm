@@ -63,7 +63,7 @@ export function centsToInput(cents: number | null | undefined): string {
 /** The day and time typed for a booked call: filled in, and not on a day that has already gone. */
 export function callTimeProblem(at: string, today: ISODate): string | undefined {
   if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(at)) return "Pick the day and time of the call";
-  if (at.slice(0, 10) < today) return "That day has already passed — pick a time from now on";
+  if (at.slice(0, 10) < today) return "That call day has already passed — pick a time from now on";
   return undefined;
 }
 

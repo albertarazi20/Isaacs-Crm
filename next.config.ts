@@ -17,6 +17,9 @@ const CSP = [
 
 const config: NextConfig = {
   poweredByHeader: false,
+  // The dev-tools "N" badge floats over the bottom-right tab ("More") on a phone-sized window and swallows its taps,
+  // which breaks the local browser tests. It is a development widget only; production builds never had it.
+  devIndicators: false,
   serverExternalPackages: ["pg"],
   async headers() {
     if (process.env.NODE_ENV !== "production") return [];

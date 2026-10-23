@@ -83,7 +83,7 @@ describe("QA I-17: refusals are in words Isaac can act on", () => {
       note: "",
     });
     await expect(asA((q) => m.scheduleCall(q, past, ctx))).rejects.toThrow(
-      "That time has already passed — pick a time from now on",
+      "That call time has already passed — pick a time from now on",
     );
   });
 });

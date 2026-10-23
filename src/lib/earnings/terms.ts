@@ -103,6 +103,30 @@ export const DAYS_PER_REMITTANCE: Record<Frequency, number> = {
 const money = (cents: number): string =>
   `$${(cents / 100).toLocaleString("en-US", { maximumFractionDigits: 2 })}`;
 
+/** Boxes whose rules look at each other: a problem found on one is also his if he changed another of the group. */
+const RELATED: readonly (readonly (keyof TermsForm)[])[] = [
+  ["commissionReceived", "commissionReceivedOn"],
+  ["fundedOn", "amount", "factorRate", "payment", "frequency"],
+  ["fundedOn", "lastPaymentOn"],
+  ["amount", "commission"],
+];
+
+/**
+ * The problems that stop a save: those in a box he touched, or in a box that is checked against one he touched (an
+ * amount with no day it arrived). A rule an old advance already breaks in a box he left alone does not stop him
+ * recording something unrelated; the database checks the saved groups again.
+ */
+export function blockingErrors(
+  errors: TermsErrors,
+  now: TermsForm,
+  initial: TermsForm,
+): (keyof TermsForm)[] {
+  const changed = (k: keyof TermsForm) => now[k] !== initial[k];
+  return (Object.keys(errors) as (keyof TermsForm)[]).filter(
+    (k) => changed(k) || RELATED.some((g) => g.includes(k) && g.some(changed)),
+  );
+}
+
 export interface CheckedTerms {
   errors: TermsErrors;
   /** The money terms, as soon as the four that define the advance are usable — so the preview keeps working while an optional field is wrong. */

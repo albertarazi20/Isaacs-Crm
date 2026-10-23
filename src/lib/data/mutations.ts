@@ -194,7 +194,7 @@ export async function moveClient(q: Db, input: MoveInput, ctx: UserContext): Pro
   }
   if (stage === "call_scheduled" && input.callAt) {
     if (input.callAt.slice(0, 10) < ctx.today)
-      throw new UserError("That time has already passed — pick a time from now on");
+      throw new UserError("That call time has already passed — pick a time from now on");
     const at = await localToInstant(q, input.callAt, ctx.timezone);
     await q.query("select * from schedule_call($1, $2, $3)", [clientId, at, input.reason]);
   }
@@ -288,7 +288,7 @@ export async function scheduleCall(
 ): Promise<ClientCard> {
   // The database would call this "a follow-up date in the past"; he is booking a call.
   if (input.at.slice(0, 10) < ctx.today)
-    throw new UserError("That time has already passed — pick a time from now on");
+    throw new UserError("That call time has already passed — pick a time from now on");
   const at = await localToInstant(q, input.at, ctx.timezone);
   await q.query("select * from schedule_call($1, $2, $3)", [input.clientId, at, input.note]);
   return mustCard(q, input.clientId);
