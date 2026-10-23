@@ -71,8 +71,8 @@ export default async function TodayPage() {
           value={kpis.renewalReady}
           tone={kpis.renewalReady > 0 ? "good" : undefined}
         />
-        <Kpi label="Funded & active" value={kpis.fundedActive} />
-        <Kpi label="Still to collect" value={formatMoneyCompact(kpis.outstandingCents)} />
+        <Kpi label="Active advances" value={kpis.fundedActive} />
+        <Kpi label="Payback outstanding" value={formatMoneyCompact(kpis.outstandingCents)} />
       </div>
 
       {cards.length === 0 ? (

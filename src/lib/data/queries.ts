@@ -70,3 +70,12 @@ export async function getClientDetail(q: Db, id: string): Promise<ClientDetail |
   );
   return { card, activities, positions, offers, asks, stips, fundings, timers } as ClientDetail;
 }
+
+/** Clients with at least one open timer due today or earlier — the number on the Today tab. */
+export async function dueCount(q: Db, today: string): Promise<number> {
+  const { rows } = await q.query<{ n: number }>(
+    "select count(distinct client_id)::int as n from timers where done_at is null and due_on <= $1::date",
+    [today],
+  );
+  return rows[0]?.n ?? 0;
+}

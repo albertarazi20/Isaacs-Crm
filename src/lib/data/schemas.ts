@@ -240,3 +240,28 @@ export const settingsSchema = z.object({
   digestHour: z.coerce.number().int().min(0).max(23),
   notifyEmail: z.union([z.literal(""), z.string().email()]),
 });
+
+export const importRowSchema = z.object({
+  line: z.number().int().min(1),
+  businessName: text(200).min(1),
+  contactName: text(200).default(""),
+  phone: text(40).default(""),
+  email: text(200).default(""),
+  wantedAmount: text(40).default(""),
+  industry: text(100).default(""),
+  state: text(40).default(""),
+  notes: text(5000).default(""),
+  stage: z
+    .enum(STAGE_KEYS)
+    .refine((s) => s !== "funded", "Funded clients can't be imported without terms"),
+  followUpOn: isoDate,
+  statusNote: text(200).default(""),
+});
+export type ImportRowInput = z.output<typeof importRowSchema>;
+
+export const importSchema = z.object({
+  rows: z
+    .array(importRowSchema)
+    .min(1, "Nothing to import")
+    .max(2000, "Import up to 2,000 clients at a time"),
+});

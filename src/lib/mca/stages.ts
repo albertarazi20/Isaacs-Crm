@@ -152,7 +152,7 @@ export const STAGES: readonly StageDef[] = [
     key: "default_workable",
     label: "Workable default",
     group: "trouble",
-    hint: "Missed payments but will make it right",
+    hint: "Missed remittances but will make it right",
     followUp: d(3),
   },
   {
@@ -260,7 +260,7 @@ export function defaultTimers(stage: StageKey, ctx: TimerContext): PlannedTimer[
         {
           kind: "check_in",
           dueOn: addDays(ctx.today, FUNDED_CHECK_IN_DAYS),
-          note: "Payments clearing? Any NSFs?",
+          note: "Remittances clearing? Any NSFs?",
         },
       ];
       const renewal = ctx.funding ? renewalDate(ctx.funding, ctx.today) : null;

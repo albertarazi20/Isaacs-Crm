@@ -8,6 +8,7 @@ import { requireSession } from "@/lib/auth/server";
 import { db, type Db } from "@/lib/db";
 import { GmailReconnectError } from "@/lib/email/gmail";
 import { toActionError } from "@/lib/data/errors";
+import { importClients, type ImportResult } from "@/lib/data/import";
 import * as m from "@/lib/data/mutations";
 import { getCard, userContext } from "@/lib/data/queries";
 import * as s from "@/lib/data/schemas";
@@ -107,6 +108,9 @@ export async function updateFundingAction(input: unknown): Promise<ActionResult<
     await m.updateFunding(q, s.fundingUpdateSchema.parse(input), ctx);
     return null;
   });
+}
+export async function importClientsAction(input: unknown): Promise<ActionResult<ImportResult>> {
+  return run((q, ctx) => importClients(q, s.importSchema.parse(input).rows, ctx));
 }
 export async function updateSettingsAction(input: unknown): Promise<ActionResult<null>> {
   return run(async (q) => {

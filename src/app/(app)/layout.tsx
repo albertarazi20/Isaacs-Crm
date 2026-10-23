@@ -5,9 +5,10 @@ import { NavLink } from "@/components/NavLink";
 import { ToastProvider } from "@/components/overlay";
 import { PendingTouchPrompt } from "@/components/ContactActions";
 import { QuickAdd } from "@/components/QuickAdd";
+import { TitleBadge } from "@/components/TitleBadge";
 import { Button } from "@/components/ui";
 import { requireSession } from "@/lib/auth/server";
-import { userContext } from "@/lib/data/queries";
+import { dueCount, userContext } from "@/lib/data/queries";
 import { db } from "@/lib/db";
 import { gmailStatus } from "@/lib/system/gmail";
 
@@ -29,7 +30,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     const { rows } = await q.query<{ name: string; email: string }>(
       "select name, email from app_users where id = app.current_user_id()",
     );
-    return { ctx, user: rows[0] };
+    return { ctx, user: rows[0], due: await dueCount(q, ctx.today) };
   });
   if (!me.user) redirect("/login?error=session_expired");
   const gmail = await gmailStatus(session.userId);
@@ -50,7 +51,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
             <span className="text-base font-bold tracking-tight">Isaac</span>
             <nav aria-label="Main" className="flex flex-1 gap-1 overflow-x-auto">
               {NAV.map((n) => (
-                <NavLink key={n.href} href={n.href}>
+                <NavLink key={n.href} href={n.href} badge={n.href === "/" ? me.due : undefined}>
                   {n.label}
                 </NavLink>
               ))}
@@ -74,6 +75,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         ) : null}
         <main className="mx-auto max-w-[1600px] px-4 py-5">{children}</main>
         <PendingTouchPrompt />
+        <TitleBadge count={me.due} />
       </ToastProvider>
     </AppProvider>
   );

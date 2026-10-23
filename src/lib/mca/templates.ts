@@ -65,7 +65,7 @@ const LINES: Record<Tone, (hi: string, biz: string, me: string) => string> = {
   offer: (hi, biz, me) =>
     `${hi}it's ${me}. Quick update on the offers for ${biz} — do you have a few minutes to go over them?`,
   funded: (hi, biz, me) =>
-    `${hi}it's ${me}. Just checking in — how's everything going with ${biz}, and are the payments clearing fine on your end?`,
+    `${hi}it's ${me}. Just checking in — how's everything going with ${biz}, and are the remittances clearing fine on your end?`,
   renewal: (hi, biz, me) =>
     `${hi}it's ${me}. You're in great shape on your current advance for ${biz}. If you want more working capital, I can likely get you a renewal on better terms — want me to take a look?`,
   default: (hi, biz, me) =>

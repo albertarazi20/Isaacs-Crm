@@ -146,7 +146,7 @@ export const ClientRow = memo(function ClientRow({
           </div>
           <p className="text-xs text-muted">
             {pct}% paid down · {formatMoney(balanceCents(terms, today))} left ·{" "}
-            {formatMoney(terms.paymentCents)} {terms.frequency}
+            {formatMoney(terms.paymentCents)} {terms.frequency} remittance
           </p>
         </div>
       ) : null}

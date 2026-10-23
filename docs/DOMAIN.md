@@ -112,7 +112,7 @@ Merchant name, business name, phone; what they want (amount + terms); what Isaac
 would approve; past asks; last call and notes; next follow-up; application-in date; default date;
 promise-to-pay date/time. Under Interested: **other advances the merchant already has** (position,
 funder, amount taken, balance). Competing offers on every lost deal (funder, amount, factor,
-payment, position). Stip checklist with one checkbox per statement month and a "ready to submit"
+remittance, position). Stip checklist with one checkbox per statement month and a "ready to submit"
 rollup. Notes on everything.
 
 ### What the research did and did not find (run 2026-10-23, `WebSearch`)

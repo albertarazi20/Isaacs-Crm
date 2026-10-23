@@ -97,7 +97,7 @@ function QuickAddDialog({ onClose }: { onClose: () => void }) {
           <Field label="Email">
             <Input name="email" type="email" />
           </Field>
-          <Field label="How much they want">
+          <Field label="Funding they want">
             <Input name="wantedAmount" placeholder="50k" />
           </Field>
         </div>

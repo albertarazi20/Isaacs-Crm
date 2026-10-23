@@ -30,7 +30,7 @@ export default async function RenewalsPage({
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Renewals</h1>
           <p className="text-sm text-muted">
-            Merchants who are paid down enough to offer more money. Your best leads.
+            Merchants paid down enough to offer a renewal. Your best leads.
           </p>
         </div>
         <nav aria-label="Paid down at least" className="flex items-center gap-1.5">
@@ -56,7 +56,7 @@ export default async function RenewalsPage({
       <section className="space-y-2">
         <SectionTitle
           aside={
-            <span className="text-sm text-muted">{formatMoney(stillOwed)} still to collect</span>
+            <span className="text-sm text-muted">{formatMoney(stillOwed)} payback outstanding</span>
           }
         >
           Ready to renew ({ready.length})
