@@ -80,6 +80,7 @@ new it finds. `[x]` done and tested · `[~]` in progress · `[ ]` queued · `[!]
 - [ ] Foreign keys prove "same user", not "same merchant" (offers/timers → submissions); two `app` helpers lack `search_path` (A-20)
 - [ ] A deal that leaves the funding pipeline and comes back gets no new chase timers; "Send to funders" replaces a do-not-contact merchant's review timer (A-22)
 - [ ] The new-lead email is sent inside the request; a slow Resend delays the sender's answer by up to 10 s (A-19)
+- [ ] Today page tap targets under 40px on a phone: the Snooze menu summary, the star, the "at stake" chip and "Move the call" (QA I-12 covered the Board cards, client page and dialogs only)
 - [ ] Snooze-reason prompt on a Board drop, the Set-follow-up button, note chips and win-back "Not now" (3B)
 
 ## 3. Proof work
