@@ -12,9 +12,17 @@ export default async function ClientsPage() {
     <div className="space-y-4">
       <div className="flex items-center justify-between gap-3">
         <h1 className="text-2xl font-bold tracking-tight">Clients</h1>
-        <Link href="/import" className={buttonClass("secondary", "md")}>
-          Import from spreadsheet
-        </Link>
+        <div className="flex flex-wrap gap-2">
+          <a href="/api/export/clients" className={buttonClass("secondary", "md")}>
+            Download clients (CSV)
+          </a>
+          <a href="/api/export/activity" className={buttonClass("secondary", "md")}>
+            Download notes (CSV)
+          </a>
+          <Link href="/import" className={buttonClass("secondary", "md")}>
+            Import from spreadsheet
+          </Link>
+        </div>
       </div>
       <ClientsTable cards={cards} />
     </div>
