@@ -6,6 +6,8 @@ export const SESSION_DAYS = 14;
 export interface SessionClaims {
   userId: string;
   email: string;
+  /** Which "log out everywhere" generation this token belongs to. Tokens issued before it existed count as 0. */
+  epoch?: number;
 }
 
 const key = (secret: string) => new TextEncoder().encode(secret);
@@ -15,7 +17,7 @@ export async function signSession(
   secret: string,
   now = new Date(),
 ): Promise<string> {
-  return new SignJWT({ email: claims.email })
+  return new SignJWT({ email: claims.email, ep: claims.epoch ?? 0 })
     .setProtectedHeader({ alg: "HS256" })
     .setSubject(claims.userId)
     .setIssuedAt(Math.floor(now.getTime() / 1000))
@@ -32,7 +34,8 @@ export async function verifySession(
   try {
     const { payload } = await jwtVerify(token, key(secret), { algorithms: ["HS256"] });
     if (typeof payload.sub !== "string" || typeof payload.email !== "string") return null;
-    return { userId: payload.sub, email: payload.email };
+    const ep = typeof payload.ep === "number" && Number.isInteger(payload.ep) ? payload.ep : 0;
+    return { userId: payload.sub, email: payload.email, epoch: ep };
   } catch {
     return null;
   }

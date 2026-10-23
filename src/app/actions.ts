@@ -16,6 +16,7 @@ import type { ActionResult, ClientCard, UserContext } from "@/lib/data/types";
 import { env } from "@/lib/env";
 import { sendViaResend } from "@/lib/email/resend";
 import { disconnectGmail, sendEmailAsUser } from "@/lib/system/gmail";
+import { bumpSessionEpoch } from "@/lib/system/users";
 import { sendTestDigest } from "@/lib/system/reminders";
 
 async function run<T>(fn: (q: Db, ctx: UserContext) => Promise<T>): Promise<ActionResult<T>> {
@@ -230,6 +231,14 @@ export async function sendTestReminderAction(): Promise<
           : toActionError(err),
     };
   }
+}
+
+/** Ends every session this user has, on every device — for a lost phone. */
+export async function logoutEverywhereAction(): Promise<void> {
+  const session = await requireSession();
+  await bumpSessionEpoch(session.userId);
+  (await cookies()).delete(SESSION_COOKIE);
+  redirect("/login");
 }
 
 export async function logoutAction(): Promise<void> {

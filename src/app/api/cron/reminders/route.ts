@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { sendViaResend } from "@/lib/email/resend";
 import { env } from "@/lib/env";
+import { recordHeartbeat } from "@/lib/system/heartbeat";
 import { runCallReminders, runReminders } from "@/lib/system/reminders";
 
 export const dynamic = "force-dynamic";
@@ -31,6 +32,8 @@ async function handle(req: Request): Promise<NextResponse> {
     sendViaResend(cfg, { to, ...d });
   const digest = await runReminders({ db, now, appUrl: e.APP_URL, send });
   const calls = await runCallReminders({ db, now, appUrl: e.APP_URL, send });
+  // Dead-man's switch: written after every run that completes, even when nothing needed sending.
+  await recordHeartbeat(undefined, { now });
   return NextResponse.json({ ...digest, calls });
 }
 

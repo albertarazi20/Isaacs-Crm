@@ -11,6 +11,8 @@ export async function GET(req: NextRequest) {
   const email = (req.nextUrl.searchParams.get("email") ?? "isaac@example.com").toLowerCase();
   const user = await upsertLoginUser(email, email.split("@")[0] ?? "");
   const res = NextResponse.redirect(`${env().APP_URL}/`);
-  res.cookies.set(await sessionCookie({ userId: user.id, email: user.email }));
+  res.cookies.set(
+    await sessionCookie({ userId: user.id, email: user.email, epoch: user.session_epoch }),
+  );
   return res;
 }

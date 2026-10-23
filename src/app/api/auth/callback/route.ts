@@ -61,7 +61,9 @@ export async function GET(req: NextRequest) {
       return fail("not_allowed");
     const user = await upsertLoginUser(who.email, who.name);
     const res = NextResponse.redirect(`${base}/`);
-    res.cookies.set(await sessionCookie({ userId: user.id, email: user.email }));
+    res.cookies.set(
+      await sessionCookie({ userId: user.id, email: user.email, epoch: user.session_epoch }),
+    );
     res.cookies.delete(OAUTH_COOKIE);
     return res;
   } catch (err) {
