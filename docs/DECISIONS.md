@@ -177,3 +177,16 @@ Reports compare lead sources, so the source must be filled in and consistent. Im
 the sheet's source column, else the list name typed in the wizard ("Lead vendor, Oct 2026"), else
 "Imported". Add client and Edit details suggest sources already in use (so "Referral" and "referral" stay
 one — reports also group case-insensitively), and Add client remembers the last source for batch entry.
+
+## 2026-10-23 — funders, submissions and offers (migration 0010)
+
+Isaac submits merchants to outside funders, so "Offers in" now has somewhere to put offers. `funders` (name,
+states they skip, minimum revenue and time in business, industries they exclude, notes), `submissions` (one
+per merchant × funder: sent date, status, decline reason) and `offers` (terms per submission). A fit check
+before sending flags a funder that excludes the merchant's state, industry, revenue or age — a warning, never
+a block, and "unknown" when the merchant's field is blank. Sending creates a `chase` timer per funder for the
+next business day; merchant contact (a call, text or email) does NOT clear a chase — only the funder's answer
+does. A late approval moves a Declined deal back to Offers in. Accepting an offer opens the Funded dialog
+pre-filled and does NOT fund by itself; "Mark funded" writes the advance. Funders hold business contacts only,
+free text goes through the sensitive-data guard, and every table is row-level secured. A manual stage move from
+the Board closes chase timers (existing `replace_timers` behaviour); the card offers "Remind me to chase".
