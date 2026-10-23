@@ -10,3 +10,6 @@ coverage/
 *.log
 .venv/
 __pycache__/
+.next/
+*.tsbuildinfo
+next-env.d.ts
