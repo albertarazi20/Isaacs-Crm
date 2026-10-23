@@ -474,17 +474,33 @@ export default async function earningsFlow({ email }) {
     "paid-in-full merchants show days since paid off",
     (await paid.filter({ hasText: /Paid off (\d+ days? ago|today)/ }).count()) >= 2,
   );
+  const hotCount = (name) =>
+    paid.filter({ hasText: name }).getByText("Hot", { exact: true }).count();
   check(
-    "a merchant inside 30 days is marked Hot, one at 70 days is not",
-    (await paid
-      .filter({ hasText: "Cedar Print Shop" })
-      .getByText("Hot", { exact: true })
-      .count()) === 1 &&
-      (await paid
-        .filter({ hasText: "Duke's Detailing" })
-        .getByText("Hot", { exact: true })
-        .count()) === 0,
+    "a do-not-contact merchant paid off 20 days ago is listed but not marked Hot; one at 70 days is not Hot either",
+    (await paid.filter({ hasText: "Cedar Print Shop" }).count()) === 1 &&
+      (await hotCount("Cedar Print Shop")) === 0 &&
+      (await hotCount("Duke's Detailing")) === 0,
   );
+  // the same merchant, free to contact: inside 30 days is Hot
+  await withDb((db) =>
+    db.query(
+      `update clients set contact_status = 'ok' where user_id = $1 and business_name = 'Cedar Print Shop'`,
+      [user.id],
+    ),
+  );
+  await page.reload({ waitUntil: "networkidle" });
+  check(
+    "a merchant inside 30 days who may be contacted is marked Hot, one at 70 days is not",
+    (await hotCount("Cedar Print Shop")) === 1 && (await hotCount("Duke's Detailing")) === 0,
+  );
+  await withDb((db) =>
+    db.query(
+      `update clients set contact_status = 'dnc' where user_id = $1 and business_name = 'Cedar Print Shop'`,
+      [user.id],
+    ),
+  );
+  await page.reload({ waitUntil: "networkidle" });
   check(
     "a do-not-contact merchant's Call is disabled",
     await page.getByRole("button", { name: /^Call Cedar Print Shop/ }).isDisabled(),
