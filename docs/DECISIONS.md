@@ -46,7 +46,7 @@ refused to start). Revisit when typescript-eslint adds 7.
 Every user-facing request runs inside a transaction as `SET LOCAL ROLE isaac_app` (NOLOGIN, no
 BYPASSRLS) with `app.user_id` set. Policies key off `app.current_user_id()`. RLS is `ENABLE`d, not
 `FORCE`d, so system jobs (login upsert, reminder cron) connect as the owner on purpose — they go
-through `withSystem()`, which is only imported from `src/app/api/**` and `src/lib/jobs/**` (a test
+through `withSystem()`, which is only imported from `src/app/api/**` and `src/lib/system/**` (a test
 greps for this). `gmail_connections` has no grants for `isaac_app` at all.
 
 ## 2026-10-23 — timers are rows, not a column

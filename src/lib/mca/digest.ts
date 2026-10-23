@@ -75,10 +75,13 @@ export function buildDigest(
   const { overdue, dueToday } = groupDue(timers, today);
   const count = overdue.length + dueToday.length;
   if (count === 0) return null;
+  const plural = (n: number, w: string) => `${n} ${w}${n === 1 ? "" : "s"}`;
   const subject =
-    overdue.length > 0
-      ? `${dueToday.length} due today, ${overdue.length} overdue — follow-ups`
-      : `${dueToday.length} follow-up${dueToday.length === 1 ? "" : "s"} due today`;
+    dueToday.length === 0
+      ? `${overdue.length} overdue follow-up${overdue.length === 1 ? "" : "s"}`
+      : overdue.length === 0
+        ? `${plural(dueToday.length, "follow-up")} due today`
+        : `${dueToday.length} due today, ${overdue.length} overdue — follow-ups`;
   const section = (title: string, rows: DueTimer[]) => {
     if (rows.length === 0) return { text: "", html: "" };
     const lines = rows.map((r) => line(r, today, appUrl));

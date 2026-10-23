@@ -55,6 +55,14 @@ describe("digest", () => {
     expect(d?.text).toContain("3d overdue");
     expect(d?.text).toContain("Renewal call");
   });
+  it("words the subject for overdue-only and today-only digests", () => {
+    expect(buildDigest([timer({ dueOn: "2026-10-20" })], TODAY, "https://app.test")?.subject).toBe(
+      "1 overdue follow-up",
+    );
+    expect(
+      buildDigest([timer({}), timer({ timerId: "t2" })], TODAY, "https://app.test")?.subject,
+    ).toBe("2 follow-ups due today");
+  });
   it("escapes merchant-controlled text in the HTML body", () => {
     const d = buildDigest(
       [timer({ businessName: "<script>alert(1)</script>", note: 'a"b' })],
