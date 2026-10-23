@@ -112,6 +112,22 @@ Those have mocked-network unit tests only.
 | I11 | Production build                             | 15 pages and the dialogs open with zero CSP violations; `/api/dev-login` is 404; exports 401 without a session; cron 401/503; leads survive a failing Resend   | `scripts/bench/pages.mjs` for speed; the smoke is recorded in `docs/DECISIONS.md`                              |
 | I12 | Performance at 5,000 merchants               | See `docs/DECISIONS.md` ("performance at 5,000 merchants") — commands next to the numbers                                                                      | `scripts/bench/*`                                                                                              |
 
+| I13 | Merge, backup, restore | Merge moves every child and keeps the earlier date, a stop wins; a backup is one snapshot with nothing that can act on an account; restore round-trips every table | `tests/merge.test.ts`, `tests/backup.test.ts`, `tests/restore.test.ts`, `e2e/backup` |
+| I14 | Fourth review, QA pass | Each finding in `docs/REVIEW-4.md` and `docs/ISSUES.md` has a test that fails without its fix | `tests/review-3a.test.ts`, `tests/review-4.test.ts`, `tests/qa-fixes.test.ts`, `e2e/board`, `e2e/client` |
+
+## Run log (2026-10-23, this machine)
+
+Each number comes from the command next to it.
+
+| What                                | Command                                                                    | Result                                               |
+| ----------------------------------- | -------------------------------------------------------------------------- | ---------------------------------------------------- |
+| Unit and database tests             | `pnpm -s vitest run`                                                       | 69 files, 1,562 tests passed                         |
+| Types, lint, format                 | `pnpm -s tsc --noEmit`, `pnpm -s eslint .`, `pnpm -s prettier --check ...` | clean, 0 warnings                                    |
+| Browser tests (dev server, real DB) | `CHROMIUM_PATH=... pnpm -s e2e`                                            | 19 files, 765 of 765 checks, exit 0                  |
+| Production build and smoke          | `scratchpad/prod-rebuild.sh`, `scratchpad/prod-smoke.mjs`                  | 15 of 15 pages, 0 console problems, 0 CSP violations |
+
+Not run here: CI (GitHub does not start the jobs; billing), real Google/Resend/Voice, a real phone.
+
 ## J. Still manual (cannot be proven from here)
 
 Real Google sign-in and Gmail send; real Resend delivery (digest, call heads-up, new-lead alert, scorecard); the hourly

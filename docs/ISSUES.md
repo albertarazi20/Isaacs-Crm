@@ -207,3 +207,31 @@ Timings with 51 merchants (`E2E_ONLY=perf pnpm -s e2e board`): Board render to f
 ## Status note, end of this pass
 
 The last `pnpm -s e2e client` run (after the lead's first fixes landed) shows I-4 and I-5 green: an SSN in "Source" / the ask's terms line, `SSN 123456789` and a checksum-failing 16-digit number are now refused. Everything else above was still failing in that run, so the checks stay in the suite as the regression tests.
+
+## Fix status (after the fixes, 2026-10-23)
+
+Fixed in the commits after `fa0c322` and re-checked by `pnpm e2e` (full run: 19 files, 765/765 checks, exit 0; command and counts in `docs/TEST-PLAN.md` "Run log"). The QA checks named in each "Evidence" line above stayed in the suite and now pass.
+
+| #             | Status         | Where it was fixed                                                                                                                |
+| ------------- | -------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| I-1 (blocker) | Fixed          | 0150 `set_follow_up(keep_calls)`; Board drop toast names the call that stayed and has Undo                                        |
+| I-2           | Fixed          | 0130 `record_default` saves the date it is given                                                                                  |
+| I-3           | Fixed          | Funded dialog and Update funding: bare "6" is a question, "6%" is points, "$3k" is dollars (`parseCommissionText`)                |
+| I-4, I-5      | Fixed          | Secrets guard on every one-line field; `SSN 123456789` and checksum-failing card numbers refused                                  |
+| I-6           | Fixed          | Application date stamped on any move into underwriting or funded                                                                  |
+| I-7           | Fixed          | 0160 `cancel_call` puts the merchant back in his earlier stage                                                                    |
+| I-8           | Fixed          | Dragging to Phone call scheduled asks when the call is (or moves without a time)                                                  |
+| I-9           | Fixed          | Board remembers its view in a cookie the server reads (no flash of Pipeline)                                                      |
+| I-10          | Fixed          | 9-month and 18-month Board columns                                                                                                |
+| I-11          | Fixed          | Disabled Call/Text say why; Edit details warns about an unusable phone                                                            |
+| I-12          | Fixed (scoped) | 40px targets on Board cards, the client page and dialogs below `sm:`. The Today page's small targets are on the backlog           |
+| I-13          | Fixed          | Note box 372px down at 390px wide (was 1,297px)                                                                                   |
+| I-14          | Fixed          | Clients on a phone: "…" menu and card rows                                                                                        |
+| I-15          | Fixed          | Edit details warns when the new phone or name matches another card, and offers "merge into this card" (0190 `merge_clients`)      |
+| I-16          | Fixed          | Payback below the advance, balance above the payback: refused                                                                     |
+| I-17          | Fixed          | Plain wording for too-long text, a $0 ask, past call times; database checks explained by name                                     |
+| I-18          | Fixed          | Follow-up picker opens with nothing lit and Set follow-up disabled                                                                |
+| I-19          | Fixed          | Styled "Choose a spreadsheet" button                                                                                              |
+| I-20          | Fixed          | Sticky stage-group tabs on the phone Board                                                                                        |
+| I-21          | Not reproduced | One hydration warning seen once; the suites now print the first 500 characters of any console error, so the next one names itself |
+| I-22          | Fixed          | `src/app/favicon.ico`                                                                                                             |
