@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { leadSchema, toNewClient } from "@/lib/leads/schema";
+import { describeLeadProblem, leadSchema, toNewClient } from "@/lib/leads/schema";
 import {
   generateToken,
   hashToken,
@@ -152,5 +152,31 @@ describe("toNewClient", () => {
     expect(
       toNewClient({ businessName: "A", phone: "1", source: "Lead vendor X" }, "2026-10-23").source,
     ).toBe("Lead vendor X");
+  });
+});
+
+describe("leads from real senders (review 3A: A-3)", () => {
+  it("treats a null field as 'not given', which is how forms and Zapier send a blank", () => {
+    const r = leadSchema.safeParse({
+      businessName: "Nully Co",
+      phone: "305-555-0111",
+      email: null,
+      contactName: null,
+      notes: null,
+      wantedAmount: null,
+    });
+    expect(r.success).toBe(true);
+    expect(r.data?.email).toBeUndefined();
+  });
+  it("names the field when it can't read it", () => {
+    const r = leadSchema.safeParse({ businessName: "X", phone: ["1"], email: "a@b.co" });
+    expect(r.success).toBe(false);
+    expect(describeLeadProblem(r.error!)).toBe("phone: must be text or a number");
+    const long = leadSchema.safeParse({ businessName: "x".repeat(300), phone: "1" });
+    expect(describeLeadProblem(long.error!)).toBe("businessName: Keep it under 200 characters");
+  });
+  it("keeps the whole-lead messages as they were", () => {
+    const r = leadSchema.safeParse({ businessName: "X" });
+    expect(describeLeadProblem(r.error!)).toBe("Include a phone number or an email");
   });
 });

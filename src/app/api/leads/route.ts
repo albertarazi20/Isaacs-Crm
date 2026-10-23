@@ -1,11 +1,13 @@
 import { NextResponse } from "next/server";
+import { ZodError } from "zod";
 import { isAllowedEmail } from "@/lib/auth/google";
 import { userContext } from "@/lib/data/queries";
 import { toActionError } from "@/lib/data/errors";
+import { UserError } from "@/lib/data/mutations";
 import { db } from "@/lib/db";
 import { devLoginEnabled, env } from "@/lib/env";
 import { ingestLead } from "@/lib/leads/intake";
-import { leadSchema } from "@/lib/leads/schema";
+import { describeLeadProblem, leadSchema } from "@/lib/leads/schema";
 import { parseBearer, readLimitedJson } from "@/lib/leads/token";
 import { sendViaResend } from "@/lib/email/resend";
 import { checkLeadToken } from "@/lib/system/leads";
@@ -37,8 +39,7 @@ export async function POST(req: Request) {
   const body = await readLimitedJson(req);
   if (!body.ok) return json({ error: body.error }, body.status);
   const parsed = leadSchema.safeParse(body.value);
-  if (!parsed.success)
-    return json({ error: parsed.error.issues[0]?.message ?? "That lead isn't valid" }, 400);
+  if (!parsed.success) return json({ error: describeLeadProblem(parsed.error) }, 400);
 
   try {
     const result = await db.withUser(check.userId, async (q) =>
@@ -61,6 +62,16 @@ export async function POST(req: Request) {
     }
     return json({ ok: true, ...result }, result.status === "created" ? 201 : 200);
   } catch (e) {
-    return json({ error: toActionError(e) }, 400);
+    // The sender's mistake is a 400. A busy database is "try again" (503): a retry will work. Anything else is ours.
+    if (e instanceof UserError || e instanceof ZodError)
+      return json({ error: toActionError(e) }, 400);
+    const code = (e as { code?: string } | null)?.code;
+    if (code === "40P01" || code === "40001" || code === "55P03")
+      return json({ error: "Busy right now — please send it again" }, 503, { "retry-after": "2" });
+    console.error("lead intake failed:", e);
+    return json(
+      { error: "Something went wrong on our side — your lead was not saved. Send it again." },
+      500,
+    );
   }
 }

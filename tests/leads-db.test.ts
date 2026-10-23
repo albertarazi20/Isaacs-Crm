@@ -209,7 +209,7 @@ describe("ingestLead", () => {
         ctx,
       ),
     );
-    expect(again).toEqual({ status: "duplicate", clientId: first.clientId });
+    expect(again).toEqual({ status: "duplicate", clientId: first.clientId, matchedOn: "phone" });
     expect((await rows("select 1 from clients where phone like '%3055550300'")).length).toBe(1);
     expect((await openTimers(first.clientId)).map((x) => [x.kind, x.due_on, x.note])).toEqual([
       ["follow_up", t.today, "Came in again — call now"],
@@ -217,7 +217,9 @@ describe("ingestLead", () => {
     const notes = await rows("select body from activities where client_id = $1 and kind = 'note'", [
       first.clientId,
     ]);
-    expect(notes.map((n) => n.body)).toEqual(["Came in again via Website: Filled the form again"]);
+    expect(notes.map((n) => n.body)).toEqual([
+      "Came in again via Website: Filled the form again (business Echo Auto Repair, phone (305) 555-0300)",
+    ]);
   });
 
   it("the same business name with no phone also counts as already here", async () => {
@@ -242,7 +244,12 @@ describe("ingestLead", () => {
     const again = await asA((q) =>
       ingestLead(q, lead({ businessName: "Stop Diner", phone: "3055550400" }), ctx),
     );
-    expect(again).toEqual({ status: "duplicate", clientId: first.clientId, doNotContact: true });
+    expect(again).toEqual({
+      status: "duplicate",
+      clientId: first.clientId,
+      matchedOn: "phone",
+      doNotContact: true,
+    });
     expect(await openTimers(first.clientId)).toEqual(before);
     expect(before.map((x) => x.due_on)).toEqual([addMonths(t.today, 36)]); // still the 36-month review
     expect(
@@ -281,5 +288,101 @@ describe("ingestLead", () => {
     const before = (await rows("select count(*)::int n from clients"))[0]?.n;
     expect(leadSchema.safeParse({ businessName: "No Contact Co" }).success).toBe(false);
     expect((await rows("select count(*)::int n from clients"))[0]?.n).toBe(before);
+  });
+});
+
+describe("lead intake under real-world delivery (review 3A: A-1, A-2)", () => {
+  const send = (user: string, over: Record<string, unknown>) =>
+    t.db.withUser(user, (q) => ingestLead(q, lead(over), ctx));
+
+  it("the same NEW lead arriving 12 times at once becomes ONE card, with no failures", async () => {
+    const results = await Promise.allSettled(
+      Array.from({ length: 12 }, () =>
+        send(a, { businessName: "Twin Pizza", phone: "3057770000" }),
+      ),
+    );
+    expect(results.filter((r) => r.status === "rejected")).toEqual([]);
+    const statuses = results.map((r) => (r.status === "fulfilled" ? r.value.status : "failed"));
+    expect(statuses.filter((s) => s === "created")).toHaveLength(1);
+    expect(statuses.filter((s) => s === "duplicate")).toHaveLength(11);
+    expect(
+      (await rows("select 1 from clients where user_id = $1 and phone like '%3057770000'", [a]))
+        .length,
+    ).toBe(1);
+  });
+
+  it("the same lead arriving 12 times at once for an EXISTING merchant: no deadlocks, one open follow-up", async () => {
+    const first = await send(a, { businessName: "Known Auto", phone: "3057771111" });
+    await t.pool.query(
+      "update timers set due_on = current_date + 30 where client_id = $1 and done_at is null",
+      [first.clientId],
+    );
+    const results = await Promise.allSettled(
+      Array.from({ length: 12 }, () =>
+        send(a, { businessName: "Known Auto", phone: "3057771111", notes: "again" }),
+      ),
+    );
+    expect(results.filter((r) => r.status === "rejected")).toEqual([]);
+    expect((await openTimers(first.clientId)).length).toBe(1);
+    expect((await openTimers(first.clientId))[0]?.due_on).toBe(t.today);
+  });
+
+  it("two different businesses with the same name are two merchants when the phones differ", async () => {
+    const one = await send(a, {
+      businessName: "Subway",
+      phone: "3057772222",
+      email: "one@subway.example",
+    });
+    const two = await send(a, {
+      businessName: "Subway",
+      phone: "7867773333",
+      email: "owner@othersubway.example",
+      contactName: "Dana",
+      wantedAmount: "80k",
+    });
+    expect(one.status).toBe("created");
+    expect(two.status).toBe("created");
+    expect(two.clientId).not.toBe(one.clientId);
+    expect(
+      (await rows("select 1 from clients where user_id = $1 and business_name = 'Subway'", [a]))
+        .length,
+    ).toBe(2);
+  });
+
+  it("a name match with no phone on the old card still counts, and the note keeps what the new lead knew", async () => {
+    const old = await send(a, {
+      businessName: "Phoneless Diner",
+      phone: "",
+      email: "old@diner.example",
+    });
+    const again = await send(a, {
+      businessName: "Phoneless Diner",
+      phone: "3057774444",
+      contactName: "Sam",
+      wantedAmount: "40k",
+    });
+    expect(again).toMatchObject({ status: "duplicate", clientId: old.clientId, matchedOn: "name" });
+    const note = (
+      await rows(
+        "select body from activities where client_id = $1 and body like 'Came in again%'",
+        [old.clientId],
+      )
+    )[0]?.body;
+    expect(note).toContain("phone 3057774444");
+    expect(note).toContain("contact Sam");
+    expect(note).toContain("wants 40k");
+  });
+
+  it("a phone match says so", async () => {
+    const first = await send(a, { businessName: "Phone Match Co", phone: "3057775555" });
+    const again = await send(a, {
+      businessName: "Totally Different Name",
+      phone: "(305) 777-5555",
+    });
+    expect(again).toMatchObject({
+      status: "duplicate",
+      clientId: first.clientId,
+      matchedOn: "phone",
+    });
   });
 });

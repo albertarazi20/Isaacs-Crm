@@ -93,6 +93,8 @@ export interface DuplicateMatch {
   stage: StageKey;
   /** Why it matched, in words Isaac can check at a glance. */
   reason: "same phone" | "same business name";
+  /** The matched merchant's phone as stored ("" when none) — name matches only count when one side has no phone. */
+  phone: string;
   /**
    * In the trash, but marked do-not-contact (or limited). Those stay matchable so a "stop" can't be undone
    * by re-adding the same number as a fresh lead.
@@ -118,10 +120,11 @@ export async function findDuplicates(
     business_name: string;
     contact_name: string;
     stage: StageKey;
+    phone: string;
     by_phone: boolean;
     trashed: boolean;
   }>(
-    `select id, business_name, contact_name, stage,
+    `select id, business_name, contact_name, stage, phone,
             ($1::text is not null and right(regexp_replace(phone, '[^0-9]', '', 'g'), 10) = $1) as by_phone,
             exists (select 1 from trashed_clients t where t.client_id = clients.id) as trashed
        from clients
@@ -138,6 +141,7 @@ export async function findDuplicates(
     contact_name: r.contact_name,
     stage: r.stage,
     reason: r.by_phone ? "same phone" : "same business name",
+    phone: r.phone,
     trashed: r.trashed,
   }));
 }

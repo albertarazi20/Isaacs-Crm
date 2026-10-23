@@ -2,11 +2,24 @@ import { z } from "zod";
 import { newClientSchema } from "../data/schemas";
 import { findSensitive } from "../data/sensitive";
 
+/** Forms and Zapier send an empty field as null; that means "not given", never "refuse the lead". */
 const str = (max: number) =>
-  z
-    .union([z.string(), z.number()])
-    .transform((v) => String(v).trim())
-    .pipe(z.string().max(max, `Keep it under ${max} characters`));
+  z.preprocess(
+    (v) => (v === null ? undefined : v),
+    z
+      .union([z.string(), z.number()], { error: "must be text or a number" })
+      .transform((v) => String(v).trim())
+      .pipe(z.string().max(max, `Keep it under ${max} characters`))
+      .optional(),
+  );
+
+/** One plain sentence about the first problem, naming the field when the problem is about one. */
+export function describeLeadProblem(error: z.ZodError): string {
+  const issue = error.issues[0];
+  if (!issue) return "That lead isn't valid";
+  const field = issue.path[0];
+  return typeof field === "string" ? `${field}: ${issue.message}` : issue.message;
+}
 
 /**
  * What a form or a lead vendor may send. Everything is optional except a way to reach the merchant.

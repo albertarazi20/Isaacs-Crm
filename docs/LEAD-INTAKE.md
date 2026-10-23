@@ -24,10 +24,17 @@ Send a phone or an email, and a business or contact name. Anything else (a stage
 
 - **New merchant:** stage _Name in_, follow-up due **today** with the note "New lead — call now", source from the
   request (or "Lead intake"), the amount wanted saved, notes on the timeline.
-- **Already in the CRM** (same phone, or same business name when there's no phone): **no second card.** A note
-  "Came in again…" is added and the follow-up moves to today. A **do-not-contact** merchant only gets the note.
-- Answers: `201` created, `200` duplicate, `400` plain-words problem, `401` bad/revoked token, `413` too big,
-  `429` more than 30 a minute.
+- **Already in the CRM:** **no second card.** A note "Came in again…" (with whatever the lead sent: amount, source,
+  notes) is added and the follow-up moves to today. A **do-not-contact** merchant only gets the note.
+  Matching rule: same phone always matches. Same business name matches **only** when the lead has no phone, or the
+  card on file has none — two Subways with two different phones stay two cards. The answer says which rule fired
+  (`matchedOn`: `"phone"` or `"name"`).
+- Two copies of one lead arriving at the same instant (a double-fired Zap) still make one card: the intake
+  serialises on the phone and name key inside the database.
+- `null` for an optional field is the same as leaving it out (Zapier sends `null` for empty fields).
+- Answers: `201` created, `200` duplicate, `400` plain-words problem naming the field, `401` bad/revoked token,
+  `413` too big, `429` more than 30 a minute, `503` + `Retry-After` when the database was briefly busy (retry the
+  same request; it is safe), `500` anything else.
 
 ## Safety
 

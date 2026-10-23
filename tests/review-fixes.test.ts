@@ -86,7 +86,12 @@ describe("R-1: a do-not-contact merchant in the trash is still a do-not-contact 
         ctx,
       ),
     );
-    expect(res).toEqual({ status: "duplicate", clientId: id, doNotContact: true });
+    expect(res).toEqual({
+      status: "duplicate",
+      clientId: id,
+      matchedOn: "phone",
+      doNotContact: true,
+    });
     expect(await open(id)).toEqual([]);
     expect(
       (

@@ -57,6 +57,7 @@ new it finds. `[x]` done and tested · `[~]` in progress · `[ ]` queued · `[!]
 - [x] Lead source is first-class: import column + list name, Add client field with suggestions
 - [x] Lead intake: `POST /api/leads` with a revocable token puts a new merchant on Today as call-now (`docs/LEAD-INTAKE.md`)
 - [x] Monday scorecard email (last week: follow-ups on time, funded, new merchants, commission, biggest overdue deals to start with)
+- [x] Funder submission package: copy a ready-to-send merchant summary, or open a Gmail draft to each funder (attach statements by hand)
 - [x] Follow-up streak (business days in a row with nothing overdue at close) on Today
 - [x] Clients list filters (stage, source, state, industry, amount, not-contacted-in) and download of the filtered list
 - [x] A stage move keeps chase timers while the deal is in the funding pipeline
@@ -72,6 +73,7 @@ new it finds. `[x]` done and tested · `[~]` in progress · `[ ]` queued · `[!]
 - [ ] A true backup: full export incl. advances, offers, submissions, stips — and the import that reads it back
 - [ ] Consent source/date capture per merchant (TCPA) [!] counsel first
 - [ ] Per-field audit trail for client edits (who changed what)
+- [ ] Clients list: page it and slim the card payload (11 MB of HTML at 5,000 merchants; fine at hundreds)
 
 ## 3. Proof work
 
