@@ -261,9 +261,9 @@ describe("create_submissions", () => {
     await send(id, [y]);
     expect(await stageOf(id)).toBe("submitted");
     const rows = await chaseFor(sx);
-    // move_client closed X's chase, and it was put back with the same due date
-    expect(rows.map((r) => r.done_reason)).toEqual(["stage_moved", null]);
-    expect(rows[1]?.due_on).toBe(original?.due_on);
+    // the move left X's chase alone: the same single row, still open, same due date
+    expect(rows.map((r) => r.done_reason)).toEqual([null]);
+    expect(rows[0]?.due_on).toBe(original?.due_on);
     expect((await openTimers(id)).filter((r) => r.kind === "chase")).toHaveLength(2);
   });
 });
