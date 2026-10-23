@@ -16,7 +16,9 @@ async function inTransaction<T>(
 ) {
   const db = await pool.connect();
   try {
-    await db.query("begin");
+    // JIT compiling a query is a fixed ~0.7 s cost that only pays off on huge scans. Listing 5,000 merchants
+    // took 1.04 s with it and 0.27 s without (EXPLAIN ANALYZE on client_cards), so it is off for every request.
+    await db.query("begin; set local jit = off");
     await setup(db);
     const result = await fn(db);
     await db.query("commit");
@@ -35,9 +37,9 @@ export function makeDb(pool: pg.Pool): DbAccess {
       inTransaction(
         pool,
         async (db) => {
-          await db.query("set local role isaac_app");
           // ALTER ROLE ... SET does not apply through SET ROLE, so the cap has to be set here.
-          await db.query("set local statement_timeout = '15s'");
+          // One round trip, not three (these are plain statements, no parameters).
+          await db.query("set local role isaac_app; set local statement_timeout = '15s'");
           await db.query("select set_config('app.user_id', $1, true)", [userId]);
         },
         fn,

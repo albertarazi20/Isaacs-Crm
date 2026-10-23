@@ -256,3 +256,25 @@ late / pushed back / overdue (same definitions as Reports), merchants added, adv
 received, and the five biggest overdue deals to start with. Facts only — no targets, no scolding. Gathered
 through row-level security (`withUser`), trashed merchants excluded, do-not-contact merchants left out of the
 "start here" list. The cron route answers 502 if any of the three email jobs failed.
+
+## 2026-10-23 — performance at 5,000 merchants, and JIT is off
+
+Measured on a PRODUCTION build against one user with 5,000 merchants, 20,000 timers, 1,190 advances
+(`psql -f scripts/bench/seed-5k.sql`, then `node scripts/bench/pages.mjs`; three requests per page, server and
+Postgres on the same small machine, other work running at the same time):
+
+| page          | before (JIT on) | after (JIT off) | HTML  |
+| ------------- | --------------- | --------------- | ----- |
+| Today         | 1.8–2.5 s       | 1.1–1.25 s      | 3.9MB |
+| Board         | 1.3–1.5 s       | 0.65–0.9 s      | 8.3MB |
+| Clients       | 1.9–2.1 s       | 0.85–0.94 s     | 11 MB |
+| Renewals      | 1.5–1.6 s       | 0.8 s           | 4.8MB |
+| Earnings      | 1.3–1.7 s       | 0.8 s           | 3.9MB |
+| Reports (90d) | 0.13 s          | 0.1 s           | —     |
+| Win-back      | 0.12 s          | 0.05–0.09 s     | —     |
+
+Cause: Postgres JIT-compiles the card-list query (`client_cards`, many correlated subqueries) and the compile
+costs more than the query. `EXPLAIN ANALYZE select to_jsonb(c) from client_cards c`: 1.04 s with JIT, 0.27 s
+without. Every request now runs `set local jit = off` (`tests/db-settings.test.ts`). Still heavy at that size:
+Clients ships every merchant (11 MB) — fine for hundreds, slow on a phone at thousands. Next step if it matters:
+page the Clients list and slim the card payload. Reports and win-back stay fast because they aggregate in SQL.
