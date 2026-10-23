@@ -25,6 +25,7 @@ import {
   type CompetitorForm,
   type DefaultForm,
   type FundingForm,
+  type FundingPrefill,
 } from "./forms";
 
 /** Resolves true when the move went through, so the dialog can close; false keeps it open. */
@@ -89,7 +90,12 @@ function useBusy(onSubmit: Submit) {
 
 // ---- funded --------------------------------------------------------------------------------
 
-export function FundingDialog({ card, onSubmit, onCancel }: DialogProps) {
+export function FundingDialog({
+  card,
+  onSubmit,
+  onCancel,
+  prefill,
+}: DialogProps & { prefill?: FundingPrefill | undefined }) {
   const { today } = useApp();
   const first = useFocusFirst();
   const { busy, send } = useBusy(onSubmit);
@@ -103,6 +109,7 @@ export function FundingDialog({ card, onSubmit, onCancel }: DialogProps) {
     positionNo: "1",
     termDays: "",
     commission: "",
+    ...prefill,
   }));
   const [tried, setTried] = useState(false);
   const set = (k: keyof FundingForm) => (v: string) => setF((cur) => ({ ...cur, [k]: v }));
@@ -156,7 +163,12 @@ export function FundingDialog({ card, onSubmit, onCancel }: DialogProps) {
           submit();
         }}
       >
-        {renewing ? (
+        {prefill ? (
+          <p className="text-sm text-muted">
+            Terms are filled in from the offer you accepted. Check them against the contract and set
+            the funded date.
+          </p>
+        ) : renewing ? (
           <p className="text-sm text-muted">
             Terms are filled in from their last advance. Change whatever is different this time.
           </p>

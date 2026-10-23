@@ -90,6 +90,9 @@ export interface FundingForm {
   commission: string;
 }
 
+/** Starting values for the Funded dialog, e.g. an accepted offer's terms. Anything left out keeps the dialog's own default. */
+export type FundingPrefill = Partial<Omit<FundingForm, "fundedOn">>;
+
 export function checkFunding(
   f: FundingForm,
   today: ISODate,

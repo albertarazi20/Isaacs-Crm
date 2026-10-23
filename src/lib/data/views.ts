@@ -28,8 +28,9 @@ export function cardFundingTerms(c: ClientCard): FundingTerms | null {
 const KIND_RANK: Record<TimerKind, number> = {
   scheduled_call: 0,
   renewal: 1,
-  check_in: 2,
-  follow_up: 3,
+  chase: 2,
+  check_in: 3,
+  follow_up: 4,
 };
 // Deals closest to funding first, then accounts that need chasing, then the rest.
 const GROUP_RANK: Record<StageGroup, number> = {

@@ -224,13 +224,14 @@ export function isStageKey(v: string): v is StageKey {
   return BY_KEY.has(v as StageKey);
 }
 
-export type TimerKind = "follow_up" | "check_in" | "renewal" | "scheduled_call";
+export type TimerKind = "follow_up" | "check_in" | "renewal" | "scheduled_call" | "chase";
 
 export const TIMER_LABELS: Record<TimerKind, string> = {
   follow_up: "Follow up",
   check_in: "Funded check-in",
   renewal: "Renewal call",
   scheduled_call: "Scheduled call",
+  chase: "Chase funder",
 };
 
 export interface PlannedTimer {

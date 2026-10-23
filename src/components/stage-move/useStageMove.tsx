@@ -14,8 +14,13 @@ import {
   FundingDialog,
   type Submit,
 } from "./dialogs";
-import { isDefaultStage, needsInput, undoInput } from "./forms";
+import { isDefaultStage, needsInput, undoInput, type FundingPrefill } from "./forms";
 import { MoveToasts, type RecentMove } from "./MoveToasts";
+
+export interface MoveOptions {
+  /** Funded only: start the dialog with these terms (an accepted offer) instead of the last advance's. */
+  fundingPrefill?: FundingPrefill;
+}
 
 /**
  * CONTRACT shared by the Board and the Client page.
@@ -26,7 +31,7 @@ import { MoveToasts, type RecentMove } from "./MoveToasts";
  */
 export interface StageMove {
   /** Resolves with the updated card, or null if the user cancelled or it failed (error already toasted). */
-  requestMove(card: ClientCard, stage: StageKey): Promise<ClientCard | null>;
+  requestMove(card: ClientCard, stage: StageKey, options?: MoveOptions): Promise<ClientCard | null>;
   /** Render this once next to the component that calls requestMove — it holds the dialogs. */
   dialogs: ReactNode;
 }
@@ -41,6 +46,7 @@ interface Ask {
   card: ClientCard;
   stage: StageKey;
   settle: Settle;
+  fundingPrefill?: FundingPrefill | undefined;
 }
 
 const TOAST_MS = 10_000;
@@ -88,14 +94,14 @@ export function useStageMove(): StageMove {
   );
 
   const requestMove = useCallback(
-    (card: ClientCard, stage: StageKey): Promise<ClientCard | null> => {
+    (card: ClientCard, stage: StageKey, options?: MoveOptions): Promise<ClientCard | null> => {
       if (!stageNeedsInput(card, stage)) {
         if (card.stage === stage) return Promise.resolve(card);
         return perform(card, stage, {});
       }
       return new Promise<ClientCard | null>((resolve) => {
         askRef.current?.settle(null);
-        const next: Ask = { card, stage, settle: resolve };
+        const next: Ask = { card, stage, settle: resolve, fundingPrefill: options?.fundingPrefill };
         askRef.current = next;
         setAsk(next);
       });
@@ -148,6 +154,7 @@ export function useStageMove(): StageMove {
         <FundingDialog
           key="funded"
           card={ask.card}
+          prefill={ask.fundingPrefill}
           onSubmit={submit}
           onCancel={() => close(null)}
         />

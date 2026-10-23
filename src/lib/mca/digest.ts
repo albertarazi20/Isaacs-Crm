@@ -22,8 +22,9 @@ export interface DigestGroups {
 const KIND_RANK: Record<TimerKind, number> = {
   scheduled_call: 0,
   renewal: 1,
-  check_in: 2,
-  follow_up: 3,
+  chase: 2,
+  check_in: 3,
+  follow_up: 4,
 };
 
 /** One line per client — two timers landing on the same day (a snoozed check-in beside a follow-up) are one phone call. */

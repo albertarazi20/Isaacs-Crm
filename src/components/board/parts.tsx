@@ -47,6 +47,7 @@ const SHORT_KIND = {
   check_in: "Check-in ",
   renewal: "Renewal call ",
   scheduled_call: "Call booked ",
+  chase: "Chase funder ",
 } as const;
 
 /**
