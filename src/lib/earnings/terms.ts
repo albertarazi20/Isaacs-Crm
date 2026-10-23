@@ -283,7 +283,7 @@ export function renewalMove(before: FundingTerms, after: FundingTerms): RenewalM
   return from === to ? null : { from, to };
 }
 
-/** The values the server action takes, from a form that passed checkTerms. */
+/** The values the server action takes, from a form that passed checkTerms: every field. */
 export function termsPayload(fundingId: string, f: TermsForm, commissionCents: number | null) {
   return {
     fundingId,
@@ -304,4 +304,27 @@ export function termsPayload(fundingId: string, f: TermsForm, commissionCents: n
     lastPaymentOn: f.lastPaymentOn || null,
     promiseToPayAt: f.promiseToPayAt || null,
   };
+}
+
+/**
+ * Only what Isaac changed since the dialog opened. Anything he did not touch is left out, so a save can't overwrite
+ * what another device recorded in the meantime. Null when nothing changed.
+ */
+export function changedTermsPayload(
+  fundingId: string,
+  now: { form: TermsForm; commissionCents: number | null },
+  before: { form: TermsForm; commissionCents: number | null },
+) {
+  const a = termsPayload(fundingId, now.form, now.commissionCents);
+  const b = termsPayload(fundingId, before.form, before.commissionCents);
+  const out: Record<string, unknown> = { fundingId };
+  let changed = 0;
+  for (const key of Object.keys(a) as (keyof typeof a)[]) {
+    if (key === "fundingId") continue;
+    if (JSON.stringify(a[key]) !== JSON.stringify(b[key])) {
+      out[key] = a[key];
+      changed += 1;
+    }
+  }
+  return changed > 0 ? out : null;
 }

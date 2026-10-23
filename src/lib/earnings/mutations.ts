@@ -14,33 +14,41 @@ async function localToInstant(q: Db, local: string, timezone: string): Promise<D
   return t;
 }
 
-/** The JSON update_funding_terms() takes, from a validated form. Exported so a test can pin the exact keys. */
+/**
+ * The JSON update_funding_terms() takes, from a validated form. A key the form did not send is left out, so the
+ * function leaves that column alone; null is sent as null and clears it. Exported so a test can pin the exact keys.
+ */
 export async function termsJson(
   q: Db,
   input: TermsUpdateInput,
   ctx: UserContext,
 ): Promise<Record<string, unknown>> {
-  const promiseAt = input.promiseToPayAt
-    ? await localToInstant(q, input.promiseToPayAt, ctx.timezone)
-    : null;
-  return {
-    funded_on: input.fundedOn,
-    funder_name: input.funderName,
-    amount_cents: input.amount,
-    factor_rate: input.factorRate,
-    payment_cents: input.payment,
-    frequency: input.frequency,
-    position_no: input.positionNo,
-    term_days: input.termDays,
-    commission_cents: input.commission,
-    paid_back_override_cents: input.paidBackOverride,
-    last_payment_on: input.lastPaymentOn ?? null,
-    promise_to_pay_at: promiseAt ? promiseAt.toISOString() : null,
-    promise_amount_cents: input.promiseAmount,
-    note: input.note,
-    commission_received_cents: input.commissionReceived,
-    commission_received_on: input.commissionReceivedOn ?? null,
+  const out: Record<string, unknown> = {};
+  const put = (key: string, value: unknown) => {
+    if (value !== undefined) out[key] = value;
   };
+  put("funded_on", input.fundedOn);
+  put("funder_name", input.funderName);
+  put("amount_cents", input.amount);
+  put("factor_rate", input.factorRate);
+  put("payment_cents", input.payment);
+  put("frequency", input.frequency);
+  put("position_no", input.positionNo);
+  put("term_days", input.termDays);
+  put("commission_cents", input.commission);
+  put("paid_back_override_cents", input.paidBackOverride);
+  put("last_payment_on", input.lastPaymentOn);
+  if (input.promiseToPayAt !== undefined) {
+    const at = input.promiseToPayAt
+      ? await localToInstant(q, input.promiseToPayAt, ctx.timezone)
+      : null;
+    out.promise_to_pay_at = at ? at.toISOString() : null;
+  }
+  put("promise_amount_cents", input.promiseAmount);
+  put("note", input.note);
+  put("commission_received_cents", input.commissionReceived);
+  put("commission_received_on", input.commissionReceivedOn);
+  return out;
 }
 
 /** Edits an advance in one transaction: the row, the renewal call and the timeline (see update_funding_terms). */

@@ -87,27 +87,34 @@ const optWholeNumber = (what: string, min: number, max: number) =>
     return n;
   });
 
-/** Every field of the advance the Funding card can change. The database validates again in update_funding_terms. */
-export const termsUpdateSchema = z.object({
-  fundingId: id,
-  fundedOn: isoDate,
-  funderName: line(200),
-  amount: money,
-  factorRate: factor,
-  payment: money,
-  frequency,
-  positionNo: wholeNumber("Position", 1, 20),
-  termDays: optWholeNumber("Term", 1, 3650),
-  /** Dollars. The dialog turns points into dollars before it sends. */
-  commission: optMoney,
-  commissionReceived: optMoney,
-  commissionReceivedOn: isoDate.nullable().optional(),
-  paidBackOverride: optMoney,
-  lastPaymentOn: isoDate.nullable().optional(),
-  promiseToPayAt: localDateTime.nullable().optional(),
-  promiseAmount: optMoney,
-  note: text(5000),
-});
+/**
+ * The fields of the advance the Funding card can change. Every one is optional: the dialog sends only what Isaac
+ * changed, so a dialog left open on another device can't write back stale values over a commission, a collected
+ * figure or a promise recorded since. A missing key means "leave it alone"; null means "clear it". The database
+ * validates again in update_funding_terms.
+ */
+export const termsUpdateSchema = z
+  .object({
+    fundedOn: isoDate,
+    funderName: line(200),
+    amount: money,
+    factorRate: factor,
+    payment: money,
+    frequency,
+    positionNo: wholeNumber("Position", 1, 20),
+    termDays: optWholeNumber("Term", 1, 3650),
+    /** Dollars. The dialog turns points into dollars before it sends. */
+    commission: optMoney,
+    commissionReceived: optMoney,
+    commissionReceivedOn: isoDate.nullable().optional(),
+    paidBackOverride: optMoney,
+    lastPaymentOn: isoDate.nullable().optional(),
+    promiseToPayAt: localDateTime.nullable().optional(),
+    promiseAmount: optMoney,
+    note: text(5000),
+  })
+  .partial()
+  .extend({ fundingId: id });
 export type TermsUpdateInput = z.output<typeof termsUpdateSchema>;
 
 /** "Mark commission received" from the Earnings page: just the amount and the day. */

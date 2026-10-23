@@ -9,7 +9,7 @@ import {
   renewalMove,
   switchCommissionMode,
   termsForm,
-  termsPayload,
+  changedTermsPayload,
   termsPreview,
   type CommissionMode,
   type EditableFunding,
@@ -336,11 +336,18 @@ function FundingDialog({
       setTried(true);
       return;
     }
-    setBusy(true);
-    const ok = await run(
-      updateFundingTermsAction(termsPayload(funding.id, v, commissionCents)),
-      "Funding updated",
+    // Only what he changed goes up: a stale dialog can't write old values over what another device recorded.
+    const changes = changedTermsPayload(
+      funding.id,
+      { form: v, commissionCents },
+      { form: initial, commissionCents: checkTerms(initial, today).commissionCents },
     );
+    if (!changes) {
+      onClose();
+      return;
+    }
+    setBusy(true);
+    const ok = await run(updateFundingTermsAction(changes), "Funding updated");
     setBusy(false);
     if (ok) onClose();
   }
