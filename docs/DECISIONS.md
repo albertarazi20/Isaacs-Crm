@@ -201,3 +201,36 @@ owner's account — it reads nothing. Limits: 30 a minute per token (counted on 
 owner). A merchant already in the CRM is not duplicated: note + follow-up today, and do-not-contact merchants
 only get the note. Revoking, removing the owner from `ALLOWED_EMAILS`, or deleting the user kills the token at
 once. Not built: instant email/push on a new lead, hosted form page.
+
+## 2026-10-23 — money-first ranking and the power dial
+
+Today orders overdue and due-today by a score: dollars at stake × stage weight × an overdue bonus. Pipeline deals
+use the smaller of what he wants and what funders would approve; defaults use payback outstanding at the default
+date; renewals use the funded amount (a paid-in-full merchant would score $0 on payback). Unknown amounts count as
+$5k; the cap is $2M. The ranking is a tool, not a rule: the page can be flipped to oldest-first. The ★ star is per
+browser (a cross-device star needs a `clients.hot` column). Bulk "reschedule all overdue" is one transaction
+(all-or-nothing), skips do-not-contact merchants and clients whose overdue timer is a passed booked call or a
+funder chase, and does not count as a snooze. Snoozing an underwriting deal past a week asks for a one-line
+reason — it never blocks. The reminder heartbeat (`job_runs`, system-only) is recorded only when a run sent
+without failures, and the cron route answers 502 otherwise so the scheduler alerts too.
+
+## 2026-10-23 — earnings and editable advance terms (migration 0020)
+
+Advance terms are editable in place (`update_funding_terms`), never re-funded: a typo fix must not mark the first
+advance "renewed" and corrupt the renewal timers. Only the LATEST active advance's renewal timer is re-derived
+(DB and TypeScript agree on the date across 600 random terms, tested); editing a past advance moves nothing.
+Average points = plain mean of commission ÷ amount across advances with commission above $0. "Awaiting
+commission" counts only advances funded in the last 90 days. Defaulted advances are excluded from expected
+commission. The pipeline estimate covers Offers in, Offer presented and Contract out and says "estimate" with the
+formula. The renewal timer stays at 50% paid down (matches `record_funding`); the radar's threshold is `?min=`,
+then the funder's own `renewal_paydown_pct`, then 50. Trashed merchants are excluded from every money figure,
+and the trash dialog says so.
+
+## 2026-10-23 — messaging, snippets and note hints (migration 0030)
+
+Signature and application link are plain columns on `app_users`; snippet bodies, the signature and the link go
+through the SSN/card/account guard. Merge fields never go silently blank: an unknown `{field}` stays visible and
+disables Send. Note hints are rules, not AI: "call Friday", "after the 15th", "after tax season" produce
+one-tap chips and NEVER change a date without a tap; a note with no date gives nothing. The win-back list excludes
+anyone with a contact limit entirely. The "texts today" counter is per browser — a soft warning, not enforcement.
+The calendar file (.ics) is built by hand and tested for folding, escaping and DST.

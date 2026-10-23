@@ -44,8 +44,12 @@ to what exists and how far it has been **proven**. Status words mean exactly thi
 
 ## Added by Claude, not asked for (flag if unwanted)
 
-CSV import · duplicate warning when adding · booked-call heads-up email · "send me a test email" button ·
-renewals page with 50–90% thresholds · long-game view · local seed data and an e2e suite.
+CSV import (with lead source) · CSV export · duplicate warning · booked-call heads-up email · "send me a test
+email" · renewals radar with commission · long-game view · **funders, submissions and offers** · **earnings and
+price book** · **power dial and money-first ranking** · **win-back batches** · saved snippets and signature ·
+note-to-date hints · add-to-calendar · **reports** (follow-ups on time, funnel, lead sources) · **lead intake API**
+· follow-up streak · client filters · trash with restore · sign out of all devices · installable app · local
+seed data and an e2e suite (`pnpm e2e`, 14 files, run locally — never in CI).
 
 ## Needs the owner or Isaac (cannot be done from here)
 

@@ -16,7 +16,7 @@ new it finds. `[x]` done and tested · `[~]` in progress · `[ ]` queued · `[!]
 - [x] Notes / call bodies must refuse SSNs and card numbers (CLAUDE.md "never store") [R24, S-L6]
 - [x] Reject control characters in every single-line field; validate email; one recipient only [S-M3]
 - [x] Allowlist re-checked on every request (verified on a production build), 14-day sessions, 100 emails/day cap [S-M1]
-- [ ] "Log out everywhere" (`session_epoch`) [R27]
+- [x] "Log out everywhere" (`session_epoch`) [R27]
 - [x] Reminder address can't be pointed at an attacker: drop the editable notify address; rate-limit test email [S-M2]
 - [x] Security headers (CSP etc.), production-only — verified: 9 pages, dialogs, zero CSP violations on a real production build [S-M4]
 - [x] `revoke temp`, `statement_timeout`, search_path on helper functions [S-L1]
@@ -24,36 +24,57 @@ new it finds. `[x]` done and tested · `[~]` in progress · `[ ]` queued · `[!]
 - [x] Timezone checked against Postgres, not Intl [S-L5] · fetch timeouts on Resend/Google [S-L7]
 - [x] Import returned raw error text to the browser [S-L8] · clear local storage on logout [S-L9]
 - [x] Delete unused `POST /api/auth/logout` [S-L10] · CI `permissions: contents: read` [S-L11]
-- [ ] Editable funding terms (a typo today can only be "fixed" by re-funding, which corrupts timers); renewal timer recomputes [R14]
-- [ ] Reminder-job heartbeat + banner "reminders haven't run in 3 hours" [R8]
-- [ ] Mobile: bottom tab bar; note box first on the client page [R9]
-- [ ] Data export (CSV of clients, notes) and a backup note [R17]
-- [ ] Correct OWNER-TODO: extra ALLOWED_EMAILS users get separate empty accounts [R27]
+- [x] Editable funding terms (a typo today can only be "fixed" by re-funding, which corrupts timers); renewal timer recomputes [R14]
+- [x] Reminder-job heartbeat + banner "reminders haven't run in 3 hours" [R8]
+- [x] Mobile: bottom tab bar; note box first on the client page [R9]
+- [x] Data export (CSV of clients, notes) — a reference copy, NOT a full backup (advances, offers, funders, stips are not in it) [R17]
+- [x] Correct OWNER-TODO: extra ALLOWED_EMAILS users get separate empty accounts [R27]
 
 ## 2. Features nobody should have to ask for (approved overnight)
 
 - [x] **Do-not-contact** status (none / no text / no call / no email / DNC): buttons disabled with the reason, server refuses, Today excludes, all timers cancelled; quiet-hours warning by merchant state [R21–22]. Not built: consent source/date, daily text counter
-- [ ] **Funders, submissions, offers-in** — the biggest functional gap: funder list with appetite, per-merchant submissions (sent / stips-requested / approved / declined + reason), offers hang off a submission, Accept pre-fills the Funded dialog, chase timer for a silent funder, fit check [R13]
-- [ ] **Money-first queue + power-dial mode**: rank by dollars at stake, one card at a time, ~3 taps per client [R5, I1]
-- [ ] Commission and earnings view (expected vs received, this month, renewal pipeline $) [R14]
-- [ ] Renewal radar: days since eligible, paid-past-payoff prompt "move to Paid in full?" [R11, I3]
-- [ ] Win-back batches from dead / declined / lost with reason-aware text [I4]
-- [ ] Notes → suggested next date and hot flag (rules, no AI call) [I5]
-- [ ] Global search (⌘K) and inbound-call phone lookup [R12]
-- [ ] Bulk "reschedule all overdue" spread by priority; "snoozed 3×" badge; guard on burying underwriting deals [R6]
-- [ ] Add-to-calendar (.ics) link for booked calls [R15]
-- [ ] Installable PWA (manifest, icons, app badge) [R16]
-- [ ] Soft-delete trash + audit trail for client edits [R18]
-- [ ] Saved snippets + signature/app-link in Settings; source pick-list [R19–20]
-- [ ] Price-book analytics from logged offers [I6]
+- [x] **Funders, submissions, offers-in** — the biggest functional gap: funder list with appetite, per-merchant submissions (sent / stips-requested / approved / declined + reason), offers hang off a submission, Accept pre-fills the Funded dialog, chase timer for a silent funder, fit check [R13]
+- [x] **Money-first queue + power-dial mode**: rank by dollars at stake, one card at a time, ~3 taps per client [R5, I1]
+- [x] Commission and earnings view (expected vs received, this month, renewal pipeline $) [R14]
+- [x] Renewal radar: days since eligible, paid-past-payoff prompt "move to Paid in full?" [R11, I3]
+- [x] Win-back batches from dead / declined / lost with reason-aware text [I4]
+- [x] Notes → suggested next date and hot flag (rules, no AI call) [I5]
+- [x] Global search (⌘K) and inbound-call phone lookup [R12]
+- [x] Bulk "reschedule all overdue" spread by priority; "snoozed 3×" badge; guard on burying underwriting deals [R6]
+- [x] Add-to-calendar (.ics) link for booked calls [R15]
+- [x] Installable PWA (manifest, icons, app badge) [R16]
+- [x] Soft-delete trash with restore (a do-not-contact merchant is kept on file for good). No per-field audit trail [R18]
+- [x] Saved snippets + signature/app-link in Settings; source pick-list [R19–20]
+- [x] Price-book analytics from logged offers [I6]
 
 - [x] Connection pool error handler (an idle-connection drop would have crashed the server) [C]
-- [ ] Board page title should carry the due count like the other pages [C]
-- [ ] Supabase/Neon deploy note: revoke default `anon`/`authenticated` grants or disable the Data API [S-L13]
+- [x] Board page title should carry the due count like the other pages [C]
+- [x] Supabase/Neon deploy note: revoke default `anon`/`authenticated` grants or disable the Data API [S-L13]
+
+### Added during the run (not asked for)
+
+- [x] Reports: follow-ups done on time, funnel, where deals ended, speed, lead-source results
+- [x] Lead source is first-class: import column + list name, Add client field with suggestions
+- [x] Lead intake: `POST /api/leads` with a revocable token puts a new merchant on Today as call-now (`docs/LEAD-INTAKE.md`)
+- [x] Follow-up streak (business days in a row with nothing overdue at close) on Today
+- [x] Clients list filters (stage, source, state, industry, amount, not-contacted-in) and download of the filtered list
+- [x] A stage move keeps chase timers while the deal is in the funding pipeline
+- [x] Second adversarial review (`docs/REVIEW-2.md`): 1 blocker + 7 bugs fixed and tested
+
+### Next (ranked; none needs the owner except where marked)
+
+- [ ] Instant "new lead" alert (email via Resend now; push later) — speed to lead is the metric
+- [ ] Web push notifications for the installed PWA (needs a phone to prove)
+- [ ] Merge duplicate merchants (move notes, timers, advances onto one card)
+- [ ] Cross-device ★ (a `clients.hot` column; today the star is per browser)
+- [ ] Stips upload link texted to the merchant [!] needs a storage decision (private bucket) from the owner
+- [ ] A true backup: full export incl. advances, offers, submissions, stips — and the import that reads it back
+- [ ] Consent source/date capture per merchant (TCPA) [!] counsel first
+- [ ] Per-field audit trail for client edits (who changed what)
 
 ## 3. Proof work
 
-- [ ] Browser e2e for Board drag, stage dialogs and Client page (extends `pnpm e2e`) [C]
+- [~] Browser e2e for Board drag, stage dialogs and Client page (`e2e/board.e2e.mjs`, `e2e/client.e2e.mjs` — QA crew; findings in `docs/ISSUES.md`) [C]
 - [ ] Run `docs/TEST-PLAN.md` end to end, write every failure into `docs/ISSUES.md`, fix, re-run [CLAUDE.md steps 4–7]
 - [ ] Production build + start, smoke test with a minted session [C]
 - [ ] Re-run security review after the fixes [C]
