@@ -29,5 +29,7 @@ drops its own database.
 
 ## Production
 
+See `docs/DEPLOY.md` for the full checklist.
+
 Hourly, call `GET /api/cron/reminders` with `Authorization: Bearer $CRON_SECRET` from any scheduler. It sends each
 user one digest per day at their chosen hour.
