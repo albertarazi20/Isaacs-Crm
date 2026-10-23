@@ -61,7 +61,7 @@ export default async function todayFlow({ email }) {
     ),
   );
   check(
-    "call + "no answer" logged and retry set for the next business day",
+    "call + no-answer logged and retry set for the next business day",
     act?.kind === "call" && act?.outcome === "no_answer" && act?.days <= 3,
     JSON.stringify(act),
   );
