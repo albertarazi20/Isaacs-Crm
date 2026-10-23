@@ -100,7 +100,7 @@ describe("move_client", () => {
       ]),
     );
     expect(await stageOf(id)).toBe("interested");
-    expect(await openTimers(id)).toEqual([{ kind: "follow_up", due_on: addDays(today(), 2) }]);
+    expect(await openTimers(id)).toEqual([{ kind: "follow_up", due_on: timer.dueOn }]);
     const closed = await t.pool.query(
       "select done_reason from timers where client_id = $1 and done_at is not null",
       [id],

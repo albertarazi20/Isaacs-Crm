@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { formatMoney, formatMoneyCompact, parseFactor, parseMoney } from "@/lib/money";
-import { suggestNextFollowUp } from "@/lib/mca/touch";
+import {
+  OUTCOMES_BY_KIND,
+  outcomeLabel,
+  suggestAfterEmail,
+  suggestNextFollowUp,
+} from "@/lib/mca/touch";
 
 describe("parseMoney", () => {
   it.each([
@@ -47,10 +52,37 @@ describe("formatting", () => {
 });
 
 describe("suggested next follow-up", () => {
-  it("retries quickly when he did not reach anyone", () => {
-    expect(suggestNextFollowUp("no_answer", "2026-10-23")).toBe("2026-10-24");
-    expect(suggestNextFollowUp("left_message", "2026-10-23")).toBe("2026-10-25");
+  // 2026-10-23 is a Friday.
+  it("retries quickly when he did not reach anyone — on business days", () => {
+    expect(suggestNextFollowUp("no_answer", "2026-10-23")).toBe("2026-10-26");
+    expect(suggestNextFollowUp("left_message", "2026-10-23")).toBe("2026-10-27");
     expect(suggestNextFollowUp("bad_number", "2026-10-23")).toBe("2026-10-30");
     expect(suggestNextFollowUp("reached", "2026-10-23")).toBe("2026-11-06");
+  });
+  it("keeps a hot stage's own pace instead of drifting to two weeks", () => {
+    expect(suggestNextFollowUp("reached", "2026-10-23", "contract_out")).toBe("2026-10-26");
+    expect(suggestNextFollowUp("reached", "2026-10-23", "offers_in")).toBe("2026-10-26");
+    expect(suggestNextFollowUp("reached", "2026-10-23", "interested")).toBe("2026-10-27");
+  });
+  it("caps slow stages at two weeks — funded merchants and exits don't wait a month or a year", () => {
+    expect(suggestNextFollowUp("reached", "2026-10-23", "funded")).toBe("2026-11-06");
+    expect(suggestNextFollowUp("reached", "2026-10-23", "dead")).toBe("2026-11-06");
+    expect(suggestNextFollowUp("reached", "2026-10-23", "not_interested")).toBe("2026-11-06");
+  });
+  it("after an email: three business days, or the stage's pace if sooner", () => {
+    expect(suggestAfterEmail("2026-10-23")).toBe("2026-10-28");
+    expect(suggestAfterEmail("2026-10-23", "contract_out")).toBe("2026-10-26");
+    expect(suggestAfterEmail("2026-10-23", "dead")).toBe("2026-10-28");
+  });
+});
+
+describe("outcome wording", () => {
+  it("a text is 'they replied' or 'sent', never 'left a message'", () => {
+    expect(OUTCOMES_BY_KIND.text).toEqual(["reached", "left_message", "bad_number"]);
+    expect(outcomeLabel("text", "reached")).toBe("They replied");
+    expect(outcomeLabel("text", "left_message")).toBe("Sent — no reply yet");
+    expect(outcomeLabel("call", "left_message")).toBe("Left message");
+    expect(OUTCOMES_BY_KIND.email).toEqual([]);
+    expect(OUTCOMES_BY_KIND.call).toHaveLength(4);
   });
 });

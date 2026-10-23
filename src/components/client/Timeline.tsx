@@ -5,7 +5,7 @@ import { addNoteAction } from "@/app/actions";
 import type { ActivityRow, ClientCard } from "@/lib/data/types";
 import { timeAgo } from "@/lib/format";
 import { stageDef } from "@/lib/mca/stages";
-import { OUTCOME_LABELS } from "@/lib/mca/touch";
+import { outcomeLabel } from "@/lib/mca/touch";
 import { useApp } from "../app-context";
 import { Badge, Button, cn, EmptyState, Textarea } from "../ui";
 import {
@@ -224,7 +224,7 @@ function Entry({ a }: { a: ActivityRow }) {
                 meta.label
               )}
               {a.kind === "call" && a.outcome ? (
-                <Badge tone={OUTCOME_TONE[a.outcome]}>{OUTCOME_LABELS[a.outcome]}</Badge>
+                <Badge tone={OUTCOME_TONE[a.outcome]}>{outcomeLabel(a.kind, a.outcome)}</Badge>
               ) : null}
             </div>
             {when}

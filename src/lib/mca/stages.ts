@@ -1,4 +1,4 @@
-import { addDays, addMonths, type ISODate } from "./dates";
+import { addBusinessDays, addDays, addMonths, type ISODate } from "./dates";
 import { renewalDate, renewalDateFromTerm, type FundingTerms } from "./funding";
 
 export const STAGE_KEYS = [
@@ -32,6 +32,7 @@ export type StageKey = (typeof STAGE_KEYS)[number];
 export type StageGroup = "prospecting" | "underwriting" | "funded" | "trouble" | "exit";
 
 export type FollowUpRule =
+  | { kind: "bdays"; days: number }
   | { kind: "days"; days: number }
   | { kind: "months"; months: number }
   | { kind: "funded" }
@@ -45,7 +46,9 @@ export interface StageDef {
   followUp: FollowUpRule;
 }
 
-const d = (days: number): FollowUpRule => ({ kind: "days", days });
+/** 1–3 days means business days (a Friday "tomorrow" is Monday, not a Saturday nobody works); longer spans are calendar days. */
+const d = (days: number): FollowUpRule =>
+  days <= 3 ? { kind: "bdays", days } : { kind: "days", days };
 const m = (months: number): FollowUpRule => ({ kind: "months", months });
 
 /** Order here is board order. Every stage has a timer — no client ever goes dark. */
@@ -251,6 +254,8 @@ export const LOST_FALLBACK_MONTHS = 6;
 export function defaultTimers(stage: StageKey, ctx: TimerContext): PlannedTimer[] {
   const rule = stageDef(stage).followUp;
   switch (rule.kind) {
+    case "bdays":
+      return [{ kind: "follow_up", dueOn: addBusinessDays(ctx.today, rule.days), note: "" }];
     case "days":
       return [{ kind: "follow_up", dueOn: addDays(ctx.today, rule.days), note: "" }];
     case "months":

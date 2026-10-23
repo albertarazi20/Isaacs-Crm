@@ -10,7 +10,7 @@ import {
   touchSchema,
 } from "@/lib/data/schemas";
 import type { UserContext } from "@/lib/data/types";
-import { addDays, addMonths } from "@/lib/mca/dates";
+import { addBusinessDays, addDays, addMonths } from "@/lib/mca/dates";
 import { renewalDate } from "@/lib/mca/funding";
 import { createTestDb, insertUser, type TestDb } from "./helpers/db";
 
@@ -105,14 +105,14 @@ describe("createClient", () => {
     });
     expect(card).toMatchObject({
       stage: "spoke_with_owner",
-      next_due_on: addDays(ctx.today, 2),
+      next_due_on: addBusinessDays(ctx.today, 2),
       wanted_amount_cents: 7_500_000,
     });
     expect(
       await rows("select kind, due_on from timers where client_id = $1 and done_at is null", [
         card.id,
       ]),
-    ).toEqual([{ kind: "follow_up", due_on: addDays(ctx.today, 2) }]);
+    ).toEqual([{ kind: "follow_up", due_on: addBusinessDays(ctx.today, 2) }]);
   });
   it("honours a chosen follow-up date, even 36 months out", async () => {
     const far = addMonths(ctx.today, 36);
@@ -135,7 +135,10 @@ describe("moveClient", () => {
   it("moves a card and starts the new stage's timer", async () => {
     const c = await newClient("Move Pizza");
     const moved = await move(c.id, "interested", { reason: "wants 50k" });
-    expect(moved).toMatchObject({ stage: "interested", next_due_on: addDays(ctx.today, 2) });
+    expect(moved).toMatchObject({
+      stage: "interested",
+      next_due_on: addBusinessDays(ctx.today, 2),
+    });
     const last = (
       await rows(
         "select kind, body, from_stage, to_stage from activities where client_id = $1 order by occurred_at desc limit 1",
@@ -280,7 +283,7 @@ describe("moveClient", () => {
         funding_status: "defaulted",
         defaulted_on: ctx.today,
         promise_amount_cents: 150_000,
-        next_due_on: addDays(ctx.today, 3),
+        next_due_on: addBusinessDays(ctx.today, 3),
       });
       const local = (
         await rows(
@@ -352,7 +355,7 @@ describe("follow-up timers", () => {
     const card = await asA((q) =>
       m.logTouch(q, touchSchema.parse({ clientId: c.id, kind: "call", outcome: "no_answer" }), ctx),
     );
-    expect(card.next_due_on).toBe(addDays(ctx.today, 1));
+    expect(card.next_due_on).toBe(addBusinessDays(ctx.today, 1));
     expect(card.last_call_at).not.toBeNull();
   });
   it("logTouch uses the date Isaac picked and keeps the call note on the card", async () => {

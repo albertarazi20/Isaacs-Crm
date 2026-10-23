@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { addMonths } from "@/lib/mca/dates";
+import { addMonths, parseISODate } from "@/lib/mca/dates";
 import type { FundingTerms } from "@/lib/mca/funding";
 import {
   defaultTimers,
@@ -42,10 +42,11 @@ describe("default timers", () => {
     defaultTimers(stage, { today: TODAY })[0]?.dueOn;
 
   it("keeps hot stages short and cold stages long", () => {
-    expect(due("name_in")).toBe("2026-10-24");
-    expect(due("application_sent")).toBe("2026-10-26");
-    expect(due("submitted")).toBe("2026-10-24");
-    expect(due("default_workable")).toBe("2026-10-26");
+    // 2026-10-23 is a Friday: 1–3 day timers are BUSINESS days, so "tomorrow" is Monday.
+    expect(due("name_in")).toBe("2026-10-26");
+    expect(due("application_sent")).toBe("2026-10-28");
+    expect(due("submitted")).toBe("2026-10-26");
+    expect(due("default_workable")).toBe("2026-10-28");
     expect(due("default_bad")).toBe("2026-10-30");
     expect(due("paid_in_full")).toBe("2026-11-06");
     expect(due("declined")).toBe("2027-01-23");
@@ -53,6 +54,22 @@ describe("default timers", () => {
     expect(due("dead")).toBe("2027-07-23");
     expect(due("not_interested")).toBe("2027-10-23");
     expect(due("written_off")).toBe("2027-10-23");
+  });
+
+  it("never lands a short timer on a weekend", () => {
+    for (const today of ["2026-10-23", "2026-10-24", "2026-10-25", "2026-10-26"]) {
+      for (const stage of [
+        "name_in",
+        "spoke_with_owner",
+        "application_sent",
+        "submitted",
+        "contract_out",
+        "default_workable",
+      ] as const) {
+        const day = parseISODate(defaultTimers(stage, { today })[0]?.dueOn ?? today).getUTCDay();
+        expect([0, 6], `${stage} from ${today}`).not.toContain(day);
+      }
+    }
   });
 
   it("sets two timers when funded: a 30-day check-in and the 50% renewal call", () => {

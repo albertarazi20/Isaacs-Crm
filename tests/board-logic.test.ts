@@ -255,7 +255,7 @@ describe("optimistic moves", () => {
   it("moves the card and applies the new stage's default timer", () => {
     const next = optimisticMove(base, "stips", TODAY);
     expect(next.stage).toBe("stips");
-    expect(next.next_due_on).toBe(addDays(TODAY, 2));
+    expect(next.next_due_on).toBe(addBusinessDays(TODAY, 2));
     expect(next.next_due_kind).toBe("follow_up");
     expect(base.stage).toBe("name_in");
     expect(optimisticMove(base, "not_interested", TODAY).next_due_on).toBe(addMonths(TODAY, 12));
@@ -576,8 +576,9 @@ describe("default form", () => {
       dueOn: "2026-10-30",
       basis: "stage",
     });
-    // Workable default is 3 days (Oct 26), the same day: the usual timer wins.
-    expect(defaultFollowUp("default_workable", "2026-10-26T09:00", TODAY).basis).toBe("stage");
+    // Workable default is 3 business days (Oct 28), the same day: the usual timer wins.
+    expect(defaultFollowUp("default_workable", "2026-10-28T09:00", TODAY).basis).toBe("stage");
+    expect(defaultFollowUp("default_workable", "2026-10-26T09:00", TODAY).basis).toBe("promise");
   });
 });
 

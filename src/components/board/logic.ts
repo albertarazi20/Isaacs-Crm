@@ -280,6 +280,8 @@ export function positionsText(card: ClientCard): string | null {
 
 export function timerText(rule: FollowUpRule): string {
   switch (rule.kind) {
+    case "bdays":
+      return rule.days === 1 ? "next business day" : `in ${rule.days} business days`;
     case "days":
       return rule.days === 1 ? "tomorrow" : `in ${rule.days} days`;
     case "months":

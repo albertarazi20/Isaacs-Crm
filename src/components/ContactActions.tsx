@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { logTouchAction, sendEmailAction } from "@/app/actions";
-import { addDays, type ISODate } from "@/lib/mca/dates";
+import type { ISODate } from "@/lib/mca/dates";
 import { formatDate } from "@/lib/format";
 import { emailBody, emailSubject, textTemplate } from "@/lib/mca/templates";
 import {
@@ -15,7 +15,9 @@ import {
   voiceTextHref,
 } from "@/lib/mca/phone";
 import {
-  OUTCOME_LABELS,
+  OUTCOMES_BY_KIND,
+  outcomeLabel,
+  suggestAfterEmail,
   suggestNextFollowUp,
   type TouchKind,
   type TouchOutcome,
@@ -41,6 +43,7 @@ const PENDING_MAX_AGE_MS = 6 * 3_600_000;
 
 interface PendingTouch {
   clientId: string;
+  stage: StageKey;
   name: string;
   kind: TouchKind;
   at: number;
@@ -109,7 +112,13 @@ export function ContactActions({
       window.open(voiceCallHref(e164), "_blank", "noopener");
       toast({ message: `${e164} copied — paste it into Google Voice if it doesn't dial` });
     }
-    setPending({ clientId: client.id, name: client.business_name, kind: "call", at: Date.now() });
+    setPending({
+      clientId: client.id,
+      stage: client.stage,
+      name: client.business_name,
+      kind: "call",
+      at: Date.now(),
+    });
   }
 
   return (
@@ -191,7 +200,13 @@ function TextDialogBody({
   if (!e164) return null;
 
   const sent = () => {
-    setPending({ clientId: client.id, name: client.business_name, kind: "text", at: Date.now() });
+    setPending({
+      clientId: client.id,
+      stage: client.stage,
+      name: client.business_name,
+      kind: "text",
+      at: Date.now(),
+    });
     onClose();
   };
 
@@ -285,7 +300,7 @@ function EmailDialogBody({
   };
   const [subject, setSubject] = useState(() => emailSubject(template));
   const [body, setBody] = useState(() => emailBody(template));
-  const [next, setNext] = useState<ISODate>(() => addDays(today, 3));
+  const [next, setNext] = useState<ISODate>(() => suggestAfterEmail(today, client.stage));
   const [busy, setBusy] = useState(false);
   const [reconnect, setReconnect] = useState(gmailNeedsReconnect);
   const to = client.email.trim();
@@ -322,6 +337,7 @@ function EmailDialogBody({
               onClick={() => {
                 setPending({
                   clientId: client.id,
+                  stage: client.stage,
                   name: client.business_name,
                   kind: "email",
                   at: Date.now(),
@@ -396,7 +412,7 @@ export function PendingTouchPrompt() {
         setOutcome(null);
         setNote("");
         setPickedDate(false);
-        setNext(suggestNextFollowUp(null, today));
+        setNext(suggestNextFollowUp(null, today, p.stage));
       }
     };
     show(readPending());
@@ -412,7 +428,7 @@ export function PendingTouchPrompt() {
 
   function choose(o: TouchOutcome) {
     setOutcome(o);
-    if (!pickedDate) setNext(suggestNextFollowUp(o, today));
+    if (!pickedDate) setNext(suggestNextFollowUp(o, today, pending?.stage));
   }
 
   function close() {
@@ -461,7 +477,7 @@ export function PendingTouchPrompt() {
       <div className="space-y-4">
         {pending?.kind !== "email" ? (
           <div className="grid grid-cols-2 gap-2" role="group" aria-label="Outcome">
-            {(Object.keys(OUTCOME_LABELS) as TouchOutcome[]).map((o) => (
+            {(pending ? OUTCOMES_BY_KIND[pending.kind] : []).map((o) => (
               <button
                 key={o}
                 type="button"
@@ -474,7 +490,7 @@ export function PendingTouchPrompt() {
                     : "border-border bg-surface hover:bg-surface-2",
                 )}
               >
-                {OUTCOME_LABELS[o]}
+                {outcomeLabel(pending?.kind ?? "call", o)}
               </button>
             ))}
           </div>
