@@ -7,7 +7,9 @@ import { devLoginEnabled, env } from "@/lib/env";
 import { ingestLead } from "@/lib/leads/intake";
 import { leadSchema } from "@/lib/leads/schema";
 import { parseBearer, readLimitedJson } from "@/lib/leads/token";
+import { sendViaResend } from "@/lib/email/resend";
 import { checkLeadToken } from "@/lib/system/leads";
+import { sendNewLeadAlert } from "@/lib/system/leadAlert";
 
 export const dynamic = "force-dynamic";
 
@@ -42,6 +44,21 @@ export async function POST(req: Request) {
     const result = await db.withUser(check.userId, async (q) =>
       ingestLead(q, parsed.data, await userContext(q)),
     );
+    // The lead is saved. A failed alert must never turn that into an error for the sender.
+    const e = env();
+    if (result.status === "created" && e.RESEND_API_KEY && e.RESEND_FROM) {
+      const cfg = { apiKey: e.RESEND_API_KEY, from: e.RESEND_FROM };
+      await sendNewLeadAlert({
+        db,
+        userId: check.userId,
+        clientId: result.clientId,
+        now: new Date(),
+        appUrl: e.APP_URL,
+        send: (to, d) => sendViaResend(cfg, { to, ...d }),
+      }).catch((err: unknown) =>
+        console.error("new-lead alert failed:", err instanceof Error ? err.message : err),
+      );
+    }
     return json({ ok: true, ...result }, result.status === "created" ? 201 : 200);
   } catch (e) {
     return json({ error: toActionError(e) }, 400);

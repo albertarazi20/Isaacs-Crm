@@ -35,5 +35,8 @@ Send a phone or an email, and a business or contact name. Anything else (a stage
 - **Keep it on a server or inside Zapier — never in a web page** (anyone could view-source it). Turn it off from the
   Lead intake page at any time; it stops working immediately. Removing the owner from `ALLOWED_EMAILS` does too.
 - SSNs and card numbers in `notes` are refused, like everywhere else in the app.
-- Not built yet: an instant "new lead" email or push (today it shows on Today and the morning digest), and a
-  hosted form page.
+- **Instant alert:** when Resend is configured, a brand-new lead emails the owner right away ("New lead: Mike's
+  Pizza — call now"). At most 20 alerts a day, one per lead, off when the reminder switch in Settings is off.
+  A failed alert never fails the request — the lead is saved first. (Proven on a production build with a
+  failing Resend key; the real delivery needs the Resend account.)
+- Not built yet: push notifications, an alert when a known merchant re-submits, and a hosted form page.

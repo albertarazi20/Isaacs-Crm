@@ -63,7 +63,7 @@ new it finds. `[x]` done and tested · `[~]` in progress · `[ ]` queued · `[!]
 
 ### Next (ranked; none needs the owner except where marked)
 
-- [ ] Instant "new lead" alert (email via Resend now; push later) — speed to lead is the metric
+- [x] Instant "new lead" email alert (capped 20/day) — push notifications still to do; delivery needs the Resend account
 - [ ] Web push notifications for the installed PWA (needs a phone to prove)
 - [ ] Merge duplicate merchants (move notes, timers, advances onto one card)
 - [ ] Cross-device ★ (a `clients.hot` column; today the star is per browser)

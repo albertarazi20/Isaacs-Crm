@@ -151,3 +151,30 @@ export function buildCallReminder(c: CallReminderInput, appUrl: string): Omit<Di
     )}<br>${esc(phone)}</p>${facts.length ? `<ul>${facts.map((f) => `<li>${esc(f)}</li>`).join("")}</ul>` : ""}</div>`,
   };
 }
+
+export interface NewLeadInput {
+  clientId: string;
+  businessName: string;
+  contactName: string;
+  phone: string;
+  wantedAmount: string | null;
+  source: string;
+}
+
+/** The instant alert for a new inbound lead — short enough to read from a phone's lock screen. */
+export function buildNewLeadAlert(l: NewLeadInput, appUrl: string): Omit<Digest, "count"> {
+  const href = `${appUrl}/clients/${l.clientId}`;
+  const phone = l.phone ? formatUS(l.phone) : "no phone — email only";
+  const facts = [
+    l.contactName ? `Contact: ${l.contactName}` : "",
+    l.wantedAmount ? `Wants ${l.wantedAmount}` : "",
+    l.source ? `From: ${l.source}` : "",
+  ].filter(Boolean);
+  return {
+    subject: oneLine(`New lead: ${l.businessName} — call now`),
+    text: `New lead — ${l.businessName}\n${phone}\n${facts.join("\n")}${facts.length ? "\n" : ""}\n${href}\n`,
+    html: `<div style="font-family:system-ui,sans-serif"><h3>New lead — call now</h3><p><a href="${esc(href)}"><strong>${esc(
+      l.businessName,
+    )}</strong></a><br>${esc(phone)}</p>${facts.length ? `<ul>${facts.map((f) => `<li>${esc(f)}</li>`).join("")}</ul>` : ""}</div>`,
+  };
+}
