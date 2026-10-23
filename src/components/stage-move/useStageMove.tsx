@@ -14,7 +14,7 @@ import {
   FundingDialog,
   type Submit,
 } from "./dialogs";
-import { isDefaultStage, undoInput } from "./forms";
+import { isDefaultStage, needsInput, undoInput } from "./forms";
 import { MoveToasts, type RecentMove } from "./MoveToasts";
 
 /**
@@ -33,8 +33,7 @@ export interface StageMove {
 
 /** True when the move cannot happen instantly (a dialog opens first). Callers skip optimistic UI for these. */
 export function stageNeedsInput(card: ClientCard, stage: StageKey): boolean {
-  if (stage === "funded" || stage === "lost") return true;
-  return isDefaultStage(stage) && card.funding_id !== null;
+  return needsInput(card, stage);
 }
 
 type Settle = (card: ClientCard | null) => void;

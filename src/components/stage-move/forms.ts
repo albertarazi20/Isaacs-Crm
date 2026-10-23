@@ -37,6 +37,12 @@ export const DEFAULT_STAGES: readonly StageKey[] = [
 
 export const isDefaultStage = (stage: StageKey) => DEFAULT_STAGES.includes(stage);
 
+/** Funded and lost always ask for details; a default stage asks only when there is an advance to stamp. */
+export function needsInput(card: Pick<ClientCard, "funding_id">, stage: StageKey): boolean {
+  if (stage === "funded" || stage === "lost") return true;
+  return isDefaultStage(stage) && card.funding_id !== null;
+}
+
 export type FormErrors<T> = Partial<Record<keyof T, string>>;
 
 /** Cents back into what Isaac would type: 5000000 → "50000", 123450 → "1234.50". */
