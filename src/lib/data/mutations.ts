@@ -13,6 +13,7 @@ import {
 const APPLICATION_IN_GROUPS = new Set<StageGroup>(["underwriting", "funded"]);
 import { defaultStips } from "../mca/stips";
 import { suggestNextFollowUp } from "../mca/touch";
+import { describeEdit } from "./audit";
 import { getCard } from "./queries";
 import type { ClientCard, UserContext } from "./types";
 import type { z } from "zod";
@@ -325,6 +326,14 @@ export async function cancelCall(q: Db, clientId: string): Promise<ClientCard> {
   return mustCard(q, clientId);
 }
 
+/** A line on the timeline that the app wrote (not Isaac): what changed, what was moved, what was merged. */
+async function addSystemNote(q: Db, clientId: string, body: string): Promise<void> {
+  await q.query(
+    "insert into activities (user_id, client_id, kind, body) select user_id, id, 'system', $2 from clients where id = $1",
+    [clientId, body],
+  );
+}
+
 export async function addNote(q: Db, input: z.output<typeof noteSchema>): Promise<void> {
   const res = await q.query(
     "insert into activities (user_id, client_id, kind, body) select user_id, id, 'note', $2 from clients where id = $1",
@@ -360,8 +369,19 @@ export async function updateClient(
     sets.push(`${column} = $${values.length}`);
   }
   if (sets.length > 0) {
+    // what it was, so the timeline can say what changed (row locked: a second save at the same time can't mix the two)
+    const was = await q.query<{ j: Record<string, unknown> }>(
+      "select to_jsonb(c) as j from clients c where id = $1 for update",
+      [input.clientId],
+    );
     const res = await q.query(`update clients set ${sets.join(", ")} where id = $1`, values);
-    if (res.rowCount === 0) throw new UserError("That client no longer exists");
+    if (res.rowCount === 0 || !was.rows[0]) throw new UserError("That client no longer exists");
+    const now = await q.query<{ j: Record<string, unknown> }>(
+      "select to_jsonb(c) as j from clients c where id = $1",
+      [input.clientId],
+    );
+    const line = describeEdit(was.rows[0].j, now.rows[0]?.j ?? {});
+    if (line) await addSystemNote(q, input.clientId, line);
   }
   return mustCard(q, input.clientId);
 }

@@ -72,7 +72,7 @@ new it finds. `[x]` done and tested · `[~]` in progress · `[ ]` queued · `[!]
 - [ ] Stips upload link texted to the merchant [!] needs a storage decision (private bucket) from the owner
 - [x] A true backup: full export incl. advances, offers, submissions, stips — and a restore that reads it back (`docs/BACKUP.md`)
 - [ ] Consent source/date capture per merchant (TCPA) [!] counsel first
-- [ ] Per-field audit trail for client edits (who changed what)
+- [x] Audit trail for client edits: Edit details writes "Edited details: phone A → B; …" on the timeline (one user, so "who" is always Isaac)
 - [ ] Clients list: page it and slim the card payload (11 MB of HTML at 5,000 merchants; fine at hundreds)
 - [ ] One definition of "the day to call about a renewal": the timer (50%), the Funding card (collected figure), the Renewals page (funder's own line) and Today's reason can disagree (review-3A A-11)
 - [ ] Estimates presented as facts: the "Record received" box is pre-filled with an estimate; a renewal's commission shows as entered (A-14)

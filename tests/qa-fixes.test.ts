@@ -139,3 +139,53 @@ describe("QA I-15: the duplicate check can leave the merchant himself out", () =
     expect(self).toEqual([]);
   });
 });
+
+describe("the timeline says what an edit changed", () => {
+  it("describeEdit lists only what differs, in words, and nothing for a no-op", async () => {
+    const { describeEdit } = await import("@/lib/data/audit");
+    expect(
+      describeEdit(
+        { phone: "3055550100", industry: "", monthly_revenue_cents: null, source: "Referral" },
+        {
+          phone: "7865550123",
+          industry: "Restaurant",
+          monthly_revenue_cents: 5_000_000,
+          source: "Referral",
+        },
+      ),
+    ).toBe(
+      "Edited details: phone 3055550100 → 7865550123; industry blank → Restaurant; monthly revenue blank → $50,000",
+    );
+    expect(describeEdit({ phone: "1", state: "FL" }, { phone: "1", state: "FL" })).toBeNull();
+    expect(
+      describeEdit(
+        { application_received_on: new Date("2026-10-01T00:00:00Z") },
+        { application_received_on: "2026-10-01" },
+      ),
+    ).toBeNull();
+  });
+
+  it("editing a merchant writes one line with the old and new values; saving the same thing writes none", async () => {
+    const { updateClientSchema } = await import("@/lib/data/schemas");
+    const c = await newClient("Audit Pizza", { phone: "(305) 555-0100", industry: "" });
+    const edit = (fields: Record<string, unknown>) =>
+      asA((q) =>
+        m
+          .updateClient(q, updateClientSchema.parse({ clientId: c.id, fields }), ctx)
+          .then(() => undefined),
+      );
+    await edit({ phone: "(786) 555-0123", industry: "Restaurant" });
+    const lines = async () =>
+      (
+        await t.pool.query<{ body: string }>(
+          "select body from activities where client_id = $1 and body like 'Edited details%' order by created_at",
+          [c.id],
+        )
+      ).rows.map((r) => r.body);
+    expect(await lines()).toHaveLength(1);
+    expect((await lines())[0]).toMatch(/^Edited details: phone .* → .*7865550123|\(786\) 555-0123/);
+    expect((await lines())[0]).toContain("industry blank → Restaurant");
+    await edit({ industry: "Restaurant" }); // the same value again
+    expect(await lines()).toHaveLength(1);
+  });
+});
