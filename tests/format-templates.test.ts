@@ -60,6 +60,25 @@ describe("message templates", () => {
       );
     }
   });
+  it("uses a capitalised first name for the sender in texts and the full name in the email signature", () => {
+    const a = { ...base, stage: "interested" as const };
+    expect(textTemplate({ ...a, senderName: "isaac" })).toContain("it's Isaac");
+    expect(textTemplate({ ...a, senderName: "Isaac Cohen" })).toContain("it's Isaac.");
+    expect(emailBody({ ...a, senderName: "Isaac Cohen" })).toMatch(/Thanks,\nIsaac Cohen$/);
+    expect(emailBody({ ...a, senderName: "isaac cohen" })).toMatch(/Thanks,\nIsaac Cohen$/);
+    expect(textTemplate({ ...a, senderName: "" })).toContain("it's Isaac");
+  });
+  it("keeps the honorific instead of greeting someone 'Dr.'", () => {
+    expect(textTemplate({ ...base, contactName: "Dr. Alan Weiss", stage: "interested" })).toMatch(
+      /^Hey Dr\. Weiss, it's Isaac/,
+    );
+    expect(textTemplate({ ...base, contactName: "Dr.", stage: "interested" })).toMatch(
+      /^Hey Dr\., it's/,
+    );
+    expect(emailBody({ ...base, contactName: "Mrs. Rita Cole", stage: "stips" })).toMatch(
+      /^Hi Mrs\. Cole,/,
+    );
+  });
   it("copes with a missing name", () => {
     expect(textTemplate({ ...base, contactName: "", stage: "interested" })).toMatch(
       /^Hey, it's Isaac/,

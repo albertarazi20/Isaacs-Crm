@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
-import { runReminders, type DigestSender } from "@/lib/system/reminders";
+import { runReminders, sendTestDigest, type DigestSender } from "@/lib/system/reminders";
 import { createTestDb, insertUser, type TestDb } from "./helpers/db";
 
 let t: TestDb;
@@ -153,5 +153,63 @@ describe("reminder digest job", () => {
     await runReminders({ db: t.db, now: day, appUrl: "https://app.test", send });
     const digest = send.mock.calls.find((c) => (c as unknown[])[0] === "alerts@x.com")?.[1];
     expect(digest?.text).toContain("Call at 3:30 PM");
+  });
+});
+
+describe("test digest", () => {
+  it("sends a clearly-labelled preview when nothing is due, and says so", async () => {
+    const empty = await insertUser(t.pool, "empty@x.com", "America/New_York");
+    const send = ok();
+    const r = await sendTestDigest({
+      db: t.db,
+      userId: empty,
+      now: MORNING,
+      appUrl: "https://app.test",
+      send,
+    });
+    expect(r).toEqual({ to: "empty@x.com", usedSample: true, count: 1 });
+    const [, digest] = send.mock.calls[0] ?? [];
+    expect(digest.subject).toMatch(/^\[Test\] /);
+    expect(digest.text).toContain("Sample Pizza");
+  });
+  it("sends the real due list when there is one, to the notification address", async () => {
+    const send = ok();
+    const r = await sendTestDigest({
+      db: t.db,
+      userId: ny,
+      now: MORNING,
+      appUrl: "https://app.test",
+      send,
+    });
+    expect(r.usedSample).toBe(false);
+    expect(r.to).toBe("alerts@x.com");
+    expect(send.mock.calls[0]?.[1].text).toContain("Due Today Pizza");
+  });
+  it("never consumes the real daily digest", async () => {
+    const before = (await t.pool.query("select count(*)::int as n from reminders_sent")).rows[0].n;
+    await sendTestDigest({
+      db: t.db,
+      userId: ny,
+      now: new Date("2026-11-02T13:00:00Z"),
+      appUrl: "https://app.test",
+      send: ok(),
+    });
+    expect((await t.pool.query("select count(*)::int as n from reminders_sent")).rows[0].n).toBe(
+      before,
+    );
+  });
+  it("surfaces a provider failure instead of pretending it sent", async () => {
+    const boom: DigestSender = async () => {
+      throw new Error("Resend failed (403: domain not verified)");
+    };
+    await expect(
+      sendTestDigest({
+        db: t.db,
+        userId: ny,
+        now: MORNING,
+        appUrl: "https://app.test",
+        send: boom,
+      }),
+    ).rejects.toThrow(/domain not verified/);
   });
 });

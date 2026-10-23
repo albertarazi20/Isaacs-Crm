@@ -12,7 +12,10 @@ import * as m from "@/lib/data/mutations";
 import { getCard, userContext } from "@/lib/data/queries";
 import * as s from "@/lib/data/schemas";
 import type { ActionResult, ClientCard, UserContext } from "@/lib/data/types";
+import { env } from "@/lib/env";
+import { sendViaResend } from "@/lib/email/resend";
 import { disconnectGmail, sendEmailAsUser } from "@/lib/system/gmail";
+import { sendTestDigest } from "@/lib/system/reminders";
 
 async function run<T>(fn: (q: Db, ctx: UserContext) => Promise<T>): Promise<ActionResult<T>> {
   const session = await requireSession();
@@ -158,6 +161,39 @@ export async function disconnectGmailAction(): Promise<ActionResult<null>> {
     return { ok: true, data: null };
   } catch (e) {
     return { ok: false, error: toActionError(e) };
+  }
+}
+
+/** Sends the real digest (or a sample) to the notification address right now. */
+export async function sendTestReminderAction(): Promise<
+  ActionResult<{ to: string; usedSample: boolean; count: number }>
+> {
+  const session = await requireSession();
+  const e = env();
+  if (!e.RESEND_API_KEY || !e.RESEND_FROM) {
+    return {
+      ok: false,
+      error: "Reminder emails aren't set up yet — add RESEND_API_KEY and RESEND_FROM on the server",
+    };
+  }
+  const cfg = { apiKey: e.RESEND_API_KEY, from: e.RESEND_FROM };
+  try {
+    const data = await sendTestDigest({
+      db,
+      userId: session.userId,
+      now: new Date(),
+      appUrl: e.APP_URL,
+      send: (to, d) => sendViaResend(cfg, { to, ...d }),
+    });
+    return { ok: true, data };
+  } catch (err) {
+    return {
+      ok: false,
+      error:
+        err instanceof Error && /^Resend failed/.test(err.message)
+          ? err.message
+          : toActionError(err),
+    };
   }
 }
 

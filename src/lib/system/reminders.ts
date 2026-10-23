@@ -1,4 +1,4 @@
-import type { DbAccess } from "../db";
+import type { Db, DbAccess } from "../db";
 import { todayIn } from "../mca/dates";
 import { buildDigest, type DueTimer } from "../mca/digest";
 import type { StageKey, TimerKind } from "../mca/stages";
@@ -87,27 +87,7 @@ export async function runReminders(args: {
           [user.id, today],
         );
         if (claim.rowCount === 0) return false;
-        const { rows } = await q.query<DueRow>(
-          `select t.id as timer_id, t.client_id, c.business_name, c.contact_name, c.phone, c.stage,
-                  t.kind, t.due_on, t.note, c.scheduled_call_at
-             from timers t join clients c on c.id = t.client_id
-            where t.user_id = $1 and t.done_at is null and t.due_on <= $2::date`,
-          [user.id, today],
-        );
-        const due: DueTimer[] = rows.map((r) => ({
-          timerId: r.timer_id,
-          clientId: r.client_id,
-          businessName: r.business_name,
-          contactName: r.contact_name,
-          phone: r.phone,
-          stage: r.stage,
-          kind: r.kind,
-          dueOn: r.due_on,
-          note:
-            r.kind === "scheduled_call" && r.scheduled_call_at
-              ? `Call at ${localTime(user.timezone, r.scheduled_call_at)}`
-              : r.note,
-        }));
+        const due = await loadDueTimers(q, user.id, today, user.timezone);
         const digest = buildDigest(due, today, args.appUrl);
         if (!digest) throw new NothingDue();
         const providerId = await args.send(user.notify_email ?? user.email, digest);
@@ -131,6 +111,76 @@ export async function runReminders(args: {
     }
   }
   return summary;
+}
+
+async function loadDueTimers(
+  q: Db,
+  userId: string,
+  today: string,
+  timezone: string,
+): Promise<DueTimer[]> {
+  const { rows } = await q.query<DueRow>(
+    `select t.id as timer_id, t.client_id, c.business_name, c.contact_name, c.phone, c.stage,
+            t.kind, t.due_on, t.note, c.scheduled_call_at
+       from timers t join clients c on c.id = t.client_id
+      where t.user_id = $1 and t.done_at is null and t.due_on <= $2::date`,
+    [userId, today],
+  );
+  return rows.map((r) => ({
+    timerId: r.timer_id,
+    clientId: r.client_id,
+    businessName: r.business_name,
+    contactName: r.contact_name,
+    phone: r.phone,
+    stage: r.stage,
+    kind: r.kind,
+    dueOn: r.due_on,
+    note:
+      r.kind === "scheduled_call" && r.scheduled_call_at
+        ? `Call at ${localTime(timezone, r.scheduled_call_at)}`
+        : r.note,
+  }));
+}
+
+/** Sends the digest right now so Isaac can see what it looks like and prove Resend works. Never claims a send it didn't make. */
+export async function sendTestDigest(args: {
+  db: DbAccess;
+  userId: string;
+  now: Date;
+  appUrl: string;
+  send: DigestSender;
+}): Promise<{ to: string; usedSample: boolean; count: number }> {
+  const user = await args.db.withSystem(async (q) => {
+    const { rows } = await q.query<UserRow>(
+      "select id, email, notify_email, timezone, digest_hour from app_users where id = $1",
+      [args.userId],
+    );
+    return rows[0];
+  });
+  if (!user) throw new Error("user not found");
+  const today = todayIn(user.timezone, args.now);
+  const real = await args.db.withSystem((q) => loadDueTimers(q, user.id, today, user.timezone));
+  const usedSample = real.length === 0;
+  const timers: DueTimer[] = usedSample
+    ? [
+        {
+          timerId: "sample",
+          clientId: "sample",
+          businessName: "Sample Pizza (nothing is due — this is a preview)",
+          contactName: "Mike",
+          phone: "5551234567",
+          stage: "interested",
+          kind: "follow_up",
+          dueOn: today,
+          note: "Wants 50k. Call back after tax return.",
+        },
+      ]
+    : real;
+  const digest = buildDigest(timers, today, args.appUrl);
+  if (!digest) throw new Error("digest was empty");
+  const to = user.notify_email ?? user.email;
+  await args.send(to, { ...digest, subject: `[Test] ${digest.subject}` });
+  return { to, usedSample, count: timers.length };
 }
 
 /** Thrown inside the transaction to roll back the claim when there is nothing to send. */

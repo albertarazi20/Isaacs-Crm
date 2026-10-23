@@ -7,8 +7,24 @@ export interface TemplateArgs {
   senderName: string;
 }
 
+const HONORIFIC = /^(dr|mr|mrs|ms|miss|mx|prof)\.?$/i;
+
+/** What to call the merchant: "Mike", or "Dr. Weiss" — never just "Dr.". */
+function greetingName(full: string): string {
+  const [first = "", ...rest] = full.trim().split(/\s+/);
+  if (HONORIFIC.test(first) && rest.length > 0) return `${first} ${rest[rest.length - 1]}`;
+  return first;
+}
+
 function firstName(full: string): string {
   return full.trim().split(/\s+/)[0] ?? "";
+}
+
+/** "isaac" → "Isaac". Names typed in all lowercase (an email prefix, a fast typist) shouldn't go out that way. */
+function tidy(name: string): string {
+  return name === name.toLowerCase()
+    ? name.replace(/(^|\s)(\p{L})/gu, (_, sp: string, c: string) => sp + c.toUpperCase())
+    : name;
 }
 
 type Tone = "warm" | "app" | "stips" | "offer" | "funded" | "renewal" | "default" | "revive";
@@ -60,12 +76,9 @@ const LINES: Record<Tone, (hi: string, biz: string, me: string) => string> = {
 
 /** A starting message. Isaac edits it; the point is never starting from a blank box. */
 export function textTemplate(a: TemplateArgs): string {
-  const name = firstName(a.contactName);
-  return LINES[TONE[a.stage]](
-    name ? `Hey ${name}, ` : "Hey, ",
-    a.businessName,
-    a.senderName || "Isaac",
-  );
+  const name = greetingName(a.contactName);
+  const me = tidy(firstName(a.senderName)) || "Isaac";
+  return LINES[TONE[a.stage]](name ? `Hey ${name}, ` : "Hey, ", a.businessName, me);
 }
 
 export function emailSubject(a: TemplateArgs): string {
@@ -83,11 +96,8 @@ export function emailSubject(a: TemplateArgs): string {
 }
 
 export function emailBody(a: TemplateArgs): string {
-  const name = firstName(a.contactName);
-  const line = LINES[TONE[a.stage]](
-    name ? `Hi ${name},\n\n` : "Hi,\n\n",
-    a.businessName,
-    a.senderName || "Isaac",
-  );
-  return `${line}\n\nThanks,\n${a.senderName || "Isaac"}`;
+  const name = greetingName(a.contactName);
+  const me = tidy(firstName(a.senderName)) || "Isaac";
+  const line = LINES[TONE[a.stage]](name ? `Hi ${name},\n\n` : "Hi,\n\n", a.businessName, me);
+  return `${line}\n\nThanks,\n${tidy(a.senderName.trim()) || "Isaac"}`;
 }
