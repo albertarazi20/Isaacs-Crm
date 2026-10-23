@@ -121,7 +121,7 @@ const S: Seed[] = [
     approve: "35k",
     terms: "6 months, daily",
     industry: "Auto repair",
-    note: "Has two other advances. Slammed with payments. Wants fresh money to cover payroll.",
+    note: "Has two other advances. Slammed with daily remittances. Wants fresh money to cover payroll.",
     positions: [
       [1, "Libertas", "40k", "54.8k", "21k"],
       [2, "Cobalt Capital", "25k", "35.5k", "30k"],
@@ -419,7 +419,7 @@ const S: Seed[] = [
     due: 0,
     industry: "Retail",
     fundedDaysAgo: 75,
-    note: "Missed 4 payments — slow season. Promised $1,500 Friday.",
+    note: "Missed 4 remittances — slow season. Promised $1,500 Friday.",
   },
   {
     biz: "Kingfisher Charters",

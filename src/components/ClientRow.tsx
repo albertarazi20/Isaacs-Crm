@@ -67,7 +67,7 @@ export const ClientRow = memo(function ClientRow({
   card: ClientCard;
   showPaydown?: boolean;
 }) {
-  const { today } = useApp();
+  const { today, nowMs } = useApp();
   const due = card.next_due_on;
   const overdue = due !== null && due < today;
   const isToday = due === today;
@@ -122,7 +122,7 @@ export const ClientRow = memo(function ClientRow({
       {card.last_call_at ? (
         <p className="mt-2 line-clamp-2 text-sm">
           <span className="text-muted">
-            Last call {timeAgo(card.last_call_at)}
+            Last call {timeAgo(card.last_call_at, new Date(nowMs))}
             {card.last_call_note ? ": " : ""}
           </span>
           {card.last_call_note ? <span className="italic">“{card.last_call_note}”</span> : null}

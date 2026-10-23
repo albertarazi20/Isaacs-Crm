@@ -17,7 +17,8 @@
     "test": "vitest run",
     "db:migrate": "tsx scripts/migrate.ts",
     "check": "pnpm typecheck && pnpm lint && pnpm format:check && pnpm test",
-    "db:seed": "tsx scripts/seed-dev.ts"
+    "db:seed": "tsx scripts/seed-dev.ts",
+    "e2e": "node e2e/run.mjs"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
@@ -39,6 +40,7 @@
     "eslint": "^10.13.0",
     "eslint-config-next": "^16.4.2",
     "eslint-config-prettier": "^10.1.8",
+    "playwright-core": "1.56.1",
     "postcss": "^8.5.31",
     "prettier": "^3.9.10",
     "tailwindcss": "^4.3.3",

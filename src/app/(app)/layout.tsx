@@ -1,15 +1,17 @@
+import type { Metadata } from "next";
 import { redirect } from "next/navigation";
+import { cache } from "react";
 import { AppProvider } from "@/components/app-context";
 import { logoutAction } from "@/app/actions";
 import { NavLink } from "@/components/NavLink";
 import { ToastProvider } from "@/components/overlay";
 import { PendingTouchPrompt } from "@/components/ContactActions";
 import { QuickAdd } from "@/components/QuickAdd";
-import { TitleBadge } from "@/components/TitleBadge";
 import { Button } from "@/components/ui";
 import { requireSession } from "@/lib/auth/server";
 import { dueCount, userContext } from "@/lib/data/queries";
 import { db } from "@/lib/db";
+import { requestTimeMs } from "@/lib/server-time";
 import { gmailStatus } from "@/lib/system/gmail";
 
 export const dynamic = "force-dynamic";
@@ -23,15 +25,26 @@ const NAV = [
   { href: "/settings", label: "Settings" },
 ];
 
-export default async function AppLayout({ children }: { children: React.ReactNode }) {
-  const session = await requireSession();
-  const me = await db.withUser(session.userId, async (q) => {
+const loadShell = cache(async (userId: string) =>
+  db.withUser(userId, async (q) => {
     const ctx = await userContext(q);
     const { rows } = await q.query<{ name: string; email: string }>(
       "select name, email from app_users where id = app.current_user_id()",
     );
     return { ctx, user: rows[0], due: await dueCount(q, ctx.today) };
-  });
+  }),
+);
+
+/** "(12) Isaac" in the tab. Set here, on the server, because Next re-applies page metadata after hydration. */
+export async function generateMetadata(): Promise<Metadata> {
+  const session = await requireSession();
+  const { due } = await loadShell(session.userId);
+  return { title: due > 0 ? `(${due}) Isaac — follow-up CRM` : "Isaac — follow-up CRM" };
+}
+
+export default async function AppLayout({ children }: { children: React.ReactNode }) {
+  const session = await requireSession();
+  const me = await loadShell(session.userId);
   if (!me.user) redirect("/login?error=session_expired");
   const gmail = await gmailStatus(session.userId);
 
@@ -43,6 +56,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         senderName: me.user.name || me.user.email.split("@")[0] || "Isaac",
         gmailConnected: gmail.connected,
         gmailNeedsReconnect: gmail.needsReconnect,
+        nowMs: requestTimeMs(),
       }}
     >
       <ToastProvider>
@@ -75,7 +89,6 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         ) : null}
         <main className="mx-auto max-w-[1600px] px-4 py-5">{children}</main>
         <PendingTouchPrompt />
-        <TitleBadge count={me.due} />
       </ToastProvider>
     </AppProvider>
   );

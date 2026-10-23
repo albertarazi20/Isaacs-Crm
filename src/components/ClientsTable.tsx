@@ -27,7 +27,7 @@ function matches(c: ClientCard, term: string): boolean {
 }
 
 export function ClientsTable({ cards }: { cards: ClientCard[] }) {
-  const { today } = useApp();
+  const { today, nowMs } = useApp();
   const [term, setTerm] = useState("");
   const [group, setGroup] = useState<StageGroup | "all">("all");
   const [sort, setSort] = useState<SortKey>("due");
@@ -149,7 +149,7 @@ export function ClientsTable({ cards }: { cards: ClientCard[] }) {
                       )}
                     </td>
                     <td className="px-3 py-2 text-muted">
-                      {c.last_touch_at ? timeAgo(c.last_touch_at) : "never"}
+                      {c.last_touch_at ? timeAgo(c.last_touch_at, new Date(nowMs)) : "never"}
                     </td>
                   </tr>
                 );

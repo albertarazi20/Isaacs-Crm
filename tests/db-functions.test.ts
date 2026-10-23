@@ -341,7 +341,7 @@ describe("stips", () => {
       )
     ).rows[0];
     expect(card).toEqual({ stips_required: 7, stips_received: 1 });
-    expect((await activities(id)).at(-1)?.body).toBe("Received: voided_check");
+    expect((await activities(id)).at(-1)?.body).toBe("Stip received: Voided check");
     await t.db.withUser(a, (q) => q.query("select * from set_stip_received($1, false)", [stip]));
     expect(
       (await t.pool.query("select received_at from stips where id = $1", [stip])).rows[0]
@@ -611,5 +611,78 @@ describe("integrity", () => {
         [b, id],
       ),
     ).rejects.toThrow(/foreign key/);
+  });
+});
+
+describe("timeline wording and ordering written by the database", () => {
+  it("writes follow-ups, stips and fundings the way Isaac would say them", async () => {
+    const id = await insertClient(t.db, a, "Wording Co");
+    const due = addMonths(today(), 2);
+    await t.db.withUser(a, (q) => q.query("select * from set_follow_up($1, $2)", [id, due]));
+    const MON = [
+      "Jan",
+      "Feb",
+      "Mar",
+      "Apr",
+      "May",
+      "Jun",
+      "Jul",
+      "Aug",
+      "Sep",
+      "Oct",
+      "Nov",
+      "Dec",
+    ];
+    const [y, mo, d] = due.split("-").map(Number) as [number, number, number];
+    expect((await activities(id)).at(-1)?.body).toBe(`Follow up set for ${MON[mo - 1]} ${d}, ${y}`);
+
+    await t.db.withUser(a, (q) =>
+      q.query("select add_stips($1, $2::jsonb)", [
+        id,
+        JSON.stringify([{ kind: "bank_statement", period: "2026-07-01", required: true }]),
+      ]),
+    );
+    const stip = (await t.pool.query("select id from stips where client_id = $1", [id])).rows[0].id;
+    await t.db.withUser(a, (q) => q.query("select * from set_stip_received($1, true)", [stip]));
+    expect((await activities(id)).at(-1)?.body).toBe("Stip received: Jul 2026 bank statement");
+    await t.db.withUser(a, (q) => q.query("select * from set_stip_received($1, false)", [stip]));
+    expect((await activities(id)).at(-1)?.body).toBe(
+      "Stip marked missing: Jul 2026 bank statement",
+    );
+
+    const funding = {
+      funded_on: today(),
+      amount_cents: 5_000_000,
+      factor_rate: 1.32,
+      payment_cents: 55_000,
+      frequency: "daily",
+    };
+    await t.db.withUser(a, (q) =>
+      q.query("select * from record_funding($1, $2::jsonb, $3::jsonb)", [
+        id,
+        JSON.stringify(funding),
+        JSON.stringify([fu(30, "check_in")]),
+      ]),
+    );
+    expect((await activities(id)).at(-1)?.body).toBe("Funded $50,000 at 1.32 factor");
+  });
+  it("two asks saved in the same transaction still have a clear newest", async () => {
+    const id = await insertClient(t.db, a, "Same Tx Ask Co");
+    await t.db.withUser(a, async (q) => {
+      await q.query(
+        "insert into client_asks (user_id, client_id, wanted_amount_cents) values ($1, $2, 1000000)",
+        [a, id],
+      );
+      await q.query(
+        "insert into client_asks (user_id, client_id, wanted_amount_cents) values ($1, $2, 2000000)",
+        [a, id],
+      );
+    });
+    const card = (
+      await t.db.withUser(a, (q) =>
+        q.query("select wanted_amount_cents from client_cards where id = $1", [id]),
+      )
+    ).rows[0];
+    expect(card.wanted_amount_cents).toBe(2_000_000);
   });
 });

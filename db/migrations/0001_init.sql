@@ -119,7 +119,8 @@ create table client_asks (
   wanted_terms text not null default '',
   est_approval_cents bigint check (est_approval_cents >= 0),
   est_approval_note text not null default '',
-  created_at timestamptz not null default now(),
+  -- clock_timestamp(): two asks saved in one transaction must still have a "newest".
+  created_at timestamptz not null default clock_timestamp(),
   foreign key (client_id, user_id) references clients (id, user_id) on delete cascade
 );
 create index client_asks_client_idx on client_asks (client_id, created_at desc);
@@ -401,7 +402,7 @@ begin
   returning * into c;
   perform app.replace_timers(c.id, c.user_id, p_timers, 'replaced');
   insert into activities (user_id, client_id, kind, body, to_stage)
-  values (c.user_id, c.id, 'system', 'Added', c.stage);
+  values (c.user_id, c.id, 'system', 'Client added', c.stage);
   return c;
 end $$;
 
@@ -438,7 +439,7 @@ begin
     jsonb_build_array(jsonb_build_object('kind', 'follow_up', 'due_on', p_due_on, 'note', coalesce(p_note, ''))),
     'replaced');
   insert into activities (user_id, client_id, kind, body)
-  values (c.user_id, p_client, 'timer', 'Follow up set for ' || p_due_on || case when coalesce(p_note, '') <> '' then ' — ' || p_note else '' end);
+  values (c.user_id, p_client, 'timer', 'Follow up set for ' || to_char(p_due_on, 'FMMon FMDD, YYYY') || case when coalesce(p_note, '') <> '' then ' — ' || p_note else '' end);
   select * into t from timers where client_id = p_client and done_at is null and kind = 'follow_up' order by created_at desc limit 1;
   return t;
 end $$;
@@ -489,7 +490,7 @@ begin
          stage_changed_at = case when stage in ('name_in','spoke_with_owner','interested') then now() else stage_changed_at end
    where id = p_client returning * into c;
   insert into activities (user_id, client_id, kind, body)
-  values (c.user_id, p_client, 'timer', 'Call booked for ' || to_char(p_at at time zone coalesce(tz, 'UTC'), 'Mon DD HH12:MI AM') || case when coalesce(p_note, '') <> '' then ' — ' || p_note else '' end);
+  values (c.user_id, p_client, 'timer', 'Call booked for ' || to_char(p_at at time zone coalesce(tz, 'UTC'), 'FMMon FMDD, FMHH12:MI AM') || case when coalesce(p_note, '') <> '' then ' — ' || p_note else '' end);
   return c;
 end $$;
 
@@ -524,8 +525,18 @@ begin
   end if;
   insert into activities (user_id, client_id, kind, body)
   values (s.user_id, s.client_id, 'system',
-          (case when p_received then 'Received: ' else 'Marked missing: ' end) || s.kind ||
-          coalesce(' ' || to_char(s.period, 'Mon YYYY'), ''));
+          (case when p_received then 'Stip received: ' else 'Stip marked missing: ' end) ||
+          case s.kind
+            when 'signed_application' then 'Signed application'
+            when 'bank_statement' then coalesce(to_char(s.period, 'FMMon YYYY') || ' ', '') || 'bank statement'
+            when 'drivers_license' then 'Driver''s license / ID'
+            when 'voided_check' then 'Voided check'
+            when 'proof_of_ownership' then 'Proof of ownership'
+            when 'tax_return' then 'Tax return'
+            when 'lease_letter' then 'Landlord / lease letter'
+            when 'processing_statement' then 'Processing statement'
+            else 'Other document'
+          end);
   return s;
 end $$;
 
@@ -551,7 +562,7 @@ begin
   returning * into f;
   perform move_client(p_client, 'funded', p_timers, 'Funded');
   insert into activities (user_id, client_id, kind, body)
-  values (c.user_id, p_client, 'funding', 'Funded $' || (f.amount_cents / 100) || ' at ' || f.factor_rate);
+  values (c.user_id, p_client, 'funding', 'Funded $' || to_char(f.amount_cents / 100, 'FM999,999,999') || ' at ' || trim(trailing '.' from to_char(f.factor_rate, 'FM0.999')) || ' factor');
   return f;
 end $$;
 

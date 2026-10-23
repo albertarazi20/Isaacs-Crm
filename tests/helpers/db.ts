@@ -36,6 +36,16 @@ export async function createTestDb(): Promise<TestDb> {
     today: rows[0]?.today ?? "",
     async drop() {
       await pool.end();
+      // pool.end() resolves before the sockets finish closing; forcing the drop now would kill
+      // connections mid-close and surface as an unhandled 57P01. Wait until they are really gone.
+      for (let i = 0; i < 100; i += 1) {
+        const { rows } = await admin.query<{ n: number }>(
+          "select count(*)::int as n from pg_stat_activity where datname = $1",
+          [name],
+        );
+        if (rows[0]?.n === 0) break;
+        await new Promise((r) => setTimeout(r, 50));
+      }
       await admin.query(`drop database ${name} with (force)`);
       await admin.end();
     },
