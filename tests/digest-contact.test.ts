@@ -77,7 +77,8 @@ describe("digest", () => {
       "1 overdue follow-up",
     );
     expect(
-      buildDigest([timer({}), timer({ timerId: "t2", clientId: "c2" })], TODAY, "https://app.test")?.subject,
+      buildDigest([timer({}), timer({ timerId: "t2", clientId: "c2" })], TODAY, "https://app.test")
+        ?.subject,
     ).toBe("2 follow-ups due today");
   });
   it("escapes merchant-controlled text in the HTML body", () => {
