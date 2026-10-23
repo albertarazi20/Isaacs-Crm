@@ -1,11 +1,12 @@
 "use client";
 
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { cn, GROUP_COLOR } from "@/components/ui";
 import type { ClientCard } from "@/lib/data/types";
 import { BUCKET_ORDER, type BucketKey, type ISODate } from "@/lib/mca/dates";
 import { STAGE_GROUPS, STAGES, type StageGroup, type StageKey } from "@/lib/mca/stages";
 import { BucketColumn, StageColumn } from "./columns";
+import { BoardScrollContext } from "./LazySlot";
 
 interface Shared {
   today: ISODate;
@@ -23,8 +24,10 @@ function Scroller({
   dragging: boolean;
   children: ReactNode;
 }) {
+  const [el, setEl] = useState<HTMLDivElement | null>(null);
   return (
     <div
+      ref={setEl}
       role="region"
       aria-label={label}
       className={cn(
@@ -32,7 +35,7 @@ function Scroller({
         !dragging && "snap-x snap-proximity",
       )}
     >
-      {children}
+      <BoardScrollContext.Provider value={el}>{children}</BoardScrollContext.Provider>
     </div>
   );
 }

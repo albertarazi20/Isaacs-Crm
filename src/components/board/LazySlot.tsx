@@ -1,8 +1,11 @@
 "use client";
 
 import {
+  createContext,
   useCallback,
+  useContext,
   useEffect,
+  useMemo,
   useRef,
   useState,
   useSyncExternalStore,
@@ -17,22 +20,65 @@ import {
 
 type Report = (visible: boolean, height: number) => void;
 const reports = new WeakMap<Element, Report>();
-let observer: IntersectionObserver | null = null;
+const observers = new WeakMap<Element, IntersectionObserver>();
 
-function observe(node: Element, report: Report): () => void {
-  observer ??= new IntersectionObserver(
-    (entries) => {
-      for (const e of entries)
-        reports.get(e.target)?.(e.isIntersecting, e.boundingClientRect.height);
-    },
-    { rootMargin: "800px 600px" },
-  );
+/**
+ * One observer per column, rooted on the column's own scroll box: a margin only widens the area
+ * of an explicit root, so this is what makes cards mount a little before they scroll into view.
+ */
+function observe(root: Element, node: Element, report: Report): () => void {
+  let io = observers.get(root);
+  if (!io) {
+    io = new IntersectionObserver(
+      (entries) => {
+        for (const e of entries)
+          reports.get(e.target)?.(e.isIntersecting, e.boundingClientRect.height);
+      },
+      { root, rootMargin: "600px 0px" },
+    );
+    observers.set(root, io);
+  }
   reports.set(node, report);
-  observer.observe(node);
+  io.observe(node);
   return () => {
-    observer?.unobserve(node);
+    io.unobserve(node);
     reports.delete(node);
   };
+}
+
+interface ColumnView {
+  root: HTMLElement | null;
+  /** False while the whole column is scrolled well out of sight sideways. */
+  near: boolean;
+}
+const ColumnContext = createContext<ColumnView>({ root: null, near: true });
+
+/** The sideways-scrolling board that holds the columns. */
+export const BoardScrollContext = createContext<HTMLElement | null>(null);
+
+/** The scrolling part of a column. Tells its cards when to be real and when to be empty boxes. */
+export function LazyColumnBody({ children }: { children: ReactNode }) {
+  const board = useContext(BoardScrollContext);
+  const [root, setRoot] = useState<HTMLDivElement | null>(null);
+  const [near, setNear] = useState(true);
+  useEffect(() => {
+    if (!root || !board) return;
+    const io = new IntersectionObserver(([e]) => e && setNear(e.isIntersecting), {
+      root: board,
+      rootMargin: "0px 700px",
+    });
+    io.observe(root);
+    return () => io.disconnect();
+  }, [root, board]);
+  const value = useMemo(() => ({ root, near }), [root, near]);
+  return (
+    <div
+      ref={setRoot}
+      className="min-h-0 flex-1 space-y-2 overflow-y-auto overscroll-y-contain p-2"
+    >
+      <ColumnContext.Provider value={value}>{children}</ColumnContext.Provider>
+    </div>
+  );
 }
 
 // The card being dragged must stay mounted even if auto-scroll carries it far off screen.
@@ -74,12 +120,13 @@ export function LazySlot({
     () => draggingId === id,
     () => false,
   );
-  const live = shown || dragging;
+  const { root, near } = useContext(ColumnContext);
+  const live = (shown && near) || dragging;
 
   useEffect(() => {
     const el = node.current;
-    if (!el) return;
-    return observe(el, (visible, h) => {
+    if (!el || !root) return;
+    return observe(root, el, (visible, h) => {
       if (visible) {
         setShown(true);
         return;
@@ -89,7 +136,7 @@ export function LazySlot({
       setHeight(h);
       setShown(false);
     });
-  }, []);
+  }, [root]);
 
   // Tabbing onto a placeholder swaps in the real card, which then takes the focus.
   useEffect(() => {

@@ -9,7 +9,7 @@ import { bucketLabel, type BucketKey, type ISODate } from "@/lib/mca/dates";
 import { stageDef, type StageKey } from "@/lib/mca/stages";
 import { formatMoneyCompact } from "@/lib/money";
 import { FollowUpCard, PipelineCard } from "./cards";
-import { LazySlot } from "./LazySlot";
+import { LazyColumnBody, LazySlot } from "./LazySlot";
 import { bucketDueDate, isDropBucket, sameCards, STAGE_MONEY_LABEL, summarize } from "./logic";
 
 const WIDTH = "w-[17rem] max-sm:w-[82vw] max-sm:max-w-80";
@@ -133,13 +133,13 @@ export const StageColumn = memo(
             ) : null}
           </p>
         </header>
-        <div className="min-h-0 flex-1 space-y-2 overflow-y-auto overscroll-y-contain p-2">
+        <LazyColumnBody>
           {cards.length > 0 ? (
             <PipelineList cards={cards} {...rest} />
           ) : (
             <DropHint>{compact ? "Drop here" : def.hint}</DropHint>
           )}
-        </div>
+        </LazyColumnBody>
       </ColumnShell>
     );
   },
@@ -203,13 +203,13 @@ export const BucketColumn = memo(
               : `Can't drop here — ${bucket === "overdue" ? "reschedule instead" : "over 36 months"}`}
           </p>
         </header>
-        <div className="min-h-0 flex-1 space-y-2 overflow-y-auto overscroll-y-contain p-2">
+        <LazyColumnBody>
           {cards.length > 0 ? (
             <FollowUpList cards={cards} label={label} {...rest} />
           ) : (
             <DropHint>{drop ? hint : "Nothing here"}</DropHint>
           )}
-        </div>
+        </LazyColumnBody>
       </ColumnShell>
     );
   },
