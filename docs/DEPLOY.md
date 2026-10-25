@@ -11,7 +11,7 @@ New hosting project, new database, new Google Cloud project, new Resend domain. 
 
 - Plain Postgres 15+. No HTTP data API that exposes tables. The app only ever talks to it from its own server.
 - Supabase also works. Migration `0060_lock_hosted_roles.sql` revokes the `anon`/`authenticated` roles it
-  auto-grants, so its data API can't serve merchant data. Still: do **not** put the Supabase anon key in this app.
+  auto-grants, so its data API can't serve merchant data. Supabase also switches row-level security on for every new table; `0230_stages_readable.sql` keeps the shared `stages` table readable under that. Still: do **not** put the Supabase anon key in this app.
 - Two connection strings (**unverified** on Neon's exact names):
   - **Direct** (no pooler) for `pnpm db:migrate`. Migrations hold an advisory lock, which needs a session connection.
   - **Pooled** for the running app. Every request is one transaction (`begin … set local role … commit`), which

@@ -171,7 +171,7 @@ describe("the timeline says what an edit changed", () => {
     const edit = (fields: Record<string, unknown>) =>
       asA((q) =>
         m
-          .updateClient(q, updateClientSchema.parse({ clientId: c.id, fields }), ctx)
+          .updateClient(q, updateClientSchema.parse({ clientId: c.id, fields }))
           .then(() => undefined),
       );
     await edit({ phone: "(786) 555-0123", industry: "Restaurant" });

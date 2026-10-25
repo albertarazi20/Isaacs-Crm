@@ -350,3 +350,16 @@ page the Clients list and slim the card payload. Reports and win-back stay fast 
   buttons are disabled for him either way.)
 - Not changed: C-6 older-backup column handling is fixed, but backups are still a version-1 file — a schema change that
   renames or drops a column needs a restore note in `docs/BACKUP.md`.
+
+## First real database: Supabase (found while migrating, 2026-10-25)
+
+- **Supabase turns row-level security on for every new table by itself** (an event trigger, `public.rls_auto_enable`).
+  `stages` is shared reference data with no merchant data and no policy, so on Supabase the app role saw it as empty
+  and `app.promote_to_offers_in` quietly returned false: a funder's yes would never move a deal to Offers in.
+  Migration `0230_stages_readable.sql` turns RLS on for `stages` everywhere and lets the app role read it.
+  `tests/hosted-rls.test.ts` shows the failure and the fix.
+- The data API is still not used by the app (`0060` revokes `anon`/`authenticated`). Turning the Data API off in the
+  project settings is a second lock, not a requirement.
+- Proof the Supabase schema matches a plain migrate: ten fingerprints (columns, constraints, indexes, functions,
+  policies, triggers, RLS flags, views, grants) compared between a local database and the project. Excluded because
+  Supabase adds them itself: `public.rls_auto_enable` and RLS on `schema_migrations`.
