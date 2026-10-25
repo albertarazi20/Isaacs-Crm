@@ -21,6 +21,8 @@ const config: NextConfig = {
   // which breaks the local browser tests. It is a development widget only; production builds never had it.
   devIndicators: false,
   serverExternalPackages: ["pg"],
+  // The merchant import is one server action carrying up to 2,000 rows; the 1 MB default can be too small.
+  experimental: { serverActions: { bodySizeLimit: "4mb" } },
   async headers() {
     if (process.env.NODE_ENV !== "production") return [];
     return [

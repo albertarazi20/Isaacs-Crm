@@ -9,6 +9,8 @@ import { runCallReminders, runReminders } from "@/lib/system/reminders";
 import { runWeeklyScorecards } from "@/lib/system/weekly";
 
 export const dynamic = "force-dynamic";
+// Explicit, so the limit does not depend on the plan or the Fluid default: this job can send several emails.
+export const maxDuration = 60;
 
 function authorised(req: Request, secret: string | undefined): boolean {
   if (!secret) return false;

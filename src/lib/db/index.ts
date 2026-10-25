@@ -15,6 +15,15 @@ async function inTransaction<T>(
   fn: (db: Db) => Promise<T>,
 ) {
   const db = await pool.connect();
+  // pg-pool drops its own 'error' listener while a client is checked out, so a socket the server closes in the middle
+  // of a request would otherwise be an uncaught error that takes the whole instance down. Log it, and never hand that
+  // client to the next request.
+  let broken = false;
+  const onError = (e: Error) => {
+    broken = true;
+    console.error("database connection error during a request:", e.message);
+  };
+  db.on("error", onError);
   try {
     // JIT compiling a query is a fixed ~0.7 s cost that only pays off on huge scans. Listing 5,000 merchants
     // took 1.04 s with it and 0.27 s without (EXPLAIN ANALYZE on client_cards), so it is off for every request.
@@ -27,7 +36,8 @@ async function inTransaction<T>(
     await db.query("rollback").catch(() => undefined);
     throw e;
   } finally {
-    db.release();
+    db.off("error", onError);
+    db.release(broken);
   }
 }
 
@@ -54,7 +64,7 @@ export function getPool(): pg.Pool {
   if (!globalForPool.__isaacPool) {
     const connectionString = process.env.DATABASE_URL;
     if (!connectionString) throw new Error("DATABASE_URL is not set");
-    const pool = new pg.Pool({ connectionString, max: 10 });
+    const pool = new pg.Pool({ connectionString, max: 10, connectionTimeoutMillis: 10_000 });
     // An idle connection the server drops (restart, failover) emits 'error'; with no listener Node
     // would crash the whole process. Log it — pg discards the dead client and the next query reconnects.
     pool.on("error", (e) => console.error("idle database connection error:", e.message));

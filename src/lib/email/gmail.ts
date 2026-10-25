@@ -10,6 +10,16 @@ export class GmailReconnectError extends Error {
   }
 }
 
+/** Google error reasons on a 403 that signing in again cannot fix. */
+const NOT_A_PERMISSION_PROBLEM = new Set([
+  "accessNotConfigured",
+  "rateLimitExceeded",
+  "userRateLimitExceeded",
+  "dailyLimitExceeded",
+  "quotaExceeded",
+  "domainPolicy",
+]);
+
 export interface GmailCreds {
   refreshTokenEnc: string;
   googleEmail: string;
@@ -66,8 +76,19 @@ export async function sendViaGmail(
     signal: AbortSignal.timeout(10_000),
     body: JSON.stringify({ raw }),
   });
-  if (res.status === 401 || res.status === 403)
-    throw new GmailReconnectError("Gmail rejected the send permission");
-  if (!res.ok) throw new Error(`Gmail send failed (${res.status})`);
+  if (!res.ok) {
+    const err = (await res.json().catch(() => ({}))) as {
+      error?: { message?: string; errors?: { reason?: string }[] };
+    };
+    const reason = err.error?.errors?.[0]?.reason;
+    // A 403 for a reason that is not about this person's permission (the Gmail API switched off in the Google
+    // project, a quota) is not fixed by signing in again: say what Google said instead of looping on "reconnect".
+    const notPermission = reason !== undefined && NOT_A_PERMISSION_PROBLEM.has(reason);
+    if (res.status === 401 || (res.status === 403 && !notPermission))
+      throw new GmailReconnectError("Gmail rejected the send permission");
+    throw new Error(
+      `Gmail send failed (${res.status}${reason ? ` ${reason}` : ""}${err.error?.message ? `: ${err.error.message}` : ""})`,
+    );
+  }
   return (await res.json()) as { id: string; threadId: string };
 }

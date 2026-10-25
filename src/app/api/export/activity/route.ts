@@ -4,6 +4,7 @@ import { activityRows, ACTIVITY_HEADER, toCsv } from "@/lib/export/csv";
 import type { ActivityRow } from "@/lib/data/types";
 
 export const dynamic = "force-dynamic";
+export const maxDuration = 60;
 
 /** Every note, call, text and stage move — the backup of what was said. */
 export async function GET() {

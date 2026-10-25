@@ -143,6 +143,36 @@ describe("Gmail send", () => {
       GmailReconnectError,
     );
   });
+  it("says what Google said when a 403 is not a permission problem, instead of looping on reconnect", async () => {
+    const mk = (status: number, reason: string, message: string) =>
+      (async (url: string) =>
+        url.includes("oauth2")
+          ? json({ access_token: "AT" })
+          : json({ error: { message, errors: [{ reason }] } }, status)) as never;
+    const off = mk(403, "accessNotConfigured", "Gmail API has not been used in project 123");
+    await expect(sendViaGmail(creds(), cfg, msg, off)).rejects.toThrow(
+      /Gmail send failed \(403 accessNotConfigured: Gmail API has not been used in project 123\)/,
+    );
+    await expect(sendViaGmail(creds(), cfg, msg, off)).rejects.not.toBeInstanceOf(
+      GmailReconnectError,
+    );
+    const quota = mk(403, "rateLimitExceeded", "Rate Limit Exceeded");
+    await expect(sendViaGmail(creds(), cfg, msg, quota)).rejects.not.toBeInstanceOf(
+      GmailReconnectError,
+    );
+    // a missing scope IS fixed by signing in again, and so is a plain 401
+    const scope = mk(
+      403,
+      "insufficientPermissions",
+      "Request had insufficient authentication scopes.",
+    );
+    await expect(sendViaGmail(creds(), cfg, msg, scope)).rejects.toBeInstanceOf(
+      GmailReconnectError,
+    );
+    await expect(
+      sendViaGmail(creds(), cfg, msg, mk(401, "authError", "Invalid Credentials")),
+    ).rejects.toBeInstanceOf(GmailReconnectError);
+  });
 });
 
 describe("Resend", () => {

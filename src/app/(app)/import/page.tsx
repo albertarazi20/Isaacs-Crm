@@ -1,6 +1,9 @@
 import Link from "next/link";
 import { ImportWizard } from "@/components/ImportWizard";
 
+// Importing a few thousand merchants is one server action; give it room instead of the plan default.
+export const maxDuration = 60;
+
 export default function ImportPage() {
   return (
     <div className="mx-auto max-w-3xl space-y-4">

@@ -4,6 +4,7 @@ import { db } from "@/lib/db";
 import { clientRows, CLIENT_HEADER, toCsv } from "@/lib/export/csv";
 
 export const dynamic = "force-dynamic";
+export const maxDuration = 60;
 
 /** Every client the signed-in user owns, as a spreadsheet. Runs as the user, so row-level security applies. */
 export async function GET() {

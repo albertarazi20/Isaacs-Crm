@@ -16,6 +16,13 @@ New hosting project, new database, new Google Cloud project, new Resend domain. 
   - **Direct** (no pooler) for `pnpm db:migrate`. Migrations hold an advisory lock, which needs a session connection.
   - **Pooled** for the running app. Every request is one transaction (`begin … set local role … commit`), which
     works with transaction-mode pooling.
+- **Supabase, as deployed (2026-10-25):** the project holds all 26 migrations. The running app uses the **Transaction
+  pooler** (port 6543) and ends the string with `?sslmode=no-verify`: Supabase's pooler certificate does not chain to a
+  public authority, so `sslmode=require` fails verification (unverified until a live connect) and no `sslmode` means no
+  encryption. `no-verify` is encrypted but does not prove who answered; the hardening is to pass Supabase's CA in code
+  (backlog). Run later `pnpm db:migrate` against the **Session pooler** (port 5432) or the direct host from a laptop,
+  never port 6543: migrations take a session-level lock. Copy the host from the dashboard (newer projects say `aws-1-…`)
+  and URL-encode the password.
 - The connecting role must be allowed to `create role` once and `set role isaac_app` (the first migration does both).
   Use the project's owner role, not a read-only one.
 - Row-level security is the wall between merchants. The app role `isaac_app` cannot bypass it. Never connect the
@@ -25,17 +32,17 @@ New hosting project, new database, new Google Cloud project, new Resend domain. 
 
 ## 3. Environment variables (host dashboard, never git, never chat)
 
-| Name                             | Value                                                                          |
-| -------------------------------- | ------------------------------------------------------------------------------ |
-| `DATABASE_URL`                   | pooled connection string                                                       |
-| `SESSION_SECRET`                 | 32+ random characters (`openssl rand -base64 48`)                              |
-| `TOKEN_ENC_KEY`                  | `openssl rand -base64 32` — encrypts the stored Gmail token                    |
-| `APP_URL`                        | the public https URL, no trailing slash                                        |
-| `ALLOWED_EMAILS`                 | Isaac's Google address only (each address gets its own empty account)          |
-| `GOOGLE_CLIENT_ID` / `_SECRET`   | from the new Google Cloud project; redirect URI `APP_URL/api/auth/callback`    |
-| `RESEND_API_KEY` / `RESEND_FROM` | Resend key; sender on a domain verified in Resend                              |
-| `CRON_SECRET`                    | 16+ random characters                                                          |
-| `DEV_LOGIN`                      | **leave unset.** It is ignored in production and unless `APP_URL` is localhost |
+| Name                             | Value                                                                                                                                                                   |
+| -------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `DATABASE_URL`                   | pooled connection string, with `?sslmode=no-verify` on Supabase (see section 2)                                                                                         |
+| `SESSION_SECRET`                 | 32+ random characters (`openssl rand -base64 48`)                                                                                                                       |
+| `TOKEN_ENC_KEY`                  | `openssl rand -base64 32` — encrypts the stored Gmail token                                                                                                             |
+| `APP_URL`                        | the public https URL, no trailing slash                                                                                                                                 |
+| `ALLOWED_EMAILS`                 | Isaac's Google address only (each address gets its own empty account)                                                                                                   |
+| `GOOGLE_CLIENT_ID` / `_SECRET`   | from the new Google Cloud project; redirect URI `APP_URL/api/auth/callback`                                                                                             |
+| `RESEND_API_KEY` / `RESEND_FROM` | Resend key; sender on a verified domain, or `onboarding@resend.dev` if the Resend account was created with Isaac's sign-in email (it only delivers to that one address) |
+| `CRON_SECRET`                    | 16+ random characters                                                                                                                                                   |
+| `DEV_LOGIN`                      | **leave unset.** It is ignored in production and unless `APP_URL` is localhost                                                                                          |
 
 ## 4. Scheduler
 
@@ -53,6 +60,10 @@ The app shows a red banner if the scheduler stops (heartbeat).
 6. Wait for the scheduler's first hourly call; the heartbeat banner must not appear.
 7. Import Isaac's CSV (Clients → Import).
 8. On Isaac's phone: tap Text on a test client and report what opens.
+
+After the first deploy, from any machine: `node scripts/smoke-live.mjs <APP_URL>` checks the public surface with no login
+(redirect to /login, Google redirect URI exact and the state cookie HttpOnly and Secure, headers, private routes refuse
+strangers, dev login off). Add `--run-cron` with `CRON_SECRET` in the environment to run the reminder job once for real.
 
 ## 6. Backups
 

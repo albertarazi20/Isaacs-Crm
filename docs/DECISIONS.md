@@ -363,3 +363,22 @@ page the Clients list and slim the card payload. Reports and win-back stay fast 
 - Proof the Supabase schema matches a plain migrate: ten fingerprints (columns, constraints, indexes, functions,
   policies, triggers, RLS flags, views, grants) compared between a local database and the project. Excluded because
   Supabase adds them itself: `public.rls_auto_enable` and RLS on `schema_migrations`.
+
+## Deploy-readiness review (2026-10-25)
+
+A read-only reviewer went through the first-deploy path on Vercel plus Supabase's transaction pooler. Fixed, each checked:
+
+- `APP_URL` is trimmed of trailing slashes, and in production an unset value or an `http://` address (other than localhost)
+  stops the app with a clear message instead of quietly building `//api/auth/callback` or localhost links. A blank optional
+  variable (`CRON_SECRET=`) means "not set" and no longer takes every page down. (`tests/env.test.ts`)
+- A Gmail 403 that is not about the person's permission (the Gmail API switched off in the Google project, a quota) now
+  says what Google said instead of looping on "reconnect Gmail". A missing scope and a 401 still ask to reconnect.
+- The database pool no longer waits forever for a connection (10 s), and a socket dropped in the middle of a request is
+  logged and its connection discarded instead of crashing the instance.
+- `maxDuration = 60` on the import page, cron, backup and export routes; the server-action body limit is 4 MB (a 2,000-row
+  import); Node is pinned to 22.x (what was tested).
+- The backup is compact and streamed. Measured on a production build against a local non-superuser Postgres with 3,000
+  merchants and 30,000 notes: 18.7 MB in 0.94 s, valid JSON, 3,000 and 30,000 rows back. Vercel's cap on a buffered response is
+  4.5 MB (from memory), so the old buffered download would have failed as the data grew.
+- Not changed: TLS stays `no-verify` until Supabase's CA is passed in code (backlog); the import's speed on 2,000 rows is an
+  estimate, not a measurement.
