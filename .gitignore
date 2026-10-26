@@ -10,3 +10,12 @@ coverage/
 *.log
 .venv/
 __pycache__/
+.next/
+*.tsbuildinfo
+next-env.d.ts
+
+# files the app downloads: the whole customer list, never in git
+isaac-backup-*.json
+isaac-clients-*.csv
+isaac-activity-*.csv
+isaac-notes-*.csv

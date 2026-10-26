@@ -1,0 +1,135 @@
+import Link from "next/link";
+import { SecurityPanel } from "@/components/SecurityPanel";
+import { SettingsPanels } from "@/components/SettingsPanels";
+import { Card, SectionTitle } from "@/components/ui";
+import { MessagesCard } from "@/components/winback/MessagesCard";
+import { requireSession } from "@/lib/auth/server";
+import { db } from "@/lib/db";
+import { env, googleConfigured } from "@/lib/env";
+import { getMessageSettings, listSnippets } from "@/lib/messaging/queries";
+import { timeAgo } from "@/lib/format";
+import { requestTimeMs } from "@/lib/server-time";
+import { gmailStatus } from "@/lib/system/gmail";
+import { reminderStatus } from "@/lib/system/heartbeat";
+
+const NOTICES: Record<string, { tone: "good" | "bad"; text: string }> = {
+  connected: {
+    tone: "good",
+    text: "Gmail connected. Emails you send from the CRM now come from your own Gmail.",
+  },
+  gmail_not_granted: {
+    tone: "bad",
+    text: "Google didn't give permission to send email. Try again and tick the box that lets this app send email for you.",
+  },
+  session_expired: {
+    tone: "bad",
+    text: "Your session ended while connecting. Sign in and try again.",
+  },
+  google_error: { tone: "bad", text: "Google connection failed. Try again." },
+  access_denied: { tone: "bad", text: "Gmail connection was cancelled." },
+  bad_state: { tone: "bad", text: "That connect link expired. Try again." },
+};
+
+export default async function SettingsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ gmail?: string; error?: string }>;
+}) {
+  const sp = await searchParams;
+  const session = await requireSession();
+  const user = await db.withUser(session.userId, async (q) => {
+    const { rows } = await q.query<{
+      email: string;
+      timezone: string;
+      digest_enabled: boolean;
+      digest_hour: number;
+    }>(
+      "select email, timezone, digest_enabled, digest_hour from app_users where id = app.current_user_id()",
+    );
+    return rows[0];
+  });
+  const gmail = await gmailStatus(session.userId);
+  const messages = await db.withUser(session.userId, async (q) => ({
+    settings: await getMessageSettings(q),
+    snippets: await listSnippets(q),
+  }));
+  const reminders = await reminderStatus(session.userId, { now: new Date(requestTimeMs()) }).catch(
+    () => null,
+  );
+  const e = env();
+  const key = sp.gmail ?? sp.error ?? "";
+  const notice = Object.hasOwn(NOTICES, key) ? NOTICES[key] : undefined;
+
+  return (
+    <div className="mx-auto max-w-2xl space-y-6">
+      <h1 className="text-2xl font-bold tracking-tight">Settings</h1>
+      {notice ? (
+        <p
+          role="status"
+          className={`rounded-lg p-3 text-sm ${notice.tone === "good" ? "bg-good-soft text-good" : "bg-bad-soft text-bad"}`}
+        >
+          {notice.text}
+        </p>
+      ) : null}
+      <SettingsPanels
+        loginEmail={user?.email ?? session.email}
+        settings={{
+          timezone: user?.timezone ?? "America/New_York",
+          digestEnabled: user?.digest_enabled ?? true,
+          digestHour: user?.digest_hour ?? 8,
+        }}
+        gmail={{
+          connected: gmail.connected,
+          needsReconnect: gmail.needsReconnect,
+          googleEmail: gmail.googleEmail,
+          configured: googleConfigured(e),
+        }}
+        resendReady={Boolean(e.RESEND_API_KEY && e.RESEND_FROM)}
+      />
+      <MessagesCard initial={messages.settings} initialSnippets={messages.snippets} />
+      <Card className="space-y-2 p-4">
+        <SectionTitle>Hourly reminder scheduler</SectionTitle>
+        <p className="text-sm text-muted">
+          {!reminders?.configured
+            ? `Not set up yet. Reminder emails need ${
+                reminders && reminders.missing.length > 0
+                  ? reminders.missing.join(", ")
+                  : "the email key, the sender address and the scheduler secret"
+              } on the server.`
+            : reminders.lastRunAt
+              ? `Last ran ${timeAgo(reminders.lastRunAt, new Date(requestTimeMs()))}.${reminders.stale ? " That is too long ago — check the scheduler." : ""}`
+              : "Has not run yet."}
+        </p>
+      </Card>
+      <Card className="space-y-2 p-4">
+        <SectionTitle>Lead intake</SectionTitle>
+        <p className="text-sm text-muted">
+          Send new merchants in from a website form, Zapier or a lead vendor. They land on Today as
+          call-now.
+        </p>
+        <Link href="/lead-intake" className="text-sm font-medium text-accent underline">
+          Set up lead intake
+        </Link>
+      </Card>
+      <Card className="space-y-2 p-4">
+        <SectionTitle>Your data</SectionTitle>
+        <p className="text-sm text-muted">
+          Everything you have put in — merchants, advances, offers, notes, timers — as one file you
+          can keep. It holds no passwords, Gmail access or tokens.
+        </p>
+        <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm font-medium">
+          <a href="/api/export/backup" className="text-accent underline" download>
+            Download a full backup (.json)
+          </a>
+          <a href="/api/export/clients" className="text-accent underline" download>
+            Merchants (.csv)
+          </a>
+          <a href="/api/export/activity" className="text-accent underline" download>
+            All notes (.csv)
+          </a>
+        </div>
+      </Card>
+      <SecurityPanel />
+    </div>
+  );
+}

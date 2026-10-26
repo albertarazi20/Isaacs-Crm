@@ -1,0 +1,153 @@
+import { diffDays, type ISODate } from "../mca/dates";
+import { paybackCents } from "../mca/funding";
+import type { Frequency } from "../mca/funding";
+import { formatMoneyCompact } from "../money";
+import { factorText, ordinal } from "./format";
+import type { FunderOfferRow, SubmissionRow, SubmissionStatus } from "./types";
+
+/** An offer still in play: the merchant could take it, or already did. */
+export const isLiveOffer = (o: Pick<FunderOfferRow, "status">): boolean =>
+  o.status === "open" || o.status === "presented" || o.status === "accepted";
+
+/** Lowest factor rate wins; a tie goes to the bigger advance, then the earlier offer. */
+export function bestOffer<T extends Pick<FunderOfferRow, "factor_rate" | "amount_cents">>(
+  offers: readonly T[],
+): T | null {
+  let best: T | null = null;
+  for (const o of offers) {
+    if (
+      best === null ||
+      o.factor_rate < best.factor_rate ||
+      (o.factor_rate === best.factor_rate && o.amount_cents > best.amount_cents)
+    )
+      best = o;
+  }
+  return best;
+}
+
+export const FREQUENCY_WORD: Record<Frequency, string> = {
+  daily: "daily",
+  weekly: "weekly",
+  biweekly: "every 2 weeks",
+  monthly: "monthly",
+};
+
+export interface OfferChip {
+  offerId: string;
+  funderName: string;
+  /** "1.34 / $45k daily" */
+  text: string;
+  best: boolean;
+}
+
+/**
+ * The one-line "offers in" summary: every live offer across the submissions, best first.
+ * Only the lowest factor is flagged, and only when there is something to compare it with.
+ */
+export function offerChips(submissions: readonly SubmissionRow[]): OfferChip[] {
+  const live = submissions.flatMap((s) =>
+    s.offers.filter(isLiveOffer).map((o) => ({ o, name: s.funder_name })),
+  );
+  const top = bestOffer(live.map((x) => x.o));
+  return live
+    .map(({ o, name }) => ({
+      offerId: o.id,
+      funderName: name,
+      factor: o.factor_rate,
+      amount: o.amount_cents,
+      text: `${factorText(o.factor_rate)} / ${formatMoneyCompact(o.amount_cents)}${o.frequency ? ` ${FREQUENCY_WORD[o.frequency]}` : ""}`,
+      best: live.length > 1 && top !== null && o.id === top.id,
+    }))
+    .sort((a, b) => a.factor - b.factor || b.amount - a.amount)
+    .map(({ offerId, funderName, text, best }) => ({ offerId, funderName, text, best }));
+}
+
+export function paybackOf(o: Pick<FunderOfferRow, "amount_cents" | "factor_rate">): number {
+  return paybackCents(o.amount_cents, o.factor_rate);
+}
+
+export type SubmissionAction =
+  | "approved"
+  | "declined"
+  | "stips_requested"
+  | "no_response"
+  | "withdrawn"
+  | "reopen"
+  | "stips_sent"
+  | "add_offer";
+
+/** Which buttons a submission row offers, by where it stands. */
+export const SUBMISSION_ACTIONS: Record<SubmissionStatus, readonly SubmissionAction[]> = {
+  sent: ["approved", "declined", "stips_requested", "no_response", "withdrawn"],
+  stips_requested: ["stips_sent", "approved", "declined", "withdrawn"],
+  approved: ["add_offer", "declined", "reopen"],
+  declined: ["approved", "reopen"],
+  no_response: ["approved", "declined", "reopen"],
+  withdrawn: ["reopen"],
+};
+
+/** "$45,000 at 1.34 factor · payback $60,300 · $450 daily" — the money terms of an offer, in MCA words. */
+export function offerTerms(
+  o: Pick<FunderOfferRow, "amount_cents" | "factor_rate" | "payment_cents" | "frequency">,
+  money: (cents: number) => string,
+): string {
+  const parts = [
+    `${money(o.amount_cents)} at ${factorText(o.factor_rate)} factor`,
+    `payback ${money(paybackOf(o))}`,
+  ];
+  if (o.payment_cents !== null)
+    parts.push(`${money(o.payment_cents)}${o.frequency ? ` ${FREQUENCY_WORD[o.frequency]}` : ""}`);
+  return parts.join(" · ");
+}
+
+/** "2nd position · 130-day term · $500 fees" — what else the offer says; empty when it says nothing more. */
+export function offerExtras(
+  o: Pick<FunderOfferRow, "position_no" | "term_days" | "fees_cents">,
+  money: (cents: number) => string,
+): string {
+  const parts: string[] = [];
+  if (o.position_no !== null) parts.push(`${ordinal(o.position_no)} position`);
+  if (o.term_days !== null) parts.push(`${o.term_days}-day term`);
+  if (o.fees_cents !== null) parts.push(`${money(o.fees_cents)} fees`);
+  return parts.join(" · ");
+}
+
+/**
+ * How long the funder has had it, or how fast they answered. `days` is calendar days; `today`
+ * is Isaac's today. Closed-out rows (no response, withdrawn) just say when they were sent.
+ */
+export function waitText(
+  s: Pick<SubmissionRow, "status" | "sent_on" | "responded_on">,
+  today: ISODate,
+): string {
+  if (s.responded_on !== null) {
+    const days = Math.max(0, diffDays(s.sent_on, s.responded_on));
+    return days === 0
+      ? "Answered the same day"
+      : `Answered in ${days} ${days === 1 ? "day" : "days"}`;
+  }
+  if (s.status === "sent" || s.status === "stips_requested") {
+    const days = Math.max(0, diffDays(s.sent_on, today));
+    return days === 0 ? "Sent today" : `Waiting ${days} ${days === 1 ? "day" : "days"}`;
+  }
+  return "";
+}
+
+/** The newest submission to each funder, so the Send list can say "already sent Oct 20 — declined". */
+export function latestByFunder(submissions: readonly SubmissionRow[]): Map<string, SubmissionRow> {
+  const out = new Map<string, SubmissionRow>();
+  for (const s of submissions) {
+    const cur = out.get(s.funder_id);
+    if (
+      !cur ||
+      s.sent_on > cur.sent_on ||
+      (s.sent_on === cur.sent_on && s.status_changed_at > cur.status_changed_at)
+    )
+      out.set(s.funder_id, s);
+  }
+  return out;
+}
+
+/** Still in play with that funder: waiting on them, they want stips, or they said yes. */
+export const isLiveSubmission = (s: Pick<SubmissionRow, "status">): boolean =>
+  s.status === "sent" || s.status === "stips_requested" || s.status === "approved";
