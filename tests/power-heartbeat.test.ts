@@ -220,9 +220,17 @@ describe("the hourly cron route", () => {
       }),
     );
 
+  afterEach(() => vi.unstubAllGlobals());
+
   it("records a heartbeat on every authorised run, even when there is nothing to send", async () => {
     const { POST } = await route();
     await t.pool.query("delete from job_runs");
+    // The weekly scorecard is due on Mondays, so on a Monday this run really would send. This test is about the
+    // heartbeat, not delivery: no network, whatever day it runs.
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response(JSON.stringify({ id: "re_test" }), { status: 200 })),
+    );
     // No users are due a digest or a call heads-up in this database.
     const before = Date.now();
     const res = await call(POST, `Bearer ${"c".repeat(20)}`);

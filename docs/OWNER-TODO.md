@@ -11,19 +11,20 @@ its schema matches a plain local migrate on every check (`docs/DECISIONS.md`, "F
 1. **Merge PR #1** (2 min). CI shows a red X: the free GitHub Actions minutes for the account were used up by another
    repository, so jobs never start (the banner on the job page says so). It is not a code problem and CI is not needed to go
    live. Everything CI would run was run locally: type check, lint, format, 1,581 unit tests.
-2. **Vercel** (30 min). New project, import `ronny-arch/Isaac`. Set these environment variables (Production), never in chat:
+2. **Netlify** (30 min). Add new site → Import from GitHub → `ronny-arch/Isaac`, branch `main`. Netlify detects Next.js; `netlify.toml` pins Node 22. Set these under Site configuration → Environment variables, never in chat:
 
    | Name                                             | Value                                                                                                                                                                                                                                |
    | ------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
    | `DATABASE_URL`                                   | Supabase → Connect → **Transaction pooler** (port 6543), your password filled in (URL-encode `@ : / # ?` in it), then add `?sslmode=no-verify` at the very end. Without it you get an unencrypted connection or a certificate error. |
-   | `SESSION_SECRET`, `TOKEN_ENC_KEY`, `CRON_SECRET` | Run this in Terminal and paste each line into Vercel: `printf 'SESSION_SECRET=%s\nTOKEN_ENC_KEY=%s\nCRON_SECRET=%s\n' "$(openssl rand -base64 48)" "$(openssl rand -base64 32)" "$(openssl rand -hex 24)"`                           |
+   | `SESSION_SECRET`, `TOKEN_ENC_KEY`, `CRON_SECRET` | Run this in Terminal and paste each line into Netlify: `printf 'SESSION_SECRET=%s\nTOKEN_ENC_KEY=%s\nCRON_SECRET=%s\n' "$(openssl rand -base64 48)" "$(openssl rand -base64 32)" "$(openssl rand -hex 24)"`                          |
    | `APP_URL`                                        | The public address, `https://…`, **no trailing slash**. Deploy once to learn it, set it, redeploy. Use this exact address everywhere (Google, the scheduler).                                                                        |
    | `ALLOWED_EMAILS`                                 | Isaac's Google address only.                                                                                                                                                                                                         |
    | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`       | From step 3.                                                                                                                                                                                                                         |
    | `RESEND_API_KEY`, `RESEND_FROM`                  | From step 4.                                                                                                                                                                                                                         |
    | `DEV_LOGIN`                                      | Leave unset.                                                                                                                                                                                                                         |
 
-   Vercel's free (Hobby) plan is for non-commercial use; a business app may need the paid plan (check their terms).
+   Netlify's free plan: I could not confirm from its terms that commercial use is allowed; check your own plan. Hosted functions may be
+   held to 10–60 seconds (sources disagree), which is why the import now goes up in slices of 100 rows.
 
 3. **Google Cloud** (30 min), a new project just for Isaac. Enable the **Gmail API**. OAuth consent screen: scopes `openid email
 profile` and `gmail.send`; set it to **In production** (an "unverified app" warning appears and is fine for one user),

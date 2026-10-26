@@ -33,7 +33,7 @@ const LOCAL_HOSTS = new Set(["localhost", "127.0.0.1"]);
  */
 export function productionUrlProblem(appUrl: string, rawAppUrl: string | undefined): string | null {
   if (!rawAppUrl || rawAppUrl.trim() === "")
-    return "APP_URL: is not set. Set it to the public address, for example https://your-app.vercel.app";
+    return "APP_URL: is not set. Set it to the public address, for example https://isaac.example.com";
   const url = new URL(appUrl);
   if (LOCAL_HOSTS.has(url.hostname)) return null;
   if (url.protocol !== "https:") return "APP_URL: must start with https:// in production";

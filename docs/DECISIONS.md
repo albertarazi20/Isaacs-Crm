@@ -382,3 +382,18 @@ A read-only reviewer went through the first-deploy path on Vercel plus Supabase'
   4.5 MB (from memory), so the old buffered download would have failed as the data grew.
 - Not changed: TLS stays `no-verify` until Supabase's CA is passed in code (backlog); the import's speed on 2,000 rows is an
   estimate, not a measurement.
+
+## Host: Netlify (owner's choice, 2026-10-26)
+
+- Vercel's free plan is for non-commercial use only (their fair-use policy), and Isaac's shop is a business. The owner has a
+  Netlify membership, so the app goes there. Nothing in the code is host-specific except `maxDuration`, which Netlify
+  ignores (harmless).
+- Sources disagree on Netlify's function limits (10 s default, about 26 s on request, or 60 s in its docs; 6 MB per buffered
+  response, 20 MB streamed). None of it was confirmed from Netlify's own pages (unreachable from the build machine), and
+  Next.js 16 on Netlify's runtime is unverified until a live deploy.
+- Because of that, the merchant import now goes up in slices of 100 rows, one server call each, with a progress label.
+  Re-running a file is safe (rows already added are skipped), a failed row keeps its own file line, and a stopped run says
+  where it stopped. `tests/import-slices-db.test.ts` runs a 250-row file through slices against a real Postgres: every row
+  once, a duplicate phone in a later slice skipped, a refused row reported on its line, and a second run changes nothing.
+- Not done yet: the full backup is one file. At 3,000 merchants and 30,000 notes it was 18.7 MB, close to a 20 MB streamed
+  cap. If a live deploy shows trouble, compress it (gzip) and teach the restore script to read it.

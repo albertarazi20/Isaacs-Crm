@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 import { importClientsAction } from "@/app/actions";
+import { chunk, emptyImportResult, IMPORT_BATCH, mergeImportResults } from "@/lib/import/batches";
 import { parseCsv } from "@/lib/import/csv";
 import {
   buildRows,
@@ -32,6 +33,7 @@ export function ImportWizard() {
   const [spreadDays, setSpreadDays] = useState(10);
   const [defaultSource, setDefaultSource] = useState("");
   const [busy, setBusy] = useState(false);
+  const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
 
   const parsed = useMemo(() => {
     if (!text.trim()) return null;
@@ -73,16 +75,34 @@ export function ImportWizard() {
   async function submit() {
     if (!built || built.rows.length === 0) return;
     setBusy(true);
-    const r = await call(importClientsAction({ rows: built.rows }));
+    const all = built.rows.length;
+    let r = emptyImportResult();
+    let stoppedAt: number | null = null;
+    for (const [i, slice] of chunk(built.rows, IMPORT_BATCH).entries()) {
+      setProgress({ done: i * IMPORT_BATCH, total: all });
+      const got = await call(importClientsAction({ rows: slice }));
+      if (!got) {
+        stoppedAt = i * IMPORT_BATCH;
+        break;
+      }
+      r = mergeImportResults(r, got);
+    }
+    setProgress(null);
     setBusy(false);
-    if (!r) return;
     const parts = [`Imported ${r.created} client${r.created === 1 ? "" : "s"}`];
     if (r.skippedExisting) parts.push(`${r.skippedExisting} already in your CRM`);
     if (r.skippedDoNotContact)
       parts.push(`${r.skippedDoNotContact} match a do-not-contact merchant — not added`);
     if (r.failed.length) parts.push(`${r.failed.length} failed`);
-    toast({ message: parts.join(" · "), tone: r.failed.length ? "error" : "success" });
-    if (r.failed.length === 0) router.push("/clients");
+    if (stoppedAt !== null)
+      parts.push(
+        `stopped after ${stoppedAt} of ${all} rows — choose the same file again to finish; rows already added are skipped`,
+      );
+    toast({
+      message: parts.join(" · "),
+      tone: r.failed.length || stoppedAt !== null ? "error" : "success",
+    });
+    if (r.failed.length === 0 && stoppedAt === null) router.push("/clients");
   }
 
   return (
@@ -276,7 +296,9 @@ export function ImportWizard() {
             onClick={() => void submit()}
           >
             {busy
-              ? "Importing…"
+              ? progress && progress.total > IMPORT_BATCH
+                ? `Importing ${Math.min(progress.done + IMPORT_BATCH, progress.total)} of ${progress.total}…`
+                : "Importing…"
               : `Import ${built.rows.length} client${built.rows.length === 1 ? "" : "s"}`}
           </Button>
         </Card>
