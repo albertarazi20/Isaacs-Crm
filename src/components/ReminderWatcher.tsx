@@ -41,11 +41,14 @@ function writeSeen(seen: Set<string>) {
  */
 export function ReminderWatcher() {
   const [due, setDue] = useState<Due[]>([]);
+  // "default" means the browser has not asked yet, so the button below can. Unknown until the first check.
+  const [canAsk, setCanAsk] = useState(false);
 
   useEffect(() => {
     let live = true;
     async function poll() {
       try {
+        setCanAsk("Notification" in window && Notification.permission === "default");
         const res = await fetch("/api/reminders/due", { cache: "no-store" });
         if (!res.ok || !live) return;
         const body = (await res.json()) as { due: Due[] };
@@ -78,7 +81,22 @@ export function ReminderWatcher() {
     };
   }, []);
 
-  if (due.length === 0) return null;
+  async function askPermission() {
+    await Notification.requestPermission();
+    setCanAsk(Notification.permission === "default");
+  }
+
+  const askButton = canAsk ? (
+    <button
+      type="button"
+      onClick={() => void askPermission()}
+      className="fixed right-3 bottom-20 z-40 rounded-full bg-[#ffd400] px-3 py-2 text-sm font-bold text-black shadow-lg sm:bottom-3"
+    >
+      🔔 Turn on reminder alerts
+    </button>
+  ) : null;
+
+  if (due.length === 0) return askButton;
 
   function dismiss(d: Due) {
     const seen = readSeen();
@@ -88,44 +106,47 @@ export function ReminderWatcher() {
   }
 
   return (
-    <div
-      role="alert"
-      aria-live="assertive"
-      className="fixed inset-x-3 top-16 z-50 mx-auto flex max-w-md flex-col gap-2"
-    >
-      {due.map((d) => (
-        <div
-          key={keyOf(d)}
-          className="flex items-center gap-3 rounded-xl bg-[#ffd400] p-3 text-black shadow-xl"
-        >
-          <span aria-hidden className="text-xl">
-            ⏰
-          </span>
-          <div className="min-w-0 flex-1">
-            <p className="truncate font-bold">
-              {CHANNEL_LABEL[d.channel]} {d.business_name} now
-            </p>
-            <p className="truncate text-xs">
-              {[d.phone ? formatUS(d.phone) : "", d.note].filter(Boolean).join(" · ")}
-            </p>
+    <>
+      {askButton}
+      <div
+        role="alert"
+        aria-live="assertive"
+        className="fixed inset-x-3 top-16 z-50 mx-auto flex max-w-md flex-col gap-2"
+      >
+        {due.map((d) => (
+          <div
+            key={keyOf(d)}
+            className="flex items-center gap-3 rounded-xl bg-[#ffd400] p-3 text-black shadow-xl"
+          >
+            <span aria-hidden className="text-xl">
+              ⏰
+            </span>
+            <div className="min-w-0 flex-1">
+              <p className="truncate font-bold">
+                {CHANNEL_LABEL[d.channel]} {d.business_name} now
+              </p>
+              <p className="truncate text-xs">
+                {[d.phone ? formatUS(d.phone) : "", d.note].filter(Boolean).join(" · ")}
+              </p>
+            </div>
+            <Link
+              href={`/clients/${d.id}`}
+              onClick={() => dismiss(d)}
+              className="rounded-lg bg-black px-3 py-1.5 text-sm font-semibold text-white"
+            >
+              Open
+            </Link>
+            <button
+              type="button"
+              aria-label={`Dismiss reminder for ${d.business_name}`}
+              onClick={() => dismiss(d)}
+              className="rounded-lg px-2 py-1 text-lg leading-none font-bold hover:bg-black/10"
+            >
+              ×
+            </button>
           </div>
-          <Link
-            href={`/clients/${d.id}`}
-            onClick={() => dismiss(d)}
-            className="rounded-lg bg-black px-3 py-1.5 text-sm font-semibold text-white"
-          >
-            Open
-          </Link>
-          <button
-            type="button"
-            aria-label={`Dismiss reminder for ${d.business_name}`}
-            onClick={() => dismiss(d)}
-            className="rounded-lg px-2 py-1 text-lg leading-none font-bold hover:bg-black/10"
-          >
-            ×
-          </button>
-        </div>
-      ))}
-    </div>
+        ))}
+      </div>
+    </>
   );
 }
