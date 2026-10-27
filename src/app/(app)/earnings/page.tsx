@@ -1,3 +1,4 @@
+import Image from "next/image";
 import Link from "next/link";
 import { MonthChart } from "@/components/earnings/MonthChart";
 import { MonthTable } from "@/components/earnings/MonthTable";
@@ -16,6 +17,8 @@ import { formatPoints } from "@/lib/earnings/commission";
 import { loadEarningsData } from "@/lib/earnings/queries";
 import { buildEarnings } from "@/lib/earnings/view";
 import { formatMoney } from "@/lib/money";
+
+const DELI_MONTH_CENTS = 400_000;
 
 const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
 
@@ -43,6 +46,39 @@ export default async function EarningsPage() {
 
   return (
     <div className="space-y-6">
+      <Card className="flex items-center gap-4 p-4">
+        <Image
+          src="/deli-guys.png"
+          alt="Two deli guys holding a loaded sandwich"
+          width={474}
+          height={842}
+          className="h-32 w-auto shrink-0 rounded-lg object-cover"
+        />
+        <div className="min-w-0 flex-1">
+          <p className="font-semibold">Deli guys make $4k a month. Goal: beat that.</p>
+          <div
+            className="mt-2 h-2 overflow-hidden rounded-full bg-surface-2"
+            role="progressbar"
+            aria-label="This month against the deli guy's $4,000"
+            aria-valuemin={0}
+            aria-valuemax={DELI_MONTH_CENTS}
+            aria-valuenow={Math.min(summary.thisMonthCents, DELI_MONTH_CENTS)}
+          >
+            <div
+              className="h-full rounded-full bg-accent"
+              style={{
+                width: `${Math.min(100, Math.max(0, (summary.thisMonthCents / DELI_MONTH_CENTS) * 100))}%`,
+              }}
+            />
+          </div>
+          <p className="mt-1 text-xs text-muted">
+            {summary.thisMonthCents >= DELI_MONTH_CENTS
+              ? `${formatMoney(summary.thisMonthCents)} this month. Deli guy beaten.`
+              : `${formatMoney(summary.thisMonthCents)} of ${formatMoney(DELI_MONTH_CENTS)} this month`}
+          </p>
+        </div>
+      </Card>
+
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Earnings</h1>
