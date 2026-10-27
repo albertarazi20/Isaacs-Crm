@@ -387,8 +387,8 @@ function DeleteClientDialog({ detail, onClose }: { detail: ClientDetail; onClose
           : ""}
       </p>
       <p className="rounded-lg bg-surface-2 p-3 text-sm text-muted">
-        Not ready to lose the notes? Close this and use <em>Move to…</em> instead (Not interested,
-        Dead deal). The client stays on your follow-up list and comes back when the timer is due.
+        Not ready to lose the notes? Close this and use <em>Move to…</em> instead (Trash). The
+        client stays on your follow-up list and comes back when the timer is due.
       </p>
     </FormDialog>
   );

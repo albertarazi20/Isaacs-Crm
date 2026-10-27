@@ -92,7 +92,7 @@ export const STAGES: readonly StageDef[] = [
     key: "application_in",
     label: "Application in",
     group: "underwriting",
-    hint: "Signed app is back",
+    hint: "Signed app is back — statements and stips",
     followUp: d(1),
   },
   {
@@ -160,7 +160,7 @@ export const STAGES: readonly StageDef[] = [
   },
   {
     key: "default_bad",
-    label: "Default",
+    label: "Bad default",
     group: "trouble",
     hint: "Not paying, not answering",
     followUp: d(7),
@@ -182,7 +182,7 @@ export const STAGES: readonly StageDef[] = [
   { key: "declined", label: "Declined", group: "exit", hint: "Funders said no", followUp: m(3) },
   {
     key: "lost",
-    label: "Lost / dead",
+    label: "Lost deal",
     group: "exit",
     hint: "Funded somewhere else",
     followUp: { kind: "lost" },
@@ -194,7 +194,13 @@ export const STAGES: readonly StageDef[] = [
     hint: "Pulled before funding",
     followUp: m(6),
   },
-  { key: "dead", label: "Dead deal", group: "exit", hint: "Went silent", followUp: m(9) },
+  {
+    key: "dead",
+    label: "Trash",
+    group: "exit",
+    hint: "Dead, killed, declined or not interested",
+    followUp: m(9),
+  },
   {
     key: "not_interested",
     label: "Not interested",
@@ -217,17 +223,22 @@ export const STAGE_GROUPS: readonly { key: StageGroup; label: string }[] = [
  * shows under the stage it folds into. The old keys stay valid in the database, so no history is rewritten.
  */
 const FOLDS_INTO: Partial<Record<StageKey, StageKey>> = {
+  name_in: "interested",
   spoke_with_owner: "interested",
   call_scheduled: "interested",
+  application_sent: "interested",
+  stips: "application_in",
+  submitted: "application_in",
   offer_presented: "offers_in",
+  contract_out: "offers_in",
   paying_off_soon: "funded",
-  default_workable: "default_bad",
+  paid_in_full: "funded",
   legal_collections: "default_bad",
   written_off: "default_bad",
-  declined: "lost",
-  killed: "lost",
-  dead: "lost",
-  not_interested: "lost",
+  declined: "dead",
+  killed: "dead",
+  not_interested: "dead",
+  lost: "dead",
 };
 
 export const foldStage = (key: StageKey): StageKey => FOLDS_INTO[key] ?? key;

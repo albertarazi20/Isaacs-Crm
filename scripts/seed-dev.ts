@@ -13,7 +13,7 @@ import { getClientDetail, userContext } from "../src/lib/data/queries";
 import { moveSchema, newClientSchema } from "../src/lib/data/schemas";
 import { addDays } from "../src/lib/mca/dates";
 import { parseMoney } from "../src/lib/money";
-import type { StageKey } from "../src/lib/mca/stages";
+import { foldStage, type StageKey } from "../src/lib/mca/stages";
 
 const url = process.env.DATABASE_URL ?? "";
 const email = (process.argv[2] ?? "isaac@example.com").toLowerCase();
@@ -572,7 +572,8 @@ const FUNDING = {
 
 await db.withUser(userId, async (q: Db) => {
   const ctx = await userContext(q);
-  for (const s of S) {
+  // Only the short stage list: retired stages fold into the ones the pickers offer.
+  for (const s of S.map((x) => ({ ...x, stage: foldStage(x.stage) }))) {
     const start: StageKey =
       s.stage === "funded" ||
       [

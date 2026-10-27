@@ -35,7 +35,7 @@ describe("stage catalogue", () => {
   it("recognises stage keys", () => {
     expect(isStageKey("funded")).toBe(true);
     expect(isStageKey("closed_won")).toBe(false);
-    expect(stageDef("lost").label).toBe("Lost / dead");
+    expect(stageDef("lost").label).toBe("Lost deal");
   });
 });
 
@@ -106,6 +106,21 @@ describe("default timers", () => {
     const core = new Set(CORE_STAGES.map((s) => s.key));
     for (const k of STAGE_KEYS) expect(core.has(foldStage(k))).toBe(true);
     expect(core.has("spoke_with_owner")).toBe(false);
-    expect(CORE_STAGES.length).toBeLessThanOrEqual(12);
+    expect(foldStage("killed")).toBe("dead");
+    expect(foldStage("not_interested")).toBe("dead");
+    expect(foldStage("declined")).toBe("dead");
+    expect(foldStage("legal_collections")).toBe("default_bad");
+    expect(foldStage("lost")).toBe("dead");
+    expect(foldStage("name_in")).toBe("interested");
+    expect(foldStage("paid_in_full")).toBe("funded");
+    expect(CORE_STAGES.map((s) => s.key)).toEqual([
+      "interested",
+      "application_in",
+      "offers_in",
+      "funded",
+      "default_workable",
+      "default_bad",
+      "dead",
+    ]);
   });
 });

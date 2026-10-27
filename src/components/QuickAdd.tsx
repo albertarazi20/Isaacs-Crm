@@ -67,8 +67,8 @@ function QuickAddDialog({ onClose }: { onClose: () => void }) {
   const { today } = useApp();
   const call = useCall();
   const toast = useToast();
-  const [stage, setStage] = useState<StageKey>("name_in");
-  const [dueOn, setDueOn] = useState<ISODate>(() => stageDue("name_in", today));
+  const [stage, setStage] = useState<StageKey>("interested");
+  const [dueOn, setDueOn] = useState<ISODate>(() => stageDue("interested", today));
   const [pickedDate, setPickedDate] = useState(false);
   const [busy, setBusy] = useState(false);
 

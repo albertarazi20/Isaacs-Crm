@@ -13,6 +13,7 @@ import { bucketDueDate, timerText, type DropBucket } from "./logic";
 const AGAIN: Partial<Record<StageKey, string>> = {
   funded: "Record a new advance (a renewal)",
   lost: "Change who they went with",
+  default_workable: "Update the default date or promise to pay",
   default_bad: "Update the default date or promise to pay",
 };
 

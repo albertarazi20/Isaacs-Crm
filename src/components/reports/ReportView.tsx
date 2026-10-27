@@ -176,8 +176,8 @@ function DeathsCard({ rows }: { rows: DeathPoint[] }) {
       ) : (
         <>
           <p className="text-sm text-muted">
-            Merchants now in Lost / dead (including Declined, Killed, Dead and Not interested), by
-            the furthest step they reached.
+            Merchants now in Lost deal or Trash (which holds Declined, Killed, Dead and Not
+            interested), by the furthest step they reached.
           </p>
           <ul className="space-y-1.5 text-sm">
             {rows.map((r) => (
