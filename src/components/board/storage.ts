@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useSyncExternalStore } from "react";
-import type { StageGroup } from "@/lib/mca/stages";
+import { isStageKey, type StageGroup, type StageKey } from "@/lib/mca/stages";
 import { VIEW_COOKIE, type BoardView } from "./logic";
 
 /**
@@ -58,6 +58,12 @@ export function useStoredFlag(key: string, fallback: boolean): [boolean, (v: boo
   const [raw, set] = useStored(key);
   const setFlag = useCallback((v: boolean) => set(v ? "1" : "0"), [set]);
   return [raw === null ? fallback : raw === "1", setFlag];
+}
+
+/** The stage he last picked in the board dropdown, remembered on this device. */
+export function useStoredStage(): [StageKey | null, (s: StageKey) => void] {
+  const [raw, set] = useStored("isaac:board:stage");
+  return [raw && isStageKey(raw) ? raw : null, set];
 }
 
 const GROUPS_KEY = "isaac:board:collapsed";

@@ -93,7 +93,7 @@ export function TodayLists({ scheduled, overdue, dueToday, upcoming, snoozeCount
 
       {lists.scheduled.length > 0 ? (
         <section className="space-y-2">
-          <SectionTitle>Calls booked today ({lists.scheduled.length})</SectionTitle>
+          <SectionTitle>Reminders today ({lists.scheduled.length})</SectionTitle>
           <div className="grid gap-3 xl:grid-cols-2">{rows(lists.scheduled)}</div>
         </section>
       ) : null}

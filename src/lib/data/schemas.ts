@@ -191,6 +191,7 @@ export const scheduleCallSchema = z.object({
   clientId: id,
   at: localDateTime,
   note: text().default(""),
+  channel: z.enum(["call", "text", "email"]).default("call"),
 });
 export const noteSchema = z.object({
   clientId: id,

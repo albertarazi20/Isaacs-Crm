@@ -14,9 +14,11 @@ import type { ClientCard } from "@/lib/data/types";
 import { CLIENT_HEADER, clientRows, toCsv } from "@/lib/export/csv";
 import { relativeDay, timeAgo } from "@/lib/format";
 import { formatUS } from "@/lib/mca/phone";
-import { STAGE_GROUPS, STAGES, type StageKey } from "@/lib/mca/stages";
+import { reminderText } from "@/lib/mca/reminder";
+import { CORE_STAGES, STAGE_GROUPS, type StageKey } from "@/lib/mca/stages";
 import { formatMoneyCompact } from "@/lib/money";
 import { useApp } from "./app-context";
+import { ReminderTag } from "./board/parts";
 import { ClientCards } from "./ClientCards";
 import { StageBadge } from "./StageBadge";
 import { Badge, Button, cn, EmptyState, Input, Select } from "./ui";
@@ -37,7 +39,7 @@ function downloadCsv(cards: readonly ClientCard[]): void {
 }
 
 export function ClientsTable({ cards }: { cards: ClientCard[] }) {
-  const { today, nowMs } = useApp();
+  const { today, nowMs, timezone } = useApp();
   const [f, setF] = useState<ClientFilters>(NO_FILTERS);
   const [showMore, setShowMore] = useState(false);
   const [sort, setSort] = useState<SortKey>("due");
@@ -125,7 +127,7 @@ export function ClientsTable({ cards }: { cards: ClientCard[] }) {
             onChange={(e) => set("stage", e.target.value as StageKey | "all")}
           >
             <option value="all">Any stage</option>
-            {STAGES.map((st) => (
+            {CORE_STAGES.map((st) => (
               <option key={st.key} value={st.key}>
                 {st.label}
               </option>
@@ -250,13 +252,23 @@ export function ClientsTable({ cards }: { cards: ClientCard[] }) {
                       {formatMoneyCompact(c.wanted_amount_cents)}
                     </td>
                     <td className="px-3 py-2">
+                      {c.scheduled_call_at ? (
+                        <ReminderTag
+                          text={reminderText(
+                            c.scheduled_call_at,
+                            c.reminder_channel,
+                            timezone,
+                            today,
+                          )}
+                        />
+                      ) : null}{" "}
                       {c.next_due_on ? (
                         <Badge
                           tone={overdue ? "bad" : c.next_due_on === today ? "warn" : "neutral"}
                         >
                           {relativeDay(c.next_due_on, today)}
                         </Badge>
-                      ) : (
+                      ) : c.scheduled_call_at ? null : (
                         "—"
                       )}
                     </td>

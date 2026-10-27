@@ -9,6 +9,7 @@ import { HotImport } from "@/components/power/HotImport";
 import { GlobalSearch } from "@/components/power/GlobalSearch";
 import { MobileTabBar } from "@/components/power/MobileTabBar";
 import { QuickAdd } from "@/components/QuickAdd";
+import { ReminderWatcher } from "@/components/ReminderWatcher";
 import { requireSession } from "@/lib/auth/server";
 import { loadShell } from "@/lib/data/shell";
 import { requestTimeMs } from "@/lib/server-time";
@@ -63,12 +64,21 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       }}
     >
       <ToastProvider>
+        <ReminderWatcher />
         <header
           data-app-header
           className="sticky top-0 z-30 border-b border-border bg-surface/90 backdrop-blur"
         >
           <div className="mx-auto flex max-w-[1600px] items-center gap-3 px-4 py-2">
-            <span className="text-base font-bold tracking-tight">Isaac</span>
+            <span className="flex items-center gap-2 pr-2 text-base font-bold tracking-tight">
+              <span
+                aria-hidden
+                className="grid size-7 place-items-center rounded-lg bg-gradient-to-br from-indigo-500 to-violet-700 text-sm font-extrabold text-white shadow-sm shadow-indigo-500/30"
+              >
+                I
+              </span>
+              Isaac
+            </span>
             <nav aria-label="Main" className="hidden flex-1 gap-1 overflow-x-auto sm:flex">
               {NAV.map((n) => (
                 <NavLink key={n.href} href={n.href} badge={n.href === "/" ? me.due : undefined}>

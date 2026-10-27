@@ -51,7 +51,7 @@ describe("applyFilters", () => {
   it("filters by an exact stage and by stage group", () => {
     const a = card({ business_name: "A", stage: "offers_in" });
     const b = card({ business_name: "B", stage: "dead" });
-    expect(run([a, b], { stage: "dead" })).toEqual(["B"]);
+    expect(run([a, b], { stage: "lost" })).toEqual(["B"]); // dead folds into lost
     expect(run([a, b], { group: "exit" })).toEqual(["B"]);
     expect(run([a, b], { group: "underwriting" })).toEqual(["A"]);
   });

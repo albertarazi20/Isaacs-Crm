@@ -22,6 +22,8 @@ export interface ClientCard {
   stage_changed_at: string;
   application_received_on: ISODate | null;
   scheduled_call_at: string | null;
+  /** What the booked reminder is for: call, text or email. Null when nothing is booked. */
+  reminder_channel?: "call" | "text" | "email" | null;
   last_contact_at: string | null;
   contact_status: ContactStatus;
   contact_status_note: string;

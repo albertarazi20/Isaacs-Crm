@@ -2,7 +2,9 @@ import { describe, expect, it } from "vitest";
 import { addMonths, parseISODate } from "@/lib/mca/dates";
 import type { FundingTerms } from "@/lib/mca/funding";
 import {
+  CORE_STAGES,
   defaultTimers,
+  foldStage,
   isStageKey,
   STAGE_GROUPS,
   STAGE_KEYS,
@@ -33,7 +35,7 @@ describe("stage catalogue", () => {
   it("recognises stage keys", () => {
     expect(isStageKey("funded")).toBe(true);
     expect(isStageKey("closed_won")).toBe(false);
-    expect(stageDef("lost").label).toBe("Lost deal");
+    expect(stageDef("lost").label).toBe("Lost / dead");
   });
 });
 
@@ -95,5 +97,15 @@ describe("default timers", () => {
       "2027-01-21",
     );
     expect(defaultTimers("lost", { today: TODAY })[0]?.dueOn).toBe("2027-04-23");
+  });
+
+  it("folds retired stages into the short list, and every fold target is on it", () => {
+    expect(foldStage("spoke_with_owner")).toBe("interested");
+    expect(foldStage("call_scheduled")).toBe("interested");
+    expect(foldStage("funded")).toBe("funded");
+    const core = new Set(CORE_STAGES.map((s) => s.key));
+    for (const k of STAGE_KEYS) expect(core.has(foldStage(k))).toBe(true);
+    expect(core.has("spoke_with_owner")).toBe(false);
+    expect(CORE_STAGES.length).toBeLessThanOrEqual(12);
   });
 });

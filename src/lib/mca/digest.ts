@@ -124,6 +124,8 @@ export interface CallReminderInput {
   phone: string;
   /** Already formatted in Isaac's timezone, e.g. "3:30 PM". */
   callTime: string;
+  /** What the reminder is for. Missing means a call. */
+  channel?: "call" | "text" | "email" | null;
   wantedAmount: string | null;
   lastCallNote: string | null;
   positionCount: number;
@@ -136,6 +138,7 @@ const oneLine = (s: string): string => s.replace(/\p{Cc}+/gu, " ").trim();
 export function buildCallReminder(c: CallReminderInput, appUrl: string): Omit<Digest, "count"> {
   const href = `${appUrl}/clients/${c.clientId}`;
   const phone = c.phone ? formatUS(c.phone) : "no phone on file";
+  const what = c.channel === "text" ? "Text" : c.channel === "email" ? "Email" : "Call";
   const facts = [
     c.wantedAmount ? `Wants ${c.wantedAmount}` : "",
     c.positionCount > 0
@@ -144,9 +147,9 @@ export function buildCallReminder(c: CallReminderInput, appUrl: string): Omit<Di
     c.lastCallNote ? `Last call: ${c.lastCallNote}` : "",
   ].filter(Boolean);
   return {
-    subject: oneLine(`Call at ${c.callTime}: ${c.businessName}`),
-    text: `Call at ${c.callTime} — ${c.businessName} (${c.contactName || "merchant"}), ${phone}\n${facts.join("\n")}${facts.length ? "\n" : ""}\n${href}\n`,
-    html: `<div style="font-family:system-ui,sans-serif"><h3>Call at ${esc(c.callTime)}</h3><p><a href="${esc(href)}"><strong>${esc(c.businessName)}</strong></a> — ${esc(
+    subject: oneLine(`${what} at ${c.callTime}: ${c.businessName}`),
+    text: `${what} at ${c.callTime} — ${c.businessName} (${c.contactName || "merchant"}), ${phone}\n${facts.join("\n")}${facts.length ? "\n" : ""}\n${href}\n`,
+    html: `<div style="font-family:system-ui,sans-serif"><h3>${what} at ${esc(c.callTime)}</h3><p><a href="${esc(href)}"><strong>${esc(c.businessName)}</strong></a> — ${esc(
       c.contactName || "merchant",
     )}<br>${esc(phone)}</p>${facts.length ? `<ul>${facts.map((f) => `<li>${esc(f)}</li>`).join("")}</ul>` : ""}</div>`,
   };

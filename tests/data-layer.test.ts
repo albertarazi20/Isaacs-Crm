@@ -415,7 +415,7 @@ describe("follow-up timers", () => {
     );
     expect(card).toMatchObject({ next_due_on: due, last_call_note: "Wants 75k after tax season" });
   });
-  it("schedules a call on Isaac's local day and moves an early lead to Phone call scheduled", async () => {
+  it("schedules a reminder on Isaac's local day and leaves the stage alone", async () => {
     const c = await newClient("Call Pizza", { stage: "interested" });
     const day = addDays(ctx.today, 3);
     const card = await asA((q) =>
@@ -425,7 +425,7 @@ describe("follow-up timers", () => {
         ctx,
       ),
     );
-    expect(card.stage).toBe("call_scheduled");
+    expect(card.stage).toBe("interested");
     expect(card.scheduled_call_at).not.toBeNull();
     expect(
       await rows(

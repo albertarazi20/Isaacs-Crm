@@ -1,6 +1,6 @@
 import type { StageGroup, StageKey } from "../mca/stages";
 import { mostCommonSpelling } from "../mca/spelling";
-import { stageDef } from "../mca/stages";
+import { foldStage, stageDef } from "../mca/stages";
 import type { ClientCard } from "./types";
 
 export type QuietFilter = "any" | "30" | "90" | "180" | "never";
@@ -53,7 +53,7 @@ export function applyFilters(
   return cards.filter((c) => {
     if (!matchesTerm(c, f.term)) return false;
     if (f.group !== "all" && stageDef(c.stage).group !== f.group) return false;
-    if (f.stage !== "all" && c.stage !== f.stage) return false;
+    if (f.stage !== "all" && foldStage(c.stage) !== f.stage) return false;
     if (f.source !== "all" && key(c.source) !== key(f.source)) return false;
     if (f.state !== "all" && key(c.state) !== key(f.state)) return false;
     if (f.industry !== "all" && key(c.industry) !== key(f.industry)) return false;

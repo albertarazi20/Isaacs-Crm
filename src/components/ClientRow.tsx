@@ -6,12 +6,14 @@ import type { Priority } from "@/lib/data/priority";
 import type { ClientCard } from "@/lib/data/types";
 import { cardFundingTerms } from "@/lib/data/views";
 import { relativeDay, timeAgo } from "@/lib/format";
-import { bookedTime, bookedToday } from "@/lib/mca/booked";
+import { bookedToday } from "@/lib/mca/booked";
+import { reminderText } from "@/lib/mca/reminder";
 import { balanceCents, paydownPct } from "@/lib/mca/funding";
 import { formatUS } from "@/lib/mca/phone";
 import { TIMER_LABELS } from "@/lib/mca/stages";
 import { formatMoney, formatMoneyCompact } from "@/lib/money";
 import { useApp } from "./app-context";
+import { ReminderTag } from "./board/parts";
 import { ContactActions } from "./ContactActions";
 import { toggleHot } from "./power/prefs";
 import { SnoozeMenu } from "./power/SnoozeMenu";
@@ -91,7 +93,11 @@ export const ClientRow = memo(function ClientRow({
                 </span>
               </Badge>
             ) : null}
-            {booked ? <Badge tone="accent">Call at {bookedTime(card, timezone)}</Badge> : null}
+            {card.scheduled_call_at ? (
+              <ReminderTag
+                text={reminderText(card.scheduled_call_at, card.reminder_channel, timezone, today)}
+              />
+            ) : null}
             {due ? (
               <Badge tone={overdue ? "bad" : isToday ? "warn" : "neutral"}>
                 {card.next_due_kind ? `${TIMER_LABELS[card.next_due_kind]} · ` : ""}

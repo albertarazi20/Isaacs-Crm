@@ -491,17 +491,21 @@ describe("QA I-7: cancelling a booked call puts the merchant back where he was",
     ).rows[0];
   const at = () => `${d(2)}T15:00:00Z`;
 
-  it("Interested → booked → cancelled is Interested again, with the move written down", async () => {
+  it("Interested → reminder set → cancelled stays Interested, and no stage move is written", async () => {
     const id = await merchant("Cancel me", "interested");
+    const moves = async () =>
+      (
+        await t.pool.query(
+          "select 1 from activities where client_id = $1 and kind = 'stage_change'",
+          [id],
+        )
+      ).rowCount;
+    const before = await moves();
     await book(id, at());
-    expect((await stageOf(id))?.stage).toBe("call_scheduled");
+    expect((await stageOf(id))?.stage).toBe("interested");
     await cancel(id);
     expect(await stageOf(id)).toMatchObject({ stage: "interested", scheduled_call_at: null });
-    const { rows } = await t.pool.query<{ from_stage: string; to_stage: string }>(
-      "select from_stage, to_stage from activities where client_id = $1 and kind = 'stage_change' order by created_at desc, id desc limit 1",
-      [id],
-    );
-    expect(rows[0]).toEqual({ from_stage: "call_scheduled", to_stage: "interested" });
+    expect(await moves()).toBe(before);
   });
 
   it("with no record of where he was, he goes back to 'Spoke with owner'", async () => {

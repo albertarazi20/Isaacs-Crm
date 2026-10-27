@@ -152,8 +152,8 @@ describe("R-3: 'Delete forever' can't overtake a restore", () => {
   });
 });
 
-describe("R-8: booking a call is part of the history", () => {
-  it("a deal that booked a call and then died still counts as having reached the owner", async () => {
+describe("R-8: a reminder is not a stage move", () => {
+  it("a deal that set a reminder and then died has only the one stage change", async () => {
     const c = await asA((q) =>
       m.createClient(q, newClientSchema.parse({ businessName: "Booked Then Dead" }), ctx),
     );
@@ -169,12 +169,9 @@ describe("R-8: booking a call is part of the history", () => {
       "select from_stage, to_stage from activities where client_id = $1 and kind = 'stage_change' order by occurred_at, id",
       [c.id],
     );
-    expect(hist).toEqual([
-      { from_stage: "name_in", to_stage: "call_scheduled" },
-      { from_stage: "call_scheduled", to_stage: "lost" },
-    ]);
+    expect(hist).toEqual([{ from_stage: "name_in", to_stage: "lost" }]);
     const cohort = (await asA((q) => loadCohort(q, null))).filter((x) => x.id === c.id);
-    expect(buildDeathPoints(cohort)).toEqual([{ label: "After Interested", count: 1 }]);
+    expect(buildDeathPoints(cohort)).toEqual([{ label: "Never reached the owner", count: 1 }]);
   });
   it("booking a call on a deal that is already past that stage adds no stage change", async () => {
     const c = await asA((q) =>

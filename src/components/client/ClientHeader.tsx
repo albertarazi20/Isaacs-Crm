@@ -12,7 +12,14 @@ import type { DuplicateMatch } from "@/lib/data/queries";
 import type { ClientDetail } from "@/lib/data/types";
 import { formatDate, relativeDay } from "@/lib/format";
 import { formatUS, normalizeUS } from "@/lib/mca/phone";
-import { stageDef, STAGE_GROUPS, STAGES, TIMER_LABELS } from "@/lib/mca/stages";
+import {
+  CORE_STAGES,
+  foldStage,
+  stageDef,
+  STAGE_GROUPS,
+  STAGES,
+  TIMER_LABELS,
+} from "@/lib/mca/stages";
 import { formatMoney } from "@/lib/money";
 import { ContactStatusButton } from "./ContactStatus";
 import { ContactActions } from "../ContactActions";
@@ -86,7 +93,7 @@ export function ClientDetails({ detail, className }: { detail: ClientDetail; cla
 
   async function move(stage: string) {
     const def = STAGES.find((s) => s.key === stage);
-    if (!def || def.key === card.stage) return;
+    if (!def || def.key === foldStage(card.stage)) return;
     setMoving(true);
     await requestMove(card, def.key);
     setMoving(false);
@@ -154,10 +161,10 @@ export function ClientDetails({ detail, className }: { detail: ClientDetail; cla
               <option value="">Move to…</option>
               {STAGE_GROUPS.map((g) => (
                 <optgroup key={g.key} label={g.label}>
-                  {STAGES.filter((s) => s.group === g.key).map((s) => (
-                    <option key={s.key} value={s.key} disabled={s.key === card.stage}>
+                  {CORE_STAGES.filter((s) => s.group === g.key).map((s) => (
+                    <option key={s.key} value={s.key} disabled={s.key === foldStage(card.stage)}>
                       {s.label}
-                      {s.key === card.stage ? " (current)" : ""}
+                      {s.key === foldStage(card.stage) ? " (current)" : ""}
                     </option>
                   ))}
                 </optgroup>

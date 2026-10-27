@@ -12,7 +12,7 @@ import {
   IMPORT_FIELDS,
   type ImportField,
 } from "@/lib/import/map";
-import { stageDef } from "@/lib/mca/stages";
+import { foldStage, stageDef } from "@/lib/mca/stages";
 import { formatDate } from "@/lib/format";
 import { useApp } from "./app-context";
 import { useCall, useToast } from "./overlay";
@@ -266,7 +266,7 @@ export function ImportWizard() {
                       <td className="px-3 py-1.5 text-muted">{r.contactName}</td>
                       <td className="px-3 py-1.5 text-muted">{r.phone}</td>
                       <td className="px-3 py-1.5 text-muted">{r.wantedAmount}</td>
-                      <td className="px-3 py-1.5">{stageDef(r.stage).label}</td>
+                      <td className="px-3 py-1.5">{stageDef(foldStage(r.stage)).label}</td>
                       <td className="px-3 py-1.5">{formatDate(r.followUpOn, today)}</td>
                     </tr>
                   ))}

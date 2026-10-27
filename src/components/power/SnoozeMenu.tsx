@@ -1,11 +1,13 @@
 "use client";
 
 import { useState, type FormEvent } from "react";
-import { setFollowUpAction } from "@/app/actions";
+import { scheduleCallAction, setFollowUpAction } from "@/app/actions";
 import { snoozeWithReasonAction } from "@/app/power-actions";
 import { snoozeNeedsReason } from "@/lib/data/priority";
 import type { ClientCard } from "@/lib/data/types";
 import { formatDate, relativeDay } from "@/lib/format";
+import { callbackAt, callbackLabel, CALLBACK_HOURS } from "@/lib/mca/callback";
+import { CHANNEL_LABEL, REMINDER_CHANNELS, type ReminderChannel } from "@/lib/mca/reminder";
 import { addDays, addMonths, type ISODate } from "@/lib/mca/dates";
 import { stageDef } from "@/lib/mca/stages";
 import { useApp } from "../app-context";
@@ -34,10 +36,27 @@ interface Pending {
  * week asks for a one-line reason, saved as a note with the new date. It never blocks: a blank reason still snoozes.
  */
 function useSnooze(card: Target, onDone: () => void) {
-  const { today } = useApp();
+  const { today, timezone } = useApp();
   const call = useCall();
   const [pending, setPending] = useState<Pending | null>(null);
   const [busy, setBusy] = useState(false);
+  const [channel, setChannel] = useState<ReminderChannel>("call");
+
+  /** "Text him in 3 hours": sets a reminder for that time, so the card flags it and the system nudges him. */
+  async function callBack(hours: number) {
+    setBusy(true);
+    await call(
+      scheduleCallAction({
+        clientId: card.id,
+        at: callbackAt(timezone, hours, Date.now()),
+        note: `${CHANNEL_LABEL[channel]} back`,
+        channel,
+      }),
+      `${card.business_name} — ${CHANNEL_LABEL[channel].toLowerCase()} reminder in ${callbackLabel(hours)}`,
+    );
+    setBusy(false);
+    onDone();
+  }
 
   async function apply(dueOn: ISODate, reason: string) {
     setBusy(true);
@@ -60,7 +79,35 @@ function useSnooze(card: Target, onDone: () => void) {
     void apply(dueOn, "");
   }
 
-  return { pending, setPending, busy, apply, choose };
+  return { pending, setPending, busy, apply, choose, callBack, channel, setChannel };
+}
+
+/** Call, text or email: what the reminder is for. */
+function ChannelPick({
+  channel,
+  onChange,
+}: {
+  channel: ReminderChannel;
+  onChange: (c: ReminderChannel) => void;
+}) {
+  return (
+    <div className="flex gap-1 px-1" role="group" aria-label="Remind me to">
+      {REMINDER_CHANNELS.map((c) => (
+        <button
+          key={c}
+          type="button"
+          aria-pressed={c === channel}
+          onClick={() => onChange(c)}
+          className={cn(
+            "flex-1 rounded-md px-2 py-1 text-xs font-semibold transition",
+            c === channel ? "bg-accent text-white" : "bg-surface-2 text-muted hover:text-text",
+          )}
+        >
+          {CHANNEL_LABEL[c]}
+        </button>
+      ))}
+    </div>
+  );
 }
 
 function ReasonForm({
@@ -113,7 +160,10 @@ function ReasonForm({
 /** The dropdown on a row. */
 export function SnoozeMenu({ card }: { card: Target }) {
   const [open, setOpen] = useState(false);
-  const { pending, setPending, busy, apply, choose } = useSnooze(card, () => setOpen(false));
+  const { pending, setPending, busy, apply, choose, callBack, channel, setChannel } = useSnooze(
+    card,
+    () => setOpen(false),
+  );
   return (
     <details
       open={open}
@@ -129,7 +179,7 @@ export function SnoozeMenu({ card }: { card: Target }) {
       <div
         className={cn(
           "absolute right-0 z-20 mt-1 rounded-xl border border-border bg-surface p-1 shadow-xl",
-          pending ? "w-72" : "grid w-44 gap-0.5",
+          pending ? "w-72" : "grid max-h-[70vh] w-44 gap-0.5 overflow-y-auto",
         )}
       >
         {pending ? (
@@ -141,16 +191,36 @@ export function SnoozeMenu({ card }: { card: Target }) {
             onBack={() => setPending(null)}
           />
         ) : (
-          SNOOZES.map((s) => (
-            <button
-              key={s.label}
-              type="button"
-              className="rounded-lg px-3 py-1.5 text-left text-sm hover:bg-surface-2"
-              onClick={() => choose(s)}
-            >
-              {s.label}
-            </button>
-          ))
+          <>
+            <p className="px-3 pt-1 text-xs font-semibold tracking-wide text-muted uppercase">
+              Remind me in
+            </p>
+            <ChannelPick channel={channel} onChange={setChannel} />
+            {CALLBACK_HOURS.map((h) => (
+              <button
+                key={h}
+                type="button"
+                disabled={busy}
+                className="rounded-lg px-3 py-1.5 text-left text-sm hover:bg-surface-2 disabled:opacity-50"
+                onClick={() => void callBack(h)}
+              >
+                {callbackLabel(h)}
+              </button>
+            ))}
+            <p className="px-3 pt-2 text-xs font-semibold tracking-wide text-muted uppercase">
+              Snooze until
+            </p>
+            {SNOOZES.map((s) => (
+              <button
+                key={s.label}
+                type="button"
+                className="rounded-lg px-3 py-1.5 text-left text-sm hover:bg-surface-2"
+                onClick={() => choose(s)}
+              >
+                {s.label}
+              </button>
+            ))}
+          </>
         )}
       </div>
     </details>
@@ -159,7 +229,10 @@ export function SnoozeMenu({ card }: { card: Target }) {
 
 /** Big touch-friendly presets for power-dial mode. */
 export function SnoozeButtons({ card, count = 5 }: { card: Target; count?: number }) {
-  const { pending, setPending, busy, apply, choose } = useSnooze(card, () => undefined);
+  const { pending, setPending, busy, apply, choose, callBack, channel, setChannel } = useSnooze(
+    card,
+    () => undefined,
+  );
   if (pending) {
     return (
       <div className="rounded-xl border border-border bg-surface-2">
@@ -175,6 +248,20 @@ export function SnoozeButtons({ card, count = 5 }: { card: Target; count?: numbe
   }
   return (
     <div className="flex flex-wrap gap-2" role="group" aria-label="Snooze">
+      <div className="w-full">
+        <ChannelPick channel={channel} onChange={setChannel} />
+      </div>
+      {CALLBACK_HOURS.slice(1, 3).map((h) => (
+        <button
+          key={`cb${h}`}
+          type="button"
+          disabled={busy}
+          onClick={() => void callBack(h)}
+          className="h-12 min-w-24 flex-1 rounded-xl border border-accent/40 bg-accent-soft px-3 text-sm font-semibold text-accent transition hover:brightness-95 disabled:opacity-50"
+        >
+          In {callbackLabel(h)}
+        </button>
+      ))}
       {SNOOZES.slice(0, count).map((s) => (
         <button
           key={s.label}

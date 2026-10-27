@@ -284,14 +284,18 @@ export async function logTouch(q: Db, input: TouchInput, ctx: UserContext): Prom
 
 export async function scheduleCall(
   q: Db,
-  input: z.output<typeof scheduleCallSchema>,
+  input: z.input<typeof scheduleCallSchema>,
   ctx: UserContext,
 ): Promise<ClientCard> {
   // The database would call this "a follow-up date in the past"; he is booking a call.
   if (input.at.slice(0, 10) < ctx.today)
     throw new UserError("That call time has already passed — pick a time from now on");
   const at = await localToInstant(q, input.at, ctx.timezone);
-  await q.query("select * from schedule_call($1, $2, $3)", [input.clientId, at, input.note]);
+  await q.query("select * from schedule_call($1, $2, $3)", [input.clientId, at, input.note ?? ""]);
+  await q.query(
+    "update timers set channel = $2 where client_id = $1 and kind = 'scheduled_call' and done_at is null",
+    [input.clientId, input.channel ?? "call"],
+  );
   return mustCard(q, input.clientId);
 }
 

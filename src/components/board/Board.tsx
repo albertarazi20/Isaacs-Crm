@@ -16,11 +16,18 @@ import { moveToBucketAction, setFollowUpAction } from "@/app/actions";
 import { useApp } from "@/components/app-context";
 import { useCall, useToast } from "@/components/overlay";
 import { stageNeedsInput, useStageMove } from "@/components/stage-move/useStageMove";
-import { cn, EmptyState, Input } from "@/components/ui";
+import { cn, EmptyState, Input, Select } from "@/components/ui";
 import type { ClientCard } from "@/lib/data/types";
 import { BUCKET_ORDER } from "@/lib/mca/dates";
 import { formatDate } from "@/lib/format";
-import { isStageKey, stageDef, TIMER_LABELS, type StageKey } from "@/lib/mca/stages";
+import {
+  CORE_STAGES,
+  foldStage,
+  isStageKey,
+  stageDef,
+  TIMER_LABELS,
+  type StageKey,
+} from "@/lib/mca/stages";
 import { DragFace } from "./cards";
 import {
   collision,
@@ -46,7 +53,7 @@ import {
 } from "./logic";
 import { setDraggingId } from "./LazySlot";
 import { FollowUpSheet, StageSheet } from "./Sheets";
-import { rememberView, useCollapsedGroups, useStoredFlag } from "./storage";
+import { rememberView, useStoredStage } from "./storage";
 import { FollowUpView, PipelineView } from "./views";
 
 const A11Y = {
@@ -126,8 +133,7 @@ export function Board({ initialCards, view }: { initialCards: ClientCard[]; view
 
   const [query, setQuery] = useState("");
   const [overdueOnly, setOverdueOnly] = useState(false);
-  const [hideEmpty, setHideEmpty] = useStoredFlag("isaac:board:hide-empty", false);
-  const [collapsed, toggleGroup] = useCollapsedGroups();
+  const [picked, setPicked] = useStoredStage();
   const [activeId, setActiveId] = useState<string | null>(null);
   const [picker, setPicker] = useState<ClientCard | null>(null);
 
@@ -147,6 +153,11 @@ export function Board({ initialCards, view }: { initialCards: ClientCard[]; view
     () => (view === "followups" ? groupByBucket(visible, today) : null),
     [view, visible, today],
   );
+  // Opens on the picked stage, or on the first stage with someone in it.
+  const stage: StageKey =
+    byStage && picked && CORE_STAGES.some((s) => s.key === picked)
+      ? picked
+      : (CORE_STAGES.find((s) => byStage?.[s.key].length)?.key ?? "name_in");
   const byId = useMemo(() => new Map(cards.map((c) => [c.id, c])), [cards]);
   const activeCard = activeId ? (byId.get(activeId) ?? null) : null;
 
@@ -241,7 +252,8 @@ export function Board({ initialCards, view }: { initialCards: ClientCard[]; view
     if (!card || !over) return;
     const [kind, key = ""] = String(over.id).split(":");
     // Dropping a card back on its own column is never a move.
-    if (kind === "stage" && isStageKey(key) && key !== card.stage) void moveCard(card, key);
+    if (kind === "stage" && isStageKey(key) && key !== foldStage(card.stage))
+      void moveCard(card, key);
     if (kind === "bucket") {
       const bucket = BUCKET_ORDER.find((b) => b === key);
       if (bucket && isDropBucket(bucket) && bucketOf(card, today) !== bucket)
@@ -277,10 +289,19 @@ export function Board({ initialCards, view }: { initialCards: ClientCard[]; view
           value={query}
           onChange={(e) => setQuery(e.target.value)}
         />
-        {view === "pipeline" ? (
-          <Toggle checked={hideEmpty} onChange={setHideEmpty}>
-            Hide empty stages
-          </Toggle>
+        {view === "pipeline" && byStage ? (
+          <Select
+            aria-label="Stage"
+            className="order-4 w-full sm:w-56"
+            value={stage}
+            onChange={(e) => setPicked(e.target.value as StageKey)}
+          >
+            {CORE_STAGES.map((s) => (
+              <option key={s.key} value={s.key}>
+                {s.label} ({byStage[s.key].length})
+              </option>
+            ))}
+          </Select>
         ) : null}
         <Toggle checked={overdueOnly} onChange={setOverdueOnly}>
           Overdue only
@@ -313,10 +334,8 @@ export function Board({ initialCards, view }: { initialCards: ClientCard[]; view
           ) : byStage ? (
             <PipelineView
               byStage={byStage}
-              hideEmpty={hideEmpty}
+              stage={stage}
               dragging={activeId !== null}
-              collapsed={collapsed}
-              onToggleGroup={toggleGroup}
               {...shared}
             />
           ) : byBucket ? (

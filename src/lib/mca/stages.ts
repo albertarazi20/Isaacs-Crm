@@ -160,7 +160,7 @@ export const STAGES: readonly StageDef[] = [
   },
   {
     key: "default_bad",
-    label: "Bad default",
+    label: "Default",
     group: "trouble",
     hint: "Not paying, not answering",
     followUp: d(7),
@@ -182,7 +182,7 @@ export const STAGES: readonly StageDef[] = [
   { key: "declined", label: "Declined", group: "exit", hint: "Funders said no", followUp: m(3) },
   {
     key: "lost",
-    label: "Lost deal",
+    label: "Lost / dead",
     group: "exit",
     hint: "Funded somewhere else",
     followUp: { kind: "lost" },
@@ -211,6 +211,29 @@ export const STAGE_GROUPS: readonly { key: StageGroup; label: string }[] = [
   { key: "trouble", label: "Default & collections" },
   { key: "exit", label: "Exits — still alive" },
 ];
+
+/**
+ * The short list Isaac works from. A stage listed here is retired: no picker offers it and a merchant already in it
+ * shows under the stage it folds into. The old keys stay valid in the database, so no history is rewritten.
+ */
+const FOLDS_INTO: Partial<Record<StageKey, StageKey>> = {
+  spoke_with_owner: "interested",
+  call_scheduled: "interested",
+  offer_presented: "offers_in",
+  paying_off_soon: "funded",
+  default_workable: "default_bad",
+  legal_collections: "default_bad",
+  written_off: "default_bad",
+  declined: "lost",
+  killed: "lost",
+  dead: "lost",
+  not_interested: "lost",
+};
+
+export const foldStage = (key: StageKey): StageKey => FOLDS_INTO[key] ?? key;
+
+/** What every dropdown offers. */
+export const CORE_STAGES: readonly StageDef[] = STAGES.filter((s) => !(s.key in FOLDS_INTO));
 
 const BY_KEY = new Map<StageKey, StageDef>(STAGES.map((s) => [s.key, s]));
 

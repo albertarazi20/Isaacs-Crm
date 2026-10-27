@@ -281,7 +281,7 @@ describe("schedule_call", () => {
       ).rows[0].scheduled_call_at.toISOString(),
     ).toBe(new Date(at).toISOString());
   });
-  it("moves early-prospecting clients to 'Phone call scheduled' but never drags a later stage back", async () => {
+  it("never changes the stage, early or late", async () => {
     const early = await insertClient(t.db, a, "Early Co");
     const late = await insertClient(t.db, a, "Late Co");
     await t.db.withUser(a, (q) =>
@@ -290,7 +290,7 @@ describe("schedule_call", () => {
     const at = `${addDays(today(), 3)}T15:00:00Z`;
     await t.db.withUser(a, (q) => q.query("select * from schedule_call($1, $2)", [early, at]));
     await t.db.withUser(a, (q) => q.query("select * from schedule_call($1, $2)", [late, at]));
-    expect(await stageOf(early)).toBe("call_scheduled");
+    expect(await stageOf(early)).toBe("name_in");
     expect(await stageOf(late)).toBe("offers_in");
   });
   it("replaces a previously booked call instead of stacking two", async () => {

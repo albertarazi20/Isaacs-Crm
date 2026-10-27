@@ -4,7 +4,7 @@ import { listTrashed, findDuplicates } from "@/lib/data/queries";
 import * as m from "@/lib/data/mutations";
 import { importSchema, moveSchema } from "@/lib/data/schemas";
 import type { UserContext } from "@/lib/data/types";
-import { addDays, addMonths } from "@/lib/mca/dates";
+import { addDays, addMonths, todayIn } from "@/lib/mca/dates";
 import { runReminders, type DigestSender } from "@/lib/system/reminders";
 import { createTestDb, insertClient, insertUser, type TestDb } from "./helpers/db";
 
@@ -155,7 +155,7 @@ describe("restoring", () => {
     expect(await openTimers(id)).toEqual([
       {
         kind: "follow_up",
-        due_on: addDays(t.today, 7),
+        due_on: addDays(todayIn("America/New_York"), 7),
         note: "Restored from trash — pick the next step",
       },
     ]);
@@ -186,7 +186,8 @@ describe("restoring", () => {
     await asA((q) => m.restoreClient(q, id));
     const [timer, ...rest] = await openTimers(id);
     expect(rest).toEqual([]);
-    expect(timer?.due_on).toBe(addMonths(t.today, 36));
+    // The app counts from the user's New York day, which differs from the database's UTC day after 8 PM there.
+    expect(timer?.due_on).toBe(addMonths(todayIn("America/New_York"), 36));
   });
 
   it("only reopens what THIS trash closed, not timers closed earlier", async () => {

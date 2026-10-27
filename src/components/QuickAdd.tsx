@@ -5,7 +5,7 @@ import Link from "next/link";
 import { addClientAction, findDuplicatesAction } from "@/app/actions";
 import type { DuplicateMatch } from "@/lib/data/queries";
 import { formatDate } from "@/lib/format";
-import { defaultTimers, stageDef, STAGES, type StageKey } from "@/lib/mca/stages";
+import { CORE_STAGES, defaultTimers, stageDef, type StageKey } from "@/lib/mca/stages";
 import type { ISODate } from "@/lib/mca/dates";
 import { useApp } from "./app-context";
 import { Dialog, useCall, useToast } from "./overlay";
@@ -13,7 +13,9 @@ import { SourceInput } from "./SourceInput";
 import { TimerPicker } from "./TimerPicker";
 import { Button, Field, Input, Select } from "./ui";
 
-const START_STAGES = STAGES.filter((s) => s.group === "prospecting" || s.group === "underwriting");
+const START_STAGES = CORE_STAGES.filter(
+  (s) => s.group === "prospecting" || s.group === "underwriting",
+);
 
 const stageDue = (stage: StageKey, today: ISODate): ISODate =>
   defaultTimers(stage, { today })[0]?.dueOn ?? today;

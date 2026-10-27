@@ -52,6 +52,7 @@ interface DueRow {
   due_on: string;
   note: string;
   scheduled_call_at: Date | null;
+  channel: string | null;
 }
 
 /**
@@ -128,7 +129,7 @@ async function loadDueTimers(
 ): Promise<DueTimer[]> {
   const { rows } = await q.query<DueRow>(
     `select t.id as timer_id, t.client_id, c.business_name, c.contact_name, c.phone, c.stage,
-            t.kind, t.due_on, t.note, c.scheduled_call_at
+            t.kind, t.due_on, t.note, c.scheduled_call_at, t.channel
        from timers t join clients c on c.id = t.client_id
       where t.user_id = $1 and t.done_at is null and t.due_on <= $2::date
         and c.contact_status <> 'dnc'
@@ -146,7 +147,7 @@ async function loadDueTimers(
     dueOn: r.due_on,
     note:
       r.kind === "scheduled_call" && r.scheduled_call_at
-        ? `Call at ${localTime(timezone, r.scheduled_call_at)}`
+        ? `${r.channel === "text" ? "Text" : r.channel === "email" ? "Email" : "Call"} at ${localTime(timezone, r.scheduled_call_at)}`
         : r.note,
   }));
 }
@@ -207,6 +208,7 @@ interface CallRow {
   contact_name: string;
   phone: string;
   scheduled_call_at: Date;
+  channel: "call" | "text" | "email" | null;
   timezone: string;
   login_email: string;
   to_email: string;
@@ -235,6 +237,8 @@ export async function runCallReminders(args: {
       (
         await q.query<CallRow>(
           `select c.user_id, c.id as client_id, c.business_name, c.contact_name, c.phone, c.scheduled_call_at,
+                (select t.channel from timers t where t.client_id = c.id and t.kind = 'scheduled_call' and t.done_at is null
+                  order by t.created_at desc limit 1) as channel,
                 u.timezone, u.email as login_email, coalesce(u.notify_email, u.email) as to_email,
                 (select k.wanted_amount_cents from client_asks k where k.client_id = c.id order by k.created_at desc limit 1) as wanted_amount_cents,
                 (select a.body from activities a where a.client_id = c.id and a.kind = 'call' and a.body <> '' order by a.occurred_at desc limit 1) as last_call_note,
@@ -266,6 +270,7 @@ export async function runCallReminders(args: {
             contactName: c.contact_name,
             phone: c.phone,
             callTime: localTime(c.timezone, c.scheduled_call_at),
+            channel: c.channel,
             wantedAmount: c.wanted_amount_cents ? formatMoneyCompact(c.wanted_amount_cents) : null,
             lastCallNote: c.last_call_note,
             positionCount: c.position_count,

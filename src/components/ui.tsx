@@ -24,8 +24,10 @@ type Variant = "primary" | "secondary" | "ghost" | "danger";
 type Size = "sm" | "md";
 
 const VARIANT: Record<Variant, string> = {
-  primary: "bg-accent text-accent-fg hover:opacity-90",
-  secondary: "bg-surface-2 text-text hover:bg-border",
+  primary:
+    "bg-accent text-accent-fg shadow-sm shadow-accent/25 hover:brightness-110 active:brightness-95",
+  secondary:
+    "border border-border bg-surface text-text shadow-sm hover:border-accent/40 hover:bg-surface-2",
   ghost: "text-muted hover:bg-surface-2 hover:text-text",
   danger: "bg-bad-soft text-bad hover:opacity-80",
 };
@@ -35,7 +37,7 @@ const SIZE: Record<Size, string> = {
   md: "h-10 px-4 text-sm",
 };
 const BASE =
-  "inline-flex items-center justify-center gap-1.5 rounded-lg font-medium transition disabled:cursor-not-allowed disabled:opacity-50";
+  "inline-flex items-center justify-center gap-1.5 rounded-lg font-semibold transition disabled:cursor-not-allowed disabled:opacity-50";
 
 export function buttonClass(
   variant: Variant = "secondary",
@@ -129,7 +131,7 @@ export function Badge({
   return (
     <span
       className={cn(
-        "inline-flex items-center rounded-md px-1.5 py-0.5 text-xs font-medium",
+        "inline-flex items-center rounded-md px-1.5 py-0.5 text-xs font-semibold",
         TONE[tone],
         className,
       )}

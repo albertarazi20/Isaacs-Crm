@@ -40,7 +40,7 @@ import {
 } from "@/components/stage-move/forms";
 import type { ClientCard } from "@/lib/data/types";
 import { addBusinessDays, addDays, addMonths, BUCKET_ORDER } from "@/lib/mca/dates";
-import { STAGE_KEYS, stageDef } from "@/lib/mca/stages";
+import { foldStage, STAGE_KEYS, stageDef } from "@/lib/mca/stages";
 
 // 2026-10-23 is a Friday.
 const TODAY = "2026-10-23";
@@ -121,7 +121,8 @@ describe("grouping", () => {
     const ids = Object.values(groups).flatMap((g) => g.map((c) => c.id));
     expect(ids).toHaveLength(cards.length);
     expect(new Set(ids).size).toBe(cards.length);
-    for (const key of STAGE_KEYS) for (const c of groups[key]) expect(c.stage).toBe(key);
+    // A retired stage's merchants sit in the stage it folds into.
+    for (const key of STAGE_KEYS) for (const c of groups[key]) expect(foldStage(c.stage)).toBe(key);
   });
 
   it("puts every card in exactly one follow-up column", () => {

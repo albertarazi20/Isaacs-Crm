@@ -7,16 +7,13 @@ import { GROUP_COLOR } from "@/components/ui";
 import type { ClientCard } from "@/lib/data/types";
 import { formatDate } from "@/lib/format";
 import { FOLLOW_UP_PRESETS } from "@/lib/mca/dates";
-import { STAGE_GROUPS, STAGES, type StageKey } from "@/lib/mca/stages";
+import { CORE_STAGES, foldStage, STAGE_GROUPS, type StageKey } from "@/lib/mca/stages";
 import { bucketDueDate, timerText, type DropBucket } from "./logic";
 
 const AGAIN: Partial<Record<StageKey, string>> = {
   funded: "Record a new advance (a renewal)",
   lost: "Change who they went with",
-  default_workable: "Update the default date or promise to pay",
   default_bad: "Update the default date or promise to pay",
-  legal_collections: "Update the default date or promise to pay",
-  written_off: "Update the default date or promise to pay",
 };
 
 const OPTION =
@@ -49,8 +46,8 @@ export function StageSheet({
               {g.label}
             </h3>
             <div className="grid gap-1.5 sm:grid-cols-2">
-              {STAGES.filter((s) => s.group === g.key).map((s) => {
-                const current = s.key === card.stage;
+              {CORE_STAGES.filter((s) => s.group === g.key).map((s) => {
+                const current = s.key === foldStage(card.stage);
                 // Funded, lost and default stages can be re-entered to record a new advance,
                 // a different competitor or a new promise to pay.
                 const again = current && needsInput(card, s.key);

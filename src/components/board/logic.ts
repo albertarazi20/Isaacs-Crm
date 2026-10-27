@@ -11,6 +11,7 @@ import {
 import { paydownPct, type FundingTerms } from "@/lib/mca/funding";
 import {
   defaultTimers,
+  foldStage,
   STAGE_KEYS,
   type FollowUpRule,
   type StageGroup,
@@ -94,7 +95,7 @@ export function groupByStage(cards: readonly ClientCard[]): Record<StageKey, Cli
     StageKey,
     ClientCard[]
   >;
-  for (const c of cards) out[c.stage].push(c);
+  for (const c of cards) out[foldStage(c.stage)].push(c);
   for (const k of STAGE_KEYS) out[k].sort(compareCards);
   return out;
 }

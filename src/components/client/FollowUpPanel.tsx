@@ -3,20 +3,27 @@
 import { useState } from "react";
 import { cancelCallAction, scheduleCallAction, setFollowUpAction } from "@/app/actions";
 import type { ClientDetail } from "@/lib/data/types";
+import { callbackAt, callbackLabel, CALLBACK_HOURS } from "@/lib/mca/callback";
+import {
+  CHANNEL_LABEL,
+  REMINDER_CHANNELS,
+  reminderText,
+  type ReminderChannel,
+} from "@/lib/mca/reminder";
 import type { ISODate } from "@/lib/mca/dates";
 import { TIMER_LABELS } from "@/lib/mca/stages";
 import { formatDate, formatDateTime, relativeDay } from "@/lib/format";
 import { useApp } from "../app-context";
 import { TimerPicker } from "../TimerPicker";
-import { Badge, Button, cn, Field, Input } from "../ui";
+import { Button, cn, Field, Input } from "../ui";
 import { AddToCalendar } from "../winback/AddToCalendar";
 import { dueTone } from "./logic";
-import { Muted, Panel, useNowMs, useRun } from "./parts";
+import { ReminderTag } from "../board/parts";
+import { Muted, Panel, useRun } from "./parts";
 
 export function FollowUpPanel({ detail, className }: { detail: ClientDetail; className?: string }) {
   const { card, timers } = detail;
   const { today, timezone } = useApp();
-  const nowMs = useNowMs();
   return (
     <Panel title="Next follow-up" className={className}>
       {timers.length === 0 ? (
@@ -64,9 +71,9 @@ export function FollowUpPanel({ detail, className }: { detail: ClientDetail; cla
       <ScheduleCall clientId={card.id} />
       {card.scheduled_call_at ? (
         <p className="mt-3 flex flex-wrap items-center gap-2 text-sm">
-          <Badge tone={new Date(card.scheduled_call_at).getTime() < nowMs ? "warn" : "accent"}>
-            Call booked
-          </Badge>
+          <ReminderTag
+            text={reminderText(card.scheduled_call_at, card.reminder_channel, timezone, today)}
+          />
           <span className="font-medium">{formatDateTime(card.scheduled_call_at, timezone)}</span>
           <CancelCall clientId={card.id} />
           <AddToCalendar
@@ -137,6 +144,7 @@ function SetFollowUp({
 function ScheduleCall({ clientId }: { clientId: string }) {
   const { timezone } = useApp();
   const run = useRun();
+  const [channel, setChannel] = useState<ReminderChannel>("call");
   const [at, setAt] = useState("");
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
@@ -144,7 +152,10 @@ function ScheduleCall({ clientId }: { clientId: string }) {
   async function book() {
     if (!at) return;
     setBusy(true);
-    const ok = await run(scheduleCallAction({ clientId, at, note }), "Call booked");
+    const ok = await run(
+      scheduleCallAction({ clientId, at, note, channel }),
+      `${CHANNEL_LABEL[channel]} reminder set`,
+    );
     setBusy(false);
     if (ok) {
       setAt("");
@@ -160,7 +171,44 @@ function ScheduleCall({ clientId }: { clientId: string }) {
         void book();
       }}
     >
-      <p className="text-xs font-medium text-muted">Schedule a call</p>
+      <p className="text-xs font-medium text-muted">Set a reminder</p>
+      <div className="flex gap-1" role="group" aria-label="Remind me to">
+        {REMINDER_CHANNELS.map((c) => (
+          <Button
+            key={c}
+            size="sm"
+            variant={c === channel ? "primary" : "secondary"}
+            aria-pressed={c === channel}
+            onClick={() => setChannel(c)}
+          >
+            {CHANNEL_LABEL[c]}
+          </Button>
+        ))}
+      </div>
+      <div className="flex flex-wrap gap-2" role="group" aria-label="Remind me in">
+        {CALLBACK_HOURS.map((h) => (
+          <Button
+            key={h}
+            size="sm"
+            disabled={busy}
+            onClick={async () => {
+              setBusy(true);
+              await run(
+                scheduleCallAction({
+                  clientId,
+                  at: callbackAt(timezone, h, Date.now()),
+                  note: note || `${CHANNEL_LABEL[channel]} back`,
+                  channel,
+                }),
+                `${CHANNEL_LABEL[channel]} reminder in ${callbackLabel(h)}`,
+              );
+              setBusy(false);
+            }}
+          >
+            In {callbackLabel(h)}
+          </Button>
+        ))}
+      </div>
       <div className="grid gap-2 sm:grid-cols-2">
         <Field label={`When (${timezone.replace("_", " ")})`}>
           <Input

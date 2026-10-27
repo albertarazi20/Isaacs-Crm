@@ -1,9 +1,11 @@
 import type { ReactNode } from "react";
+import { useApp } from "@/components/app-context";
 import { cn } from "@/components/ui";
 import { FREQUENCY_ADJECTIVE } from "@/components/stage-move/forms";
 import type { ClientCard } from "@/lib/data/types";
 import { formatDate, relativeDay } from "@/lib/format";
 import type { ISODate } from "@/lib/mca/dates";
+import { reminderText } from "@/lib/mca/reminder";
 import { TIMER_LABELS } from "@/lib/mca/stages";
 import { formatMoney } from "@/lib/money";
 
@@ -63,12 +65,20 @@ export function DueChip({
   today: ISODate;
   withDate?: boolean;
 }) {
+  const { timezone } = useApp();
+  const reminder = card.scheduled_call_at ? (
+    <ReminderTag
+      text={reminderText(card.scheduled_call_at, card.reminder_channel, timezone, today)}
+    />
+  ) : null;
+  // A booked reminder is the next thing due, so its tag stands in for the plain date chip.
+  if (reminder && card.next_due_kind === "scheduled_call") return reminder;
   if (card.next_due_on === null) return <Pill tone="bad">No follow-up date</Pill>;
   const rel = relativeDay(card.next_due_on, today);
   const tone = card.next_due_on < today ? "bad" : card.next_due_on === today ? "warn" : "neutral";
   const kind = card.next_due_kind ?? "follow_up";
   const exact = formatDate(card.next_due_on, today);
-  return (
+  const chip = (
     <Pill tone={tone} className="gap-1" title={`${TIMER_LABELS[kind]}: ${exact} (${rel})`}>
       <span aria-hidden>{tone === "bad" ? "!" : tone === "warn" ? "●" : "◷"}</span>
       <span>
@@ -78,6 +88,27 @@ export function DueChip({
         {withDate && tone === "neutral" ? ` · ${exact}` : ""}
       </span>
     </Pill>
+  );
+  if (!reminder) return chip;
+  return (
+    <span className="inline-flex flex-wrap items-center gap-1">
+      {reminder}
+      {chip}
+    </span>
+  );
+}
+
+/** The bright yellow "Reminder" flag: it is the one thing on a card that cannot be missed. */
+export function ReminderTag({ text }: { text: string }) {
+  return (
+    <span
+      className="inline-flex items-center gap-1 rounded-md bg-[#ffd400] px-1.5 py-0.5 text-xs font-bold whitespace-nowrap text-black shadow-sm"
+      title="Reminder"
+    >
+      <span aria-hidden>⏰</span>
+      <span className="sr-only">Reminder: </span>
+      {text}
+    </span>
   );
 }
 

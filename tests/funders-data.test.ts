@@ -4,7 +4,7 @@ import { toActionError } from "@/lib/data/errors";
 import * as m from "@/lib/funders/mutations";
 import { funderScoreboard, getClientFundersData, listFunders } from "@/lib/funders/queries";
 import * as s from "@/lib/funders/schemas";
-import { addBusinessDays } from "@/lib/mca/dates";
+import { addBusinessDays, todayIn } from "@/lib/mca/dates";
 import { createTestDb, insertClient, insertUser, timersJson, type TestDb } from "./helpers/db";
 
 let t: TestDb;
@@ -172,7 +172,8 @@ describe("the whole flow through the app's own mutation layer", () => {
     ]);
     expect(
       data.submissions.every(
-        (x) => x.status === "sent" && x.chase_due_on === addBusinessDays(t.today, 1),
+        (x) =>
+          x.status === "sent" && x.chase_due_on === addBusinessDays(todayIn("America/New_York"), 1),
       ),
     ).toBe(true);
     expect(data.funders.map((f) => f.name)).toContain("Flow Pearl");
@@ -229,7 +230,7 @@ describe("the whole flow through the app's own mutation layer", () => {
       chase_due_on: null,
     });
     expect(data.submissions.find((x) => x.funder_name === "Flow Everest")?.chase_due_on).toBe(
-      addBusinessDays(t.today, 1),
+      addBusinessDays(todayIn("America/New_York"), 1),
     );
     expect(
       (await t.pool.query("select stage from clients where id = $1", [client])).rows[0].stage,

@@ -94,10 +94,12 @@ interface StageColumnProps extends ListProps {
   stage: StageKey;
   /** A hidden-empty stage shown narrow during a drag, so it can still be dropped on. */
   compact: boolean;
+  /** The one stage picked in the dropdown fills the screen instead of sitting in a fixed-width column. */
+  wide?: boolean;
 }
 
 export const StageColumn = memo(
-  function StageColumn({ stage, cards, compact, ...rest }: StageColumnProps) {
+  function StageColumn({ stage, cards, compact, wide, ...rest }: StageColumnProps) {
     const def = stageDef(stage);
     const { setNodeRef, isOver } = useDroppable({
       id: `stage:${stage}`,
@@ -111,7 +113,7 @@ export const StageColumn = memo(
         label={`${def.label}, ${cards.length} ${cards.length === 1 ? "merchant" : "merchants"}`}
         describedBy={hintId}
         className={cn(
-          compact ? "w-28" : WIDTH,
+          compact ? "w-28" : wide ? "w-full max-w-3xl" : WIDTH,
           isOver ? "border-accent bg-accent-soft ring-2 ring-accent" : "border-border",
         )}
       >
@@ -143,7 +145,7 @@ export const StageColumn = memo(
       </ColumnShell>
     );
   },
-  (a, b) => a.stage === b.stage && a.compact === b.compact && sameList(a, b),
+  (a, b) => a.stage === b.stage && a.compact === b.compact && a.wide === b.wide && sameList(a, b),
 );
 
 interface BucketColumnProps extends ListProps {

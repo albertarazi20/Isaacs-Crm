@@ -31,9 +31,11 @@ function Kpi({
           ? "text-good"
           : "text-text";
   return (
-    <div className="rounded-xl border border-border bg-surface px-4 py-3">
-      <p className="text-xs font-medium text-muted">{label}</p>
-      <p className={`mt-0.5 text-2xl font-bold tabular-nums ${color}`}>{value}</p>
+    <div className="rounded-xl border border-border bg-surface px-4 py-3.5">
+      <p className="text-[11px] font-semibold tracking-wide text-muted uppercase">{label}</p>
+      <p className={`mt-1 text-[28px] leading-8 font-bold tracking-tight tabular-nums ${color}`}>
+        {value}
+      </p>
     </div>
   );
 }
