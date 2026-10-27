@@ -19,6 +19,8 @@ const schema = z.object({
   RESEND_API_KEY: optional(z.string()),
   RESEND_FROM: optional(z.string()),
   CRON_SECRET: optional(z.string().min(16)),
+  // Sign-in without Google: one shared passcode, signs in as the first ALLOWED_EMAILS address.
+  ACCESS_PASSCODE: optional(z.string().min(12, "ACCESS_PASSCODE must be at least 12 characters")),
   DEV_LOGIN: optional(z.string()),
 });
 
@@ -63,6 +65,18 @@ export function env(): Env {
 
 export function googleConfigured(e: Env = env()): boolean {
   return Boolean(e.GOOGLE_CLIENT_ID && e.GOOGLE_CLIENT_SECRET);
+}
+
+export function passcodeConfigured(e: Env = env()): boolean {
+  return Boolean(e.ACCESS_PASSCODE && firstAllowedEmail(e.ALLOWED_EMAILS));
+}
+
+/** The address a passcode sign-in acts as: the first entry of ALLOWED_EMAILS. */
+export function firstAllowedEmail(list: string): string | undefined {
+  return list
+    .split(",")
+    .map((x) => x.trim().toLowerCase())
+    .find(Boolean);
 }
 
 /** The dev login skips Google. It can never switch on in production. */

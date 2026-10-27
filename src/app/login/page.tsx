@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { getSession } from "@/lib/auth/server";
-import { devLoginEnabled, googleConfigured } from "@/lib/env";
+import { devLoginEnabled, googleConfigured, passcodeConfigured } from "@/lib/env";
 import { buttonClass } from "@/components/ui";
 
 export const dynamic = "force-dynamic";
@@ -12,6 +12,7 @@ const MESSAGES: Record<string, string> = {
   bad_state: "That sign-in link expired. Try again.",
   google_not_configured:
     "Google sign-in isn't set up yet (missing GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET).",
+  bad_passcode: "That passcode is wrong.",
   session_expired: "Your session ended. Sign in again.",
 };
 
@@ -39,6 +40,22 @@ export default async function LoginPage({
         <a className={buttonClass("primary", "md", "w-full")} href="/api/auth/google">
           Continue with Google
         </a>
+      ) : null}
+      {passcodeConfigured() ? (
+        <form method="post" action="/api/auth/passcode" className="flex flex-col gap-3">
+          <input
+            type="password"
+            name="passcode"
+            required
+            autoComplete="current-password"
+            placeholder="Passcode"
+            aria-label="Passcode"
+            className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-text"
+          />
+          <button type="submit" className={buttonClass("primary", "md", "w-full")}>
+            Sign in
+          </button>
+        </form>
       ) : null}
       {devLoginEnabled() ? (
         <a className={buttonClass("secondary", "md", "w-full")} href="/api/dev-login">

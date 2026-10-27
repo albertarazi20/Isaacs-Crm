@@ -32,17 +32,18 @@ New hosting project, new database, new Google Cloud project, new Resend domain. 
 
 ## 3. Environment variables (host dashboard, never git, never chat)
 
-| Name                             | Value                                                                                                                                                                   |
-| -------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `DATABASE_URL`                   | pooled connection string, with `?sslmode=no-verify` on Supabase (see section 2)                                                                                         |
-| `SESSION_SECRET`                 | 32+ random characters (`openssl rand -base64 48`)                                                                                                                       |
-| `TOKEN_ENC_KEY`                  | `openssl rand -base64 32` — encrypts the stored Gmail token                                                                                                             |
-| `APP_URL`                        | the public https URL, no trailing slash                                                                                                                                 |
-| `ALLOWED_EMAILS`                 | Isaac's Google address only (each address gets its own empty account)                                                                                                   |
-| `GOOGLE_CLIENT_ID` / `_SECRET`   | from the new Google Cloud project; redirect URI `APP_URL/api/auth/callback`                                                                                             |
-| `RESEND_API_KEY` / `RESEND_FROM` | Resend key; sender on a verified domain, or `onboarding@resend.dev` if the Resend account was created with Isaac's sign-in email (it only delivers to that one address) |
-| `CRON_SECRET`                    | 16+ random characters                                                                                                                                                   |
-| `DEV_LOGIN`                      | **leave unset.** It is ignored in production and unless `APP_URL` is localhost                                                                                          |
+| Name                             | Value                                                                                                                                                                         |
+| -------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `DATABASE_URL`                   | pooled connection string, with `?sslmode=no-verify` on Supabase (see section 2)                                                                                               |
+| `SESSION_SECRET`                 | 32+ random characters (`openssl rand -base64 48`)                                                                                                                             |
+| `TOKEN_ENC_KEY`                  | `openssl rand -base64 32` — encrypts the stored Gmail token                                                                                                                   |
+| `APP_URL`                        | the public https URL, no trailing slash                                                                                                                                       |
+| `ALLOWED_EMAILS`                 | Isaac's Google address only (each address gets its own empty account)                                                                                                         |
+| `GOOGLE_CLIENT_ID` / `_SECRET`   | from the new Google Cloud project; redirect URI `APP_URL/api/auth/callback`                                                                                                   |
+| `RESEND_API_KEY` / `RESEND_FROM` | Resend key; sender on a verified domain, or `onboarding@resend.dev` if the Resend account was created with Isaac's sign-in email (it only delivers to that one address)       |
+| `CRON_SECRET`                    | 16+ random characters                                                                                                                                                         |
+| `ACCESS_PASSCODE`                | optional, 12+ characters. Adds a passcode box to /login that signs in as the first `ALLOWED_EMAILS` address. Use instead of Google; anyone with the passcode gets full access |
+| `DEV_LOGIN`                      | **leave unset.** It is ignored in production and unless `APP_URL` is localhost                                                                                                |
 
 ## 4. Scheduler
 
