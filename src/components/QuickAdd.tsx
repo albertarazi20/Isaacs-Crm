@@ -2,14 +2,16 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { addClientAction, findDuplicatesAction } from "@/app/actions";
+import { addClientAction, findDuplicatesAction, scheduleCallAction } from "@/app/actions";
 import type { DuplicateMatch } from "@/lib/data/queries";
 import { formatDate } from "@/lib/format";
+import { slotAt, TIME_SLOTS } from "@/lib/mca/callback";
 import { CORE_STAGES, defaultTimers, stageDef, type StageKey } from "@/lib/mca/stages";
 import type { ISODate } from "@/lib/mca/dates";
 import { useApp } from "./app-context";
 import { Dialog, useCall, useToast } from "./overlay";
 import { SourceInput } from "./SourceInput";
+import { TimeSelect } from "./TimeSelect";
 import { TimerPicker } from "./TimerPicker";
 import { Button, Field, Input, Select } from "./ui";
 
@@ -70,6 +72,7 @@ function QuickAddDialog({ onClose }: { onClose: () => void }) {
   const [stage, setStage] = useState<StageKey>("interested");
   const [dueOn, setDueOn] = useState<ISODate>(() => stageDue("interested", today));
   const [pickedDate, setPickedDate] = useState(false);
+  const [time, setTime] = useState("");
   const [busy, setBusy] = useState(false);
 
   const [dupes, setDupes] = useState<DuplicateMatch[] | null>(null);
@@ -92,9 +95,20 @@ function QuickAddDialog({ onClose }: { onClose: () => void }) {
     setBusy(false);
     if (!card) return;
     rememberSource(String(values.source ?? ""));
+    // A time of day books a call reminder at that time on the follow-up day.
+    if (time) {
+      await call(
+        scheduleCallAction({
+          clientId: card.id,
+          at: slotAt(dueOn, time),
+          note: "Follow up",
+          channel: "call",
+        }),
+      );
+    }
     onClose();
     toast({
-      message: `Added ${card.business_name} — follow up ${formatDate(dueOn, today)}`,
+      message: `Added ${card.business_name} — follow up ${formatDate(dueOn, today)}${time ? ` at ${TIME_SLOTS.find((s) => s.value === time)?.label ?? time}` : ""}`,
       tone: "success",
     });
   }
@@ -197,8 +211,12 @@ function QuickAddDialog({ onClose }: { onClose: () => void }) {
             onChange={(d) => {
               setDueOn(d);
               setPickedDate(true);
+              setTime("");
             }}
           />
+        </Field>
+        <Field label="Time of day">
+          <TimeSelect value={time} onChange={setTime} date={dueOn} none="No set time" up />
         </Field>
         {dupes && pending ? (
           <div

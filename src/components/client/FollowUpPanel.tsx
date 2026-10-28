@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { cancelCallAction, scheduleCallAction, setFollowUpAction } from "@/app/actions";
 import type { ClientDetail } from "@/lib/data/types";
-import { callbackAt, callbackLabel, CALLBACK_HOURS } from "@/lib/mca/callback";
+import { callbackAt, callbackLabel, CALLBACK_HOURS, slotAt } from "@/lib/mca/callback";
 import {
   CHANNEL_LABEL,
   REMINDER_CHANNELS,
@@ -14,6 +14,7 @@ import type { ISODate } from "@/lib/mca/dates";
 import { TIMER_LABELS } from "@/lib/mca/stages";
 import { formatDate, formatDateTime, relativeDay } from "@/lib/format";
 import { useApp } from "../app-context";
+import { TimeSelect } from "../TimeSelect";
 import { TimerPicker } from "../TimerPicker";
 import { Button, cn, Field, Input } from "../ui";
 import { AddToCalendar } from "../winback/AddToCalendar";
@@ -103,23 +104,49 @@ function SetFollowUp({
 }) {
   const run = useRun();
   const [dueOn, setDueOn] = useState<ISODate | "">("");
+  const [time, setTime] = useState("");
   const [busy, setBusy] = useState(false);
-  const nothingToChange = dueOn === "" || dueOn === current;
+  const nothingToChange = dueOn === "" || (dueOn === current && time === "");
 
   async function save() {
     if (!dueOn) return;
     setBusy(true);
-    await run(
-      setFollowUpAction({ clientId, dueOn }),
-      `Follow-up set for ${formatDate(dueOn, today)}`,
-    );
+    const ok =
+      dueOn === current ||
+      (await run(
+        setFollowUpAction({ clientId, dueOn }),
+        `Follow-up set for ${formatDate(dueOn, today)}`,
+      ));
+    // A time of day books the reminder too, so the card shows it and the app nudges at that time.
+    if (ok && time) {
+      await run(
+        scheduleCallAction({
+          clientId,
+          at: slotAt(dueOn, time),
+          note: "Follow up",
+          channel: "call",
+        }),
+        "Reminder set",
+      );
+      setTime("");
+    }
     setBusy(false);
   }
 
   return (
     <div className="mt-4 space-y-2">
       <p className="text-xs font-medium text-muted">Change the follow-up date</p>
-      <TimerPicker value={dueOn} onChange={setDueOn} today={today} />
+      <TimerPicker
+        value={dueOn}
+        onChange={(d) => {
+          setDueOn(d);
+          setTime("");
+        }}
+        today={today}
+      />
+      {dueOn ? (
+        <TimeSelect value={time} onChange={setTime} date={dueOn} none="No set time" />
+      ) : null}
       <Button
         variant="primary"
         disabled={busy || nothingToChange}
@@ -142,10 +169,12 @@ function SetFollowUp({
 }
 
 function ScheduleCall({ clientId }: { clientId: string }) {
-  const { timezone } = useApp();
+  const { timezone, today } = useApp();
   const run = useRun();
   const [channel, setChannel] = useState<ReminderChannel>("call");
-  const [at, setAt] = useState("");
+  const [date, setDate] = useState<ISODate>(today);
+  const [time, setTime] = useState("");
+  const at = time ? slotAt(date, time) : "";
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
 
@@ -158,7 +187,7 @@ function ScheduleCall({ clientId }: { clientId: string }) {
     );
     setBusy(false);
     if (ok) {
-      setAt("");
+      setTime("");
       setNote("");
     }
   }
@@ -210,24 +239,32 @@ function ScheduleCall({ clientId }: { clientId: string }) {
         ))}
       </div>
       <div className="grid gap-2 sm:grid-cols-2">
-        <Field label={`When (${timezone.replace("_", " ")})`}>
+        <Field label={`Day (${timezone.replace("_", " ")})`}>
           <Input
-            type="datetime-local"
-            value={at}
-            onChange={(e) => setAt(e.target.value)}
+            type="date"
+            value={date}
+            min={today}
+            onChange={(e) => {
+              if (!e.target.value) return;
+              setDate(e.target.value);
+              setTime("");
+            }}
             required
           />
         </Field>
-        <Field label="What it's about">
-          <Input
-            value={note}
-            onChange={(e) => setNote(e.target.value)}
-            placeholder="Review offers, get statements…"
-          />
+        <Field label="Time of day">
+          <TimeSelect value={time} onChange={setTime} date={date} />
         </Field>
       </div>
+      <Field label="What it's about">
+        <Input
+          value={note}
+          onChange={(e) => setNote(e.target.value)}
+          placeholder="Review offers, get statements…"
+        />
+      </Field>
       <Button type="submit" disabled={busy || !at}>
-        {busy ? "Booking…" : "Book the call"}
+        {busy ? "Booking…" : `Set ${CHANNEL_LABEL[channel].toLowerCase()} reminder`}
       </Button>
     </form>
   );

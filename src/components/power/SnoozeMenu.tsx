@@ -6,11 +6,12 @@ import { snoozeWithReasonAction } from "@/app/power-actions";
 import { snoozeNeedsReason } from "@/lib/data/priority";
 import type { ClientCard } from "@/lib/data/types";
 import { formatDate, relativeDay } from "@/lib/format";
-import { callbackAt, callbackLabel, CALLBACK_HOURS } from "@/lib/mca/callback";
+import { callbackAt, callbackLabel, CALLBACK_HOURS, slotAt } from "@/lib/mca/callback";
 import { CHANNEL_LABEL, REMINDER_CHANNELS, type ReminderChannel } from "@/lib/mca/reminder";
 import { addDays, addMonths, type ISODate } from "@/lib/mca/dates";
 import { stageDef } from "@/lib/mca/stages";
 import { useApp } from "../app-context";
+import { TimeSelect } from "../TimeSelect";
 import { useCall } from "../overlay";
 import { Button, cn, Input } from "../ui";
 
@@ -58,6 +59,22 @@ function useSnooze(card: Target, onDone: () => void) {
     onDone();
   }
 
+  /** "Text him at 5:30 PM": the same reminder, at an exact half hour of a chosen day. */
+  async function callAt(date: ISODate, time: string) {
+    setBusy(true);
+    await call(
+      scheduleCallAction({
+        clientId: card.id,
+        at: slotAt(date, time),
+        note: `${CHANNEL_LABEL[channel]} back`,
+        channel,
+      }),
+      `${card.business_name} — ${CHANNEL_LABEL[channel].toLowerCase()} reminder set`,
+    );
+    setBusy(false);
+    onDone();
+  }
+
   async function apply(dueOn: ISODate, reason: string) {
     setBusy(true);
     const input = { clientId: card.id, dueOn, reason };
@@ -79,7 +96,7 @@ function useSnooze(card: Target, onDone: () => void) {
     void apply(dueOn, "");
   }
 
-  return { pending, setPending, busy, apply, choose, callBack, channel, setChannel };
+  return { pending, setPending, busy, apply, choose, callBack, callAt, channel, setChannel };
 }
 
 /** Call, text or email: what the reminder is for. */
@@ -106,6 +123,38 @@ function ChannelPick({
           {CHANNEL_LABEL[c]}
         </button>
       ))}
+    </div>
+  );
+}
+
+/** A day and a half-hour time of day (New York time), for when "in 2 hours" is not the time he wants. */
+function PickTime({
+  busy,
+  onPick,
+}: {
+  busy: boolean;
+  onPick: (date: ISODate, time: string) => void;
+}) {
+  const { today } = useApp();
+  const [date, setDate] = useState<ISODate>(today);
+  const [time, setTime] = useState("");
+  return (
+    <div className="space-y-1.5 px-2 pb-1">
+      <Input
+        type="date"
+        aria-label="Reminder day"
+        value={date}
+        min={today}
+        onChange={(e) => {
+          if (!e.target.value) return;
+          setDate(e.target.value);
+          setTime("");
+        }}
+      />
+      <TimeSelect value={time} onChange={setTime} date={date} />
+      <Button variant="primary" disabled={busy || !time} onClick={() => onPick(date, time)}>
+        Set reminder
+      </Button>
     </div>
   );
 }
@@ -160,10 +209,8 @@ function ReasonForm({
 /** The dropdown on a row. */
 export function SnoozeMenu({ card }: { card: Target }) {
   const [open, setOpen] = useState(false);
-  const { pending, setPending, busy, apply, choose, callBack, channel, setChannel } = useSnooze(
-    card,
-    () => setOpen(false),
-  );
+  const { pending, setPending, busy, apply, choose, callBack, callAt, channel, setChannel } =
+    useSnooze(card, () => setOpen(false));
   return (
     <details
       open={open}
@@ -208,6 +255,10 @@ export function SnoozeMenu({ card }: { card: Target }) {
               </button>
             ))}
             <p className="px-3 pt-2 text-xs font-semibold tracking-wide text-muted uppercase">
+              Or at a time
+            </p>
+            <PickTime busy={busy} onPick={(d, t) => void callAt(d, t)} />
+            <p className="px-3 pt-2 text-xs font-semibold tracking-wide text-muted uppercase">
               Snooze until
             </p>
             {SNOOZES.map((s) => (
@@ -229,10 +280,8 @@ export function SnoozeMenu({ card }: { card: Target }) {
 
 /** Big touch-friendly presets for power-dial mode. */
 export function SnoozeButtons({ card, count = 5 }: { card: Target; count?: number }) {
-  const { pending, setPending, busy, apply, choose, callBack, channel, setChannel } = useSnooze(
-    card,
-    () => undefined,
-  );
+  const { pending, setPending, busy, apply, choose, callBack, callAt, channel, setChannel } =
+    useSnooze(card, () => undefined);
   if (pending) {
     return (
       <div className="rounded-xl border border-border bg-surface-2">
@@ -251,7 +300,7 @@ export function SnoozeButtons({ card, count = 5 }: { card: Target; count?: numbe
       <div className="w-full">
         <ChannelPick channel={channel} onChange={setChannel} />
       </div>
-      {CALLBACK_HOURS.slice(1, 3).map((h) => (
+      {CALLBACK_HOURS.slice(2, 4).map((h) => (
         <button
           key={`cb${h}`}
           type="button"
@@ -262,6 +311,9 @@ export function SnoozeButtons({ card, count = 5 }: { card: Target; count?: numbe
           In {callbackLabel(h)}
         </button>
       ))}
+      <div className="w-full rounded-xl border border-border bg-surface p-2">
+        <PickTime busy={busy} onPick={(d, t) => void callAt(d, t)} />
+      </div>
       {SNOOZES.slice(0, count).map((s) => (
         <button
           key={s.label}
