@@ -1,12 +1,17 @@
 "use client";
 
+import { useState } from "react";
+import { scheduleCallAction } from "@/app/actions";
 import { useApp } from "@/components/app-context";
-import { Dialog } from "@/components/overlay";
+import { Dialog, useCall } from "@/components/overlay";
+import { ChannelPick, PickTime } from "@/components/power/SnoozeMenu";
 import { needsInput } from "@/components/stage-move/forms";
 import { GROUP_COLOR } from "@/components/ui";
 import type { ClientCard } from "@/lib/data/types";
 import { formatDate } from "@/lib/format";
-import { FOLLOW_UP_PRESETS } from "@/lib/mca/dates";
+import { callbackAt, callbackLabel, CALLBACK_HOURS, slotAt } from "@/lib/mca/callback";
+import { FOLLOW_UP_PRESETS, type ISODate } from "@/lib/mca/dates";
+import { CHANNEL_LABEL, type ReminderChannel } from "@/lib/mca/reminder";
 import { CORE_STAGES, foldStage, STAGE_GROUPS, type StageKey } from "@/lib/mca/stages";
 import { bucketDueDate, timerText, type DropBucket } from "./logic";
 
@@ -93,18 +98,69 @@ export function FollowUpSheet({
   onPick: (bucket: DropBucket) => void;
   onClose: () => void;
 }) {
-  const { today } = useApp();
+  const { today, timezone } = useApp();
+  const call = useCall();
+  const [channel, setChannel] = useState<ReminderChannel>("call");
+  const [busy, setBusy] = useState(false);
+
+  /** A reminder at an exact time: the card flags it and the app nudges at that time. */
+  async function remind(at: string, when: string) {
+    setBusy(true);
+    const ok = await call(
+      scheduleCallAction({
+        clientId: card.id,
+        at,
+        note: `${CHANNEL_LABEL[channel]} back`,
+        channel,
+      }),
+      `${card.business_name} — ${CHANNEL_LABEL[channel].toLowerCase()} reminder ${when}`,
+    );
+    setBusy(false);
+    if (ok !== null && ok !== undefined) onClose();
+  }
+
   return (
     <Dialog open onClose={onClose} title={`Follow up with ${card.business_name} in…`}>
-      <div className="grid grid-cols-2 gap-1.5">
-        {CHOICES.map((c) => (
-          <button key={c.key} type="button" onClick={() => onPick(c.key)} className={OPTION}>
-            <span className="block font-medium">{c.label}</span>
-            <span className="block text-xs text-muted">
-              {formatDate(bucketDueDate(c.key, today), today)}
-            </span>
-          </button>
-        ))}
+      <div className="space-y-4">
+        <section aria-label="Remind me at a time" className="space-y-2">
+          <h3 className="text-xs font-semibold tracking-wide text-muted uppercase">Remind me in</h3>
+          <ChannelPick channel={channel} onChange={setChannel} />
+          <div className="flex flex-wrap gap-1.5">
+            {CALLBACK_HOURS.map((h) => (
+              <button
+                key={h}
+                type="button"
+                disabled={busy}
+                onClick={() =>
+                  void remind(callbackAt(timezone, h, Date.now()), `in ${callbackLabel(h)}`)
+                }
+                className={OPTION}
+              >
+                {callbackLabel(h)}
+              </button>
+            ))}
+          </div>
+          <p className="text-xs font-semibold tracking-wide text-muted uppercase">Or at a time</p>
+          <PickTime
+            busy={busy}
+            onPick={(date: ISODate, time: string) => void remind(slotAt(date, time), "set")}
+          />
+        </section>
+        <section aria-label="Follow up on a day">
+          <h3 className="mb-1.5 text-xs font-semibold tracking-wide text-muted uppercase">
+            Or on a day
+          </h3>
+          <div className="grid grid-cols-2 gap-1.5">
+            {CHOICES.map((c) => (
+              <button key={c.key} type="button" onClick={() => onPick(c.key)} className={OPTION}>
+                <span className="block font-medium">{c.label}</span>
+                <span className="block text-xs text-muted">
+                  {formatDate(bucketDueDate(c.key, today), today)}
+                </span>
+              </button>
+            ))}
+          </div>
+        </section>
       </div>
     </Dialog>
   );

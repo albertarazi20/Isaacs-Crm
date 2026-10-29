@@ -100,7 +100,7 @@ function useSnooze(card: Target, onDone: () => void) {
 }
 
 /** Call, text or email: what the reminder is for. */
-function ChannelPick({
+export function ChannelPick({
   channel,
   onChange,
 }: {
@@ -128,7 +128,7 @@ function ChannelPick({
 }
 
 /** A day and a half-hour time of day (New York time), for when "in 2 hours" is not the time he wants. */
-function PickTime({
+export function PickTime({
   busy,
   onPick,
 }: {

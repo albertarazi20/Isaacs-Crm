@@ -12,7 +12,14 @@ import type { ISODate } from "@/lib/mca/dates";
 import { formatUS } from "@/lib/mca/phone";
 import { stageDef } from "@/lib/mca/stages";
 import { formatMoneyCompact } from "@/lib/money";
-import { APP_IN_STAGES, cardPaydown, lastContact, positionsText, STIP_STAGES } from "./logic";
+import {
+  APP_IN_STAGES,
+  cardPaydown,
+  lastContact,
+  nextCallText,
+  positionsText,
+  STIP_STAGES,
+} from "./logic";
 import { DueChip, PaydownBar, Pill, remittanceText } from "./parts";
 
 const who = (card: ClientCard) =>
@@ -133,10 +140,12 @@ function ContactLine({
   timezone: string;
 }) {
   const c = lastContact(card, today, timezone);
+  const next = nextCallText(card, today, timezone);
   return (
     <p className="mt-1 text-xs text-muted">
       {c.call}
       {c.touch ? ` · ${c.touch}` : ""}
+      {next ? <span className="font-medium text-text"> · {next}</span> : null}
     </p>
   );
 }

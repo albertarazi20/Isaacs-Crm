@@ -274,6 +274,34 @@ export function agoShort(iso: string, today: ISODate, timezone: string): string 
   return `${Math.round(months / 12)}y ago`;
 }
 
+/** "2:30 PM" in the user's time zone. */
+const clockTime = (iso: string, timezone: string) =>
+  new Intl.DateTimeFormat("en-US", {
+    timeZone: timezone,
+    hour: "numeric",
+    minute: "2-digit",
+  }).format(new Date(iso));
+
+/** "today 2:30 PM" or "yesterday 2:30 PM" for a recent talk (the time matters on an hourly follow-up), else "3d ago". */
+function agoWithClock(iso: string, today: ISODate, timezone: string): string {
+  const ago = agoShort(iso, today, timezone);
+  return ago === "today" || ago === "yesterday" ? `${ago} ${clockTime(iso, timezone)}` : ago;
+}
+
+/** "Next call 2:30 PM" (today), "Next text Thu 2:30 PM" (later), or null when no reminder is booked or its day has gone. */
+export function nextCallText(card: ClientCard, today: ISODate, timezone: string): string | null {
+  if (!card.scheduled_call_at) return null;
+  const when = new Date(card.scheduled_call_at);
+  const day = todayIn(timezone, when);
+  if (day < today) return null;
+  const channel = (card.reminder_channel ?? "call").toLowerCase();
+  const weekday =
+    day === today
+      ? ""
+      : `${new Intl.DateTimeFormat("en-US", { timeZone: timezone, weekday: "short" }).format(when)} `;
+  return `Next ${channel} ${weekday}${clockTime(card.scheduled_call_at, timezone)}`;
+}
+
 /** "Last call 3d ago", plus "last touch" when a text or email came after the last call. */
 export function lastContact(
   card: ClientCard,
@@ -281,7 +309,7 @@ export function lastContact(
   timezone: string,
 ): { call: string; touch: string | null } {
   const call = card.last_call_at
-    ? `Last call ${agoShort(card.last_call_at, today, timezone)}`
+    ? `Last call ${agoWithClock(card.last_call_at, today, timezone)}`
     : "No calls yet";
   const newer =
     card.last_touch_at !== null &&
@@ -290,7 +318,7 @@ export function lastContact(
     call,
     touch:
       newer && card.last_touch_at
-        ? `last touch ${agoShort(card.last_touch_at, today, timezone)}`
+        ? `last touch ${agoWithClock(card.last_touch_at, today, timezone)}`
         : null,
   };
 }

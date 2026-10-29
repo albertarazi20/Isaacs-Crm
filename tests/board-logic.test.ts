@@ -12,6 +12,7 @@ import {
   isOverdue,
   lastContact,
   matchesQuery,
+  nextCallText,
   mergeServerCards,
   optimisticDue,
   optimisticMove,
@@ -417,11 +418,31 @@ describe("what a card shows", () => {
         TODAY,
         "UTC",
       ),
-    ).toEqual({ call: "Last call 3d ago", touch: "last touch yesterday" });
+    ).toEqual({ call: "Last call 3d ago", touch: "last touch yesterday 3:00 PM" });
     expect(lastContact(card({ last_touch_at: "2026-10-22T15:00:00Z" }), TODAY, "UTC")).toEqual({
       call: "No calls yet",
-      touch: "last touch yesterday",
+      touch: "last touch yesterday 3:00 PM",
     });
+    expect(
+      lastContact(card({ last_call_at: "2026-10-23T18:30:00Z" }), TODAY, "America/New_York").call,
+    ).toBe("Last call today 2:30 PM");
+  });
+
+  it("says when the next call is, with the time of day", () => {
+    const ny = "America/New_York";
+    expect(nextCallText(card(), TODAY, ny)).toBeNull();
+    expect(nextCallText(card({ scheduled_call_at: "2026-10-23T18:30:00Z" }), TODAY, ny)).toBe(
+      "Next call 2:30 PM",
+    );
+    expect(
+      nextCallText(
+        card({ scheduled_call_at: "2026-10-24T21:00:00Z", reminder_channel: "text" }),
+        TODAY,
+        ny,
+      ),
+    ).toBe("Next text Sat 5:00 PM");
+    // Its day has gone: the yellow tag says overdue, so no "next" line.
+    expect(nextCallText(card({ scheduled_call_at: "2026-10-21T18:30:00Z" }), TODAY, ny)).toBeNull();
   });
 
   it("words other advances the way Isaac does", () => {
