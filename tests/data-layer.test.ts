@@ -613,7 +613,15 @@ describe("queries and settings", () => {
       digestEnabled: true,
       digestHour: 8,
     });
-    if (intlOk.success) {
+    // Only meaningful where Postgres's tz data lacks the alias (CI's Linux image does; a full tzdata build such as
+    // EnterpriseDB's macOS one knows it, and then saving it would be correct).
+    const pgKnows =
+      (
+        await rows("select 1 from pg_timezone_names where name = $1", [
+          "America/Argentina/ComodRivadavia",
+        ])
+      ).length > 0;
+    if (intlOk.success && !pgKnows) {
       await expect(asA((q) => m.updateSettings(q, intlOk.data))).rejects.toThrow(/time zone/);
     }
     expect((await rows("select timezone from app_users where id = $1", [a]))[0].timezone).toBe(
