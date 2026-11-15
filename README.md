@@ -10,7 +10,7 @@ lead from 2024 is a warm call today.
 
 - **Today:** who to call, ranked by dollars at stake; start a **power dial** through the list; ⌘K finds anyone
   (and looks up an inbound caller by number); a follow-up streak; bulk "reschedule all overdue".
-- **Board:** drag a merchant between 23 MCA stages or between follow-up buckets (1 week → 36 months). Every
+- **Board:** drag a merchant between the MCA stages (23 keys in the database, seven shown on the board) or between follow-up buckets (1 week → 36 months). Every
   stage has a timer; nobody ever leaves the system.
 - **Client page:** notes on everything, last call / last follow-up / next follow-up, what he wants and what
   funders would approve, other advances (positions), competing offers, stips checklist, submissions to funders,
@@ -27,6 +27,7 @@ lead from 2024 is a warm call today.
 
 ## Where things are
 
+- **New Claude? Start with `docs/handoff/README.md`.**
 - `docs/OWNER-TODO.md` — only the things a human must do. `docs/BACKLOG.md` — the work queue and what is next.
 - `docs/DOMAIN.md` — the MCA model, the stages and their default timers, and what research did and did not confirm.
 - `docs/DECISIONS.md` — why it is built this way (data handling, RLS, timers, Gmail, texting, reminders).

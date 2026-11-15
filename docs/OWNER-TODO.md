@@ -5,13 +5,12 @@ environment variables; Claude only needs to be told they are set.
 
 ## A. You, in this order (about 2 hours of your own time)
 
-**Already done (verified 2026-10-25):** the database. A Supabase project holds all 26 migrations, and a fingerprint of
+**Already done (re-verified 2026-11-15):** the database. A Supabase project holds all 31 migrations, and a fingerprint of
 its schema matches a plain local migrate on every check (`docs/DECISIONS.md`, "First real database").
 
-1. **Merge PR #1** (2 min). CI shows a red X: the free GitHub Actions minutes for the account were used up by another
-   repository, so jobs never start (the banner on the job page says so). It is not a code problem and CI is not needed to go
-   live. Everything CI would run was run locally: type check, lint, format, 1,581 unit tests.
-2. **Netlify** (30 min). Add new site → Import from GitHub → `ronny-arch/Isaac`, branch `main`. Netlify detects Next.js; `netlify.toml` pins Node 22. Set these under Site configuration → Environment variables, never in chat:
+1. **Merge PR #1.** Done: it and every later pull request are merged. CI works again as of 2026-11-15 (the free GitHub Actions minutes had been
+   used up by another repository for a while).
+2. **Netlify** (30 min). **Done: the site `mca123` exists and builds this repo.** Still to check: its environment variables, sign-in and the scheduler. Add new site → Import from GitHub → `ronny-arch/Isaac`, branch `main`. Netlify detects Next.js; `netlify.toml` pins Node 22. Set these under Site configuration → Environment variables, never in chat:
 
    | Name                                             | Value                                                                                                                                                                                                                                |
    | ------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
@@ -43,7 +42,7 @@ profile` and `gmail.send`; set it to **In production** (an "unverified app" warn
 
 | #   | Ask him                                                                                                                                                                                                                       | Time   |
 | --- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ |
-| 7   | Read the 23 stage names and default timers in `docs/DOMAIN.md`. Right names? Right order? Right timers?                                                                                                                       | 15 min |
+| 7   | Read the stage names and default timers (the board now shows seven stages: see `docs/handoff/MCA-KNOWLEDGE.md`). Right names? Right order? Right timers?                                                                      | 15 min |
 | 8   | At what % paid down do funders let him renew? (the app assumes **50%**)                                                                                                                                                       | 2 min  |
 | 9   | Does he submit to outside funders, fund himself, or both? Which states does he write business in? (state disclosure rules)                                                                                                    | 5 min  |
 | 10  | Does he have Google Workspace or a regular Gmail? (changes the Google mode in #4) What time zone and what hour does he want the morning email?                                                                                | 3 min  |
@@ -56,7 +55,7 @@ profile` and `gmail.send`; set it to **In production** (an "unverified app" warn
 - **Bank statements / documents:** the app stores none (CLAUDE.md: documents live in private object storage, never in a table). If Isaac wants to attach statements to a merchant, pick a storage provider (a private bucket in the same Supabase/Neon account is simplest) and say yes — it's a half-day build. Until then "stips received" is a checkbox.
 - **Lead intake:** if Isaac gets leads from a website form or a vendor, make a connection in the app (Clients → Lead intake) and paste the token into Zapier/the vendor — 5 minutes (`docs/LEAD-INTAKE.md`). Optional.
 - **Take a backup once it's live and try the restore on a copy** (`docs/BACKUP.md`) — 10 minutes, and you'll know it works before you need it.
-- Review PR #1 (it is large; `README.md` and `docs/DECISIONS.md` are the quickest way in). Nothing is merged or deployed without you.
+- Pull requests are merged by Claude (you said so on 2026-10-26). Anything that changes the live database or the live site needs your OK and a backup first (`docs/handoff/README.md`).
 - Already built without waiting on you: do-not-contact flag, per-funder submissions and offers, power-dial, win-back, earnings. Look at them in `docs/BACKLOG.md`.
 
 ## D. Ask a lawyer or compliance person (Claude cannot answer these)

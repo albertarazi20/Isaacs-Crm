@@ -1,0 +1,1178 @@
+<title>Isaac Finish List</title>
+<meta name="claude:viewport-fit-sides" content="cover" />
+<link
+  rel="stylesheet"
+  href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@600;700&family=Instrument+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap"
+/>
+<style>
+  /* Layout: one working column. Summary first (time, progress), then the four lists in the order the owner meets them:
+     his own tasks, Isaac's call, yes/no decisions, the lawyer. Proof status and gaps sit below the lists. */
+  :root {
+    --bg: #f2f5f7;
+    --surface: #ffffff;
+    --surface-2: #e8edf1;
+    --ink: #14202b;
+    --muted: #55656f;
+    --line: #d3dce3;
+    --accent: #0a6b5a;
+    --accent-ink: #ffffff;
+    --accent-soft: #d9efe9;
+    --warn: #8a5300;
+    --warn-soft: #f8ecd3;
+    --bad: #a82a22;
+    --bad-soft: #f8dedb;
+    --font-display: "Bricolage Grotesque", "Avenir Next", "Segoe UI", sans-serif;
+    --font-body: "Instrument Sans", "Segoe UI", system-ui, sans-serif;
+    --font-mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #0e1519;
+      --surface: #162027;
+      --surface-2: #1e2b34;
+      --ink: #e6edf2;
+      --muted: #94a5b2;
+      --line: #2a3a46;
+      --accent: #4cc9ad;
+      --accent-ink: #06201a;
+      --accent-soft: #14352e;
+      --warn: #e8b15a;
+      --warn-soft: #36290f;
+      --bad: #f0877f;
+      --bad-soft: #3b1b18;
+      color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #0e1519;
+    --surface: #162027;
+    --surface-2: #1e2b34;
+    --ink: #e6edf2;
+    --muted: #94a5b2;
+    --line: #2a3a46;
+    --accent: #4cc9ad;
+    --accent-ink: #06201a;
+    --accent-soft: #14352e;
+    --warn: #e8b15a;
+    --warn-soft: #36290f;
+    --bad: #f0877f;
+    --bad-soft: #3b1b18;
+    color-scheme: dark;
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: var(--font-body);
+    font-size: 15px;
+    line-height: 1.5;
+    padding-block: 28px 56px;
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+  }
+  .wrap {
+    max-width: 880px;
+    margin: 0 auto;
+    display: flex;
+    flex-direction: column;
+    gap: 28px;
+  }
+  h1,
+  h2,
+  h3 {
+    font-family: var(--font-display);
+    text-wrap: balance;
+    margin: 0;
+    line-height: 1.15;
+  }
+  h1 {
+    font-size: clamp(28px, 5vw, 40px);
+    font-weight: 700;
+    letter-spacing: -0.01em;
+  }
+  h2 {
+    font-size: 22px;
+    font-weight: 700;
+  }
+  h3 {
+    font-size: 16px;
+    font-weight: 600;
+  }
+  p {
+    margin: 0;
+  }
+  a {
+    color: var(--accent);
+  }
+  code,
+  .mono {
+    font-family: var(--font-mono);
+    font-size: 0.88em;
+  }
+  :focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+
+  .lede {
+    color: var(--muted);
+    max-width: 62ch;
+    margin-top: 10px;
+  }
+  .stats {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+    gap: 12px;
+  }
+  .stat {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 14px 16px;
+    min-width: 0;
+  }
+  .stat .k {
+    font-size: 12px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+  .stat .v {
+    font-family: var(--font-display);
+    font-size: 26px;
+    font-weight: 700;
+    margin-top: 2px;
+    font-variant-numeric: tabular-nums;
+  }
+  .stat .n {
+    color: var(--muted);
+    font-size: 13px;
+    margin-top: 2px;
+  }
+  .progress {
+    background: var(--surface-2);
+    border-radius: 99px;
+    height: 8px;
+    overflow: hidden;
+  }
+  .progress > i {
+    display: block;
+    height: 100%;
+    width: 0;
+    background: var(--accent);
+    transition: width 0.25s ease;
+  }
+  .progress-line {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    font-size: 13px;
+    color: var(--muted);
+    margin-bottom: 6px;
+  }
+
+  section {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .sec-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 6px 16px;
+  }
+  .sec-head .total {
+    color: var(--muted);
+    font-size: 13px;
+    font-variant-numeric: tabular-nums;
+  }
+  ul.list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .item {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+  }
+  .item.done {
+    background: transparent;
+  }
+  .item.done h3 {
+    text-decoration: line-through;
+    color: var(--muted);
+  }
+  .row {
+    display: flex;
+    gap: 12px;
+    padding: 12px 14px;
+    align-items: flex-start;
+  }
+  .row input[type="checkbox"] {
+    width: 22px;
+    height: 22px;
+    margin: 2px 0 0;
+    flex: none;
+    accent-color: var(--accent);
+  }
+  .main {
+    min-width: 0;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+  .chip {
+    font-size: 12px;
+    padding: 2px 8px;
+    border-radius: 99px;
+    background: var(--surface-2);
+    color: var(--muted);
+    font-variant-numeric: tabular-nums;
+  }
+  .chip.time {
+    background: var(--accent-soft);
+    color: var(--accent);
+    font-weight: 500;
+  }
+  .chip.block {
+    background: var(--warn-soft);
+    color: var(--warn);
+  }
+  .chip.stop {
+    background: var(--bad-soft);
+    color: var(--bad);
+  }
+  details {
+    border-top: 1px solid var(--line);
+  }
+  summary {
+    cursor: pointer;
+    padding: 8px 14px;
+    font-size: 13px;
+    color: var(--muted);
+    list-style: none;
+  }
+  summary::-webkit-details-marker {
+    display: none;
+  }
+  summary::before {
+    content: "+";
+    display: inline-block;
+    width: 1.1em;
+    font-family: var(--font-mono);
+  }
+  details[open] > summary::before {
+    content: "–";
+  }
+  .detail {
+    padding: 2px 14px 14px 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    color: var(--ink);
+  }
+  .detail ol,
+  .detail ul {
+    margin: 0;
+    padding-left: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .env {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+  .env button {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    background: var(--surface-2);
+    color: var(--ink);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 4px 8px;
+    cursor: pointer;
+    min-height: 32px;
+  }
+  .env button:hover {
+    border-color: var(--accent);
+  }
+  .note {
+    font-size: 13px;
+    color: var(--muted);
+  }
+
+  .table-wrap {
+    overflow-x: auto;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+  }
+  table {
+    border-collapse: collapse;
+    width: 100%;
+    min-width: 560px;
+    font-size: 14px;
+  }
+  th,
+  td {
+    text-align: left;
+    padding: 9px 14px;
+    border-bottom: 1px solid var(--line);
+    vertical-align: top;
+  }
+  th {
+    font-size: 12px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--muted);
+    font-weight: 500;
+  }
+  tr:last-child td {
+    border-bottom: 0;
+  }
+  .status {
+    font-weight: 600;
+    white-space: nowrap;
+  }
+  .status.ok {
+    color: var(--accent);
+  }
+  .status.mock {
+    color: var(--warn);
+  }
+  .status.no {
+    color: var(--bad);
+  }
+
+  .cols {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    gap: 12px;
+  }
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 14px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    min-width: 0;
+  }
+  .card ul {
+    margin: 0;
+    padding-left: 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .foot {
+    color: var(--muted);
+    font-size: 13px;
+  }
+  .reset {
+    background: none;
+    border: 0;
+    color: var(--muted);
+    text-decoration: underline;
+    cursor: pointer;
+    font: inherit;
+    font-size: 13px;
+    padding: 6px 0;
+    min-height: 32px;
+  }
+</style>
+
+<div class="wrap">
+  <header>
+    <h1>Isaac finish list</h1>
+    <p class="lede">
+      <strong>Snapshot from 2026-10-26. Stale:</strong> it says 26 migrations (now 31), 73 test
+      files (now 78), and to create the Netlify site (it exists). Use
+      <code>docs/handoff/STATE.md</code> instead.
+    </p>
+    <p class="lede">
+      Everything that can be built and tested without you has been. What is left needs your
+      accounts, Isaac's answers, or a lawyer. Tick items as you go; ticks stay in this browser.
+    </p>
+  </header>
+
+  <div class="stats" aria-label="Summary">
+    <div class="stat">
+      <div class="k">Your hands-on time</div>
+      <div class="v">≈ 2 h</div>
+      <div class="n">no DNS wait if you use the Resend test sender</div>
+    </div>
+    <div class="stat">
+      <div class="k">Isaac's call</div>
+      <div class="v">≈ 55 min</div>
+      <div class="n">six questions and one phone test</div>
+    </div>
+    <div class="stat">
+      <div class="k">Isaac on real clients</div>
+      <div class="v">2–3 days</div>
+      <div class="n">from the day you start list 1</div>
+    </div>
+  </div>
+
+  <div>
+    <div class="progress-line">
+      <span id="progress-text">0 of 0 done</span
+      ><button class="reset" id="reset" type="button">Clear ticks</button>
+    </div>
+    <div
+      class="progress"
+      role="progressbar"
+      aria-label="Items done"
+      aria-valuemin="0"
+      aria-valuemax="100"
+      aria-valuenow="0"
+      id="bar"
+    >
+      <i id="bar-fill"></i>
+    </div>
+  </div>
+
+  <section>
+    <div class="sec-head">
+      <h2>1. You</h2>
+      <span class="total">6 items · ≈ 2 h hands-on · the database is already done</span>
+    </div>
+    <ul class="list" id="list-you">
+      <li class="item" data-id="billing">
+        <div class="row">
+          <input type="checkbox" id="c-billing" aria-labelledby="t-billing" />
+          <div class="main">
+            <h3 id="t-billing">GitHub CI is blocked (optional, skip it)</h3>
+            <div class="chips">
+              <span class="chip time">0 min</span><span class="chip">not needed to go live</span>
+            </div>
+          </div>
+        </div>
+        <details>
+          <summary>Why and how</summary>
+          <div class="detail">
+            <p>
+              Every CI run fails in 2 seconds before any step starts. GitHub's own message on the
+              job: "recent account payments have failed or your spending limit needs to be
+              increased". Your Billing page shows no failed payment: the free Actions allowance is
+              used up. Isaac's repo used about $0.01 of it; nearly all of it came from another
+              repository.
+            </p>
+            <ol>
+              <li>Do nothing: the allowance should come back on the first of the month.</li>
+              <li>
+                To stop it recurring, fix that other repository's workflow, in its own session (it
+                must not be read from here).
+              </li>
+              <li>
+                Everything CI would run was run locally: type check, lint, format and 1,581 unit
+                tests.
+              </li>
+            </ol>
+            <p class="note">
+              CI is meant to run unit tests and a real build only (2,000 free minutes). Browser
+              tests stay local.
+            </p>
+          </div>
+        </details>
+      </li>
+      <li class="item" data-id="hosting">
+        <div class="row">
+          <input type="checkbox" id="c-hosting" aria-labelledby="t-hosting" />
+          <div class="main">
+            <h3 id="t-hosting">Create the Netlify site (the first PR is already merged)</h3>
+            <div class="chips">
+              <span class="chip time">20–30 min</span
+              ><span class="chip block">nothing is live without it</span>
+            </div>
+          </div>
+        </div>
+        <details>
+          <summary>Why and how</summary>
+          <div class="detail">
+            <ol>
+              <li>
+                Pull request #1 is merged into <code>main</code> (commit <code>3b51e59</code>), so
+                Netlify imports <code>main</code>. The Netlify follow-up, PR #2 (import in slices of
+                100, <code>netlify.toml</code>), is merged too (commit <code>df07ee0</code>).
+              </li>
+              <li>
+                Netlify → Add new site → Import from GitHub → <code>ronny-arch/Isaac</code>, branch
+                <code>main</code>. Set the variables under Site configuration → Environment
+                variables.
+              </li>
+              <li>
+                <code>DATABASE_URL</code>: Supabase → Connect →
+                <strong>Transaction pooler</strong> (port 6543) with your password filled in, then
+                add <code>?sslmode=no-verify</code> at the very end.
+              </li>
+              <li>
+                The three secrets: run this in Terminal and paste each line into Netlify (they never
+                come to me):
+              </li>
+            </ol>
+            <p class="mono">
+              printf 'SESSION_SECRET=%s\nTOKEN_ENC_KEY=%s\nCRON_SECRET=%s\n' "$(openssl rand -base64
+              48)" "$(openssl rand -base64 32)" "$(openssl rand -hex 24)"
+            </p>
+            <ol start="5">
+              <li>
+                <code>APP_URL</code>: the public https address, no trailing slash. Deploy once to
+                learn it, set it, redeploy. <code>ALLOWED_EMAILS</code>: Isaac's Google address
+                only. Leave <code>DEV_LOGIN</code> unset.
+              </li>
+              <li>Tell me the address. I run a no-login check of the live site and report.</li>
+            </ol>
+            <div class="env">
+              <button type="button" data-copy="DATABASE_URL">DATABASE_URL</button
+              ><button type="button" data-copy="SESSION_SECRET">SESSION_SECRET</button
+              ><button type="button" data-copy="TOKEN_ENC_KEY">TOKEN_ENC_KEY</button
+              ><button type="button" data-copy="CRON_SECRET">CRON_SECRET</button
+              ><button type="button" data-copy="APP_URL">APP_URL</button
+              ><button type="button" data-copy="ALLOWED_EMAILS">ALLOWED_EMAILS</button>
+            </div>
+            <p class="note">
+              The database is already built and verified (26 of 26 migrations, security tested as
+              the app role). Netlify's free plan: I could not confirm that commercial use is
+              allowed, so check your plan. Hosted functions may be held to 10–60 seconds, which is
+              why the import now goes up in slices. Never paste keys or passwords into chat.
+            </p>
+          </div>
+        </details>
+      </li>
+      <li class="item" data-id="google">
+        <div class="row">
+          <input type="checkbox" id="c-google" aria-labelledby="t-google" />
+          <div class="main">
+            <h3 id="t-google">Google Cloud: sign-in and Gmail send</h3>
+            <div class="chips">
+              <span class="chip time">20–30 min</span
+              ><span class="chip block">login and Gmail are unproven</span>
+            </div>
+          </div>
+        </div>
+        <details>
+          <summary>Why and how</summary>
+          <div class="detail">
+            <ol>
+              <li>
+                New Google Cloud project for Isaac's app. Turn on the
+                <strong>Gmail API</strong> (Library → Gmail API → Enable). Then the OAuth consent
+                screen, then a "Web application" client.
+              </li>
+              <li>Redirect URI: <code>&lt;your-app-url&gt;/api/auth/callback</code></li>
+              <li>Scopes: <code>openid email profile</code> and <code>gmail.send</code>.</li>
+              <li>Put the values in the host's environment variables:</li>
+            </ol>
+            <div class="env">
+              <button type="button" data-copy="GOOGLE_CLIENT_ID">GOOGLE_CLIENT_ID</button
+              ><button type="button" data-copy="GOOGLE_CLIENT_SECRET">GOOGLE_CLIENT_SECRET</button
+              ><button type="button" data-copy="ALLOWED_EMAILS">ALLOWED_EMAILS</button>
+            </div>
+            <p class="note">
+              <code>ALLOWED_EMAILS</code> is Isaac's Google address only. Every allowed email gets
+              its own separate, empty account, so your own login would not show his clients. Use a
+              second deployment for your testing.
+            </p>
+          </div>
+        </details>
+      </li>
+      <li class="item" data-id="mode">
+        <div class="row">
+          <input type="checkbox" id="c-mode" aria-labelledby="t-mode" />
+          <div class="main">
+            <h3 id="t-mode">Choose the Google mode</h3>
+            <div class="chips">
+              <span class="chip time">5 min</span
+              ><span class="chip block">avoids weekly Gmail reconnects</span>
+            </div>
+          </div>
+        </div>
+        <details>
+          <summary>Why and how</summary>
+          <div class="detail">
+            <p>
+              Set the consent screen to <strong>In production</strong> (an "unverified app" warning
+              shows at sign-in and is fine for one user). In Testing mode only listed test users can
+              sign in and Gmail must be reconnected every 7 days. Whether a permanent fix needs
+              Google verification or a Workspace-internal app depends on whether Isaac has Workspace
+              or plain Gmail (ask him in list 2).
+            </p>
+          </div>
+        </details>
+      </li>
+      <li class="item" data-id="resend">
+        <div class="row">
+          <input type="checkbox" id="c-resend" aria-labelledby="t-resend" />
+          <div class="main">
+            <h3 id="t-resend">Resend: key and sender</h3>
+            <div class="chips">
+              <span class="chip time">10 min</span
+              ><span class="chip block">reminder emails are unproven</span>
+            </div>
+          </div>
+        </div>
+        <details>
+          <summary>Why and how</summary>
+          <div class="detail">
+            <ol>
+              <li>
+                Quickest: sign up at Resend
+                <strong>with the same email Isaac signs in with</strong>, make an API key, and set
+                <code>RESEND_FROM</code> to <code>onboarding@resend.dev</code>. That sender only
+                delivers to that one address, which is all the reminders need. No domain, no wait.
+              </li>
+              <li>
+                Later, for a proper sender: verify a domain of Isaac's own (add the DNS records
+                Resend shows; 1 hour to 1 day). Not a BH domain.
+              </li>
+            </ol>
+            <div class="env">
+              <button type="button" data-copy="RESEND_API_KEY">RESEND_API_KEY</button
+              ><button type="button" data-copy="RESEND_FROM">RESEND_FROM</button>
+            </div>
+            <p class="note">
+              The same key sends the morning digest, the heads-up before a booked call, the instant
+              new-lead alert and the Monday scorecard. If either variable is missing in production,
+              the app shows a red banner naming it.
+            </p>
+          </div>
+        </details>
+      </li>
+      <li class="item" data-id="cron">
+        <div class="row">
+          <input type="checkbox" id="c-cron" aria-labelledby="t-cron" />
+          <div class="main">
+            <h3 id="t-cron">Set the hourly trigger</h3>
+            <div class="chips">
+              <span class="chip time">10 min</span
+              ><span class="chip block">no reminders without it</span>
+            </div>
+          </div>
+        </div>
+        <details>
+          <summary>Why and how</summary>
+          <div class="detail">
+            <p>
+              Create a free scheduler job (for example cron-job.org) that calls this every hour,
+              after the hosting step:
+            </p>
+            <p class="mono">
+              GET &lt;your-app-url&gt;/api/cron/reminders<br />Authorization: Bearer
+              &lt;CRON_SECRET&gt;
+            </p>
+            <div class="env">
+              <button type="button" data-copy="CRON_SECRET">CRON_SECRET</button>
+            </div>
+            <p class="note">
+              Settings shows when it last ran. If it goes quiet for three hours, the app shows a
+              banner, but not in the first 24 hours of an account: turn on the scheduler's own
+              failure alerts as well.
+            </p>
+          </div>
+        </details>
+      </li>
+    </ul>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <h2>2. Isaac, one call</h2>
+      <span class="total">6 items · ≈ 55 min</span>
+    </div>
+    <ul class="list" id="list-isaac">
+      <li class="item" data-id="stages">
+        <div class="row">
+          <input type="checkbox" id="c-stages" aria-labelledby="t-stages" />
+          <div class="main">
+            <h3 id="t-stages">Read the 23 stage names and default timers</h3>
+            <div class="chips"><span class="chip time">15 min</span></div>
+          </div>
+        </div>
+        <details>
+          <summary>What to ask</summary>
+          <div class="detail">
+            <p>
+              Right names, right order, right timers? They are in <code>docs/DOMAIN.md</code> and in
+              the Board. Anything he renames is a one-line change.
+            </p>
+          </div>
+        </details>
+      </li>
+      <li class="item" data-id="fifty">
+        <div class="row">
+          <input type="checkbox" id="c-fifty" aria-labelledby="t-fifty" />
+          <div class="main">
+            <h3 id="t-fifty">At what % paid down do funders let him renew?</h3>
+            <div class="chips"><span class="chip time">2 min</span></div>
+          </div>
+        </div>
+        <details>
+          <summary>What to ask</summary>
+          <div class="detail">
+            <p>
+              The app assumes 50%. Each funder can have its own line (Funders page), so the answer
+              may be "depends who".
+            </p>
+          </div>
+        </details>
+      </li>
+      <li class="item" data-id="funders">
+        <div class="row">
+          <input type="checkbox" id="c-funders" aria-labelledby="t-funders" />
+          <div class="main">
+            <h3 id="t-funders">
+              Does he submit to outside funders, fund himself, or both? Which states?
+            </h3>
+            <div class="chips">
+              <span class="chip time">5 min</span
+              ><span class="chip block">decides the legal questions in list 4</span>
+            </div>
+          </div>
+        </div>
+      </li>
+      <li class="item" data-id="workspace">
+        <div class="row">
+          <input type="checkbox" id="c-workspace" aria-labelledby="t-workspace" />
+          <div class="main">
+            <h3 id="t-workspace">Workspace or regular Gmail? Time zone and morning-email hour?</h3>
+            <div class="chips">
+              <span class="chip time">3 min</span
+              ><span class="chip block">picks the Google mode</span>
+            </div>
+          </div>
+        </div>
+      </li>
+      <li class="item" data-id="csv">
+        <div class="row">
+          <input type="checkbox" id="c-csv" aria-labelledby="t-csv" />
+          <div class="main">
+            <h3 id="t-csv">His existing clients as a spreadsheet (CSV)</h3>
+            <div class="chips"><span class="chip time">15 min</span></div>
+          </div>
+        </div>
+        <details>
+          <summary>What to ask</summary>
+          <div class="detail">
+            <p>
+              Whatever he exports from where they live now. The Import page maps the columns, keeps
+              the lead source, skips people already in the CRM and leaves do-not-contact merchants
+              alone. A value that looks like an SSN or card number is dropped from that row, not
+              stored.
+            </p>
+          </div>
+        </details>
+      </li>
+      <li class="item" data-id="phone">
+        <div class="row">
+          <input type="checkbox" id="c-phone" aria-labelledby="t-phone" />
+          <div class="main">
+            <h3 id="t-phone">Phone test with Isaac holding his phone</h3>
+            <div class="chips">
+              <span class="chip time">15 min</span
+              ><span class="chip block">the one thing only his phone can prove</span>
+            </div>
+          </div>
+        </div>
+        <details>
+          <summary>What to ask</summary>
+          <div class="detail">
+            <p>
+              Tap Call and Text on a test client and tell me what opens (Messages? Google Voice?).
+              Google publishes no official Voice link, so I cannot prove this here.
+            </p>
+          </div>
+        </details>
+      </li>
+    </ul>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <h2>3. Your decisions</h2>
+      <span class="total">yes or no</span>
+    </div>
+    <ul class="list" id="list-decide">
+      <li class="item" data-id="ci-scope">
+        <div class="row">
+          <input type="checkbox" id="c-ci-scope" aria-labelledby="t-ci-scope" />
+          <div class="main">
+            <h3 id="t-ci-scope">Keep lint, typecheck and format in CI?</h3>
+            <div class="chips"><span class="chip">adds about 20 seconds</span></div>
+          </div>
+        </div>
+        <details>
+          <summary>Detail</summary>
+          <div class="detail">
+            <p>
+              Your rule says CI runs unit tests and a real build, nothing else. I added the three
+              checks because they are what catches mistakes before a merge. Say "drop them" and I
+              remove them in one commit.
+            </p>
+          </div>
+        </details>
+      </li>
+      <li class="item" data-id="storage">
+        <div class="row">
+          <input type="checkbox" id="c-storage" aria-labelledby="t-storage" />
+          <div class="main">
+            <h3 id="t-storage">Should the app store bank statements?</h3>
+            <div class="chips">
+              <span class="chip">half a day to build</span
+              ><span class="chip block">needs a private storage bucket</span>
+            </div>
+          </div>
+        </div>
+        <details>
+          <summary>Detail</summary>
+          <div class="detail">
+            <p>
+              Your rule: statements are documents in private storage behind an authenticated link,
+              never a column and never in git. Today "stips received" is a checkbox and nothing is
+              stored. If Isaac wants statements attached to each merchant, pick a provider (a
+              private bucket in the same Supabase or Neon account is simplest) and say yes.
+            </p>
+          </div>
+        </details>
+      </li>
+      <li class="item" data-id="review">
+        <div class="row">
+          <input type="checkbox" id="c-review" aria-labelledby="t-review" />
+          <div class="main">
+            <h3 id="t-review">Review the pull request</h3>
+            <div class="chips"><span class="chip">large</span></div>
+          </div>
+        </div>
+        <details>
+          <summary>Detail</summary>
+          <div class="detail">
+            <p>
+              Start with <code>README.md</code> and <code>docs/DECISIONS.md</code>; they say what
+              exists and why. Nothing is merged or deployed without you.
+            </p>
+          </div>
+        </details>
+      </li>
+      <li class="item" data-id="leads">
+        <div class="row">
+          <input type="checkbox" id="c-leads" aria-labelledby="t-leads" />
+          <div class="main">
+            <h3 id="t-leads">Does Isaac get leads from a form or a vendor?</h3>
+            <div class="chips">
+              <span class="chip time">5 min if yes</span><span class="chip">optional</span>
+            </div>
+          </div>
+        </div>
+        <details>
+          <summary>Detail</summary>
+          <div class="detail">
+            <p>
+              If yes, make a connection in the app (Clients → Lead intake) and paste its token into
+              Zapier or the vendor. New leads then land on Today as "call now" and email him at
+              once. Steps in <code>docs/LEAD-INTAKE.md</code>.
+            </p>
+          </div>
+        </details>
+      </li>
+      <li class="item" data-id="restore">
+        <div class="row">
+          <input type="checkbox" id="c-restore" aria-labelledby="t-restore" />
+          <div class="main">
+            <h3 id="t-restore">After go-live: download a backup and try the restore on a copy</h3>
+            <div class="chips"><span class="chip time">10 min</span></div>
+          </div>
+        </div>
+        <details>
+          <summary>Detail</summary>
+          <div class="detail">
+            <p>
+              Settings → Your data → Download a full backup. <code>docs/BACKUP.md</code> has the
+              restore command. Better to know it works before you need it.
+            </p>
+          </div>
+        </details>
+      </li>
+    </ul>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <h2>4. Ask a lawyer or compliance person</h2>
+      <span class="total">I cannot answer these</span>
+    </div>
+    <ul class="list" id="list-legal">
+      <li class="item" data-id="states">
+        <div class="row">
+          <input type="checkbox" id="c-states" aria-labelledby="t-states" />
+          <div class="main">
+            <h3 id="t-states">Which states need broker registration or financing disclosure?</h3>
+            <div class="chips"><span class="chip stop">unverified, check it</span></div>
+          </div>
+        </div>
+        <details>
+          <summary>Detail</summary>
+          <div class="detail">
+            <p>
+              Secondary sources point to California, New York, Utah, Virginia, Florida, Georgia,
+              Connecticut, Kansas, Missouri and Texas, and say Texas broker registration is due at
+              the end of 2026. I could not confirm any of it from a primary source. The app does not
+              generate disclosure documents.
+            </p>
+          </div>
+        </details>
+      </li>
+      <li class="item" data-id="tcpa">
+        <div class="row">
+          <input type="checkbox" id="c-tcpa" aria-labelledby="t-tcpa" />
+          <div class="main">
+            <h3 id="t-tcpa">Texting merchants: consent rules (TCPA and state law)</h3>
+            <div class="chips"><span class="chip stop">a legal fact, not a feature</span></div>
+          </div>
+        </div>
+        <details>
+          <summary>Detail</summary>
+          <div class="detail">
+            <p>
+              The app blocks do-not-contact merchants, refuses to send a text with an unfilled
+              field, and warns outside 8am–9pm. Whether his merchants have consented is for counsel.
+              A per-merchant consent date is on the backlog until they answer.
+            </p>
+          </div>
+        </details>
+      </li>
+    </ul>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <h2>What is proven, and what is not</h2>
+      <span class="total">numbers from runs on this machine</span>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Area</th>
+            <th>Status</th>
+            <th>How it was checked</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>
+              Today, Board drag, stages, timers, notes, asks, stips, funding, offers, earnings,
+              win-back, reports, trash, import, lead intake, merge duplicates, backup and restore,
+              phone layout at 390px
+            </td>
+            <td class="status ok">Proven</td>
+            <td>
+              Driven in a real browser, then the database rows read back: 19 browser files, 765 of
+              765 checks. Plus 73 test files, 1,581 tests against a real Postgres.
+            </td>
+          </tr>
+          <tr>
+            <td>Production build</td>
+            <td class="status ok">Proven</td>
+            <td>
+              Built and started; 15 of 15 pages load with no console errors and no CSP violations.
+            </td>
+          </tr>
+          <tr>
+            <td>Database on Supabase</td>
+            <td class="status ok">Proven</td>
+            <td>
+              26 of 26 migrations applied; 10 schema fingerprints equal a clean local migrate;
+              tested as the app role (one user cannot see another's merchants; strangers refused).
+              The live app against it: not yet.
+            </td>
+          </tr>
+          <tr>
+            <td>Production build on a Supabase-like database (non-superuser)</td>
+            <td class="status ok">Proven</td>
+            <td>
+              16 public checks pass; a 3,000-merchant, 30,000-note backup streams as 18.7 MB in
+              under a second and parses back with the same counts.
+            </td>
+          </tr>
+          <tr>
+            <td>Google sign-in and Gmail send</td>
+            <td class="status mock">Network mocked</td>
+            <td>Logic and database state tested; the Google calls need your credentials.</td>
+          </tr>
+          <tr>
+            <td>Reminder emails (digest, call heads-up, lead alert, scorecard)</td>
+            <td class="status mock">Network mocked</td>
+            <td>Claims, retries and skips tested; delivery needs the Resend account.</td>
+          </tr>
+          <tr>
+            <td>Text button opening Google Voice or Messages</td>
+            <td class="status no">Not proven</td>
+            <td>Only Isaac's phone can show it.</td>
+          </tr>
+          <tr>
+            <td>Continuous integration</td>
+            <td class="status no">Not running</td>
+            <td>
+              Jobs do not start: the account's free Actions minutes are used up. Same checks pass
+              locally.
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <h2>Where energy is leaking</h2>
+      <span class="total">my read, not a verified market survey</span>
+    </div>
+    <div class="cols">
+      <div class="card">
+        <h3>Gating items</h3>
+        <ul>
+          <li>
+            Nothing is live until hosting, Google and Resend exist. That is list 1, not more
+            building.
+          </li>
+          <li>
+            No CI means no safety net online. The local suite is green, but it only protects this
+            machine.
+          </li>
+          <li>The pull request is large. Your review is now the slowest step.</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h3>What I can build next without you</h3>
+        <ul>
+          <li>
+            Pin Supabase's certificate authority so the database connection verifies who answers
+            (today it is encrypted but unverified).
+          </li>
+          <li>Page the Clients list; it ships every merchant at once (11 MB at 5,000).</li>
+          <li>A merchant-facing upload link for bank statements (needs your storage decision).</li>
+          <li>Small tap targets left on the Today page on a phone.</li>
+          <li>Web push for the installed app (needs a phone to prove).</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h3>What MCA shops commonly buy tools for</h3>
+        <ul>
+          <li>Bank-statement analysis (cash flow, existing positions, NSFs).</li>
+          <li>E-sign for the application and contract.</li>
+          <li>Submitting to funders by their portals or APIs.</li>
+          <li>A merchant-facing upload link for statements.</li>
+          <li>Call recording through a dialer.</li>
+        </ul>
+        <p class="note">
+          General knowledge of the trade, not researched. The upload link and statement storage are
+          the first two that fit this build.
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <p class="foot">
+    After lists 1 and 2 are done I need about 1–2 hours to wire the real keys, prove login, Gmail
+    and reminders end to end, and fix what breaks. Numbers are from runs on this machine on
+    2026-10-25.
+  </p>
+</div>
+
+<script>
+  (function () {
+    var KEY = "isaac-finish-list-v1";
+    var checks = Array.prototype.slice.call(
+      document.querySelectorAll('.item input[type="checkbox"]'),
+    );
+    var saved = {};
+    try {
+      saved = JSON.parse(localStorage.getItem(KEY) || "{}") || {};
+    } catch (e) {
+      saved = {};
+    }
+
+    function paint() {
+      var done = 0;
+      checks.forEach(function (c) {
+        var item = c.closest(".item");
+        if (c.checked) done += 1;
+        item.classList.toggle("done", c.checked);
+      });
+      var total = checks.length;
+      var pct = total ? Math.round((done / total) * 100) : 0;
+      document.getElementById("progress-text").textContent = done + " of " + total + " done";
+      document.getElementById("bar-fill").style.width = pct + "%";
+      document.getElementById("bar").setAttribute("aria-valuenow", String(pct));
+    }
+    function persist() {
+      var out = {};
+      checks.forEach(function (c) {
+        if (c.checked) out[c.closest(".item").dataset.id] = 1;
+      });
+      try {
+        localStorage.setItem(KEY, JSON.stringify(out));
+      } catch (e) {
+        /* storage blocked: ticks last for this visit only */
+      }
+    }
+    checks.forEach(function (c) {
+      c.checked = !!saved[c.closest(".item").dataset.id];
+      c.addEventListener("change", function () {
+        paint();
+        persist();
+      });
+    });
+    document.getElementById("reset").addEventListener("click", function () {
+      checks.forEach(function (c) {
+        c.checked = false;
+      });
+      paint();
+      persist();
+    });
+    paint();
+
+    document.querySelectorAll("[data-copy]").forEach(function (b) {
+      b.addEventListener("click", function () {
+        var text = b.getAttribute("data-copy");
+        var original = b.textContent;
+        function flash(msg) {
+          b.textContent = msg;
+          setTimeout(function () {
+            b.textContent = original;
+          }, 1200);
+        }
+        function fallback() {
+          var r = document.createRange();
+          r.selectNodeContents(b);
+          var s = window.getSelection();
+          s.removeAllRanges();
+          s.addRange(r);
+          flash("select + copy");
+        }
+        try {
+          navigator.clipboard.writeText(text).then(function () {
+            flash("copied");
+          }, fallback);
+        } catch (e) {
+          fallback();
+        }
+      });
+    });
+  })();
+</script>

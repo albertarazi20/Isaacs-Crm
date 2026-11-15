@@ -3,7 +3,12 @@
 ## What this is
 
 A CRM for a **merchant cash advance (MCA)** shop. One client: a friend of the owner.
-Build is starting from scratch; see `docs/DOMAIN.md` for the model before writing any schema.
+The CRM is built and live; `docs/handoff/STATE.md` says where it stands and `docs/DOMAIN.md` has the original model.
+
+## New to this repo? Start here
+
+Read `docs/handoff/README.md` first. It holds the current state, the next steps, the MCA business knowledge, how the owner works, and
+the database facts. This file holds the rules that never change.
 
 ## Hard separation from BH
 

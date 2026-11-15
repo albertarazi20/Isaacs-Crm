@@ -1,7 +1,8 @@
 # Deploying Isaac
 
-Nothing here has been done yet. Everything marked **(unverified)** is from provider docs, not from running it.
-Claude does not deploy, create accounts or spend money — you do steps 1–4, then tell Claude the names.
+Partly done (2026-11-15): the database is live with all 31 migrations, and a Netlify site `mca123` builds this repository (merging to `main` deploys it).
+Everything marked **(unverified)** is from provider docs, not from running it. Claude does not create accounts or spend money; the owner does
+that and tells Claude the names.
 
 ## 1. Separate accounts from BH
 
@@ -16,7 +17,7 @@ New hosting project, new database, new Google Cloud project, new Resend domain. 
   - **Direct** (no pooler) for `pnpm db:migrate`. Migrations hold an advisory lock, which needs a session connection.
   - **Pooled** for the running app. Every request is one transaction (`begin … set local role … commit`), which
     works with transaction-mode pooling.
-- **Supabase, as deployed (2026-10-25):** the project holds all 26 migrations. The running app uses the **Transaction
+- **Supabase, as deployed (2026-10-25):** the project holds all 31 migrations. The running app uses the **Transaction
   pooler** (port 6543) and ends the string with `?sslmode=no-verify`: Supabase's pooler certificate does not chain to a
   public authority, so `sslmode=require` fails verification (unverified until a live connect) and no `sslmode` means no
   encryption. `no-verify` is encrypted but does not prove who answered; the hardening is to pass Supabase's CA in code

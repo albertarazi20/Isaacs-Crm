@@ -1,5 +1,7 @@
 # Everything the owner asked for — and where it stands
 
+> Written when there were 23 stages. The board now shows seven (`docs/handoff/STATE.md`, "The stage list"); the 23 keys still exist in the database.
+
 The owner said: _"don't forget a single thing of what I said."_ This is every ask, in his order, mapped
 to what exists and how far it has been **proven**. Status words mean exactly this:
 

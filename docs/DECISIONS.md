@@ -397,3 +397,11 @@ A read-only reviewer went through the first-deploy path on Vercel plus Supabase'
   once, a duplicate phone in a later slice skipped, a refused row reported on its line, and a second run changes nothing.
 - Not done yet: the full backup is one file. At 3,000 merchants and 30,000 notes it was 18.7 MB, close to a 20 MB streamed
   cap. If a live deploy shows trouble, compress it (gzip) and teach the restore script to read it.
+
+## Delegation (owner, 2026-10-26)
+
+The owner said merging pull request 1 was Claude's job ("only give me work that you can't do"). The first session took that as standing for
+its own pull requests: merge once the checks it ran are green and say plainly what was not run. It does **not** cover a change that touches
+the live database or the live site: those need the owner's OK, a backup, and the migration applied before the code is merged
+(`docs/handoff/README.md`, "Before you touch production"). It also does not cover the "deliberately not built" list in `docs/BACKLOG.md`
+section 5. The earlier line in `docs/OWNER-TODO.md` ("nothing is merged or deployed without you") predates this.
