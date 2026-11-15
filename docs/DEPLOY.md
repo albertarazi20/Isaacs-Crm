@@ -1,5 +1,7 @@
 # Deploying Isaac
 
+> **MCA-CRM note (2026-11-15):** this file describes Ronny's original Isaac deployment (Supabase `vngxqywqqdmucvcdjfec`, Netlify `mca123`). This repo uses Supabase project `aztoxzcmnvqaypjuuuwj`. Never run anything against the Isaac project or site. See `CLAUDE.md`.
+
 Partly done (2026-11-15): the database is live with all 31 migrations, and a Netlify site `mca123` builds this repository (merging to `main` deploys it).
 Everything marked **(unverified)** is from provider docs, not from running it. Claude does not create accounts or spend money; the owner does
 that and tells Claude the names.

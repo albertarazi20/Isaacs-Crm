@@ -1,5 +1,7 @@
 # Paste this into the new Claude
 
+> **MCA-CRM note (2026-11-15):** this file describes Ronny's original Isaac deployment (Supabase `vngxqywqqdmucvcdjfec`, Netlify `mca123`). This repo uses Supabase project `aztoxzcmnvqaypjuuuwj`. Never run anything against the Isaac project or site. See `CLAUDE.md`.
+
 Use this as the first message in a new Claude session (Claude Code, or a Claude project) that has the repository
 `ronny-arch/Isaac` connected. Do not add secrets to it.
 

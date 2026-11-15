@@ -1,5 +1,7 @@
 # Next steps, in order
 
+> **MCA-CRM note (2026-11-15):** this file describes Ronny's original Isaac deployment (Supabase `vngxqywqqdmucvcdjfec`, Netlify `mca123`). This repo uses Supabase project `aztoxzcmnvqaypjuuuwj`. Never run anything against the Isaac project or site. See `CLAUDE.md`.
+
 ## 0. Before anything else (30 minutes)
 
 - [ ] Read `README.md`, `STATE.md`, `CLAUDE.md`, then `docs/DECISIONS.md` (skim the headings).

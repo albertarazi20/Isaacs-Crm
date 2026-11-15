@@ -1,5 +1,7 @@
 # The database (Supabase)
 
+> **MCA-CRM note (2026-11-15):** this file describes Ronny's original Isaac deployment (Supabase `vngxqywqqdmucvcdjfec`, Netlify `mca123`). This repo uses Supabase project `aztoxzcmnvqaypjuuuwj`. Never run anything against the Isaac project or site. See `CLAUDE.md`.
+
 No password, key or connection string with a password is in this repo. Never add one.
 
 ## The project

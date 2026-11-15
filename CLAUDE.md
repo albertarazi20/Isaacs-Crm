@@ -1,5 +1,16 @@
 # Isaac (MCA CRM) — working rules
 
+## READ FIRST: this repo is MCA-CRM, a separate copy
+
+This repository (`github.com/albertarazi20/MCA-CRM`) was started from Ronny's Isaac codebase on 2026-11-15. It is a
+**different deployment with its own database**:
+
+- **Our database:** Supabase project `aztoxzcmnvqaypjuuuwj` (org "MCA CRM", us-east-1). Every Supabase call passes this `project_id`.
+- **Never touch Isaac's live systems:** Supabase project `vngxqywqqdmucvcdjfec` and the Netlify site `mca123`. The docs under
+  `docs/` and `docs/handoff/` were written for that deployment; read their project IDs, site names and counts (e.g. "31 migrations",
+  "24 clients") as Isaac's, not ours.
+- Our Netlify (or other host) site does not exist yet.
+
 ## What this is
 
 A CRM for a **merchant cash advance (MCA)** shop. One client: a friend of the owner.
