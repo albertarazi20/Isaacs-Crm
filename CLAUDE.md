@@ -1,8 +1,8 @@
 # Isaac (MCA CRM) — working rules
 
-## READ FIRST: this repo is MCA-CRM, a separate copy
+## READ FIRST: this repo is isaac-work, a separate copy
 
-This repository (`github.com/albertarazi20/MCA-CRM`) was started from Ronny's Isaac codebase on 2026-11-15. It is a
+This repository (`github.com/albertarazi20/isaac-work`, local clone `~/isaac-work`) was started from Ronny's Isaac codebase on 2026-11-15. It is a
 **different deployment with its own database**:
 
 - **Our database:** Supabase project `aztoxzcmnvqaypjuuuwj` (org "MCA CRM", us-east-1). Every Supabase call passes this `project_id`.

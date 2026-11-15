@@ -1,6 +1,6 @@
 # State of the project (2026-11-15)
 
-> **MCA-CRM note (2026-11-15):** this file describes Ronny's original Isaac deployment (Supabase `vngxqywqqdmucvcdjfec`, Netlify `mca123`). This repo uses Supabase project `aztoxzcmnvqaypjuuuwj`. Never run anything against the Isaac project or site. See `CLAUDE.md`.
+> **isaac-work note (2026-11-15):** this file describes Ronny's original Isaac deployment (Supabase `vngxqywqqdmucvcdjfec`, Netlify `mca123`). This repo uses Supabase project `aztoxzcmnvqaypjuuuwj`. Never run anything against the Isaac project or site. See `CLAUDE.md`.
 
 Everything here was measured on 2026-11-15 unless marked **unverified**. The command that produced each number is next to it.
 

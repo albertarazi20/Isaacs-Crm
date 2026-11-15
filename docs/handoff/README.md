@@ -1,6 +1,6 @@
 # Handoff: Isaac's MCA CRM
 
-> **MCA-CRM note (2026-11-15):** this file describes Ronny's original Isaac deployment (Supabase `vngxqywqqdmucvcdjfec`, Netlify `mca123`). This repo uses Supabase project `aztoxzcmnvqaypjuuuwj`. Never run anything against the Isaac project or site. See `CLAUDE.md`.
+> **isaac-work note (2026-11-15):** this file describes Ronny's original Isaac deployment (Supabase `vngxqywqqdmucvcdjfec`, Netlify `mca123`). This repo uses Supabase project `aztoxzcmnvqaypjuuuwj`. Never run anything against the Isaac project or site. See `CLAUDE.md`.
 
 Read this first if you are a new Claude picking up the build. It is the one folder that holds what the first Claude
 session knew. Written 2026-11-15. The first session built v1 (Oct 20 to 26, 2026). A second Claude thread then merged pull

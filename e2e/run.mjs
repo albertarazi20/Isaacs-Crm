@@ -2,7 +2,6 @@
 //   pnpm e2e              run everything
 //   pnpm e2e today        run files whose name contains "today"
 import { readdirSync } from "node:fs";
-import { pathToFileURL } from "node:url";
 import { dropUser, makeUser, summary } from "./lib.mjs";
 
 const filter = process.argv[2] ?? "";
@@ -15,7 +14,8 @@ for (const file of files) {
   console.log(`\n== ${file}`);
   const email = await makeUser(file.split(".")[0]);
   try {
-    const mod = await import(pathToFileURL(new URL(file, import.meta.url).pathname).href);
+    // Use the file URL as-is: `.pathname` is percent-encoded, and pathToFileURL would encode it again (breaks paths with spaces).
+    const mod = await import(new URL(file, import.meta.url).href);
     await mod.default({ email });
   } catch (e) {
     failed = true;

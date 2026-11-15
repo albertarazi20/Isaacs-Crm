@@ -1,6 +1,6 @@
 # Owner to-do — only the things Claude cannot do
 
-> **MCA-CRM note (2026-11-15):** this file describes Ronny's original Isaac deployment (Supabase `vngxqywqqdmucvcdjfec`, Netlify `mca123`). This repo uses Supabase project `aztoxzcmnvqaypjuuuwj`. Never run anything against the Isaac project or site. See `CLAUDE.md`.
+> **isaac-work note (2026-11-15):** this file describes Ronny's original Isaac deployment (Supabase `vngxqywqqdmucvcdjfec`, Netlify `mca123`). This repo uses Supabase project `aztoxzcmnvqaypjuuuwj`. Never run anything against the Isaac project or site. See `CLAUDE.md`.
 
 Never paste secrets (API keys, client secrets) into chat. Put them in the hosting provider's
 environment variables; Claude only needs to be told they are set.
