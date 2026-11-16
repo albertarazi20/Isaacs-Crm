@@ -37,6 +37,7 @@ const SAMPLE: Record<MergeField, string> = {
   application_link: "",
   amount_wanted: "$60,000",
   funder_best_offer: "$50,000 at 1.42 from Rival Capital",
+  upload_link: "https://crm.selectivecap.com/upload/abc123",
 };
 
 /** Settings → Messages: signature, application link, and saved snippets. */
