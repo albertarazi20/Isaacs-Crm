@@ -4,7 +4,7 @@ import { createClient, stampClientTimezone, UserError } from "../data/mutations"
 import { findDuplicates, userContext, type DuplicateMatch } from "../data/queries";
 import { id, optMoney } from "../data/schemas";
 import { stageDef } from "../mca/stages";
-import { fileOneRow, PENDING_ROW_COLUMNS, sendWelcome, type PendingRow } from "../sheets/file";
+import { fileOneRow, loadPendingRow, sendWelcome } from "../sheets/file";
 import { refuseAnotherReps } from "./owner";
 
 /**
@@ -72,12 +72,7 @@ export async function intakeLead(
   const contact = `${i.firstName} ${i.lastName}`.trim();
 
   if (i.sheetRowId) {
-    const { rows } = await q.query<PendingRow>(
-      `select app.current_user_id() as owner_id, ${PENDING_ROW_COLUMNS}
-         from sheet_rows r join sheet_sources s on s.id = r.source_id where r.id = $1`,
-      [i.sheetRowId],
-    );
-    const row = rows[0];
+    const row = await loadPendingRow(q, i.sheetRowId);
     if (!row) throw new UserError("That sheet row is gone");
     // what was typed wins; the sheet's own words fill whatever was left blank
     const business =

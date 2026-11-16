@@ -128,10 +128,9 @@ describe("architecture boundaries", () => {
       // ${TZ_LABEL}: a constant CASE expression (time-zone label); stream 1 adds ${SENDS_SQL} / ${TOTALS_SQL}, the
       // fixed fragments the template and bucket scores are counted with (the window is a bound parameter)
       "lib/buckets/queries.ts": 3,
-      // ${PENDING_ROW_COLUMNS}: the fixed column list a sheet row is read with before it is filed as a merchant
-      "lib/sheets/file.ts": 1,
-      "lib/leads/form.ts": 1,
-      "app/sheets-actions.ts": 1,
+      // ${PENDING_ROW_COLUMNS}: the fixed column list a sheet row is read with before it is filed as a merchant —
+      // the daily loop's read, and loadPendingRow (stream 1), which the form and the actions call
+      "lib/sheets/file.ts": 2,
     };
     const counts: Record<string, number> = {};
     for (const f of files) {

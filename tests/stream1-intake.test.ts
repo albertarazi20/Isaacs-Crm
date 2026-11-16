@@ -3,6 +3,7 @@ import { toActionError } from "@/lib/data/errors";
 import { intakeLead, intakeSchema } from "@/lib/leads/form";
 import { OwnedElsewhereError, ownedElsewhereMessage, touchedAgo } from "@/lib/leads/owner";
 import {
+  fileManyRows,
   fileNewSheetRows,
   fileOneRow,
   PENDING_ROW_COLUMNS,
@@ -242,5 +243,79 @@ describe("S1-9: time in business comes off the sheet row", () => {
       [out.clientId],
     );
     expect(c).toEqual({ time_in_business_months: 18, lead_source_kind: "sheet" });
+  });
+});
+
+describe("S1-13: bulk intake files N staged rows into one bucket, one transaction each, and reports every row", () => {
+  it("filed, the rep's own duplicate, another rep's merchant, a row that cannot be a merchant, a row that is gone", async () => {
+    const fresh = await stageRow(danasSheet, {
+      row_no: 10,
+      business_name: "Blue Bakery",
+      contact_name: "Ana Ruiz",
+      phone: "2125550190",
+      email: "ana@bluebakery.com",
+    });
+    const mine = await stageRow(danasSheet, {
+      row_no: 11,
+      business_name: "Golden Wok",
+      phone: "2125550182",
+    });
+    const mikes = await stageRow(danasSheet, {
+      row_no: 12,
+      business_name: "Harbor Tacos",
+      phone: "3105550199",
+    });
+    const nameless = await stageRow(danasSheet, { row_no: 13, phone: "2125550177" });
+    const gone = "00000000-0000-0000-0000-000000000001";
+    const before = (await one<{ n: number }>("select count(*)::int as n from clients"))!.n;
+    const report = await fileManyRows({
+      db: t.db,
+      userId: dana,
+      rowIds: [fresh, mine, mikes, nameless, gone],
+      bucketId: statements,
+      appUrl: "https://crm.test",
+    });
+    expect(report.map((r) => [r.rowId, r.result])).toEqual([
+      [fresh, "filed"],
+      [mine, "duplicate"],
+      [mikes, "duplicate"],
+      [nameless, "refused"],
+      [gone, "missing"],
+    ]);
+    expect(report[0]?.message).toBe("Filed, welcome email queued");
+    expect(report[1]?.message).toBe(
+      "Already in the system: Dana Lee's lead, in Missing statements",
+    );
+    expect(report[2]?.message).toBe(
+      "Already in the system: Mike's lead, in Missing statements, touched 3 days ago",
+    );
+    expect(report[2]?.clientId).toBe(harbor);
+    expect(report[3]?.message).not.toBe("");
+    expect((await one<{ n: number }>("select count(*)::int as n from clients"))!.n).toBe(
+      before + 1,
+    );
+    const bakery = report[0]!.clientId!;
+    const enrolled = await one<{ key: string }>(
+      "select b.key from enrollments e join buckets b on b.id = e.bucket_id where e.client_id = $1 and e.stopped_at is null",
+      [bakery],
+    );
+    expect(enrolled).toEqual({ key: "missing_statements" });
+    const welcome = await one<{ lane: string; status: string }>(
+      "select lane, status from outbox where client_id = $1",
+      [bakery],
+    );
+    expect(welcome).toEqual({ lane: "intake", status: "queued" });
+    // the same rows again: nothing is made twice
+    const again = await fileManyRows({
+      db: t.db,
+      userId: dana,
+      rowIds: [fresh, mikes],
+      bucketId: statements,
+      appUrl: "https://crm.test",
+    });
+    expect(again.map((r) => r.result)).toEqual(["already_filed", "already_filed"]);
+    expect((await one<{ n: number }>("select count(*)::int as n from clients"))!.n).toBe(
+      before + 1,
+    );
   });
 });

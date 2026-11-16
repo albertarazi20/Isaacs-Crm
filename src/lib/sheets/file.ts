@@ -1,4 +1,5 @@
 import type { Db, DbAccess } from "../db";
+import { toActionError } from "../data/errors";
 import { createClient, stampClientTimezone } from "../data/mutations";
 import { newClientSchema } from "../data/schemas";
 import { findDuplicates, userContext, type DuplicateMatch } from "../data/queries";
@@ -50,6 +51,113 @@ export type FileOutcome =
   | { result: "filed"; clientId: string; welcomeSent: boolean }
   /** Already in the CRM: nothing was made; `match` says whose it is and where it sits. */
   | { result: "duplicate"; clientId: string; match: DuplicateMatch };
+
+/** One staged row with its source, as the signed-in user sees it (row security decides); null when they cannot. */
+export async function loadPendingRow(q: Db, rowId: string): Promise<PendingRow | null> {
+  const { rows } = await q.query<PendingRow>(
+    `select app.current_user_id() as owner_id, ${PENDING_ROW_COLUMNS}
+       from sheet_rows r join sheet_sources s on s.id = r.source_id where r.id = $1`,
+    [rowId],
+  );
+  return rows[0] ?? null;
+}
+
+export interface BulkFileReport {
+  rowId: string;
+  businessName: string;
+  result: "filed" | "duplicate" | "already_filed" | "missing" | "refused";
+  clientId: string | null;
+  /** The duplicate's owner and place, or why the row was refused, in words. */
+  message: string;
+}
+
+/**
+ * Bulk intake (S1-13): file N staged rows into one bucket in one action. Each row is its own transaction, so one
+ * bad row never rolls the others back; duplicates (the rep's own, and another rep's) are skipped and named.
+ */
+export async function fileManyRows(args: {
+  db: DbAccess;
+  userId: string;
+  rowIds: readonly string[];
+  bucketId: string | null;
+  appUrl: string;
+  now?: Date;
+}): Promise<BulkFileReport[]> {
+  const out: BulkFileReport[] = [];
+  for (const rowId of args.rowIds) {
+    try {
+      const r = await args.db.withUser(args.userId, async (q) => {
+        const row = await loadPendingRow(q, rowId);
+        if (!row)
+          return {
+            rowId,
+            businessName: "",
+            result: "missing",
+            clientId: null,
+            message: "That sheet row is gone",
+          } as const;
+        const already = (
+          await q.query<{ client_id: string | null }>(
+            "select client_id from sheet_rows where id = $1 and filed_at is not null",
+            [rowId],
+          )
+        ).rows[0];
+        const businessName = row.business_name || row.contact_name;
+        if (already)
+          return {
+            rowId,
+            businessName,
+            result: "already_filed",
+            clientId: already.client_id,
+            message: "Already filed",
+          } as const;
+        const filed = await fileOneRow(q, row, args.appUrl, args.now, args.bucketId);
+        if (filed.result === "duplicate")
+          return {
+            rowId,
+            businessName,
+            result: "duplicate",
+            clientId: filed.clientId,
+            message: `Already in the system: ${filed.match.owner_name || "this book"}'s lead${filed.match.bucket_name ? `, in ${filed.match.bucket_name}` : ""}`,
+          } as const;
+        return {
+          rowId,
+          businessName,
+          result: "filed",
+          clientId: filed.clientId,
+          message: filed.welcomeSent ? "Filed, welcome email queued" : "Filed",
+        } as const;
+      });
+      out.push(r);
+    } catch (e) {
+      if (e instanceof OwnedElsewhereError) {
+        // the row is the other rep's merchant: marked as such, like the daily loop does, so it is not offered again
+        await args.db.withUser(args.userId, (q) =>
+          q.query("update sheet_rows set filed_at = now(), client_id = $2 where id = $1", [
+            rowId,
+            e.owner.client_id,
+          ]),
+        );
+        out.push({
+          rowId,
+          businessName: e.owner.business_name,
+          result: "duplicate",
+          clientId: e.owner.client_id,
+          message: e.message,
+        });
+        continue;
+      }
+      out.push({
+        rowId,
+        businessName: "",
+        result: "refused",
+        clientId: null,
+        message: toActionError(e),
+      });
+    }
+  }
+  return out;
+}
 
 /** What the intake form typed over the sheet's row. */
 export interface FileExtras {

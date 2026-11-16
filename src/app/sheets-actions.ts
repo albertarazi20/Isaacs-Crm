@@ -8,7 +8,7 @@ import { UserError } from "@/lib/data/mutations";
 import { id } from "@/lib/data/schemas";
 import type { ActionResult } from "@/lib/data/types";
 import { db, type Db } from "@/lib/db";
-import { fileOneRow, PENDING_ROW_COLUMNS, type PendingRow } from "@/lib/sheets/file";
+import { fileManyRows, fileOneRow, loadPendingRow, type BulkFileReport } from "@/lib/sheets/file";
 import {
   connectSheet,
   connectSheetSchema,
@@ -139,17 +139,35 @@ export async function fileSheetRowAction(
   try {
     const i = z.object({ rowId: id, bucketId: id.nullable() }).parse(input);
     const outcome = await db.withUser(session.userId, async (q) => {
-      const { rows } = await q.query<PendingRow>(
-        `select app.current_user_id() as owner_id, ${PENDING_ROW_COLUMNS}
-           from sheet_rows r join sheet_sources s on s.id = r.source_id where r.id = $1`,
-        [i.rowId],
-      );
-      const row = rows[0];
+      const row = await loadPendingRow(q, i.rowId);
       if (!row) throw new UserError("That sheet row is gone");
       return fileOneRow(q, row, env().APP_URL, new Date(), i.bucketId);
     });
     revalidatePath("/", "layout");
     return { ok: true, data: { result: outcome.result } };
+  } catch (e) {
+    return { ok: false, error: toActionError(e) };
+  }
+}
+
+/** Bulk intake (S1-13): file the checked staged rows into one bucket, one transaction each, and report every row. */
+export async function fileSheetRowsAction(
+  input: unknown,
+): Promise<ActionResult<{ rows: BulkFileReport[] }>> {
+  const session = await requireSession();
+  try {
+    const i = z
+      .object({ rowIds: z.array(id).min(1).max(500), bucketId: id.nullable().default(null) })
+      .parse(input);
+    const rows = await fileManyRows({
+      db,
+      userId: session.userId,
+      rowIds: i.rowIds,
+      bucketId: i.bucketId,
+      appUrl: env().APP_URL,
+    });
+    revalidatePath("/", "layout");
+    return { ok: true, data: { rows } };
   } catch (e) {
     return { ok: false, error: toActionError(e) };
   }
