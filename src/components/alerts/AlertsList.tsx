@@ -76,7 +76,7 @@ export function AlertsList({ rows, timezone }: { rows: AlertFeedRow[]; timezone:
               }}
               className="flex items-start gap-3 px-4 py-2.5 transition hover:bg-surface-3"
             >
-              <span className="mt-0.5 shrink-0">
+              <span className="mt-0.5 shrink-0 sm:w-36">
                 <Badge tone={TONE[r.kind] ?? "neutral"}>
                   {ALERT_KIND_LABELS[r.kind] ?? r.kind}
                 </Badge>

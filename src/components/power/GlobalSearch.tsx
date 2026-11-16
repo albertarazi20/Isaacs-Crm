@@ -116,7 +116,7 @@ export function GlobalSearch() {
         onClick={show}
         aria-label="Find a client"
         aria-keyshortcuts="Control+K Meta+K"
-        className="inline-flex h-10 items-center gap-2 rounded-lg px-2.5 text-[13px] text-muted transition hover:bg-surface-2 hover:text-text sm:h-9 lg:w-60 lg:border lg:border-border lg:bg-surface-2/60 lg:px-3 lg:hover:border-border-strong lg:hover:bg-surface"
+        className="inline-flex h-10 items-center gap-2 rounded-lg px-2.5 text-[13px] text-muted transition hover:bg-surface-2 hover:text-text sm:h-9 lg:w-44 lg:border xl:w-60 lg:border-border lg:bg-surface-2/60 lg:px-3 lg:hover:border-border-strong lg:hover:bg-surface"
       >
         <SearchIcon />
         <span className="hidden flex-1 text-left lg:inline">Find a client…</span>

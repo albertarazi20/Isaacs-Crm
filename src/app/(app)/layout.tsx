@@ -107,7 +107,10 @@ export default async function AppLayout({ children }: { children: React.ReactNod
                 className="only-dark hidden sm:block"
               />
             </Link>
-            <nav aria-label="Main" className="hidden flex-1 gap-0.5 overflow-x-auto sm:flex">
+            <nav
+              aria-label="Main"
+              className="hidden min-w-0 flex-1 gap-0.5 overflow-x-auto sm:flex"
+            >
               {navFor(session.role).map((n) => (
                 <NavLink key={n.href} href={n.href} badge={n.href === "/" ? me.due : undefined}>
                   {n.label}
