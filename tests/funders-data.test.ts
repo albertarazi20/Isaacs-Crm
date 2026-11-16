@@ -77,6 +77,110 @@ describe("funders: save, archive, delete", () => {
     });
   });
 
+  it("saves the money terms FUND checks against and reads them back; blank boxes are the shop defaults (P2-6)", async () => {
+    const id = await asA((q) =>
+      m.saveFunder(
+        q,
+        newFunder({
+          name: "Kalamata Capital Group",
+          maxUpsellPoints: "5",
+          psfCapPct: "2.5%",
+          clawbackDays: "45",
+          approvalValidDays: "21",
+          statementFreshDay: "10",
+          commissionPaidAfterDays: "0",
+          renewalCommissionBasis: "full",
+        }),
+      ),
+    );
+    const f = (await asA((q) => listFunders(q))).find((x) => x.id === id);
+    expect(f).toMatchObject({
+      max_upsell_points: 5,
+      psf_cap_pct: 2.5,
+      clawback_days: 45,
+      approval_valid_days: 21,
+      statement_fresh_day: 10,
+      commission_paid_after_days: 0,
+      renewal_commission_basis: "full",
+    });
+    // the guardrail reads what the form saved: 10 points against a cap of 5 is refused in the lender's words
+    const client = await merchantInStage("Marlin Charters", "application_in");
+    await asA((q) => q.query("select submit_to_ops($1)", [client]));
+    const err = await asA((q) =>
+      q.query("select propose_funding($1, $2::jsonb)", [
+        client,
+        JSON.stringify({
+          funder_id: id,
+          funded_on: t.today,
+          amount_cents: 4_500_000,
+          sell_rate: 1.4,
+          points: 10,
+          payment_cents: 50_000,
+          frequency: "daily",
+          position_no: 1,
+          timers: [],
+        }),
+      ]),
+    ).catch((e) => e);
+    expect(toActionError(err)).toBe("Kalamata Capital Group caps points at 5.00 — you entered 10");
+
+    // blank boxes mean the column defaults, and an edit that clears a cap really clears it
+    await asA((q) =>
+      m.saveFunder(
+        q,
+        newFunder({
+          id,
+          name: "Kalamata Capital Group",
+          maxUpsellPoints: "",
+          psfCapPct: "",
+          clawbackDays: "",
+          approvalValidDays: "",
+          statementFreshDay: "",
+          commissionPaidAfterDays: "",
+          renewalCommissionBasis: "",
+        }),
+      ),
+    );
+    const back = (await asA((q) => listFunders(q))).find((x) => x.id === id);
+    expect(back).toMatchObject({
+      max_upsell_points: null,
+      psf_cap_pct: null,
+      clawback_days: 30,
+      approval_valid_days: 30,
+      statement_fresh_day: 5,
+      commission_paid_after_days: 7,
+      renewal_commission_basis: "new_money",
+    });
+    const fresh = (await asA((q) => listFunders(q))).find((x) => x.name === "Pearl Capital");
+    expect(fresh).toMatchObject({ max_upsell_points: null, clawback_days: 30 });
+  });
+
+  it("the money-term ranges are the migration's check constraints, explained in words", () => {
+    const refuse = (over: Record<string, unknown>) => {
+      const r = s.funderSchema.safeParse({ name: "Range Check", ...over });
+      return r.success ? null : r.error.issues[0]?.message;
+    };
+    expect(refuse({ maxUpsellPoints: "101" })).toBe(
+      "Max upsell points must be a number from 0 to 100",
+    );
+    expect(refuse({ psfCapPct: "-1" })).toBe("PSF cap must be a number from 0 to 100");
+    expect(refuse({ clawbackDays: "366" })).toBe(
+      "Clawback days must be a whole number from 0 to 365",
+    );
+    expect(refuse({ approvalValidDays: "0" })).toBe(
+      "Approval validity must be a whole number from 1 to 365",
+    );
+    expect(refuse({ statementFreshDay: "29" })).toBe(
+      "Statement day must be a whole number from 1 to 28",
+    );
+    expect(refuse({ commissionPaidAfterDays: "121" })).toBe(
+      "Commission pay timing must be a whole number from 0 to 120",
+    );
+    expect(refuse({ commissionPaidAfterDays: "7.5" })).toMatch(/whole number/);
+    expect(refuse({ renewalCommissionBasis: "half" })).toBeTruthy();
+    expect(s.funderSchema.parse({ name: "Ok", maxUpsellPoints: "7.5%" }).maxUpsellPoints).toBe(7.5);
+  });
+
   it("edits in place: clearing a limit really clears it", async () => {
     const id = await asA((q) =>
       m.saveFunder(q, newFunder({ name: "Edit Me", minMonthlyRevenue: "40k", maxPosition: "1" })),

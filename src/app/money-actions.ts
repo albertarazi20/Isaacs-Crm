@@ -85,9 +85,11 @@ export async function recordCommissionPaidAction(input: unknown): Promise<Action
       .object({
         fundingId: id,
         amount: money,
+        // a cleared date box sends ""; blank means today
         on: z
           .string()
           .regex(/^\d{4}-\d{2}-\d{2}$/)
+          .or(z.literal("").transform(() => undefined))
           .optional(),
         note: z.string().max(500).default(""),
       })

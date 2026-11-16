@@ -166,6 +166,25 @@ describe("FUND", () => {
     expect(totals[0]?.funded_cents).toBe(5_000_000);
     expect(totals[0]?.rep_cut_cents).toBe(300_000);
   });
+  it("a payment with no date is dated today — the sheet's blank 'Paid on' box (P2-52)", async () => {
+    const fid = (
+      await t.pool.query<{ id: string }>("select id from fundings where client_id = $1", [pizza])
+    ).rows[0]?.id as string;
+    await t.pool.query(
+      "update fundings set commission_received_cents = null, commission_received_on = null where id = $1",
+      [fid],
+    );
+    await t.db.withUser(manager, (q) =>
+      recordCommissionPaid(q, { fundingId: fid, cents: 600_000 }),
+    );
+    const row = (
+      await t.pool.query<{ on: string; cents: number }>(
+        "select commission_received_on::text as on, commission_received_cents::int as cents from fundings where id = $1",
+        [fid],
+      )
+    ).rows[0];
+    expect(row).toEqual({ on: t.today, cents: 600_000 });
+  });
   it("a default inside the clawback window flips the commission to clawed back with a negative ledger line", async () => {
     const taco = await insertClient(t.db, rep, "Taco Town");
     await t.pool.query("update clients set email = 't@t.com' where id = $1", [taco]);

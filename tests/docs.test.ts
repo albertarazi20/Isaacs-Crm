@@ -21,6 +21,7 @@ import {
   sniff,
   wantedFor,
 } from "@/lib/docs/upload";
+import { listLiveDocumentLinks, mintLenderLink, revokeDocumentLink } from "@/lib/docs/links";
 import { isPdf, watermarkPdf } from "@/lib/docs/watermark";
 import { createTestDb, insertClient, insertUser, type TestDb } from "./helpers/db";
 
@@ -321,5 +322,91 @@ describe("the document pipeline", () => {
         mintDownloadLink(q, { documentId: docId, createdBy: rep2, watermark: "x" }),
       ),
     ).rejects.toThrow(/not found/);
+  });
+
+  it("a lender link minted by id is stamped from the funder's record, is listed live, and dies when revoked (P2-50, P2-34)", async () => {
+    const docId = (await t.db.withUser(rep, (q) => listDocuments(q, pizza))).find(
+      (d) => d.kind === "bank_statement",
+    )!.id;
+    const pearl = (
+      await t.pool.query<{ id: string }>(
+        "insert into funders (user_id, name) values ($1, 'Pearl Capital') returning id",
+        [rep],
+      )
+    ).rows[0]!.id;
+    // the typed name loses to the record
+    const link = await t.db.withUser(rep, (q) =>
+      mintLenderLink(q, {
+        documentId: docId,
+        createdBy: rep,
+        lenderId: pearl,
+        lenderName: "Somebody Else",
+        minutes: 1440,
+      }),
+    );
+    expect(link.lenderName).toBe("Pearl Capital");
+    const stored = (
+      await t.pool.query<{ lender_id: string; watermark: string; revoked_at: string | null }>(
+        "select lender_id, watermark, revoked_at from document_links where token = $1",
+        [link.token],
+      )
+    ).rows[0];
+    expect(stored).toEqual({
+      lender_id: pearl,
+      watermark: "Prepared for Pearl Capital",
+      revoked_at: null,
+    });
+    // a typed name still works for callers without a record
+    const typed = await t.db.withUser(rep, (q) =>
+      mintLenderLink(q, { documentId: docId, createdBy: rep, lenderName: "Fast Money LLC" }),
+    );
+    expect(typed.lenderName).toBe("Fast Money LLC");
+    // an unknown lender id is refused in words
+    await expect(
+      t.db.withUser(rep, (q) =>
+        mintLenderLink(q, {
+          documentId: docId,
+          createdBy: rep,
+          lenderId: "00000000-0000-4000-8000-000000000000",
+        }),
+      ),
+    ).rejects.toThrow(/no longer on the list/);
+
+    const live = await t.db.withUser(rep, (q) => listLiveDocumentLinks(q, pizza));
+    const mine = live.filter((l) => l.document_id === docId && l.downloads < l.max_downloads);
+    expect(mine.map((l) => l.lender_name ?? l.watermark)).toEqual([
+      "Prepared for Fast Money LLC",
+      "Pearl Capital",
+    ]);
+    const pearlLink = mine.find((l) => l.lender_id === pearl)!;
+    expect(pearlLink).toMatchObject({ downloads: 0, max_downloads: 5 });
+    // another rep sees none of them (the document is not theirs)
+    expect(await t.db.withUser(rep2, (q) => listLiveDocumentLinks(q, pizza))).toEqual([]);
+    await expect(t.db.withUser(rep2, (q) => revokeDocumentLink(q, pearlLink.id))).rejects.toThrow(
+      /already gone/,
+    );
+
+    // revoke: the row is stamped, the list drops it, the token stops working, a second revoke says so
+    await t.db.withUser(rep, (q) => revokeDocumentLink(q, pearlLink.id));
+    const after = (
+      await t.pool.query<{ revoked_at: string | null }>(
+        "select revoked_at from document_links where id = $1",
+        [pearlLink.id],
+      )
+    ).rows[0];
+    expect(after?.revoked_at).not.toBeNull();
+    expect(
+      (await t.db.withUser(rep, (q) => listLiveDocumentLinks(q, pizza))).some(
+        (l) => l.id === pearlLink.id,
+      ),
+    ).toBe(false);
+    expect(await resolveDownloadLink(t.db, link.token)).toBeNull();
+    await expect(t.db.withUser(rep, (q) => revokeDocumentLink(q, pearlLink.id))).rejects.toThrow(
+      /already gone/,
+    );
+    // the typed-name link still downloads
+    expect((await resolveDownloadLink(t.db, typed.token))?.watermark).toBe(
+      "Prepared for Fast Money LLC",
+    );
   });
 });

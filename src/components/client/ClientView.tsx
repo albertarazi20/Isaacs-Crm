@@ -1,5 +1,6 @@
 "use client";
 
+import { CAN, type Role } from "@/lib/auth/roles";
 import type { ClientDetail } from "@/lib/data/types";
 import type { ClientFundersData } from "@/lib/funders/types";
 import { AskCard } from "./AskCard";
@@ -22,12 +23,16 @@ export function ClientView({
   detail,
   serverNow,
   funders,
+  role,
 }: {
   detail: ClientDetail;
   serverNow: number;
   funders?: ClientFundersData;
+  /** The viewer's role: reps and managers get "Submit to ops"; ops does not (it is their own queue). */
+  role?: Role;
 }) {
   const { card } = detail;
+  const canSubmitToOps = role !== undefined && CAN.workLeads(role);
   return (
     <NowProvider serverNow={serverNow}>
       <div className="flex flex-col gap-4">
@@ -47,6 +52,7 @@ export function ClientView({
                 data={funders}
                 positions={detail.positions}
                 stips={detail.stips}
+                canSubmitToOps={canSubmitToOps}
                 className="order-6"
               />
             ) : null}

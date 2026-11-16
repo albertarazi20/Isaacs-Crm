@@ -52,6 +52,7 @@ export function GoalEditor({
       <Input
         value={value}
         onChange={(e) => setValue(e.target.value)}
+        aria-label={`${label} goal for this month`}
         placeholder="250k"
         className="h-8 w-28 text-sm"
         autoFocus

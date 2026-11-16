@@ -1,5 +1,8 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { offerToFundingPrefill } from "@/components/funders/prefill";
+import { curableText, groupDeclineReasons } from "@/lib/funders/declines";
 import {
   checkFit,
   excludedIndustry,
@@ -15,6 +18,7 @@ import {
   offerChips,
   offerExtras,
   offerTerms,
+  PLAIN_STATUS_ACTIONS,
   SUBMISSION_ACTIONS,
   waitText,
 } from "@/lib/funders/offers";
@@ -31,11 +35,18 @@ import {
 import { buildScoreboard, type SubmissionStat } from "@/lib/funders/scoreboard";
 import { normalizeState, parseStateList, splitList } from "@/lib/funders/states";
 import {
+  DECLINE_REASON_LABELS,
+  DECLINE_REASONS,
+  SUBMISSION_STATUS_LABELS,
   SUBMISSION_STATUSES,
+  type DeclineReason,
+  type DeclineReasonRow,
   type FunderOfferRow,
   type SubmissionRow,
   type SubmissionStatus,
 } from "@/lib/funders/types";
+
+const ID = "00000000-0000-4000-8000-000000000001";
 
 const anyFunder = (over: Partial<FunderAppetite> = {}): FunderAppetite => ({
   name: "Pearl",
@@ -464,8 +475,10 @@ describe("offers", () => {
     expect(offerChips([])).toEqual([]);
   });
 
-  it("every submission status has actions, and none lists an action that makes no sense there", () => {
-    for (const s of SUBMISSION_STATUSES) expect(SUBMISSION_ACTIONS[s].length).toBeGreaterThan(0);
+  it("every submission status has actions (funded is the end: a chip only), and none lists an action that makes no sense there", () => {
+    for (const s of SUBMISSION_STATUSES)
+      if (s === "funded") expect(SUBMISSION_ACTIONS[s]).toEqual([]);
+      else expect(SUBMISSION_ACTIONS[s].length).toBeGreaterThan(0);
     const has = (s: SubmissionStatus, a: string) =>
       (SUBMISSION_ACTIONS[s] as readonly string[]).includes(a);
     expect(has("sent", "approved")).toBe(true);
@@ -808,5 +821,89 @@ describe("the chase timer in the morning digest", () => {
       "2026-10-23",
     );
     expect(renewal.dueToday[0]?.kind).toBe("renewal");
+  });
+});
+
+describe("the lender statuses and decline reasons match db/migrations/0300_deals.sql (P2-47, P2-43)", () => {
+  const sql = readFileSync(join(process.cwd(), "db", "migrations", "0300_deals.sql"), "utf8");
+  const quoted = (block: string) => [...block.matchAll(/'([a-z_]+)'/g)].map((m) => m[1]);
+
+  it("every status the check constraint allows has a chip label and an action list", () => {
+    const m = sql.match(
+      /add constraint submissions_status_check check \(status in \(([\s\S]*?)\)\);/,
+    );
+    expect(m).not.toBeNull();
+    const dbStatuses = quoted(m![1]!);
+    expect(dbStatuses.length).toBe(12);
+    expect([...SUBMISSION_STATUSES].sort()).toEqual([...dbStatuses].sort());
+    for (const s of dbStatuses) {
+      expect(SUBMISSION_STATUS_LABELS[s as SubmissionStatus]).toBeTruthy();
+      expect(Array.isArray(SUBMISSION_ACTIONS[s as SubmissionStatus])).toBe(true);
+    }
+    // funded is the end of the line; expired can go back to waiting
+    expect(SUBMISSION_ACTIONS.funded).toEqual([]);
+    expect(SUBMISSION_ACTIONS.expired).toEqual(["reopen"]);
+    // the plain status changes write a status the database accepts
+    for (const status of Object.values(PLAIN_STATUS_ACTIONS)) expect(dbStatuses).toContain(status);
+    expect(statusSchema.safeParse({ submissionId: ID, status: "contracts_out" }).success).toBe(
+      true,
+    );
+    expect(statusSchema.safeParse({ submissionId: ID, status: "funded" }).success).toBe(true);
+  });
+
+  it("the typed decline list is exactly the table's seed, and the pick-list groups it by category", () => {
+    const m = sql.match(
+      /insert into decline_reasons \(key, label, category, curable_after_days, sort\) values([\s\S]*?);/,
+    );
+    expect(m).not.toBeNull();
+    const rows: DeclineReasonRow[] = [
+      ...m![1]!.matchAll(/\('([a-z_]+)', '([^']+)', '([a-z_]+)', (\d+|null), (\d+)\)/g),
+    ].map((r) => ({
+      key: r[1]!,
+      label: r[2]!,
+      category: r[3] as DeclineReasonRow["category"],
+      curable_after_days: r[4] === "null" ? null : Number(r[4]),
+      sort: Number(r[5]),
+    }));
+    expect(rows.length).toBe(19);
+    expect([...DECLINE_REASONS].sort()).toEqual(rows.map((r) => r.key).sort());
+    for (const r of rows) expect(DECLINE_REASON_LABELS[r.key as DeclineReason]).toBe(r.label);
+    // the constraint on submissions.decline_reason allows the same keys
+    const c = sql.match(
+      /add constraint submissions_decline_reason_check check \(decline_reason is null or decline_reason in \(([\s\S]*?)\)\);/,
+    );
+    expect(quoted(c![1]!).sort()).toEqual(rows.map((r) => r.key).sort());
+    // a new-taxonomy reason passes the action's schema
+    expect(
+      statusSchema.safeParse({ submissionId: ID, status: "declined", declineReason: "failed_bv" })
+        .success,
+    ).toBe(true);
+
+    const groups = groupDeclineReasons(rows);
+    expect(groups.map((g) => g.category)).toEqual([
+      "bank_health",
+      "debt_load",
+      "profile",
+      "credit",
+      "file",
+      "history",
+      "other",
+    ]);
+    expect(groups[0]?.label).toBe("Bank health");
+    expect(groups[0]?.reasons.map((r) => r.key)).toEqual([
+      "revenue",
+      "falling_revenue",
+      "low_balances",
+      "negative_days",
+      "nsfs",
+    ]);
+    expect(groups.flatMap((g) => g.reasons)).toHaveLength(19);
+    expect(curableText(rows.find((r) => r.key === "nsfs"))).toBe(
+      "Winback can try this merchant again after 60 days",
+    );
+    expect(curableText(rows.find((r) => r.key === "industry"))).toMatch(
+      /^Not something time fixes/,
+    );
+    expect(curableText(undefined)).toBe("");
   });
 });

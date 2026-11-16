@@ -74,17 +74,54 @@ export type SubmissionAction =
   | "withdrawn"
   | "reopen"
   | "stips_sent"
-  | "add_offer";
+  | "add_offer"
+  | "contracts_out"
+  | "contracts_in"
+  | "funding_call";
 
-/** Which buttons a submission row offers, by where it stands. */
+/**
+ * Which buttons a submission row offers, by where it stands. Every status in the database's check
+ * (0300) has an entry — a row the card cannot render would take the whole page down. Funded is the
+ * end of the line (FUND wrote it; nothing here undoes money), so it is a chip only.
+ */
 export const SUBMISSION_ACTIONS: Record<SubmissionStatus, readonly SubmissionAction[]> = {
   sent: ["approved", "declined", "stips_requested", "no_response", "withdrawn"],
   stips_requested: ["stips_sent", "approved", "declined", "withdrawn"],
-  approved: ["add_offer", "declined", "reopen"],
+  approved: ["add_offer", "contracts_out", "declined", "reopen"],
+  revised: ["add_offer", "contracts_out", "declined", "reopen"],
+  contracts_out: ["contracts_in", "declined", "withdrawn"],
+  contracts_in: ["funding_call", "declined", "withdrawn"],
+  funding_call: ["declined", "withdrawn"],
+  funded: [],
   declined: ["approved", "reopen"],
   no_response: ["approved", "declined", "reopen"],
   withdrawn: ["reopen"],
+  expired: ["reopen"],
 };
+
+/** The actions that are a plain status change (no dialog first). */
+export type PlainAction =
+  | "no_response"
+  | "withdrawn"
+  | "reopen"
+  | "stips_sent"
+  | "contracts_out"
+  | "contracts_in"
+  | "funding_call";
+
+/** The status each plain action writes. */
+export const PLAIN_STATUS_ACTIONS: Record<PlainAction, SubmissionStatus> = {
+  no_response: "no_response",
+  withdrawn: "withdrawn",
+  reopen: "sent",
+  stips_sent: "sent",
+  contracts_out: "contracts_out",
+  contracts_in: "contracts_in",
+  funding_call: "funding_call",
+};
+
+export const isPlainAction = (a: SubmissionAction): a is PlainAction =>
+  Object.hasOwn(PLAIN_STATUS_ACTIONS, a);
 
 /** "$45,000 at 1.34 factor · payback $60,300 · $450 daily" — the money terms of an offer, in MCA words. */
 export function offerTerms(
@@ -148,6 +185,12 @@ export function latestByFunder(submissions: readonly SubmissionRow[]): Map<strin
   return out;
 }
 
-/** Still in play with that funder: waiting on them, they want stips, or they said yes. */
+/** Still in play with that funder: waiting on them, they want stips, they said yes, or the deal is closing. */
 export const isLiveSubmission = (s: Pick<SubmissionRow, "status">): boolean =>
-  s.status === "sent" || s.status === "stips_requested" || s.status === "approved";
+  s.status === "sent" ||
+  s.status === "stips_requested" ||
+  s.status === "approved" ||
+  s.status === "revised" ||
+  s.status === "contracts_out" ||
+  s.status === "contracts_in" ||
+  s.status === "funding_call";

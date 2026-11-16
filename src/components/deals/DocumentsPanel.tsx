@@ -7,22 +7,63 @@ import {
   deleteDocumentAction,
   mintLenderLinkAction,
   relabelDocumentAction,
+  revokeLenderLinkAction,
 } from "@/app/docs-actions";
-import { ConfirmButton, copyText, useRun } from "@/components/client/parts";
+import { useApp } from "@/components/app-context";
+import { ConfirmButton, FormDialog, Muted, copyText, useRun } from "@/components/client/parts";
+import { QuietConfirm } from "@/components/funders/QuietConfirm";
 import { useToast } from "@/components/overlay";
-import { Button, EmptyState, Input, Select, cn } from "@/components/ui";
+import { Button, EmptyState, Field, Input, Select, cn } from "@/components/ui";
 import type { Freshness } from "@/lib/docs/freshness";
 import { DOC_KINDS, DOC_LABELS, type DocKind } from "@/lib/docs/label";
+import {
+  LINK_EXPIRY_LABELS,
+  LINK_EXPIRY_MINUTES,
+  type DocumentLinkRow,
+  type LinkExpiry,
+} from "@/lib/docs/links";
 import type { DocumentRow } from "@/lib/docs/upload";
 import { formatDate } from "@/lib/format";
 import { UploadLinkButton } from "./UploadLinkButton";
 
 const ACCEPT = ".pdf,.jpg,.jpeg,.png,.heic,.heif,.webp,.csv,.xlsx,.docx";
 
+/** A lender row on the deal, as the panel's two lender pickers list it. */
+export interface PanelLender {
+  submissionId: string;
+  /** The funder's id — the lender link is stamped from its record. */
+  funderId: string;
+  name: string;
+  status: string;
+}
+
+/** A freshly minted link, shown under its document until the page moves on. */
+interface Minted {
+  documentId: string;
+  url: string;
+  expiresAt: string;
+  lenderName: string;
+}
+
 function size(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
   return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+}
+
+/** Who a link is for: the funder's record, else the name typed when it was minted. */
+const linkName = (l: DocumentLinkRow): string =>
+  l.lender_name ?? (l.watermark.replace(/^Prepared for /, "") || "the lender");
+
+/** "in 2 hours", "in 6 days", "in 40 min" — how long a link has left. */
+export function expiresIn(iso: string, nowMs: number): string {
+  const mins = Math.round((new Date(iso).getTime() - nowMs) / 60_000);
+  if (mins < 1) return "expiring";
+  if (mins < 60) return `in ${mins} min`;
+  const hours = Math.round(mins / 60);
+  if (hours < 48) return `in ${hours} hour${hours === 1 ? "" : "s"}`;
+  const days = Math.round(hours / 24);
+  return `in ${days} day${days === 1 ? "" : "s"}`;
 }
 
 function Relabel({ d, onDone }: { d: DocumentRow; onDone: () => void }) {
@@ -49,6 +90,7 @@ function Relabel({ d, onDone }: { d: DocumentRow; onDone: () => void }) {
       }}
     >
       <Select
+        aria-label="Document type"
         value={kind}
         onChange={(e) => setKind(e.target.value as DocKind)}
         className="h-8 text-sm"
@@ -62,6 +104,7 @@ function Relabel({ d, onDone }: { d: DocumentRow; onDone: () => void }) {
       {kind === "bank_statement" ? (
         <Input
           type="month"
+          aria-label="Statement month"
           value={period}
           onChange={(e) => setPeriod(e.target.value)}
           className="h-8 w-40 text-sm"
@@ -77,6 +120,104 @@ function Relabel({ d, onDone }: { d: DocumentRow; onDone: () => void }) {
   );
 }
 
+/**
+ * Who the copy is for and how long the link lives. The lender comes from the deal's lender rows, so the
+ * watermark and the link's lender are the funder's record; with no lender on the deal yet, a typed name.
+ */
+function LenderLinkDialog({
+  doc,
+  lenders,
+  onMinted,
+  onClose,
+}: {
+  doc: DocumentRow;
+  lenders: PanelLender[];
+  onMinted: (m: Minted) => void;
+  onClose: () => void;
+}) {
+  const toast = useToast();
+  const [busy, setBusy] = useState(false);
+  const [funderId, setFunderId] = useState(
+    lenders.find((l) => l.status === "stips_requested")?.funderId ?? lenders[0]?.funderId ?? "",
+  );
+  const [typedName, setTypedName] = useState("");
+  const [expiry, setExpiry] = useState<LinkExpiry>("2h");
+  // one option per lender, even when the same lender has two rows on the deal
+  const options = lenders.filter(
+    (l, i) => lenders.findIndex((x) => x.funderId === l.funderId) === i,
+  );
+  const typing = funderId === "";
+
+  async function mint() {
+    if (typing && typedName.trim() === "") {
+      toast({ message: "Say who the copy is for — it is stamped on every page", tone: "error" });
+      return;
+    }
+    setBusy(true);
+    const r = await mintLenderLinkAction({
+      documentId: doc.id,
+      lenderId: typing ? null : funderId,
+      lenderName: typing ? typedName : "",
+      minutes: LINK_EXPIRY_MINUTES[expiry],
+    });
+    setBusy(false);
+    if (!r.ok) return toast({ message: r.error, tone: "error" });
+    const copied = await copyText(r.data.url);
+    toast({
+      message: copied
+        ? `Link for ${r.data.lenderName || "the lender"} copied — good for ${LINK_EXPIRY_LABELS[expiry]}, 5 downloads, watermarked`
+        : `Link minted — good for ${LINK_EXPIRY_LABELS[expiry]}`,
+      tone: "success",
+    });
+    onMinted({ documentId: doc.id, ...r.data });
+    onClose();
+  }
+
+  return (
+    <FormDialog
+      title={`Lender link — ${doc.label}`}
+      onClose={onClose}
+      onSubmit={() => void mint()}
+      busy={busy}
+      submitLabel="Mint link"
+    >
+      <Field label="Which lender is this copy for" hint="Stamped on every page of the download">
+        <Select value={funderId} onChange={(e) => setFunderId(e.target.value)} autoFocus>
+          {options.map((l) => (
+            <option key={l.funderId} value={l.funderId}>
+              {l.name} · {l.status.replace(/_/g, " ")}
+            </option>
+          ))}
+          <option value="">Someone else…</option>
+        </Select>
+      </Field>
+      {typing ? (
+        <Field label="Their name">
+          <Input
+            value={typedName}
+            onChange={(e) => setTypedName(e.target.value)}
+            maxLength={80}
+            placeholder="Who gets this copy"
+          />
+        </Field>
+      ) : null}
+      <Field label="Good for">
+        <Select value={expiry} onChange={(e) => setExpiry(e.target.value as LinkExpiry)}>
+          {(Object.keys(LINK_EXPIRY_LABELS) as LinkExpiry[]).map((k) => (
+            <option key={k} value={k}>
+              {LINK_EXPIRY_LABELS[k]}
+            </option>
+          ))}
+        </Select>
+      </Field>
+      <Muted>
+        Five downloads, then it dies on its own. You can revoke it any time from the list under the
+        document.
+      </Muted>
+    </FormDialog>
+  );
+}
+
 export function DocumentsPanel({
   clientId,
   dealId,
@@ -85,6 +226,7 @@ export function DocumentsPanel({
   canDelete,
   today,
   lenders = [],
+  links = [],
 }: {
   clientId: string;
   dealId: string | null;
@@ -92,15 +234,20 @@ export function DocumentsPanel({
   freshness: Freshness;
   canDelete: boolean;
   today: string;
-  /** The deal's lender rows, for "send the checked files to…". */
-  lenders?: { submissionId: string; name: string; status: string }[];
+  /** The deal's lender rows, for "send the checked files to…" and the lender link. */
+  lenders?: PanelLender[];
+  /** The live lender links on these documents (revoke them here). */
+  links?: DocumentLinkRow[];
 }) {
+  const { nowMs } = useApp();
   const router = useRouter();
   const toast = useToast();
   const run = useRun();
   const input = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
   const [editing, setEditing] = useState<string | null>(null);
+  const [linking, setLinking] = useState<DocumentRow | null>(null);
+  const [minted, setMinted] = useState<Minted | null>(null);
   const [checked, setChecked] = useState<Set<string>>(new Set());
   const [lenderSub, setLenderSub] = useState(
     lenders.find((l) => l.status === "stips_requested")?.submissionId ??
@@ -168,18 +315,27 @@ export function DocumentsPanel({
     }
   }
 
-  async function lenderLink(d: DocumentRow) {
-    const name = window.prompt("Which lender is this copy for? (stamped on every page)") ?? "";
-    if (name === "") return;
-    const r = await mintLenderLinkAction({ documentId: d.id, lenderName: name, minutes: 120 });
-    if (!r.ok) return toast({ message: r.error, tone: "error" });
-    const copied = await copyText(r.data.url);
-    toast({
-      message: copied
-        ? "Lender link copied — good for 2 hours, 5 downloads, watermarked"
-        : r.data.url,
-      tone: "success",
-    });
+  async function revoke(l: DocumentLinkRow) {
+    setBusy(true);
+    const ok = await run(
+      revokeLenderLinkAction({ linkId: l.id }),
+      `Link for ${linkName(l)} revoked — the next download is refused`,
+    );
+    setBusy(false);
+    if (ok) {
+      if (minted && links.some((x) => x.id === l.id && x.document_id === minted.documentId))
+        setMinted(null);
+      router.refresh();
+    }
+  }
+
+  async function copyMinted(m: Minted) {
+    const copied = await copyText(m.url);
+    toast(
+      copied
+        ? { message: "Lender link copied", tone: "success" }
+        : { message: "Couldn't copy — select it and press Ctrl+C", tone: "error" },
+    );
   }
 
   return (
@@ -235,6 +391,7 @@ export function DocumentsPanel({
             type="file"
             multiple
             accept={ACCEPT}
+            aria-label="Add files"
             className="hidden"
             onChange={(e) => e.target.files && void upload(e.target.files)}
           />
@@ -247,99 +404,162 @@ export function DocumentsPanel({
         </EmptyState>
       ) : (
         <ul className="divide-y divide-border rounded-xl border border-border bg-surface">
-          {documents.map((d) => (
-            <li key={d.id} className="px-4 py-3">
-              <div className="flex flex-wrap items-start justify-between gap-3">
-                <div className="flex min-w-0 items-start gap-2">
-                  {lenders.length > 0 ? (
-                    <input
-                      type="checkbox"
-                      className="mt-1"
-                      aria-label={`Check ${d.label}`}
-                      disabled={d.scan_status !== "clean"}
-                      checked={checked.has(d.id)}
-                      onChange={() => toggle(d.id)}
-                    />
-                  ) : null}
-                  <div className="min-w-0">
-                    <p className="text-sm font-semibold">
-                      {d.label}
-                      {d.label_confidence < 0.8 && d.label_by === "rule" ? (
-                        <span className="ml-2 rounded bg-warn-soft px-1.5 py-0.5 text-[11px] font-medium text-warn">
-                          check the label
-                        </span>
-                      ) : null}
-                      {d.scan_status !== "clean" ? (
-                        <span className="ml-2 rounded bg-surface-2 px-1.5 py-0.5 text-[11px] font-medium text-muted">
-                          {d.scan_status === "pending" ? "being checked" : d.scan_status}
-                        </span>
-                      ) : null}
-                    </p>
-                    <p className="truncate text-xs text-muted">
-                      {d.filename} · {size(d.size_bytes)} ·{" "}
-                      {d.source === "upload_link"
-                        ? "merchant upload"
-                        : d.source === "email"
-                          ? "from email"
-                          : (d.uploaded_by_name ?? "staff")}{" "}
-                      · {formatDate(d.created_at.slice(0, 10), today)}
-                      {d.views > 0 ? ` · opened ${d.views}×` : ""}
-                    </p>
+          {documents.map((d) => {
+            const live = links.filter((l) => l.document_id === d.id);
+            const fresh = minted?.documentId === d.id ? minted : null;
+            return (
+              <li key={d.id} className="px-4 py-3">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div className="flex min-w-0 items-start gap-2">
+                    {lenders.length > 0 ? (
+                      <input
+                        type="checkbox"
+                        className="mt-1"
+                        aria-label={`Check ${d.label}`}
+                        disabled={d.scan_status !== "clean"}
+                        checked={checked.has(d.id)}
+                        onChange={() => toggle(d.id)}
+                      />
+                    ) : null}
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold">
+                        {d.label}
+                        {d.label_confidence < 0.8 && d.label_by === "rule" ? (
+                          <span className="ml-2 rounded bg-warn-soft px-1.5 py-0.5 text-[11px] font-medium text-warn">
+                            check the label
+                          </span>
+                        ) : null}
+                        {d.scan_status !== "clean" ? (
+                          <span className="ml-2 rounded bg-surface-2 px-1.5 py-0.5 text-[11px] font-medium text-muted">
+                            {d.scan_status === "pending" ? "being checked" : d.scan_status}
+                          </span>
+                        ) : null}
+                      </p>
+                      <p className="truncate text-xs text-muted">
+                        {d.filename} · {size(d.size_bytes)} ·{" "}
+                        {d.source === "upload_link"
+                          ? "merchant upload"
+                          : d.source === "email"
+                            ? "from email"
+                            : (d.uploaded_by_name ?? "staff")}{" "}
+                        · {formatDate(d.created_at.slice(0, 10), today)}
+                        {d.views > 0 ? ` · opened ${d.views}×` : ""}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {d.scan_status === "clean" ? (
+                      <a
+                        href={`/api/docs/${d.id}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-flex h-8 items-center rounded-lg border border-border px-2.5 text-sm font-semibold hover:bg-surface-2"
+                      >
+                        Open
+                      </a>
+                    ) : null}
+                    {d.scan_status === "clean" ? (
+                      <Button size="sm" disabled={busy} onClick={() => setLinking(d)}>
+                        Lender link
+                      </Button>
+                    ) : null}
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => setEditing(editing === d.id ? null : d.id)}
+                    >
+                      Relabel
+                    </Button>
+                    {canDelete ? (
+                      <ConfirmButton
+                        label="Delete"
+                        confirmLabel="Really delete"
+                        busy={busy}
+                        onConfirm={async () => {
+                          setBusy(true);
+                          const ok = await run(
+                            deleteDocumentAction({ documentId: d.id }),
+                            "Deleted",
+                          );
+                          setBusy(false);
+                          if (ok) router.refresh();
+                        }}
+                      />
+                    ) : null}
                   </div>
                 </div>
-                <div className="flex flex-wrap gap-1.5">
-                  {d.scan_status === "clean" ? (
-                    <a
-                      href={`/api/docs/${d.id}`}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="inline-flex h-8 items-center rounded-lg border border-border px-2.5 text-sm font-semibold hover:bg-surface-2"
-                    >
-                      Open
-                    </a>
-                  ) : null}
-                  {d.scan_status === "clean" ? (
-                    <Button size="sm" onClick={() => void lenderLink(d)}>
-                      Lender link
-                    </Button>
-                  ) : null}
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    onClick={() => setEditing(editing === d.id ? null : d.id)}
-                  >
-                    Relabel
-                  </Button>
-                  {canDelete ? (
-                    <ConfirmButton
-                      label="Delete"
-                      confirmLabel="Really delete"
-                      busy={busy}
-                      onConfirm={async () => {
-                        setBusy(true);
-                        const ok = await run(deleteDocumentAction({ documentId: d.id }), "Deleted");
-                        setBusy(false);
-                        if (ok) router.refresh();
+                {editing === d.id ? (
+                  <div className="mt-2">
+                    <Relabel
+                      d={d}
+                      onDone={() => {
+                        setEditing(null);
+                        router.refresh();
                       }}
                     />
-                  ) : null}
-                </div>
-              </div>
-              {editing === d.id ? (
-                <div className="mt-2">
-                  <Relabel
-                    d={d}
-                    onDone={() => {
-                      setEditing(null);
-                      router.refresh();
-                    }}
-                  />
-                </div>
-              ) : null}
-            </li>
-          ))}
+                  </div>
+                ) : null}
+                {fresh ? (
+                  <div
+                    className="mt-2 flex flex-wrap items-center gap-2 rounded-lg border border-good/40 bg-good-soft px-3 py-2 text-sm"
+                    data-minted-link
+                  >
+                    <span className="font-medium text-good">
+                      Link for {fresh.lenderName || "the lender"}
+                    </span>
+                    <code className="min-w-0 flex-1 truncate text-xs" title={fresh.url}>
+                      {fresh.url}
+                    </code>
+                    <span className="text-xs text-muted">
+                      expires {expiresIn(fresh.expiresAt, nowMs)}
+                    </span>
+                    <Button size="sm" onClick={() => void copyMinted(fresh)}>
+                      Copy
+                    </Button>
+                  </div>
+                ) : null}
+                {live.length > 0 ? (
+                  <ul className="mt-2 space-y-1" aria-label={`Live lender links for ${d.label}`}>
+                    {live.map((l) => (
+                      <li
+                        key={l.id}
+                        data-link={l.id}
+                        className="flex flex-wrap items-center gap-x-2 gap-y-1 rounded-lg bg-surface-2 px-3 py-1.5 text-xs"
+                      >
+                        <span className="font-medium text-text">{linkName(l)}</span>
+                        <span className="text-muted">
+                          expires {expiresIn(l.expires_at, nowMs)} · {l.downloads} of{" "}
+                          {l.max_downloads} downloads
+                          {l.created_by_name ? ` · minted by ${l.created_by_name}` : ""}
+                        </span>
+                        <span className="ml-auto">
+                          <QuietConfirm
+                            label="Revoke"
+                            confirmLabel="Click again to revoke"
+                            busy={busy}
+                            onConfirm={() => void revoke(l)}
+                          />
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                ) : null}
+              </li>
+            );
+          })}
         </ul>
       )}
+      {linking ? (
+        <LenderLinkDialog
+          doc={linking}
+          lenders={lenders}
+          onMinted={(m) => {
+            setMinted(m);
+            router.refresh();
+          }}
+          onClose={() => setLinking(null)}
+        />
+      ) : null}
     </div>
   );
 }

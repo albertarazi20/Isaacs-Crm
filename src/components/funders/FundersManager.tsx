@@ -6,7 +6,12 @@ import { Muted, useRun } from "@/components/client/parts";
 import { Badge, Button, Card, EmptyState } from "@/components/ui";
 import { factorText, ordinal } from "@/lib/funders/format";
 import { emptyScore, type ScoreRow } from "@/lib/funders/scoreboard";
-import { DECLINE_REASON_LABELS, type FunderRow } from "@/lib/funders/types";
+import {
+  DECLINE_REASON_LABELS,
+  MONEY_TERM_DEFAULTS,
+  RENEWAL_COMMISSION_BASIS_LABELS,
+  type FunderRow,
+} from "@/lib/funders/types";
 import { formatMoneyCompact } from "@/lib/money";
 import { FunderDialog } from "./FunderDialog";
 import { QuietConfirm } from "./QuietConfirm";
@@ -32,6 +37,41 @@ export function appetiteChips(f: FunderRow): string[] {
   if (f.commission_points !== null) chips.push(`${f.commission_points} commission points`);
   if (f.renewal_paydown_pct !== null) chips.push(`Renews at ${f.renewal_paydown_pct}% paid down`);
   return chips;
+}
+
+/**
+ * The money terms as chips: the two caps when set, and every clock — "Clawback 30 days", "Approval good 30 days",
+ * "Statements fresh from the 5th", "Commission paid after 7 days", "Renewal commission on new money only".
+ */
+export function moneyTermChips(f: FunderRow): string[] {
+  const chips: string[] = [];
+  if (f.max_upsell_points !== null) chips.push(`Max ${f.max_upsell_points} upsell points`);
+  if (f.psf_cap_pct !== null) chips.push(`PSF cap ${f.psf_cap_pct}% of the advance`);
+  chips.push(`Clawback ${f.clawback_days} days`);
+  chips.push(`Approval good ${f.approval_valid_days} days`);
+  chips.push(`Statements fresh from the ${ordinal(f.statement_fresh_day)}`);
+  chips.push(
+    f.commission_paid_after_days === 0
+      ? "Commission paid at funding"
+      : `Commission paid after ${f.commission_paid_after_days} days`,
+  );
+  chips.push(
+    `Renewal commission on ${RENEWAL_COMMISSION_BASIS_LABELS[f.renewal_commission_basis].toLowerCase()}`,
+  );
+  return chips;
+}
+
+/** True when every money term is still the shop default — the chips then say so in one line instead of seven. */
+export function moneyTermsAreDefault(f: FunderRow): boolean {
+  return (
+    f.max_upsell_points === null &&
+    f.psf_cap_pct === null &&
+    f.clawback_days === MONEY_TERM_DEFAULTS.clawback_days &&
+    f.approval_valid_days === MONEY_TERM_DEFAULTS.approval_valid_days &&
+    f.statement_fresh_day === MONEY_TERM_DEFAULTS.statement_fresh_day &&
+    f.commission_paid_after_days === MONEY_TERM_DEFAULTS.commission_paid_after_days &&
+    f.renewal_commission_basis === MONEY_TERM_DEFAULTS.renewal_commission_basis
+  );
 }
 
 const pct = (r: number) => `${Math.round(r * 100)}%`;
@@ -117,6 +157,7 @@ function FunderCard({
   const run = useRun();
   const [busy, setBusy] = useState(false);
   const chips = appetiteChips(funder);
+  const money = moneyTermChips(funder);
   const contact = [funder.contact_name, funder.phone, funder.submission_email].filter(Boolean);
 
   async function toggle() {
@@ -173,6 +214,24 @@ function FunderCard({
       ) : (
         <Muted>No limits entered — the fit check treats this funder as writing everyone.</Muted>
       )}
+      <div className="space-y-1.5">
+        <p className="text-[11px] font-semibold tracking-wide text-muted uppercase">Money terms</p>
+        {moneyTermsAreDefault(funder) ? (
+          <Muted>
+            Shop defaults — no points or PSF cap, {MONEY_TERM_DEFAULTS.clawback_days}-day clawback,
+            approvals good {MONEY_TERM_DEFAULTS.approval_valid_days} days. Edit to set this
+            lender&apos;s own.
+          </Muted>
+        ) : (
+          <ul className="flex flex-wrap gap-1.5" aria-label="Money terms">
+            {money.map((c) => (
+              <li key={c}>
+                <Badge tone="accent">{c}</Badge>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
       {funder.notes ? <p className="text-sm whitespace-pre-wrap">{funder.notes}</p> : null}
       <Scoreboard score={score} />
     </Card>

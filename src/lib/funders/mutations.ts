@@ -20,6 +20,13 @@ export async function saveFunder(q: Db, input: FunderInput): Promise<string> {
     input.excludedIndustries,
     input.commissionPoints,
     input.renewalPaydownPct,
+    input.maxUpsellPoints,
+    input.psfCapPct,
+    input.clawbackDays,
+    input.approvalValidDays,
+    input.statementFreshDay,
+    input.commissionPaidAfterDays,
+    input.renewalCommissionBasis,
   ];
   try {
     if (input.id) {
@@ -27,7 +34,9 @@ export async function saveFunder(q: Db, input: FunderInput): Promise<string> {
         `update funders set name = $2, submission_email = $3, contact_name = $4, phone = $5, notes = $6,
                 min_monthly_revenue_cents = $7, min_time_in_business_months = $8, max_position = $9,
                 min_amount_cents = $10, max_amount_cents = $11, excluded_states = $12,
-                excluded_industries = $13, commission_points = $14, renewal_paydown_pct = $15
+                excluded_industries = $13, commission_points = $14, renewal_paydown_pct = $15,
+                max_upsell_points = $16, psf_cap_pct = $17, clawback_days = $18, approval_valid_days = $19,
+                statement_fresh_day = $20, commission_paid_after_days = $21, renewal_commission_basis = $22
           where id = $1 returning id`,
         [input.id, ...values],
       );
@@ -38,8 +47,11 @@ export async function saveFunder(q: Db, input: FunderInput): Promise<string> {
       `insert into funders (user_id, name, submission_email, contact_name, phone, notes,
               min_monthly_revenue_cents, min_time_in_business_months, max_position,
               min_amount_cents, max_amount_cents, excluded_states, excluded_industries,
-              commission_points, renewal_paydown_pct)
-       values (app.current_user_id(), $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+              commission_points, renewal_paydown_pct,
+              max_upsell_points, psf_cap_pct, clawback_days, approval_valid_days,
+              statement_fresh_day, commission_paid_after_days, renewal_commission_basis)
+       values (app.current_user_id(), $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14,
+               $15, $16, $17, $18, $19, $20, $21)
        returning id`,
       values,
     );

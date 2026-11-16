@@ -85,6 +85,8 @@ export function SequenceEditor({
             <Button
               size="sm"
               variant="ghost"
+              aria-label={`Remove step ${i + 1}`}
+              title="Remove this step"
               onClick={() => setRows((cur) => cur.filter((_, j) => j !== i))}
             >
               ✕

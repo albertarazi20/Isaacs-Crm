@@ -1,23 +1,60 @@
 "use client";
 
-import { useState } from "react";
-import { recordOfferAction, setSubmissionStatusAction } from "@/app/funders-actions";
+import { useEffect, useState } from "react";
+import {
+  listDeclineReasonsAction,
+  recordOfferAction,
+  setSubmissionStatusAction,
+} from "@/app/funders-actions";
 import { useApp } from "@/components/app-context";
 import { FormDialog, Muted, useFormState, useRun } from "@/components/client/parts";
+import { useToast } from "@/components/overlay";
 import { Button, Field, Input, Select, Textarea } from "@/components/ui";
 import { FREQUENCIES } from "@/components/stage-move/forms";
 import type { ClientCard } from "@/lib/data/types";
+import { curableText, groupDeclineReasons } from "@/lib/funders/declines";
 import { offerSchema } from "@/lib/funders/schemas";
-import { DECLINE_REASON_LABELS, DECLINE_REASONS, type SubmissionRow } from "@/lib/funders/types";
+import type { DeclineReasonRow, SubmissionRow } from "@/lib/funders/types";
 import { paybackCents } from "@/lib/mca/funding";
 import { parseFactor, parseMoney, formatMoney } from "@/lib/money";
 
-/** The funder said no. A reason is required so the scoreboard can say why. */
-export function DeclineDialog({ sub, onClose }: { sub: SubmissionRow; onClose: () => void }) {
+/**
+ * The funder said no. A reason is required so the scoreboard — and Winback's "declined, now curable" pool —
+ * can say why. The reasons are the `decline_reasons` table: handed in by the page when it has them, otherwise
+ * read once when the dialog opens.
+ */
+export function DeclineDialog({
+  sub,
+  reasons,
+  onClose,
+}: {
+  sub: SubmissionRow;
+  /** The `decline_reasons` rows. Leave out where the server component cannot pass them; they load on open. */
+  reasons?: readonly DeclineReasonRow[];
+  onClose: () => void;
+}) {
   const run = useRun();
+  const toast = useToast();
   const { v, bind } = useFormState(() => ({ reason: "", note: "" }));
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
+  const [loaded, setLoaded] = useState<DeclineReasonRow[] | null>(null);
+  const needsLoad = reasons === undefined;
+  useEffect(() => {
+    if (!needsLoad) return;
+    let live = true;
+    void listDeclineReasonsAction().then((r) => {
+      if (!live) return;
+      if (r.ok) setLoaded(r.data);
+      else toast({ message: r.error, tone: "error" });
+    });
+    return () => {
+      live = false;
+    };
+  }, [needsLoad, toast]);
+  const rows = reasons ?? loaded ?? [];
+  const groups = groupDeclineReasons(rows);
+  const picked = rows.find((r) => r.key === v.reason);
 
   async function save() {
     if (v.reason === "") {
@@ -52,13 +89,17 @@ export function DeclineDialog({ sub, onClose }: { sub: SubmissionRow; onClose: (
           {problem}
         </p>
       ) : null}
-      <Field label="Why did they decline? *">
-        <Select {...bind("reason")} autoFocus>
-          <option value="">Pick a reason…</option>
-          {DECLINE_REASONS.map((r) => (
-            <option key={r} value={r}>
-              {DECLINE_REASON_LABELS[r]}
-            </option>
+      <Field label="Why did they decline? *" hint={curableText(picked) || undefined}>
+        <Select {...bind("reason")} autoFocus disabled={needsLoad && loaded === null}>
+          <option value="">{needsLoad && loaded === null ? "Loading…" : "Pick a reason…"}</option>
+          {groups.map((g) => (
+            <optgroup key={g.category} label={g.label}>
+              {g.reasons.map((r) => (
+                <option key={r.key} value={r.key}>
+                  {r.label}
+                </option>
+              ))}
+            </optgroup>
           ))}
         </Select>
       </Field>

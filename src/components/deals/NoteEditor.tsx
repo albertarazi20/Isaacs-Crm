@@ -55,6 +55,7 @@ export function NoteEditor({
         value={value}
         onChange={(e) => setValue(e.target.value)}
         onBlur={save}
+        aria-label={`${label} note`}
         rows={2}
         className="mt-1 text-sm"
         placeholder="—"

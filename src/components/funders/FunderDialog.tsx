@@ -2,10 +2,15 @@
 
 import { useState } from "react";
 import { saveFunderAction } from "@/app/funders-actions";
-import { Field, Input, Textarea } from "@/components/ui";
+import { Field, Input, Select, Textarea } from "@/components/ui";
 import { FormDialog, useFormState, useRun } from "@/components/client/parts";
 import { funderSchema } from "@/lib/funders/schemas";
-import type { FunderRow } from "@/lib/funders/types";
+import {
+  MONEY_TERM_DEFAULTS,
+  RENEWAL_COMMISSION_BASES,
+  RENEWAL_COMMISSION_BASIS_LABELS,
+  type FunderRow,
+} from "@/lib/funders/types";
 
 interface FunderForm {
   name: string;
@@ -22,6 +27,14 @@ interface FunderForm {
   excludedIndustries: string;
   commissionPoints: string;
   renewalPaydownPct: string;
+  // money terms (0350): what FUND checks this lender's deals against
+  maxUpsellPoints: string;
+  psfCapPct: string;
+  clawbackDays: string;
+  approvalValidDays: string;
+  statementFreshDay: string;
+  commissionPaidAfterDays: string;
+  renewalCommissionBasis: string;
 }
 
 /** 5_000_000 cents → "50k", so the form shows money the way Isaac types it. */
@@ -49,6 +62,14 @@ function toForm(f: FunderRow | undefined): FunderForm {
     excludedIndustries: (f?.excluded_industries ?? []).join(", "),
     commissionPoints: num(f?.commission_points ?? null),
     renewalPaydownPct: num(f?.renewal_paydown_pct ?? null),
+    maxUpsellPoints: num(f?.max_upsell_points ?? null),
+    psfCapPct: num(f?.psf_cap_pct ?? null),
+    clawbackDays: num(f?.clawback_days ?? null),
+    approvalValidDays: num(f?.approval_valid_days ?? null),
+    statementFreshDay: num(f?.statement_fresh_day ?? null),
+    commissionPaidAfterDays: num(f?.commission_paid_after_days ?? null),
+    renewalCommissionBasis:
+      f?.renewal_commission_basis ?? MONEY_TERM_DEFAULTS.renewal_commission_basis,
   };
 }
 
@@ -154,6 +175,69 @@ export function FunderDialog({
         </Field>
         <Field label="Renews merchants at (% paid down)" hint="Empty = 50">
           <Input {...bind("renewalPaydownPct")} inputMode="numeric" />
+        </Field>
+      </div>
+
+      <div>
+        <h3 className="text-xs font-semibold tracking-wide text-muted uppercase">Money terms</h3>
+        <p className="mt-1 text-xs text-muted">
+          What FUND checks a deal with this lender against. Points or a PSF above the cap are
+          refused before anything is recorded; the clocks drive the ledger, Renewals and the
+          stale-approval chase. Empty means the shop default shown in the box.
+        </p>
+      </div>
+      <div className="grid gap-3 sm:grid-cols-2">
+        <Field label="Max upsell points" hint="Points above this are refused. Empty = no cap">
+          <Input {...bind("maxUpsellPoints")} inputMode="decimal" placeholder="no cap" />
+        </Field>
+        <Field
+          label="PSF cap (% of the advance)"
+          hint="A PSF above this is refused. Empty = no cap"
+        >
+          <Input {...bind("psfCapPct")} inputMode="decimal" placeholder="no cap" />
+        </Field>
+        <Field label="Clawback window (days)" hint="A default inside it claws the commission back">
+          <Input
+            {...bind("clawbackDays")}
+            inputMode="numeric"
+            placeholder={String(MONEY_TERM_DEFAULTS.clawback_days)}
+          />
+        </Field>
+        <Field label="Approval good for (days)" hint="The approval-expiry clock on the board">
+          <Input
+            {...bind("approvalValidDays")}
+            inputMode="numeric"
+            placeholder={String(MONEY_TERM_DEFAULTS.approval_valid_days)}
+          />
+        </Field>
+        <Field
+          label="Statements fresh from the (day of month)"
+          hint="After this day they want last month's statement"
+        >
+          <Input
+            {...bind("statementFreshDay")}
+            inputMode="numeric"
+            placeholder={String(MONEY_TERM_DEFAULTS.statement_fresh_day)}
+          />
+        </Field>
+        <Field
+          label="Commission paid after (days)"
+          hint="Days after funding the wire usually lands"
+        >
+          <Input
+            {...bind("commissionPaidAfterDays")}
+            inputMode="numeric"
+            placeholder={String(MONEY_TERM_DEFAULTS.commission_paid_after_days)}
+          />
+        </Field>
+        <Field label="Renewal commission is paid on" className="sm:col-span-2">
+          <Select {...bind("renewalCommissionBasis")}>
+            {RENEWAL_COMMISSION_BASES.map((b) => (
+              <option key={b} value={b}>
+                {RENEWAL_COMMISSION_BASIS_LABELS[b]}
+              </option>
+            ))}
+          </Select>
         </Field>
       </div>
       <Field label="Notes">

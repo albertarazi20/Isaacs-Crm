@@ -35,25 +35,42 @@ const FREQ = ["daily", "weekly", "biweekly", "monthly"] as const;
 /**
  * The green button. Terms, points and PSF in; the commission out, before anyone commits. A rep's FUND waits for a
  * manager; a manager's FUND confirms in the same click (the action decides).
+ *
+ * "Mark funded" on an accepted offer lands here through the URL (`?fund=<lender id>`): the page keys this
+ * component on that value, so it mounts open with that lender picked, and closing it drops the parameter.
  */
 export function FundDialog({
   clientId,
   businessName,
   lenders,
   canConfirm,
+  initialOpen = false,
+  initialFunderId = null,
+  closeHref = null,
 }: {
   clientId: string;
   businessName: string;
   lenders: FundLender[];
   canConfirm: boolean;
+  /** Start open (the URL asked for FUND). */
+  initialOpen?: boolean;
+  /** Start with this lender picked (the accepted offer's lender). */
+  initialFunderId?: string | null;
+  /** Where closing goes when the dialog was opened by the URL — the same page without `fund`. */
+  closeHref?: string | null;
 }) {
   const { today } = useApp();
   const router = useRouter();
   const toast = useToast();
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(initialOpen);
   const [busy, setBusy] = useState(false);
-  const [preview, setPreview] = useState<(FundPreview & { checklist: Checklist }) | null>(null);
-  const first = lenders.find((l) => l.offer) ?? lenders[0];
+  const [preview, setPreview] = useState<(FundPreview & { checklist: Checklist | null }) | null>(
+    null,
+  );
+  const first =
+    lenders.find((l) => l.funderId === initialFunderId) ??
+    lenders.find((l) => l.offer) ??
+    lenders[0];
   const { v, bind, set } = useFormState(() => ({
     funderId: first?.funderId ?? "",
     funderName: "",
@@ -103,12 +120,17 @@ export function FundDialog({
     setPreview(null);
   }
 
+  function close() {
+    setOpen(false);
+    if (initialOpen && closeHref) router.replace(closeHref);
+  }
+
   async function doPreview() {
     setBusy(true);
     const r = await previewFundAction(payload());
     setBusy(false);
     if (!r.ok) return toast({ message: r.error, tone: "error" });
-    setPreview(r.data as FundPreview & { checklist: Checklist });
+    setPreview(r.data as FundPreview & { checklist: Checklist | null });
   }
 
   async function submit() {
@@ -123,8 +145,13 @@ export function FundDialog({
       tone: "success",
     });
     setOpen(false);
-    router.refresh();
+    if (initialOpen && closeHref) router.replace(closeHref);
+    else router.refresh();
   }
+
+  // A lender cap the terms break is a refusal: "Fund and confirm" will say exactly this, so the preview says it first.
+  const refusals = preview?.warnings ?? [];
+  const required = preview?.checklist?.items?.filter((i) => i.required) ?? [];
 
   return (
     <>
@@ -138,7 +165,7 @@ export function FundDialog({
       {open ? (
         <FormDialog
           title={`Fund ${businessName}`}
-          onClose={() => setOpen(false)}
+          onClose={close}
           onSubmit={submit}
           busy={busy}
           submitLabel={canConfirm ? "Fund and confirm" : "Fund (manager confirms)"}
@@ -219,7 +246,27 @@ export function FundDialog({
             <Textarea {...bind("note")} rows={2} placeholder="Anything the ledger should know" />
           </Field>
           {preview ? (
-            <div className="rounded-xl border border-border bg-surface-2/60 p-3 text-sm">
+            <div
+              className={cn(
+                "rounded-xl border p-3 text-sm",
+                refusals.length > 0
+                  ? "border-bad/40 bg-bad-soft/40"
+                  : "border-border bg-surface-2/60",
+              )}
+              data-preview={refusals.length > 0 ? "refused" : "ok"}
+            >
+              {refusals.length > 0 ? (
+                <div role="alert" className="mb-3 space-y-1">
+                  <p className="text-xs font-semibold tracking-wide text-bad uppercase">
+                    {canConfirm ? "Fund and confirm" : "Fund"} will be refused
+                  </p>
+                  {refusals.map((w) => (
+                    <p key={w} className="font-medium text-bad">
+                      {w}
+                    </p>
+                  ))}
+                </div>
+              ) : null}
               <dl className="grid grid-cols-2 gap-x-4 gap-y-1.5 sm:grid-cols-4">
                 <div>
                   <dt className="text-xs text-muted">Payback</dt>
@@ -229,7 +276,11 @@ export function FundDialog({
                 </div>
                 <div>
                   <dt className="text-xs text-muted">Points</dt>
-                  <dd className="font-semibold tabular-nums">{preview.points ?? "—"}</dd>
+                  <dd
+                    className={cn("font-semibold tabular-nums", refusals.length > 0 && "text-bad")}
+                  >
+                    {preview.points ?? "—"}
+                  </dd>
                 </div>
                 <div>
                   <dt className="text-xs text-muted">Gross commission</dt>
@@ -247,28 +298,22 @@ export function FundDialog({
                 </div>
               </dl>
               <p className="mt-2 text-xs text-muted">
+                {preview.points === null
+                  ? "Enter the points, or a buy rate, to see the commission. "
+                  : ""}
                 Net to merchant {formatMoney(preview.netToMerchantCents)}
                 {preview.houseCutCents !== null
                   ? ` · house ${formatMoney(preview.houseCutCents)}`
                   : ""}
               </p>
-              {preview.warnings.length > 0 ? (
-                <ul className="mt-2 space-y-0.5 text-xs text-warn">
-                  {preview.warnings.map((w) => (
-                    <li key={w}>⚠ {w}</li>
-                  ))}
-                </ul>
-              ) : null}
-              {preview.checklist.items?.some((i) => i.required) ? (
+              {required.length > 0 ? (
                 <ul className="mt-2 space-y-0.5 text-xs">
-                  {preview.checklist.items
-                    .filter((i) => i.required)
-                    .map((i) => (
-                      <li key={i.key} className={cn("text-muted")}>
-                        ☐ {i.label}
-                        {preview.checklist.state ? ` (${preview.checklist.state})` : ""}
-                      </li>
-                    ))}
+                  {required.map((i) => (
+                    <li key={i.key} className="text-muted">
+                      ☐ {i.label}
+                      {preview.checklist?.state ? ` (${preview.checklist.state})` : ""}
+                    </li>
+                  ))}
                 </ul>
               ) : null}
             </div>
