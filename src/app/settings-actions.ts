@@ -1,5 +1,6 @@
 "use server";
 
+import { promises as dns } from "node:dns";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { CAN, requireRole } from "@/lib/auth/server";
@@ -7,6 +8,7 @@ import { toActionError } from "@/lib/data/errors";
 import { id } from "@/lib/data/schemas";
 import type { ActionResult } from "@/lib/data/types";
 import { db } from "@/lib/db";
+import { checkAutomationDns, describeDnsCheck, storeDnsCheck } from "@/lib/send/dns";
 
 const pct = z.coerce.number().min(0).max(100);
 
@@ -64,6 +66,30 @@ export async function saveShopSettingsAction(input: unknown): Promise<ActionResu
     );
     revalidatePath("/", "layout");
     return { ok: true, data: null };
+  } catch (e) {
+    return { ok: false, error: toActionError(e) };
+  }
+}
+
+/**
+ * The DNS gate (S1-4): look up SPF, DKIM and DMARC for the automation address and store the result. The outbox worker
+ * sends from the Resend domain only while the stored result says all three are there.
+ */
+export async function checkAutomationDnsAction(): Promise<
+  ActionResult<{ ok: boolean; summary: string }>
+> {
+  const session = await requireRole(CAN.manageTeam);
+  try {
+    const from = await db.withUser(
+      session.userId,
+      async (q) =>
+        (await q.query<{ automation_from: string }>("select automation_from from shop_settings"))
+          .rows[0]?.automation_from ?? "",
+    );
+    const check = await checkAutomationDns(from, { resolveTxt: (h) => dns.resolveTxt(h) });
+    await db.withUser(session.userId, (q) => storeDnsCheck(q, check));
+    revalidatePath("/settings/email");
+    return { ok: true, data: { ok: check.ok, summary: describeDnsCheck(check) } };
   } catch (e) {
     return { ok: false, error: toActionError(e) };
   }

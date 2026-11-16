@@ -209,6 +209,7 @@ export async function runBucketSteps(args: {
           text,
           when: "window",
           expiresInHours: 36,
+          templateId: step.template_id,
         },
         now,
       );
@@ -297,6 +298,7 @@ export async function queueBlast(
         text: `${body.text.replace(/\s+$/, "")}\n\n${effectiveSignature(row.signature, row.sender_name)}`,
         when: "window",
         expiresInHours: 48,
+        templateId: args.templateId,
       },
       now,
     );

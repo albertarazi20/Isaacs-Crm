@@ -1,4 +1,5 @@
 import type { Db, DbAccess } from "../db";
+import { checkClaims } from "../messaging/claims";
 import { capAllows, legalFooter, merchantCapAllows, textToHtml, type Lane } from "./rules";
 
 export interface Deliverer {
@@ -35,6 +36,8 @@ interface Settings {
   per_merchant_weekly: number;
   automation_from: string;
   automation_reply_to_rep: boolean;
+  /** The SPF / DKIM / DMARC check on the automation domain passed (S1-4). Resend sends wait until it has. */
+  dns_ok: boolean;
 }
 
 interface Job {
@@ -48,11 +51,18 @@ interface Job {
   text_body: string;
   expires_at: string | null;
   attempts: number;
+  last_error: string | null;
   rep_email: string | null;
   gmail_address: string | null;
   gmail_ok: boolean;
   client_opt_out: boolean | null;
   client_dnc: boolean | null;
+  client_trashed: boolean;
+  /** The bucket enrolment this step belongs to is paused (a rep's Pause, or a merchant's "not now"). */
+  enrollment_paused: boolean;
+  client_state: string | null;
+  /** A lender said yes on an open deal: "approved" language is true for this merchant. */
+  has_offer: boolean;
   suppressed: boolean;
   unsubscribe_token: string | null;
   merchant_24h: number;
@@ -61,7 +71,8 @@ interface Job {
 
 const MAX_ATTEMPTS = 3;
 
-async function mailboxFor(
+/** The sending identity a ledger row keys on: a user's Gmail or the shop's Resend domain. Upserted, never duplicated. */
+export async function mailboxFor(
   q: Db,
   kind: "gmail" | "resend",
   userId: string | null,
@@ -112,11 +123,19 @@ export async function drainOutbox(args: {
          update outbox o set status = 'sending', attempts = o.attempts + 1
            from next where o.id = next.id
          returning o.id, o.user_id, o.client_id, o.lane, o.source, o.to_address, o.subject, o.text_body, o.expires_at, o.attempts,
+           o.last_error,
            (select email from app_users u where u.id = o.user_id) as rep_email,
            (select google_email from gmail_connections g where g.user_id = o.user_id) as gmail_address,
            (select status = 'ok' from gmail_connections g where g.user_id = o.user_id) as gmail_ok,
            (select email_opt_out from clients c where c.id = o.client_id) as client_opt_out,
            (select contact_status in ('dnc', 'no_email') from clients c where c.id = o.client_id) as client_dnc,
+           exists (select 1 from trashed_clients tc where tc.client_id = o.client_id) as client_trashed,
+           exists (select 1 from enrollments e where e.client_id = o.client_id and e.stopped_at is null and e.paused
+                      and o.source like 'bucket:' || e.bucket_id::text || ':%') as enrollment_paused,
+           (select state from clients c where c.id = o.client_id) as client_state,
+           exists (select 1 from submissions s join deals d on d.id = s.deal_id
+                    where s.client_id = o.client_id and d.outcome = 'open'
+                      and s.status in ('approved', 'revised', 'contracts_out', 'contracts_in', 'funding_call')) as has_offer,
            app.is_suppressed('email', o.to_address) as suppressed,
            (select unsubscribe_token from clients c where c.id = o.client_id) as unsubscribe_token,
            coalesce((select app.merchant_sent(o.client_id, interval '24 hours', $1::timestamptz)), 0) as merchant_24h,
@@ -134,6 +153,13 @@ export async function drainOutbox(args: {
         ]);
         summary.skipped += 1;
       };
+      const cancel = async (reason: string) => {
+        await q.query("update outbox set status = 'cancelled', skip_reason = $2 where id = $1", [
+          job.id,
+          reason,
+        ]);
+        summary.skipped += 1;
+      };
       const defer = async (until: Date, reason: string) => {
         await q.query(
           "update outbox set status = 'queued', not_before = $2, last_error = $3 where id = $1",
@@ -141,15 +167,23 @@ export async function drainOutbox(args: {
         );
         summary.deferred += 1;
       };
+      const hour = 3_600_000;
 
       if (job.expires_at && new Date(job.expires_at) < now) return (skip("expired"), false);
+      // a deleted merchant gets no mail at all, whatever lane the row is on (S1-2)
+      if (job.client_trashed) return (cancel("trashed"), false);
       if (job.suppressed) return (skip("suppressed"), false);
       if (job.client_opt_out) return (skip("opted_out"), false);
       if (job.client_dnc) return (skip("dnc"), false);
       const bulk = job.lane === "sequence" || job.lane === "blast";
+      if (bulk && job.enrollment_paused) {
+        // the rep pressed Pause (or the merchant said "not now"): the step waits, it is not lost
+        await defer(new Date(now.getTime() + hour), "paused");
+        return false;
+      }
       if (bulk && settings.postal_address.trim() === "") {
         // CAN-SPAM: automated mail carries a postal address or it does not go. Intake and replies still do.
-        await defer(new Date(now.getTime() + 3_600_000), "no_postal_address");
+        await defer(new Date(now.getTime() + hour), "no_postal_address");
         return false;
       }
       if (
@@ -162,12 +196,37 @@ export async function drainOutbox(args: {
         })
       ) {
         // try again tomorrow in the window; the per-merchant rule is about frequency, not a lost message
-        await defer(new Date(now.getTime() + 24 * 3_600_000), "per_merchant_cap");
+        await defer(new Date(now.getTime() + 24 * hour), "per_merchant_cap");
         return false;
+      }
+      if (bulk) {
+        // the claim checker (S1-15): what the engine says on its own must be true for this merchant
+        const claims = checkClaims(`${job.subject}\n${job.text_body}`, {
+          approvedOffer: job.has_offer,
+          state: job.client_state ?? "",
+        });
+        if (!claims.ok) {
+          if (job.last_error !== "claim_check" && job.client_id)
+            await q.query(
+              "insert into activities (user_id, client_id, kind, body) values ($1, $2, 'system', $3)",
+              [
+                job.user_id,
+                job.client_id,
+                `Automated email held by the claim check: ${claims.reasons.join("; ")}`,
+              ],
+            );
+          await defer(new Date(now.getTime() + hour), "claim_check");
+          return false;
+        }
       }
 
       // Which mailbox: automation goes out from the shop's Resend domain when set; everything else from the rep's Gmail.
       const useResend = bulk && settings.automation_from !== "";
+      if (useResend && !settings.dns_ok) {
+        // the automation domain has not passed its SPF / DKIM / DMARC check (Settings → Email): hold, do not fall back
+        await defer(new Date(now.getTime() + hour), "dns_not_verified");
+        return false;
+      }
       let mailboxId: string;
       let providerLimit = 2000;
       if (useResend) {
@@ -175,7 +234,7 @@ export async function drainOutbox(args: {
         providerLimit = 50_000;
       } else {
         if (!job.gmail_address || !job.gmail_ok) {
-          await defer(new Date(now.getTime() + 6 * 3_600_000), "gmail_not_connected");
+          await defer(new Date(now.getTime() + 6 * hour), "gmail_not_connected");
           return false;
         }
         providerLimit = job.gmail_address.toLowerCase().endsWith("@gmail.com") ? 500 : 2000;
@@ -203,8 +262,8 @@ export async function drainOutbox(args: {
           )
         ).rows[0]?.t;
         const until = oldest
-          ? new Date(new Date(oldest).getTime() + 24 * 3_600_000 + 60_000)
-          : new Date(now.getTime() + 3_600_000);
+          ? new Date(new Date(oldest).getTime() + 24 * hour + 60_000)
+          : new Date(now.getTime() + hour);
         await defer(until, "cap");
         return false;
       }
@@ -246,7 +305,7 @@ export async function drainOutbox(args: {
               headers,
             });
         await q.query(
-          "update outbox set status = 'sent', provider = $2, provider_id = $3, sent_at = $4 where id = $1",
+          "update outbox set status = 'sent', provider = $2, provider_id = $3, sent_at = $4, last_error = null where id = $1",
           [job.id, useResend ? "resend" : "gmail", providerId, now.toISOString()],
         );
         await q.query(

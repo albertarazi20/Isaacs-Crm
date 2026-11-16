@@ -178,6 +178,7 @@ export async function sendWelcome(
   now = new Date(),
 ): Promise<boolean> {
   const { rows } = await q.query<{
+    template_id: string;
     subject: string;
     body: string;
     contact_name: string;
@@ -187,7 +188,7 @@ export async function sendWelcome(
     signature: string;
     token: string;
   }>(
-    `select t.subject, t.body, c.contact_name, c.business_name, u.name as sender_name, u.application_link, u.signature, c.unsubscribe_token as token
+    `select t.id as template_id, t.subject, t.body, c.contact_name, c.business_name, u.name as sender_name, u.application_link, u.signature, c.unsubscribe_token as token
        from bucket_steps s join templates t on t.id = s.template_id
        join clients c on c.id = $1 join app_users u on u.id = c.user_id
       where s.bucket_id = $2 and s.action = 'email' and app.template_may_auto_send(t.id)
@@ -218,6 +219,7 @@ export async function sendWelcome(
       text: `${body.text.replace(/\s+$/, "")}\n\n${effectiveSignature(r.signature, r.sender_name)}`,
       when: "now",
       expiresInHours: 24,
+      templateId: r.template_id,
     },
     now,
   );
