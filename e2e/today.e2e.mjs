@@ -20,7 +20,7 @@ export default async function todayFlow({ email }) {
       [email, name],
     ),
   );
-  await card.getByText("Snooze").click();
+  await card.locator("summary", { hasText: "Snooze" }).click(); // the snooze menu is a <details>
   await page.getByRole("button", { name: "1 month" }).first().click();
   // Snoozing a deal that is in underwriting asks for a one-line reason first; give one if it shows.
   const ask = page.getByRole("button", { name: /^Snooze until/ });
@@ -116,7 +116,8 @@ export default async function todayFlow({ email }) {
   );
   check(
     "quick add stores stage, ask and a 3-month timer",
-    row?.stage === "name_in" && row?.w === 4_500_000 && row?.d >= 89 && row?.d <= 92,
+    // "Name in" folds into Interested, so that is what quick add stores
+    row?.stage === "interested" && row?.w === 4_500_000 && row?.d >= 89 && row?.d <= 92,
     JSON.stringify(row),
   );
 

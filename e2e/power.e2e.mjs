@@ -84,8 +84,10 @@ export default async function powerFlow({ email }) {
   await page.evaluate(() => localStorage.clear());
   await page.reload({ waitUntil: "networkidle" });
 
-  const articles = await page.locator("main article").count();
-  const stakes = await page.locator("main article button[aria-expanded]").count();
+  const articles = await page.locator("main article >> visible=true").count();
+  const stakes = await page
+    .locator('main article button[aria-expanded][title*="priority"] >> visible=true')
+    .count();
   check(
     "every Today row shows its $ at stake",
     articles > 0 && stakes === articles,
@@ -97,7 +99,7 @@ export default async function powerFlow({ email }) {
   const overdueScores = async () =>
     (
       await section("Overdue")
-        .locator("article button[aria-expanded]")
+        .locator('article button[aria-expanded][title*="priority"] >> visible=true')
         .evaluateAll((els) => els.map((e) => e.title))
     ).map(scoreOf);
   const overdueAges = async () =>
@@ -203,11 +205,19 @@ export default async function powerFlow({ email }) {
   );
 
   // The explanation is on the page, not only in a tooltip.
-  await section("Overdue").locator("article button[aria-expanded]").first().click();
+  const stakeBtn = section("Overdue")
+    .locator('article button[aria-expanded][title*="priority"] >> visible=true')
+    .first();
+  await stakeBtn.click();
+  const stakeArticle = stakeBtn.locator("xpath=ancestor::article[1]");
+  await stakeArticle
+    .getByRole("note")
+    .waitFor({ timeout: 4000 })
+    .catch(() => undefined);
   check(
     "tapping '$ at stake' explains the score in words",
     /at stake \(.+\)\. .+ counts x [\d.]+\. .+\. That makes priority [\d,]+\./.test(
-      await section("Overdue").locator("article").first().innerText(),
+      await stakeArticle.innerText(),
     ),
   );
 
@@ -752,7 +762,7 @@ export default async function powerFlow({ email }) {
   );
   check(
     "brand, search and Add client are still in the header",
-    (await mp.getByText("Selective CRM", { exact: true }).first().isVisible()) &&
+    (await mp.getByText("Selective CRM").first().isVisible()) &&
       (await mp.getByRole("button", { name: "Find a client" }).isVisible()) &&
       (await mp.getByRole("button", { name: "+ Add client" }).isVisible()),
   );

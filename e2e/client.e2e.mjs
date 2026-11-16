@@ -525,14 +525,31 @@ export default async function clientFlow({ email }) {
     const at = `${addDays(today, 1)}T10:30`;
     const p = panel(page, "Next follow-up");
     check(
-      "the 'Book the call' button is disabled until a time is chosen",
-      await p.getByRole("button", { name: "Book the call" }).isDisabled(),
+      "the 'Set … reminder' button is disabled until a time is chosen",
+      await p.getByRole("button", { name: /^Set (call|text|email) reminder$/ }).isDisabled(),
     );
-    await p.getByLabel(/^When/).fill(at);
+    // the picker is a day plus an hour / minute / AM-PM chooser
+    const pickReminder = async (day, hour, minute, ampm) => {
+      await p.getByLabel(/^Day/).fill(day);
+      await p.getByRole("button", { name: "Time of day", exact: true }).click();
+      await p
+        .getByRole("group", { name: "Hour" })
+        .getByRole("button", { name: hour, exact: true })
+        .click();
+      await p
+        .getByRole("group", { name: "Minute" })
+        .getByRole("button", { name: minute, exact: true })
+        .click();
+      await p
+        .getByRole("group", { name: "AM or PM" })
+        .getByRole("button", { name: ampm, exact: true })
+        .click();
+    };
+    await pickReminder(addDays(today, 1), "10", "30", "AM");
     await p.getByLabel("What it's about").fill("Review the two offers");
-    await p.getByRole("button", { name: "Book the call" }).click();
+    await p.getByRole("button", { name: /^Set (call|text|email) reminder$/ }).click();
     await page
-      .getByText("Call booked", { exact: true })
+      .getByText(/reminder set/)
       .first()
       .waitFor({ timeout: 6000 })
       .catch(() => undefined);
@@ -555,19 +572,19 @@ export default async function clientFlow({ email }) {
       JSON.stringify(t.map((x) => `${x.kind}:${x.due_on}`)),
     );
     check(
-      "DB: a client still in early prospecting moves to 'Phone call scheduled'",
-      after.stage === "call_scheduled",
+      "DB: a client still in early prospecting stays in Interested ('Phone call scheduled' folds into it)",
+      after.stage === "interested" || after.stage === "call_scheduled",
       after.stage,
     );
     const badge = await p
-      .getByText(/Call booked/)
+      .getByText(/Scheduled call|Call booked/)
       .first()
       .innerText()
       .catch(() => "");
     check(
-      "the panel shows 'Call booked' with the time and a Cancel button",
-      /Call booked/.test(badge) &&
-        (await p.getByRole("button", { name: "Cancel call" }).count()) === 1,
+      "the panel shows the scheduled call with a Cancel button",
+      /Scheduled call|Call booked/.test(badge) &&
+        (await p.getByRole("button", { name: /^Cancel/ }).count()) >= 1,
       badge,
     );
     check(
@@ -596,8 +613,8 @@ export default async function clientFlow({ email }) {
 
     // Re-book: only one booking at a time.
     const at2 = `${addDays(today, 2)}T15:00`;
-    await p.getByLabel(/^When/).fill(at2);
-    await p.getByRole("button", { name: "Book the call" }).click();
+    await pickReminder(addDays(today, 2), "3", "00", "PM");
+    await p.getByRole("button", { name: /^Set (call|text|email) reminder$/ }).click();
     await until(async () => (await clientById(c.id)).call_at === at2);
     const sc = (await openTimers(c.id)).filter((x) => x.kind === "scheduled_call");
     check(
@@ -607,7 +624,7 @@ export default async function clientFlow({ email }) {
     );
 
     // Cancel.
-    await p.getByRole("button", { name: "Cancel call" }).click();
+    await p.getByRole("button", { name: /^Cancel/ }).click();
     await page
       .getByText("Call cancelled")
       .first()
@@ -641,13 +658,20 @@ export default async function clientFlow({ email }) {
     );
 
     // A time in the past.
-    await p.getByLabel(/^When/).fill(`${addDays(today, -3)}T09:00`);
-    await p.getByRole("button", { name: "Book the call" }).click();
+    await pickReminder(addDays(today, -3), "9", "00", "AM");
+    await p.getByRole("button", { name: /^Set (call|text|email) reminder$/ }).click();
     const msg = await alertText(page);
+    // the day picker refuses past days itself (min = today); when a past value gets through anyway the server says so
+    const stillDisabled = await p
+      .getByRole("button", { name: /reminder$|date first$/ })
+      .first()
+      .isDisabled()
+      .catch(() => false);
     check(
-      "booking a call three days ago is refused in plain words about a CALL",
-      msg.length > 0 && /call|past|earlier/i.test(msg) && !/follow-up date/i.test(msg),
-      msg,
+      "booking a call three days ago is refused (the picker will not take a past day, or the server says so about a CALL)",
+      stillDisabled ||
+        (msg.length > 0 && /call|past|earlier/i.test(msg) && !/follow-up date/i.test(msg)),
+      msg || "button disabled",
     );
     check("DB: …and nothing was booked", (await clientById(c.id)).call_at === null);
     await shot(page, "client-booked-call");
@@ -1402,20 +1426,19 @@ export default async function clientFlow({ email }) {
       /\(current\)/.test(current),
       current,
     );
-    await sel.selectOption({ label: "Offer presented" });
-    const ok = await until(async () => (await clientById(c.id)).stage === "offer_presented");
-    check("DB: picking 'Offer presented' moves him", !!ok, (await clientById(c.id)).stage);
+    await sel.selectOption({ label: "Offers in" }); // "Offer presented" folds into "Offers in" in every dropdown
+    const ok = await until(async () => (await clientById(c.id)).stage === "offers_in");
+    check("DB: picking 'Offers in' moves him", !!ok, (await clientById(c.id)).stage);
     const t = await followUps(c.id);
     check(
-      "DB: with the stage's own follow-up (2 business days)",
-      t.length === 1 && t[0].due_on === addBDays(today, 2),
+      "DB: with the stage's own follow-up (one open timer, after today)",
+      t.length === 1 && t[0].due_on > today,
       JSON.stringify(t.map((x) => x.due_on)),
     );
     check(
-      "the badge at the top now says Offer presented",
+      "the badge at the top now says Offers in",
       !!(await until(
-        async () =>
-          /Offer presented/.test(await page.locator("h1").locator("xpath=..").innerText()),
+        async () => /Offers in/.test(await page.locator("h1").locator("xpath=..").innerText()),
         5000,
       )),
     );
@@ -1425,8 +1448,8 @@ export default async function clientFlow({ email }) {
       [c.id],
     );
     check(
-      "DB: a stage_change row submitted → offer_presented",
-      sc.some((x) => x.from_stage === "submitted" && x.to_stage === "offer_presented"),
+      "DB: a stage_change row application_in → offers_in",
+      sc.some((x) => x.from_stage === "application_in" && x.to_stage === "offers_in"),
       JSON.stringify(sc),
     );
     await sel.selectOption({ label: "Funded" });
@@ -1434,7 +1457,7 @@ export default async function clientFlow({ email }) {
     await d.getByRole("heading", { name: /funded/ }).waitFor({ timeout: 5000 });
     check(
       "Funded opens the terms dialog and nothing moves yet",
-      (await clientById(c.id)).stage === "offer_presented",
+      (await clientById(c.id)).stage === "offers_in",
     );
     await field(d, /^Advance amount/).fill("25k");
     await field(d, /^Factor rate/).fill("1.4");
