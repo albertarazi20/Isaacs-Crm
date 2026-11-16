@@ -40,8 +40,8 @@ function MerchantLine({ card }: { card: ClientCard }) {
     `would be ${ordinal(facts.nextPosition)} position`,
   ];
   return (
-    <p className="rounded-lg bg-surface-2 p-3 text-sm">
-      <span className="font-medium">Checking against:</span> {bits.join(" · ")}
+    <p className="rounded-lg border border-border bg-surface-2/60 px-3 py-2 text-sm text-text-2">
+      <span className="font-medium text-text">Checking against:</span> {bits.join(" · ")}
     </p>
   );
 }
@@ -188,32 +188,38 @@ export function SendDialog({
       ) : null}
       <MerchantLine card={card} />
       {shotgun ? (
-        <p role="status" className="rounded-lg bg-warn-soft text-warn p-3 text-sm">
+        <p
+          role="status"
+          className="rounded-lg border border-warn/30 bg-warn-soft px-3 py-2 text-sm text-warn"
+        >
           <span className="font-semibold">Shotgun warning.</span> This file would be with{" "}
           {wouldHold} lenders; the shop limit is {maxLendersPerDeal}. Every lender who sees it is a
           backdoor risk — untick some, or send anyway on purpose.
         </p>
       ) : null}
-      <ul className="divide-y divide-border rounded-lg border border-border" aria-label="Funders">
+      <ul
+        className="divide-y divide-border overflow-hidden rounded-lg border border-border"
+        aria-label="Funders"
+      >
         {candidates.map(({ funder, fit, earlier }) => {
           const on = picked.has(funder.id);
           return (
             <li key={funder.id}>
               <label
                 className={cn(
-                  "flex min-h-14 cursor-pointer items-start gap-3 px-3 py-2.5",
-                  on ? "bg-accent-soft" : "hover:bg-surface-2",
+                  "flex min-h-12 cursor-pointer items-start gap-3 px-3 py-2 transition",
+                  on ? "bg-accent-soft/60" : "hover:bg-surface-3",
                 )}
               >
                 <input
                   type="checkbox"
-                  className="mt-1 size-5 shrink-0 accent-accent"
+                  className="mt-0.5 size-5 shrink-0 accent-accent"
                   checked={on}
                   onChange={() => toggle(funder.id)}
                   aria-label={funder.name}
                 />
-                <span className="min-w-0 flex-1 space-y-1">
-                  <span className="block font-medium">{funder.name}</span>
+                <span className="min-w-0 flex-1 space-y-0.5">
+                  <span className="block text-sm font-medium">{funder.name}</span>
                   <FitNote fit={fit} />
                   {earlier ? (
                     <span className="block text-xs text-muted">

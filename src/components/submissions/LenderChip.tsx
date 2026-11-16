@@ -4,26 +4,15 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { setSubmissionStatusAction } from "@/app/funders-actions";
 import { chaseLenderAction } from "@/app/inbox-actions";
+import { useApp } from "@/components/app-context";
+import { Icon, SUB_TONE, TONE_CLASS } from "@/components/deals/primitives";
 import { DeclineDialog, StipsDialog } from "@/components/funders/SubmissionDialogs";
 import { useRun } from "@/components/client/parts";
-import { cn } from "@/components/ui";
+import { Badge, cn } from "@/components/ui";
 import type { BoardSubmission } from "@/lib/deals/queries";
-import type { SubmissionRow } from "@/lib/funders/types";
-
-const TONE: Record<string, string> = {
-  sent: "border-border text-muted",
-  stips_requested: "border-warn/40 bg-warn-soft text-warn",
-  approved: "border-good/40 bg-good-soft text-good",
-  revised: "border-good/40 bg-good-soft text-good",
-  contracts_out: "border-accent/40 bg-accent-soft text-accent",
-  contracts_in: "border-accent/40 bg-accent-soft text-accent",
-  funding_call: "border-accent/40 bg-accent-soft text-accent",
-  funded: "border-good/40 bg-good-soft text-good",
-  declined: "border-bad/40 bg-bad-soft text-bad",
-  no_response: "border-border text-muted",
-  withdrawn: "border-border text-muted",
-  expired: "border-border text-muted",
-};
+import { formatDate } from "@/lib/format";
+import { DECLINE_REASON_LABELS, type DeclineReason, type SubmissionRow } from "@/lib/funders/types";
+import { diffDays } from "@/lib/mca/dates";
 
 const CHOICES: { value: string; label: string }[] = [
   { value: "sent", label: "Sent" },
@@ -51,14 +40,45 @@ const asRow = (s: BoardSubmission): SubmissionRow =>
     offers: [],
   }) as unknown as SubmissionRow;
 
-/** One lender on one deal: the status as a chip with a dropdown behind it (the plan's per-lender dropdown). */
+/** "3d" since the lender got the file; "today" on the day it went out. */
+function age(sentOn: string, today: string): string {
+  const d = diffDays(sentOn, today);
+  return d <= 0 ? "today" : `${d}d`;
+}
+
+/** The decline reason in words, with the note the lender gave. */
+function reasonText(s: BoardSubmission): string {
+  if (s.status === "declined") {
+    const label = s.decline_reason
+      ? (DECLINE_REASON_LABELS[s.decline_reason as DeclineReason] ??
+        s.decline_reason.replace(/_/g, " "))
+      : "";
+    return [label, s.decline_note].filter(Boolean).join(" — ");
+  }
+  return s.note;
+}
+
+/**
+ * One lender on one deal, as a row on the Submission Board: the status as a badge (a dropdown behind it for
+ * ops, the plan's per-lender dropdown), when it went out and how long ago, when they answered, and the
+ * decline reason or the note in words.
+ */
 export function LenderChip({ s, canEdit }: { s: BoardSubmission; canEdit: boolean }) {
+  const { today } = useApp();
   const run = useRun();
   const router = useRouter();
   const [dialog, setDialog] = useState<"decline" | "stips" | null>(null);
   const [busy, setBusy] = useState(false);
   const label = s.status.replace(/_/g, " ");
   const title = `${s.funder_name}: ${label} · sent ${s.sent_on}${s.responded_on ? ` · answered ${s.responded_on}` : ""}${s.chase_count ? ` · chased ${s.chase_count}×` : ""}${s.source === "email" ? " · read from email" : ""}`;
+  const tone = SUB_TONE[s.status] ?? "neutral";
+  const words = reasonText(s);
+  const meta = [
+    `sent ${formatDate(s.sent_on, today)} · ${age(s.sent_on, today)}`,
+    s.responded_on ? `answered ${formatDate(s.responded_on, today)}` : null,
+    s.chase_count ? `chased ${s.chase_count}×` : null,
+    s.source === "email" ? "read from email" : null,
+  ].filter(Boolean);
 
   async function change(value: string) {
     if (value === s.status) return;
@@ -74,34 +94,35 @@ export function LenderChip({ s, canEdit }: { s: BoardSubmission; canEdit: boolea
   }
 
   return (
-    <span
-      className={cn(
-        "inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs",
-        TONE[s.status] ?? "border-border",
-      )}
+    <li
+      className="flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2 text-[13px] sm:px-4 sm:py-1.5"
       title={title}
     >
-      <span className="font-semibold">{s.funder_name}</span>
+      <span className="min-w-0 flex-1 basis-40 truncate font-medium">{s.funder_name}</span>
       {canEdit ? (
-        <select
-          aria-label={`${s.funder_name} status`}
-          value={CHOICES.some((c) => c.value === s.status) ? s.status : "sent"}
-          disabled={busy}
-          onChange={(e) => void change(e.target.value)}
-          className="cursor-pointer bg-transparent text-xs text-current outline-none"
-        >
-          {!CHOICES.some((c) => c.value === s.status) ? (
-            <option value="sent">{label}</option>
-          ) : null}
-          {CHOICES.map((c) => (
-            <option key={c.value} value={c.value}>
-              {c.label}
-            </option>
-          ))}
-        </select>
+        <span className={cn("relative inline-flex items-center rounded-md", TONE_CLASS[tone])}>
+          <select
+            aria-label={`${s.funder_name} status`}
+            value={CHOICES.some((c) => c.value === s.status) ? s.status : "sent"}
+            disabled={busy}
+            onChange={(e) => void change(e.target.value)}
+            className="h-9 cursor-pointer appearance-none bg-transparent pr-6 pl-2 text-[11px] font-semibold text-current outline-none disabled:cursor-wait disabled:opacity-60 sm:h-6"
+          >
+            {!CHOICES.some((c) => c.value === s.status) ? (
+              <option value="sent">{label}</option>
+            ) : null}
+            {CHOICES.map((c) => (
+              <option key={c.value} value={c.value}>
+                {c.label}
+              </option>
+            ))}
+          </select>
+          <Icon name="chevron-down" className="pointer-events-none absolute right-1.5 size-3" />
+        </span>
       ) : (
-        <span>{label}</span>
+        <Badge tone={tone}>{label}</Badge>
       )}
+      <span className="text-xs text-muted tabular-nums">{meta.join(" · ")}</span>
       {canEdit && s.status === "sent" ? (
         <button
           type="button"
@@ -116,10 +137,18 @@ export function LenderChip({ s, canEdit }: { s: BoardSubmission; canEdit: boolea
             setBusy(false);
             if (ok) router.refresh();
           }}
-          className="rounded px-1 text-[11px] text-muted hover:text-text"
+          className="inline-flex h-9 items-center gap-1 rounded-md px-2 text-xs font-medium text-muted transition hover:bg-surface-2 hover:text-text disabled:opacity-50 sm:h-7"
         >
+          <Icon name="send" className="size-3.5" />
           chase
         </button>
+      ) : null}
+      {words ? (
+        <span
+          className={cn("basis-full text-xs", s.status === "declined" ? "text-bad" : "text-text-2")}
+        >
+          {words}
+        </span>
       ) : null}
       {dialog === "decline" ? (
         <DeclineDialog
@@ -139,6 +168,6 @@ export function LenderChip({ s, canEdit }: { s: BoardSubmission; canEdit: boolea
           }}
         />
       ) : null}
-    </span>
+    </li>
   );
 }

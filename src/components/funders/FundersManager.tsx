@@ -3,7 +3,8 @@
 import { useState } from "react";
 import { deleteFunderAction, setFunderActiveAction } from "@/app/funders-actions";
 import { Muted, useRun } from "@/components/client/parts";
-import { Badge, Button, Card, EmptyState } from "@/components/ui";
+import { Icon, PageHeader, Stat } from "@/components/deals/primitives";
+import { Badge, Button, EmptyState } from "@/components/ui";
 import { factorText, ordinal } from "@/lib/funders/format";
 import { emptyScore, type ScoreRow } from "@/lib/funders/scoreboard";
 import {
@@ -83,68 +84,54 @@ function answerTime(days: number | null): string {
   return `${days} ${days === 1 ? "day" : "days"}`;
 }
 
-function Stat({ label, value, sub }: { label: string; value: string; sub?: string | undefined }) {
-  return (
-    <div className="min-w-0">
-      <dt className="text-xs text-muted">{label}</dt>
-      <dd className="text-base font-semibold">{value}</dd>
-      {sub ? <dd className="truncate text-xs text-muted">{sub}</dd> : null}
-    </div>
-  );
-}
-
+/** The four numbers on a lender, in a row that lines up with every other lender's. */
 function Scoreboard({ score }: { score: ScoreRow }) {
   if (score.submissions === 0) {
     return (
-      <p className="border-t border-border pt-3 text-sm text-muted">
+      <p className="text-xs text-muted lg:max-w-56 lg:text-right">
         Nothing sent yet. Results show up here once you send a merchant to this funder.
       </p>
     );
   }
   const decided = score.approvals + score.declines;
   return (
-    <div className="space-y-2 border-t border-border pt-3">
-      <dl className="grid grid-cols-2 gap-x-4 gap-y-3 sm:grid-cols-4">
-        <Stat
-          label="Sent"
-          value={String(score.submissions)}
-          sub={score.pending > 0 ? `${score.pending} waiting` : undefined}
-        />
-        <Stat
-          label="Approval rate"
-          value={score.approvalRate === null ? "—" : pct(score.approvalRate)}
-          sub={decided === 0 ? "No answers yet" : `${score.approvals} of ${decided} answered`}
-        />
-        <Stat
-          label="Average factor"
-          value={score.avgFactor === null ? "—" : factorText(score.avgFactor)}
-          sub={
-            score.offerCount > 0
-              ? `${score.offerCount} ${score.offerCount === 1 ? "offer" : "offers"}`
-              : "No offers yet"
-          }
-        />
-        <Stat
-          label="Answers in"
-          value={answerTime(score.avgDaysToRespond)}
-          sub={score.noResponse > 0 ? `${score.noResponse} never answered` : undefined}
-        />
-      </dl>
-      {score.declinesByReason.length > 0 ? (
-        <p className="text-sm text-muted">
-          <span className="font-medium text-text">Declined for:</span>{" "}
-          {score.declinesByReason
-            .map(
-              (d) =>
-                `${d.reason === "unspecified" ? "No reason given" : DECLINE_REASON_LABELS[d.reason]} ${d.count}`,
-            )
-            .join(" · ")}
-        </p>
-      ) : null}
-    </div>
+    <dl className="grid grid-cols-2 gap-x-4 gap-y-2 sm:grid-cols-4 lg:w-[30rem] lg:shrink-0 [&_dt]:whitespace-nowrap">
+      <Stat
+        label="Sent"
+        caps={false}
+        value={String(score.submissions)}
+        sub={score.pending > 0 ? `${score.pending} waiting` : undefined}
+      />
+      <Stat
+        label="Approval rate"
+        caps={false}
+        value={score.approvalRate === null ? "—" : pct(score.approvalRate)}
+        sub={decided === 0 ? "No answers yet" : `${score.approvals} of ${decided} answered`}
+      />
+      <Stat
+        label="Average factor"
+        caps={false}
+        value={score.avgFactor === null ? "—" : factorText(score.avgFactor)}
+        sub={
+          score.offerCount > 0
+            ? `${score.offerCount} ${score.offerCount === 1 ? "offer" : "offers"}`
+            : "No offers yet"
+        }
+      />
+      <Stat
+        label="Answers in"
+        caps={false}
+        value={answerTime(score.avgDaysToRespond)}
+        sub={score.noResponse > 0 ? `${score.noResponse} never answered` : undefined}
+      />
+    </dl>
   );
 }
 
+/**
+ * One lender as a row of the dense list: the name, contact and numbers on the first line, the rules they write
+ * and their money terms on the second, so the whole list reads at a glance. Each row stays a `section`.
+ */
 function FunderCard({
   funder,
   score,
@@ -175,18 +162,19 @@ function FunderCard({
   }
 
   return (
-    <Card className="space-y-3 p-4">
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between sm:gap-3">
-        <div className="min-w-0">
-          <h2 className="flex flex-wrap items-center gap-2 text-base font-semibold">
+    <section className="space-y-3 px-4 py-3 sm:px-5">
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+        <div className="min-w-0 flex-1">
+          <h2 className="flex flex-wrap items-center gap-2 text-sm font-semibold">
             <span className="truncate">{funder.name}</span>
             {funder.active ? null : <Badge>Archived</Badge>}
           </h2>
           {contact.length > 0 ? (
-            <p className="mt-0.5 truncate text-sm text-muted">{contact.join(" · ")}</p>
+            <p className="mt-0.5 truncate text-xs text-muted">{contact.join(" · ")}</p>
           ) : null}
         </div>
-        <div className="flex shrink-0 flex-wrap gap-1 sm:justify-end">
+        <Scoreboard score={score} />
+        <div className="flex shrink-0 flex-wrap items-center gap-1 lg:justify-end">
           <Button size="sm" onClick={onEdit}>
             Edit
           </Button>
@@ -203,38 +191,65 @@ function FunderCard({
           ) : null}
         </div>
       </div>
-      {chips.length > 0 ? (
-        <ul className="flex flex-wrap gap-1.5" aria-label="What they write">
-          {chips.map((c) => (
-            <li key={c}>
-              <Badge>{c}</Badge>
-            </li>
-          ))}
-        </ul>
-      ) : (
-        <Muted>No limits entered — the fit check treats this funder as writing everyone.</Muted>
-      )}
-      <div className="space-y-1.5">
-        <p className="text-[11px] font-semibold tracking-wide text-muted uppercase">Money terms</p>
-        {moneyTermsAreDefault(funder) ? (
-          <Muted>
-            Shop defaults — no points or PSF cap, {MONEY_TERM_DEFAULTS.clawback_days}-day clawback,
-            approvals good {MONEY_TERM_DEFAULTS.approval_valid_days} days. Edit to set this
-            lender&apos;s own.
-          </Muted>
-        ) : (
-          <ul className="flex flex-wrap gap-1.5" aria-label="Money terms">
-            {money.map((c) => (
-              <li key={c}>
-                <Badge tone="accent">{c}</Badge>
-              </li>
-            ))}
-          </ul>
-        )}
+      <div className="grid gap-x-6 gap-y-2 text-sm lg:grid-cols-2">
+        <div className="min-w-0">
+          {chips.length > 0 ? (
+            <ul className="flex flex-wrap gap-1" aria-label="What they write">
+              {chips.map((c) => (
+                <li key={c}>
+                  <Badge className="font-medium">{c}</Badge>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <Muted>No limits entered — the fit check treats this funder as writing everyone.</Muted>
+          )}
+        </div>
+        <div className="flex min-w-0 flex-wrap items-start gap-x-2 gap-y-1">
+          <p className="shrink-0 text-xs font-medium text-muted lg:leading-5">Money terms</p>
+          {moneyTermsAreDefault(funder) ? (
+            <Muted className="min-w-0 flex-1 basis-56">
+              Shop defaults — no points or PSF cap, {MONEY_TERM_DEFAULTS.clawback_days}-day
+              clawback, approvals good {MONEY_TERM_DEFAULTS.approval_valid_days} days. Edit to set
+              this lender&apos;s own.
+            </Muted>
+          ) : (
+            <ul className="flex min-w-0 flex-1 basis-56 flex-wrap gap-1" aria-label="Money terms">
+              {money.map((c) => (
+                <li key={c}>
+                  <Badge tone="accent" className="font-medium">
+                    {c}
+                  </Badge>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
       </div>
-      {funder.notes ? <p className="text-sm whitespace-pre-wrap">{funder.notes}</p> : null}
-      <Scoreboard score={score} />
-    </Card>
+      {funder.notes ? (
+        <p className="text-sm whitespace-pre-wrap text-text-2">{funder.notes}</p>
+      ) : null}
+      {score.declinesByReason.length > 0 ? (
+        <p className="text-xs text-muted">
+          <span className="font-medium text-text-2">Declined for:</span>{" "}
+          {score.declinesByReason
+            .map(
+              (d) =>
+                `${d.reason === "unspecified" ? "No reason given" : DECLINE_REASON_LABELS[d.reason]} ${d.count}`,
+            )
+            .join(" · ")}
+        </p>
+      ) : null}
+    </section>
+  );
+}
+
+/** A dense list of lenders; a plain div, so each lender's `section` is the only one that holds its name. */
+function LenderList({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="divide-y divide-border rounded-xl border border-border bg-surface">
+      {children}
+    </div>
   );
 }
 
@@ -251,18 +266,16 @@ export function FundersManager({
   const scoreOf = (id: string): ScoreRow => scores[id] ?? emptyScore(id);
 
   return (
-    <div className="space-y-5">
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">Funders</h1>
-          <p className="text-sm text-muted">
-            Who you send applications to, what each one writes, and how they&apos;ve treated you.
-          </p>
-        </div>
-        <Button variant="primary" onClick={() => setEditing("new")}>
-          + Add funder
-        </Button>
-      </div>
+    <div className="space-y-6">
+      <PageHeader
+        title="Funders"
+        context="Who you send applications to, what each one writes, and how they've treated you."
+        actions={
+          <Button variant="primary" onClick={() => setEditing("new")}>
+            + Add funder
+          </Button>
+        }
+      />
 
       {funders.length === 0 ? (
         <EmptyState title="Start by adding the funders you send applications to">
@@ -271,18 +284,21 @@ export function FundersManager({
           against that merchant first, sets a reminder to chase the ones that go quiet, and keeps
           score of who approves, who declines and why.
         </EmptyState>
-      ) : (
-        <div className="grid gap-4 xl:grid-cols-2">
+      ) : active.length === 0 ? null : (
+        <LenderList>
           {active.map((f) => (
             <FunderCard key={f.id} funder={f} score={scoreOf(f.id)} onEdit={() => setEditing(f)} />
           ))}
-        </div>
+        </LenderList>
       )}
 
       {archived.length > 0 ? (
-        <section className="space-y-3">
-          <h2 className="text-sm font-semibold tracking-wide text-muted uppercase">Archived</h2>
-          <div className="grid gap-4 xl:grid-cols-2">
+        <div className="space-y-3">
+          <h2 className="flex items-center gap-2 text-[13px] font-semibold text-text">
+            <Icon name="inbox" className="text-muted" />
+            Archived
+          </h2>
+          <LenderList>
             {archived.map((f) => (
               <FunderCard
                 key={f.id}
@@ -291,8 +307,8 @@ export function FundersManager({
                 onEdit={() => setEditing(f)}
               />
             ))}
-          </div>
-        </section>
+          </LenderList>
+        </div>
       ) : null}
 
       {editing ? (

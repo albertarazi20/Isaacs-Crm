@@ -7,9 +7,10 @@ import { ConfirmFundingButton } from "@/components/deals/ConfirmFundingButton";
 import { DocumentsPanel } from "@/components/deals/DocumentsPanel";
 import { FundDialog, type FundLender } from "@/components/deals/FundDialog";
 import { NoteEditor } from "@/components/deals/NoteEditor";
+import { DealStatusBadge, Icon, SUB_TONE } from "@/components/deals/primitives";
 import { ResubmitToOpsButton } from "@/components/deals/SubmitToOps";
 import { UploadLinkButton } from "@/components/deals/UploadLinkButton";
-import { Card, SectionTitle, cn } from "@/components/ui";
+import { Badge, Card, SectionTitle, buttonClass, cn } from "@/components/ui";
 import { requireSession } from "@/lib/auth/server";
 import { CAN } from "@/lib/auth/roles";
 import { getClientDetail, userContext } from "@/lib/data/queries";
@@ -37,73 +38,73 @@ const TABS = [
 ] as const;
 type Tab = (typeof TABS)[number]["key"];
 
-const URGENCY: Record<Suggestion["urgency"], string> = {
-  now: "border-bad/40 bg-bad-soft",
-  today: "border-warn/40 bg-warn-soft",
-  soon: "border-border bg-surface",
-  none: "border-border bg-surface",
+const URGENCY: Record<
+  Suggestion["urgency"],
+  { tone: "bad" | "warn" | "accent" | "neutral"; word: string }
+> = {
+  now: { tone: "bad", word: "Do now" },
+  today: { tone: "warn", word: "Today" },
+  soon: { tone: "accent", word: "Soon" },
+  none: { tone: "neutral", word: "Status" },
 };
 
+/** The blocker line under the header: what to do next, why, and the way there. */
 function NextStep({ s, dealId, clientId }: { s: Suggestion; dealId: string; clientId: string }) {
   const go = (tab: Tab) => `/deals/${dealId}?tab=${tab}`;
+  const link = (href: string, label: string) => (
+    <Link href={href} className={buttonClass("secondary", "sm")}>
+      {label}
+    </Link>
+  );
   let action: React.ReactNode = null;
   switch (s.action) {
     case "collect_stips":
       action = <UploadLinkButton clientId={clientId} dealId={dealId} size="md" />;
       break;
     case "answer":
-      action = (
-        <Link
-          href={`/clients/${clientId}`}
-          className="text-sm font-semibold text-accent hover:underline"
-        >
-          Open the merchant →
-        </Link>
-      );
+      action = link(`/clients/${clientId}`, "Open the merchant →");
       break;
     case "present":
     case "close":
     case "chase":
     case "contracts":
     case "fund":
-      action = (
-        <Link href={go("offers")} className="text-sm font-semibold text-accent hover:underline">
-          Lenders & offers →
-        </Link>
-      );
+      action = link(go("offers"), "Lenders & offers →");
       break;
     case "fix_file":
-      action = (
-        <Link href={go("documents")} className="text-sm font-semibold text-accent hover:underline">
-          Documents →
-        </Link>
-      );
+      action = link(go("documents"), "Documents →");
       break;
     default:
       action = null;
   }
+  const u = URGENCY[s.urgency];
   return (
-    <div
-      className={cn(
-        "flex flex-wrap items-center justify-between gap-3 rounded-xl border px-4 py-3",
-        URGENCY[s.urgency],
-      )}
-    >
-      <div className="min-w-0">
-        <p className="text-[11px] font-semibold tracking-wide text-muted uppercase">
-          {s.urgency === "now"
-            ? "Do now"
-            : s.urgency === "today"
-              ? "Today"
-              : s.urgency === "soon"
-                ? "Soon"
-                : "Status"}
-        </p>
-        <p className="text-base font-semibold">{s.title}</p>
-        <p className="text-sm text-muted">{s.why}</p>
+    <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-t border-border px-4 py-3 sm:px-5">
+      <div className="flex min-w-0 flex-1 basis-64 items-start gap-3">
+        <Badge tone={u.tone} className="mt-0.5">
+          {u.word}
+        </Badge>
+        <div className="min-w-0">
+          <p className="text-sm font-semibold">{s.title}</p>
+          <p className="text-xs text-muted">{s.why}</p>
+        </div>
       </div>
       {action}
     </div>
+  );
+}
+
+/** "FUND waiting for a manager", "Funded $45k": a state the header shows as a pill the height of a button. */
+function HeaderPill({ tone, children }: { tone: "warn" | "good"; children: React.ReactNode }) {
+  return (
+    <span
+      className={cn(
+        "inline-flex h-10 items-center rounded-lg px-3 text-sm font-semibold sm:h-9",
+        tone === "warn" ? "bg-warn-soft text-warn" : "bg-good-soft text-good",
+      )}
+    >
+      {children}
+    </span>
   );
 }
 
@@ -165,114 +166,117 @@ export default async function DealPage({
         : manager;
 
   return (
-    <div className="space-y-5">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="min-w-0">
-          <Link href="/deals" className="text-xs font-medium text-muted hover:text-text">
+    <div className="space-y-6">
+      <Card className="p-0">
+        <div className="px-4 pt-4 pb-4 sm:px-5">
+          <Link
+            href="/deals"
+            className="inline-flex h-8 items-center gap-1 text-xs font-medium text-muted transition hover:text-text"
+          >
             ← Deals
           </Link>
-          <h1 className="mt-0.5 truncate text-2xl font-bold tracking-tight">
-            {deal.business_name}{" "}
-            <span className="text-base font-medium text-muted">D-{deal.number}</span>
-          </h1>
-          <p className="text-sm text-muted">
-            <span className="rounded-md bg-accent-soft px-2 py-0.5 text-xs font-semibold text-accent">
-              {DEAL_STATUS_LABELS[deal.status]}
-            </span>
-            {" · "}
-            {deal.contact_name || "—"}
-            {deal.phone ? (
-              <>
+          <div className="mt-1 flex flex-wrap items-start justify-between gap-x-4 gap-y-3">
+            <div className="min-w-0 flex-1 basis-72">
+              <h1 className="truncate text-xl font-semibold tracking-tight sm:text-2xl">
+                {deal.business_name}{" "}
+                <span className="text-base font-medium text-muted">D-{deal.number}</span>
+              </h1>
+              <p className="mt-1.5 flex flex-wrap items-center gap-x-1 gap-y-1 text-sm text-muted">
+                <DealStatusBadge status={deal.status} label={DEAL_STATUS_LABELS[deal.status]} />
                 {" · "}
-                <a href={`tel:${deal.phone}`} className="hover:underline">
-                  {deal.phone}
-                </a>
-                <CopyContact clientId={deal.client_id} value={deal.phone} kind="phone" />
-              </>
-            ) : null}
-            {deal.email ? (
-              <>
-                {" · "}
-                <a href={`mailto:${deal.email}`} className="hover:underline">
-                  {deal.email}
-                </a>
-                <CopyContact clientId={deal.client_id} value={deal.email} kind="email" />
-              </>
-            ) : null}
-            {manager ? ` · ${deal.rep_name}` : ""}
-          </p>
+                {deal.contact_name || "—"}
+                {deal.phone ? (
+                  <>
+                    {" · "}
+                    <a href={`tel:${deal.phone}`} className="text-text-2 hover:underline">
+                      {deal.phone}
+                    </a>
+                    <CopyContact clientId={deal.client_id} value={deal.phone} kind="phone" />
+                  </>
+                ) : null}
+                {deal.email ? (
+                  <>
+                    {" · "}
+                    <a href={`mailto:${deal.email}`} className="text-text-2 hover:underline">
+                      {deal.email}
+                    </a>
+                    <CopyContact clientId={deal.client_id} value={deal.email} kind="email" />
+                  </>
+                ) : null}
+                {manager ? ` · ${deal.rep_name}` : ""}
+              </p>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              {deal.ops_status === "kicked_back" && deal.outcome === "open" && canSubmitToOps ? (
+                <ResubmitToOpsButton clientId={deal.client_id} kind={deal.kind} />
+              ) : null}
+              {deal.requested_cents ? (
+                <span className="text-sm text-muted">
+                  Asked{" "}
+                  <span className="font-semibold text-text tabular-nums">
+                    {formatMoneyCompact(deal.requested_cents)}
+                  </span>
+                </span>
+              ) : null}
+              {deal.outcome === "open" && snapshot.funding && !snapshot.funding.confirmed ? (
+                CAN.confirmFunding(session.role) && snapshot.funding.id ? (
+                  <ConfirmFundingButton fundingId={snapshot.funding.id} />
+                ) : (
+                  <HeaderPill tone="warn">FUND waiting for a manager</HeaderPill>
+                )
+              ) : deal.outcome === "open" ? (
+                <FundDialog
+                  key={fund ?? "closed"}
+                  clientId={deal.client_id}
+                  businessName={deal.business_name}
+                  lenders={lendersForFund}
+                  canConfirm={CAN.confirmFunding(session.role)}
+                  initialOpen={fund !== null}
+                  initialFunderId={fund}
+                  closeHref={hereWithoutFund}
+                />
+              ) : deal.funded_cents ? (
+                <HeaderPill tone="good">Funded {formatMoneyCompact(deal.funded_cents)}</HeaderPill>
+              ) : null}
+            </div>
+          </div>
+
+          <ol className="mt-4 flex flex-wrap gap-1.5" aria-label="Milestones">
+            {chips.map((m) => (
+              <li
+                key={m.key}
+                className={cn(
+                  "inline-flex h-7 items-center rounded-full border px-2.5 text-xs font-medium whitespace-nowrap",
+                  m.done
+                    ? "border-good/30 bg-good-soft text-good"
+                    : m.current
+                      ? "border-accent/40 bg-accent-soft text-accent"
+                      : "border-border text-muted",
+                )}
+                title={m.on ? formatDate(m.on, ctx.today) : undefined}
+              >
+                {m.done ? "✓ " : ""}
+                {m.label}
+              </li>
+            ))}
+          </ol>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
-          {deal.ops_status === "kicked_back" && deal.outcome === "open" && canSubmitToOps ? (
-            <ResubmitToOpsButton clientId={deal.client_id} kind={deal.kind} />
-          ) : null}
-          {deal.requested_cents ? (
-            <span className="text-sm text-muted">
-              Asked{" "}
-              <span className="font-semibold text-text">
-                {formatMoneyCompact(deal.requested_cents)}
-              </span>
-            </span>
-          ) : null}
-          {deal.outcome === "open" && snapshot.funding && !snapshot.funding.confirmed ? (
-            CAN.confirmFunding(session.role) && snapshot.funding.id ? (
-              <ConfirmFundingButton fundingId={snapshot.funding.id} />
-            ) : (
-              <span className="rounded-lg bg-warn-soft px-3 py-1.5 text-sm font-semibold text-warn">
-                FUND waiting for a manager
-              </span>
-            )
-          ) : deal.outcome === "open" ? (
-            <FundDialog
-              key={fund ?? "closed"}
-              clientId={deal.client_id}
-              businessName={deal.business_name}
-              lenders={lendersForFund}
-              canConfirm={CAN.confirmFunding(session.role)}
-              initialOpen={fund !== null}
-              initialFunderId={fund}
-              closeHref={hereWithoutFund}
-            />
-          ) : deal.funded_cents ? (
-            <span className="rounded-lg bg-good-soft px-3 py-1.5 text-sm font-semibold text-good">
-              Funded {formatMoneyCompact(deal.funded_cents)}
-            </span>
-          ) : null}
-        </div>
-      </div>
+        <NextStep s={next} dealId={deal.id} clientId={deal.client_id} />
+      </Card>
 
-      <ol className="flex flex-wrap gap-1.5" aria-label="Milestones">
-        {chips.map((m) => (
-          <li
-            key={m.key}
-            className={cn(
-              "rounded-full border px-2.5 py-0.5 text-xs font-medium",
-              m.done
-                ? "border-good/40 bg-good-soft text-good"
-                : m.current
-                  ? "border-accent bg-accent-soft text-accent"
-                  : "border-border text-muted",
-            )}
-            title={m.on ? formatDate(m.on, ctx.today) : undefined}
-          >
-            {m.done ? "✓ " : ""}
-            {m.label}
-          </li>
-        ))}
-      </ol>
-
-      <NextStep s={next} dealId={deal.id} clientId={deal.client_id} />
-
-      <nav aria-label="Deal sections" className="flex gap-1 border-b border-border">
+      <nav
+        aria-label="Deal sections"
+        className="-mx-4 flex gap-1 overflow-x-auto border-b border-border px-4 sm:mx-0 sm:px-0"
+      >
         {TABS.map((t) => (
           <Link
             key={t.key}
             href={t.key === "overview" ? `/deals/${deal.id}` : `/deals/${deal.id}?tab=${t.key}`}
             aria-current={t.key === tab ? "page" : undefined}
             className={cn(
-              "-mb-px border-b-2 px-3 py-2 text-sm font-medium",
+              "-mb-px inline-flex h-11 shrink-0 items-center border-b-2 px-2 text-[13px] font-medium whitespace-nowrap transition sm:h-10 sm:px-3 sm:text-sm",
               t.key === tab
-                ? "border-accent text-accent"
+                ? "border-accent text-text"
                 : "border-transparent text-muted hover:text-text",
             )}
           >
@@ -282,8 +286,8 @@ export default async function DealPage({
       </nav>
 
       {tab === "overview" ? (
-        <div className="grid gap-5 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
-          <Card className="space-y-4">
+        <div className="grid grid-cols-[minmax(0,1fr)] gap-6 xl:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
+          <Card className="min-w-0 space-y-4 p-4 sm:p-5">
             <SectionTitle>Notes</SectionTitle>
             <NoteEditor
               dealId={deal.id}
@@ -308,15 +312,18 @@ export default async function DealPage({
               />
             ) : null}
             {deal.blocker ? (
-              <p className="rounded-lg bg-warn-soft px-3 py-2 text-sm text-warn">
-                <span className="font-semibold">Blocked:</span> {deal.blocker}
+              <p className="flex items-start gap-2 rounded-lg bg-warn-soft px-3 py-2 text-sm text-warn">
+                <Icon name="alert" className="mt-0.5" />
+                <span>
+                  <span className="font-semibold">Blocked:</span> {deal.blocker}
+                </span>
               </p>
             ) : null}
           </Card>
-          <div className="space-y-5">
-            <Card>
+          <div className="min-w-0 space-y-6">
+            <Card className="p-4 sm:p-5">
               <SectionTitle>The file</SectionTitle>
-              <dl className="mt-2 grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
+              <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
                 <div>
                   <dt className="text-xs text-muted">Kind</dt>
                   <dd className="font-medium capitalize">{deal.kind.replace("_", " ")}</dd>
@@ -333,14 +340,14 @@ export default async function DealPage({
                 </div>
                 <div>
                   <dt className="text-xs text-muted">Opened</dt>
-                  <dd className="font-medium">
+                  <dd className="font-medium tabular-nums">
                     {formatDate(deal.created_at.slice(0, 10), ctx.today)}
                   </dd>
                 </div>
               </dl>
               <p
                 className={cn(
-                  "mt-3 text-sm",
+                  "mt-4 flex items-start gap-2 border-t border-border pt-3 text-sm",
                   fresh.status === "fresh"
                     ? "text-good"
                     : fresh.status === "none"
@@ -348,39 +355,45 @@ export default async function DealPage({
                       : "text-warn",
                 )}
               >
-                {fresh.message}
+                <Icon name="file" className="mt-0.5" />
+                <span>{fresh.message}</span>
               </p>
               {snapshot.stips_missing.length > 0 ? (
-                <p className="mt-1 text-sm text-warn">
+                <p className="mt-1 pl-6 text-sm text-warn">
                   Still missing: {snapshot.stips_missing.join(", ")}
                 </p>
               ) : null}
             </Card>
-            <Card>
-              <SectionTitle
-                aside={
-                  <Link
-                    href={`/deals/${deal.id}?tab=offers`}
-                    className="text-xs text-accent hover:underline"
-                  >
-                    Details
-                  </Link>
-                }
-              >
-                Lenders
-              </SectionTitle>
+            <Card className="p-0">
+              <div className="px-4 pt-4 pb-2 sm:px-5">
+                <SectionTitle
+                  aside={
+                    <Link
+                      href={`/deals/${deal.id}?tab=offers`}
+                      className="text-xs font-medium text-accent hover:underline"
+                    >
+                      Details
+                    </Link>
+                  }
+                >
+                  Lenders
+                </SectionTitle>
+              </div>
               {snapshot.lenders.length === 0 ? (
-                <p className="mt-2 text-sm text-muted">Not with any lender yet.</p>
+                <p className="px-4 pb-4 text-sm text-muted sm:px-5">Not with any lender yet.</p>
               ) : (
-                <ul className="mt-2 divide-y divide-border text-sm">
+                <ul className="divide-y divide-border border-t border-border text-sm">
                   {snapshot.lenders.map((l) => (
                     <li
                       key={`${l.name}-${l.sent_on}`}
-                      className="flex items-center justify-between gap-3 py-1.5"
+                      className="flex flex-wrap items-center gap-x-3 gap-y-1 px-4 py-2 sm:px-5"
                     >
-                      <span className="font-medium">{l.name}</span>
-                      <span className="text-xs text-muted">
-                        {l.status.replace(/_/g, " ")} · sent {formatDate(l.sent_on, ctx.today)}
+                      <span className="min-w-0 flex-1 basis-32 truncate font-medium">{l.name}</span>
+                      <Badge tone={SUB_TONE[l.status] ?? "neutral"}>
+                        {l.status.replace(/_/g, " ")}
+                      </Badge>
+                      <span className="text-xs text-muted tabular-nums">
+                        sent {formatDate(l.sent_on, ctx.today)}
                         {l.responded_on
                           ? ` · answered ${formatDate(l.responded_on, ctx.today)}`
                           : l.chase_count > 0
@@ -415,7 +428,7 @@ export default async function DealPage({
       ) : null}
 
       {tab === "activity" ? (
-        <Card>
+        <Card className="p-0">
           <ActivityFeed
             events={timeline}
             today={ctx.today}
