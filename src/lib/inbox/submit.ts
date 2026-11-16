@@ -153,18 +153,38 @@ export async function chaseLender(
   return true;
 }
 
-/** Lenders quiet past the shop's chase window get a nudge (a draft or a send, by setting). */
+/**
+ * Lenders quiet past the shop's chase window get a nudge on the same thread, from the deal's own rep's Gmail.
+ * Settings decide the window and the cap; 'off' sends nothing. Returns how many went out.
+ */
 export async function autoChase(
   q: Db,
-  args: { businessHours: number; senderName: string; send: Sender; now?: Date },
-): Promise<number> {
-  const { rows } = await q.query<{ id: string }>(
-    `select s.id from submissions s join deals d on d.id = s.deal_id
-      where s.status = 'sent' and d.outcome = 'open' and s.sent_via = 'crm' and s.chase_count < 2
-        and coalesce(s.last_chased_at, s.created_at) < now() - ($1 || ' hours')::interval`,
-    [String(Math.round((args.businessHours * 24) / 10))], // business hours ≈ calendar hours × 2.4 (10h work days)
+  args: { sendFor: (userId: string) => Sender; now?: Date },
+): Promise<{ chased: number; skipped: number }> {
+  const settings = (
+    await q.query<{ days: number; mode: string; max: number }>(
+      "select lender_chase_days as days, lender_chase_mode as mode, lender_chase_max as max from shop_settings",
+    )
+  ).rows[0];
+  if (!settings || settings.mode === "off") return { chased: 0, skipped: 0 };
+  const { rows } = await q.query<{ id: string; user_id: string; rep_name: string }>(
+    `select s.id, d.user_id, coalesce(nullif(u.name, ''), 'the team') as rep_name
+       from submissions s join deals d on d.id = s.deal_id join app_users u on u.id = d.user_id
+      where s.status = 'sent' and d.outcome = 'open' and s.sent_via = 'crm' and s.chase_count < $2
+        and coalesce(s.last_chased_at, s.created_at) < $3::timestamptz - ($1 || ' days')::interval
+        and not exists (select 1 from trashed_clients tc where tc.client_id = s.client_id)
+      order by coalesce(s.last_chased_at, s.created_at)`,
+    [String(settings.days), settings.max, (args.now ?? new Date()).toISOString()],
   );
-  let n = 0;
-  for (const r of rows) if (await chaseLender(q, r.id, args.senderName, args.send)) n += 1;
-  return n;
+  let chased = 0;
+  let skipped = 0;
+  for (const r of rows) {
+    try {
+      if (await chaseLender(q, r.id, r.rep_name, args.sendFor(r.user_id))) chased += 1;
+      else skipped += 1;
+    } catch {
+      skipped += 1; // a disconnected Gmail is the rep's problem to fix in Settings, not a reason to stop the loop
+    }
+  }
+  return { chased, skipped };
 }

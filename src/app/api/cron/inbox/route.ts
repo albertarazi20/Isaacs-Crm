@@ -3,7 +3,9 @@ import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { env } from "@/lib/env";
 import { processInbox } from "@/lib/inbox/process";
+import { autoChase } from "@/lib/inbox/submit";
 import { productionMailTokenFor, syncInbox } from "@/lib/inbox/sync";
+import { sendEmailAsUser } from "@/lib/system/gmail";
 import { sendViaResend } from "@/lib/email/resend";
 import { recordHeartbeat } from "@/lib/system/heartbeat";
 import { sendReplyAlerts } from "@/lib/system/replies";
@@ -39,9 +41,13 @@ async function handle(req: Request): Promise<NextResponse> {
             ),
         })
       : { sent: 0, skipped: sync.merchantReplies.length, failed: 0 };
+  // quiet lenders get a nudge on the same thread, from the deal's rep
+  const chase = await db.withSystem((q) =>
+    autoChase(q, { sendFor: (userId) => (m) => sendEmailAsUser(userId, m) }),
+  );
   await recordHeartbeat("inbox");
   return NextResponse.json(
-    { sync, processed, alerts },
+    { sync, processed, alerts, chase },
     { status: sync.failed.length > 0 ? 207 : 200 },
   );
 }
