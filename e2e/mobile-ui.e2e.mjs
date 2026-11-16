@@ -75,9 +75,9 @@ export default async function mobileUi({ email }) {
       JSON.stringify(box),
     );
     await more.tap();
-    const items = await p
-      .getByRole("link", { name: /CSV|Import|Lead intake|Reports|Trash/ })
-      .allInnerTexts();
+    // the menu's own panel: a merchant card in the Trash stage is also a link with "Trash" in its name
+    const panel = p.locator(`[id="${await more.getAttribute("aria-controls")}"]`);
+    const items = await panel.getByRole("link").allInnerTexts();
     check(
       "the menu has all six: both downloads, Import, Lead intake, Reports, Trash",
       items.length === 6,
@@ -85,9 +85,12 @@ export default async function mobileUi({ email }) {
     );
     await shot(p, "clients-menu-open");
     await p.keyboard.press("Escape");
-    check("Escape closes the menu", (await p.getByRole("link", { name: "Trash" }).count()) === 0);
+    check(
+      "Escape closes the menu",
+      (await panel.getByRole("link", { name: "Trash" }).count()) === 0,
+    );
     await more.tap();
-    await p.getByRole("link", { name: "Trash" }).tap();
+    await panel.getByRole("link", { name: "Trash" }).tap();
     await p.waitForURL(/\/trash/);
     check("a menu item goes to its page", /\/trash/.test(p.url()));
     await p.goBack();
@@ -136,7 +139,7 @@ export default async function mobileUi({ email }) {
     check("and the due chip is fully on screen (no swipe needed)", visibleDue);
     check(
       "and the stage",
-      /Interested|Name in|Funded|Submitted|Collecting|Application|Offer|Lost|Dead|Declined|Killed|Default|Paid|Phone|Contract|Not interested|Paying/.test(
+      /Interested|Name in|Funded|Submitted|Collecting|Application|Offer|Lost|Dead|Trash|Declined|Killed|Default|Paid|Phone|Contract|Not interested|Paying/.test(
         cardText,
       ),
       cardText.replace(/\s+/g, " ").slice(0, 80),

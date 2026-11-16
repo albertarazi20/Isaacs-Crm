@@ -28,22 +28,37 @@ export function Dialog({
   wide?: boolean;
 }) {
   const ref = useRef<HTMLDialogElement>(null);
+  // Every close() we call ourselves still fires a native "close" event, a moment later. If the same dialog has been
+  // opened again by then (log a call, start the next at once), that late event would run onClose for the NEW one and
+  // wipe it. So each programmatic close counts one event to ignore; only the person's own dismissal (Escape, the
+  // backdrop, the X) reaches onClose.
+  const ownCloses = useRef(0);
   useEffect(() => {
     const d = ref.current;
     if (!d) return;
     if (open && !d.open) d.showModal();
-    if (!open && d.open) d.close();
+    if (!open && d.open) {
+      ownCloses.current += 1;
+      d.close();
+    }
   }, [open]);
   return (
     <dialog
       ref={ref}
-      onClose={onClose}
+      onClose={() => {
+        if (ownCloses.current > 0) {
+          ownCloses.current -= 1;
+          return;
+        }
+        onClose();
+      }}
       onClick={(e) => {
         if (e.target === ref.current) onClose();
       }}
       className={cn(
-        // centred on a desktop; a bottom sheet with a grab handle on a phone
-        "m-auto w-[calc(100%-2rem)] rounded-2xl border border-border bg-surface p-0 text-text shadow-pop backdrop:bg-black/40 backdrop:backdrop-blur-[2px] max-sm:m-0 max-sm:mt-auto max-sm:w-full max-sm:max-w-none max-sm:rounded-b-none max-sm:pb-[env(safe-area-inset-bottom)]",
+        // anchored a fixed distance from the top on a desktop, so content that loads after it opens grows downward instead
+        // of re-centring the box under the pointer; a bottom sheet with a grab handle on a phone
+        "mx-auto mt-[8vh] mb-auto w-[calc(100%-2rem)] rounded-2xl border border-border bg-surface p-0 text-text shadow-pop backdrop:bg-black/40 backdrop:backdrop-blur-[2px] max-sm:m-0 max-sm:mt-auto max-sm:w-full max-sm:max-w-none max-sm:rounded-b-none max-sm:pb-[env(safe-area-inset-bottom)]",
         wide ? "max-w-2xl" : "max-w-lg",
       )}
     >

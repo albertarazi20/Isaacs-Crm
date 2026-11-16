@@ -208,16 +208,23 @@ export default async function powerFlow({ email }) {
   const stakeBtn = section("Overdue")
     .locator('article button[aria-expanded][title*="priority"] >> visible=true')
     .first();
-  await stakeBtn.click();
   const stakeArticle = stakeBtn.locator("xpath=ancestor::article[1]");
-  // the note renders on the next paint; under load that took longer than 4s once, so poll for the words themselves
+  // the note renders on the next paint; under load that took longer than 4s once, so poll for the words themselves.
+  // A refresh that lands just after the tap re-renders the list and closes the note, so tap again if it is closed.
   const STAKE_WORDS = /at stake \(.+\)\. .+ counts x [\d.]+\. .+\. That makes priority [\d,]+\./;
-  let stakeText = await stakeArticle.innerText();
-  for (let i = 0; i < 20 && !STAKE_WORDS.test(stakeText); i++) {
-    await page.waitForTimeout(400);
-    stakeText = await stakeArticle.innerText();
+  let stakeText = "";
+  for (let attempt = 0; attempt < 4 && !STAKE_WORDS.test(stakeText); attempt++) {
+    if ((await stakeBtn.getAttribute("aria-expanded")) !== "true") await stakeBtn.click();
+    for (let i = 0; i < 8 && !STAKE_WORDS.test(stakeText); i++) {
+      await page.waitForTimeout(300);
+      stakeText = await stakeArticle.innerText();
+    }
   }
-  check("tapping '$ at stake' explains the score in words", STAKE_WORDS.test(stakeText));
+  check(
+    "tapping '$ at stake' explains the score in words",
+    STAKE_WORDS.test(stakeText),
+    JSON.stringify(stakeText.slice(0, 400)),
+  );
 
   // Without localStorage the page still works and the toggle still flips for the session.
   {
@@ -760,7 +767,7 @@ export default async function powerFlow({ email }) {
   );
   check(
     "brand, search and Add client are still in the header",
-    (await mp.getByText("Selective CRM").first().isVisible()) &&
+    (await mp.getByRole("link", { name: "Selective CRM home" }).isVisible()) &&
       (await mp.getByRole("button", { name: "Find a client" }).isVisible()) &&
       (await mp.getByRole("button", { name: "+ Add client" }).isVisible()),
   );
@@ -782,8 +789,9 @@ export default async function powerFlow({ email }) {
   await sheet.waitFor();
   const more = (await sheet.innerText()).replace(/\n+/g, "|");
   check(
-    "More lists Pipeline board, Today's calls, Settings and Log out",
-    ["Pipeline board", "Today's calls", "Settings", "Log out"].every((x) => more.includes(x)),
+    "More lists Alerts, Today's calls, Settings and Log out",
+    ["Alerts", "Today's calls", "Settings", "Log out"].every((x) => more.includes(x)) &&
+      !more.includes("Pipeline board"),
     more,
   );
   await shot(mp, "more-390");
