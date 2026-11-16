@@ -385,6 +385,7 @@ describe("C-6: an older backup still restores after a new column with a default"
       // Shop-level and system tables added for Selective CRM (0290–0430). The JSON file stays the merchant-level
       // export one person can keep; the shop's full state is the database backup (Supabase daily + pg_dump).
       "access_log",
+      "user_alerts", // 0500: the alert feed, system state
       "ai_runs",
       "app_state_tz",
       "area_code_tz",
