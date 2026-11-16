@@ -125,7 +125,9 @@ describe("architecture boundaries", () => {
       "lib/messaging/queries.ts": 2, // ${offerSql}
       "lib/data/mutations.ts": 2, // ${sets} from the CLIENT_COLUMNS map; ${fn} from a fixed list
       "lib/data/queries.ts": 1, // ${NAME_KEY_SQL("business_name")}
-      "lib/buckets/queries.ts": 1, // ${TZ_LABEL}: a constant CASE expression (time-zone label), no input in it
+      // ${TZ_LABEL}: a constant CASE expression (time-zone label); stream 1 adds ${SENDS_SQL} / ${TOTALS_SQL}, the
+      // fixed fragments the template and bucket scores are counted with (the window is a bound parameter)
+      "lib/buckets/queries.ts": 3,
       // ${PENDING_ROW_COLUMNS}: the fixed column list a sheet row is read with before it is filed as a merchant
       "lib/sheets/file.ts": 1,
       "lib/leads/form.ts": 1,
