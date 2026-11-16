@@ -1,19 +1,22 @@
 import { AiSettingsForm } from "@/components/settings/AiSettingsForm";
+import { AiSpendCard } from "@/components/settings/AiSpendCard";
 import { Note, SettingsCard, StatTile } from "@/components/settings/primitives";
 import { SettingsHeader } from "@/components/settings/SettingsNav";
 import { requireRole } from "@/lib/auth/server";
 import { CAN } from "@/lib/auth/roles";
 import { db } from "@/lib/db";
 import { env } from "@/lib/env";
+import { aiSpendByPurpose } from "@/lib/settings/ai";
 import { aiStatus, getShopSettings } from "@/lib/settings/queries";
 
 export const dynamic = "force-dynamic";
 
 export default async function AiSettingsPage() {
   const session = await requireRole(CAN.manageTeam);
-  const { settings, status } = await db.withUser(session.userId, async (q) => ({
+  const { settings, status, spend } = await db.withUser(session.userId, async (q) => ({
     settings: await getShopSettings(q),
     status: await aiStatus(q),
+    spend: await aiSpendByPurpose(q),
   }));
   const keySet = Boolean(env().ANTHROPIC_API_KEY);
   return (
@@ -43,6 +46,7 @@ export default async function AiSettingsPage() {
         />
       </div>
       <AiSettingsForm s={settings} />
+      <AiSpendCard rows={spend} />
       <SettingsCard title="Recent runs" flush>
         {status.runs.length === 0 ? (
           <p className="border-t border-border px-4 py-3 text-sm text-muted">None yet.</p>

@@ -1,3 +1,5 @@
+import { DnsCard } from "@/components/settings/DnsCard";
+import { MailboxSync } from "@/components/settings/MailboxSync";
 import { SettingsCard } from "@/components/settings/primitives";
 import { SettingsHeader } from "@/components/settings/SettingsNav";
 import { ShopSettingsForm } from "@/components/settings/ShopSettingsForm";
@@ -7,17 +9,24 @@ import { requireRole } from "@/lib/auth/server";
 import { CAN } from "@/lib/auth/roles";
 import { emailMeters } from "@/lib/dashboard/queries";
 import { db } from "@/lib/db";
+import { mailboxSyncStatus } from "@/lib/inbox/sync";
+import { dnsView } from "@/lib/settings/dnsView";
 import { getShopSettings, listSuppressions } from "@/lib/settings/queries";
+import { requestTimeMs } from "@/lib/server-time";
 
 export const dynamic = "force-dynamic";
 
 export default async function EmailSettingsPage() {
   const session = await requireRole(CAN.manageTeam);
-  const { settings, meters, suppressions } = await db.withUser(session.userId, async (q) => ({
-    settings: await getShopSettings(q),
-    meters: await emailMeters(q),
-    suppressions: await listSuppressions(q),
-  }));
+  const { settings, meters, suppressions, mailboxes } = await db.withUser(
+    session.userId,
+    async (q) => ({
+      settings: await getShopSettings(q),
+      meters: await emailMeters(q),
+      suppressions: await listSuppressions(q),
+      mailboxes: await mailboxSyncStatus(q),
+    }),
+  );
   return (
     <div className="mx-auto max-w-3xl space-y-5">
       <SettingsHeader role={session.role} current="/settings/email" />
@@ -60,7 +69,8 @@ export default async function EmailSettingsPage() {
           </ul>
         </SettingsCard>
       ) : null}
-      <ShopSettingsForm s={settings} />
+      <MailboxSync rows={mailboxes} nowMs={requestTimeMs()} />
+      <ShopSettingsForm s={settings} afterShop={<DnsCard view={dnsView(settings)} />} />
       <SuppressionList rows={suppressions} />
     </div>
   );

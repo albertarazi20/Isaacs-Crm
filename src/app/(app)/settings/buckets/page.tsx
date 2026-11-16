@@ -1,3 +1,4 @@
+import { ScoresCard } from "@/components/settings/ScoresCard";
 import { SequenceEditor } from "@/components/settings/SequenceEditor";
 import { ChipLink, ChipRow, SettingsCard } from "@/components/settings/primitives";
 import { SettingsHeader } from "@/components/settings/SettingsNav";
@@ -5,12 +6,20 @@ import { TemplateEditor } from "@/components/settings/TemplateEditor";
 import { Badge, cn } from "@/components/ui";
 import { requireSession } from "@/lib/auth/server";
 import { CAN } from "@/lib/auth/roles";
-import { listBucketSteps, listBuckets, listTemplates } from "@/lib/buckets/queries";
+import {
+  bucketScores,
+  listBucketSteps,
+  listBuckets,
+  listTemplates,
+  templateScores,
+} from "@/lib/buckets/queries";
 import { db } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
 
 const UUID = /^[0-9a-f-]{36}$/;
+const SCORE_DAYS = 90;
+const isWinback = (name: string) => name.toLowerCase().startsWith("winback");
 const POOLS = [
   "Approved, never funded",
   "Declined, now curable",
@@ -32,9 +41,13 @@ export default async function BucketsSettingsPage({
     const templates = await listTemplates(q, true);
     const steps = new Map<string, Awaited<ReturnType<typeof listBucketSteps>>>();
     for (const x of buckets) steps.set(x.id, await listBucketSteps(q, x.id));
-    return { buckets, templates, steps };
+    const scores = {
+      buckets: await bucketScores(q, SCORE_DAYS),
+      templates: await templateScores(q, SCORE_DAYS),
+    };
+    return { buckets, templates, steps, scores };
   });
-  const { buckets, templates, steps } = data;
+  const { buckets, templates, steps, scores } = data;
   const winback = tab === "winback";
   const focus = b && UUID.test(b) ? b : null;
 
@@ -70,7 +83,17 @@ export default async function BucketsSettingsPage({
               ))}
             </ul>
           </SettingsCard>
-          <TemplateEditor templates={templates} manager={manager} only="winback" />
+          <TemplateEditor
+            templates={templates}
+            manager={manager}
+            only="winback"
+            scores={scores.templates}
+          />
+          <ScoresCard
+            templates={scores.templates.filter((t) => isWinback(t.name))}
+            days={SCORE_DAYS}
+            manager={manager}
+          />
         </>
       ) : (
         <>
@@ -110,7 +133,18 @@ export default async function BucketsSettingsPage({
               </SettingsCard>
             ))}
           </div>
-          <TemplateEditor templates={templates} manager={manager} only="buckets" />
+          <TemplateEditor
+            templates={templates}
+            manager={manager}
+            only="buckets"
+            scores={scores.templates}
+          />
+          <ScoresCard
+            buckets={scores.buckets}
+            templates={scores.templates.filter((t) => !isWinback(t.name))}
+            days={SCORE_DAYS}
+            manager={manager}
+          />
         </>
       )}
     </div>

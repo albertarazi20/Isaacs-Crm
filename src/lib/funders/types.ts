@@ -145,7 +145,8 @@ export interface FunderRow {
   max_upsell_points: number | null;
   psf_cap_pct: number | null;
   clawback_days: number;
-  approval_valid_days: number;
+  /** null = this lender follows the shop's default (Settings → Email & lenders). */
+  approval_valid_days: number | null;
   statement_fresh_day: number;
   commission_paid_after_days: number;
   renewal_commission_basis: RenewalCommissionBasis;

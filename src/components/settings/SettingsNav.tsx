@@ -8,6 +8,7 @@ const ITEMS: { href: string; label: string; manager?: boolean }[] = [
   { href: "/settings/team", label: "Team & trust", manager: true },
   { href: "/settings/email", label: "Email & lenders", manager: true },
   { href: "/settings/plan", label: "Commission plan", manager: true },
+  { href: "/settings/states", label: "State rules", manager: true },
   { href: "/settings/ai", label: "AI", manager: true },
   { href: "/funders", label: "Lender list", manager: true },
 ];

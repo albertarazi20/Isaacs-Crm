@@ -49,7 +49,11 @@ export function moneyTermChips(f: FunderRow): string[] {
   if (f.max_upsell_points !== null) chips.push(`Max ${f.max_upsell_points} upsell points`);
   if (f.psf_cap_pct !== null) chips.push(`PSF cap ${f.psf_cap_pct}% of the advance`);
   chips.push(`Clawback ${f.clawback_days} days`);
-  chips.push(`Approval good ${f.approval_valid_days} days`);
+  chips.push(
+    f.approval_valid_days === null
+      ? "Approval good for the shop's default"
+      : `Approval good ${f.approval_valid_days} days`,
+  );
   chips.push(`Statements fresh from the ${ordinal(f.statement_fresh_day)}`);
   chips.push(
     f.commission_paid_after_days === 0
@@ -68,7 +72,8 @@ export function moneyTermsAreDefault(f: FunderRow): boolean {
     f.max_upsell_points === null &&
     f.psf_cap_pct === null &&
     f.clawback_days === MONEY_TERM_DEFAULTS.clawback_days &&
-    f.approval_valid_days === MONEY_TERM_DEFAULTS.approval_valid_days &&
+    (f.approval_valid_days === null ||
+      f.approval_valid_days === MONEY_TERM_DEFAULTS.approval_valid_days) &&
     f.statement_fresh_day === MONEY_TERM_DEFAULTS.statement_fresh_day &&
     f.commission_paid_after_days === MONEY_TERM_DEFAULTS.commission_paid_after_days &&
     f.renewal_commission_basis === MONEY_TERM_DEFAULTS.renewal_commission_basis
@@ -210,8 +215,8 @@ function FunderCard({
           {moneyTermsAreDefault(funder) ? (
             <Muted className="min-w-0 flex-1 basis-56">
               Shop defaults — no points or PSF cap, {MONEY_TERM_DEFAULTS.clawback_days}-day
-              clawback, approvals good {MONEY_TERM_DEFAULTS.approval_valid_days} days. Edit to set
-              this lender&apos;s own.
+              clawback, approvals good for the shop&apos;s default. Edit to set this lender&apos;s
+              own.
             </Muted>
           ) : (
             <ul className="flex min-w-0 flex-1 basis-56 flex-wrap gap-1" aria-label="Money terms">

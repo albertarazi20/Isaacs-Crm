@@ -19,6 +19,7 @@ export function AiSettingsForm({ s }: { s: ShopSettingsRow }) {
     aiModel: s.ai_model,
     aiDailyCapCents: String(s.ai_daily_cap_cents),
     aiAutoApplyLowStakes: s.ai_auto_apply_low_stakes,
+    winbackOpenerMode: s.winback_opener_mode,
   }));
   return (
     <SettingsCard
@@ -65,6 +66,15 @@ export function AiSettingsForm({ s }: { s: ShopSettingsRow }) {
           </Field>
           <Field label="Daily spend cap (cents)">
             <Input {...bind("aiDailyCapCents")} inputMode="numeric" />
+          </Field>
+          <Field
+            label="Win-back opening line"
+            hint="The first line Claude drafts for each merchant in a win-back pool"
+          >
+            <Select {...bind("winbackOpenerMode")}>
+              <option value="review">Review: a manager reads each line first</option>
+              <option value="auto">Auto: use the line as drafted</option>
+            </Select>
           </Field>
         </div>
       </form>

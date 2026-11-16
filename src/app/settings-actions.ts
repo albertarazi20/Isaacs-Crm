@@ -9,65 +9,22 @@ import { id } from "@/lib/data/schemas";
 import type { ActionResult } from "@/lib/data/types";
 import { db } from "@/lib/db";
 import { checkAutomationDns, describeDnsCheck, storeDnsCheck } from "@/lib/send/dns";
+import {
+  saveAiSettings,
+  saveDocumentRetention,
+  saveRegistration,
+  saveShopSettings,
+} from "@/lib/settings/mutations";
+import { aiSchema, registrationSchema, retentionSchema, shopSchema } from "@/lib/settings/schemas";
 
 const pct = z.coerce.number().min(0).max(100);
-
-const shopSchema = z.object({
-  shopName: z.string().trim().min(1).max(80),
-  postalAddress: z.string().trim().max(300).default(""),
-  dailyCap: z.coerce.number().int().min(50).max(2000),
-  amberAt: z.coerce.number().int().min(10).max(2000),
-  reservedForIntake: z.coerce.number().int().min(0).max(500),
-  sequencesEnabled: z.boolean(),
-  sendWindowStart: z.coerce.number().int().min(0).max(23),
-  sendWindowEnd: z.coerce.number().int().min(1).max(24),
-  sendOnWeekends: z.boolean(),
-  /** US federal holidays (S1-11); a form that does not send it leaves the window closed on them. */
-  sendOnHolidays: z.boolean().default(false),
-  perMerchantDaily: z.coerce.number().int().min(1).max(5),
-  perMerchantWeekly: z.coerce.number().int().min(1).max(20),
-  automationFrom: z.string().trim().max(200).default(""),
-  automationReplyToRep: z.boolean(),
-  lenderChaseDays: z.coerce.number().int().min(1).max(14),
-  lenderChaseMode: z.enum(["send", "off"]),
-  lenderChaseMax: z.coerce.number().int().min(0).max(5),
-  maxLendersPerDeal: z.coerce.number().int().min(1).max(30),
-});
 
 /** The shop-wide email and lender rules. One row; managers only (RLS enforces it too). */
 export async function saveShopSettingsAction(input: unknown): Promise<ActionResult<null>> {
   const session = await requireRole(CAN.manageTeam);
   try {
     const i = shopSchema.parse(input);
-    await db.withUser(session.userId, (q) =>
-      q.query(
-        `update shop_settings set shop_name = $1, postal_address = $2, daily_cap = $3, amber_at = $4, reserved_for_intake = $5,
-                sequences_enabled = $6, send_window_start = $7, send_window_end = $8, send_on_weekends = $9,
-                per_merchant_daily = $10, per_merchant_weekly = $11, automation_from = $12, automation_reply_to_rep = $13,
-                lender_chase_days = $14, lender_chase_mode = $15, lender_chase_max = $16, max_lenders_per_deal = $17,
-                send_on_holidays = $18`,
-        [
-          i.shopName,
-          i.postalAddress,
-          i.dailyCap,
-          i.amberAt,
-          i.reservedForIntake,
-          i.sequencesEnabled,
-          i.sendWindowStart,
-          i.sendWindowEnd,
-          i.sendOnWeekends,
-          i.perMerchantDaily,
-          i.perMerchantWeekly,
-          i.automationFrom,
-          i.automationReplyToRep,
-          i.lenderChaseDays,
-          i.lenderChaseMode,
-          i.lenderChaseMax,
-          i.maxLendersPerDeal,
-          i.sendOnHolidays,
-        ],
-      ),
-    );
+    await db.withUser(session.userId, (q) => saveShopSettings(q, i));
     revalidatePath("/", "layout");
     return { ok: true, data: null };
   } catch (e) {
@@ -99,23 +56,11 @@ export async function checkAutomationDnsAction(): Promise<
   }
 }
 
-const aiSchema = z.object({
-  aiEnabled: z.boolean(),
-  aiModel: z.string().trim().min(3).max(60),
-  aiDailyCapCents: z.coerce.number().int().min(0).max(100_000),
-  aiAutoApplyLowStakes: z.boolean(),
-});
-
 export async function saveAiSettingsAction(input: unknown): Promise<ActionResult<null>> {
   const session = await requireRole(CAN.manageTeam);
   try {
     const i = aiSchema.parse(input);
-    await db.withUser(session.userId, (q) =>
-      q.query(
-        "update shop_settings set ai_enabled = $1, ai_model = $2, ai_daily_cap_cents = $3, ai_auto_apply_low_stakes = $4",
-        [i.aiEnabled, i.aiModel, i.aiDailyCapCents, i.aiAutoApplyLowStakes],
-      ),
-    );
+    await db.withUser(session.userId, (q) => saveAiSettings(q, i));
     revalidatePath("/settings/ai");
     return { ok: true, data: null };
   } catch (e) {
@@ -184,6 +129,35 @@ export async function deleteSuppressionAction(input: unknown): Promise<ActionRes
       q.query("delete from suppressions where id = $1", [i.suppressionId]),
     );
     revalidatePath("/settings/email");
+    return { ok: true, data: null };
+  } catch (e) {
+    return { ok: false, error: toActionError(e) };
+  }
+}
+
+/** How long a dead deal's documents are kept before the nightly purge (S3-9). Managers only. */
+export async function saveDocumentRetentionAction(input: unknown): Promise<ActionResult<null>> {
+  const session = await requireRole(CAN.manageTeam);
+  try {
+    const i = retentionSchema.parse(input);
+    await db.withUser(session.userId, (q) => saveDocumentRetention(q, i));
+    revalidatePath("/settings/plan");
+    return { ok: true, data: null };
+  } catch (e) {
+    return { ok: false, error: toActionError(e) };
+  }
+}
+
+/**
+ * The shop's registration in a state: added, or its status, number and renewal date changed (0350). The rules table
+ * beside it is the shop's lawyer's; this is only the shop's own side. Managers only (RLS enforces it too).
+ */
+export async function saveRegistrationAction(input: unknown): Promise<ActionResult<null>> {
+  const session = await requireRole(CAN.manageTeam);
+  try {
+    const i = registrationSchema.parse(input);
+    await db.withUser(session.userId, (q) => saveRegistration(q, i));
+    revalidatePath("/settings/states");
     return { ok: true, data: null };
   } catch (e) {
     return { ok: false, error: toActionError(e) };

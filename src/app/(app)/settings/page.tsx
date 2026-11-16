@@ -1,8 +1,10 @@
+import { cookies } from "next/headers";
 import Link from "next/link";
 import { SecurityPanel } from "@/components/SecurityPanel";
 import { ICON, Icon, Note, SettingsCard } from "@/components/settings/primitives";
 import { SettingsHeader } from "@/components/settings/SettingsNav";
 import { SettingsPanels } from "@/components/SettingsPanels";
+import { ThemeSwitch } from "@/components/ThemeSwitch";
 import { MessagesCard } from "@/components/winback/MessagesCard";
 import { requireSession } from "@/lib/auth/server";
 import { db } from "@/lib/db";
@@ -10,6 +12,7 @@ import { env, googleConfigured } from "@/lib/env";
 import { getMessageSettings, listSnippets } from "@/lib/messaging/queries";
 import { timeAgo } from "@/lib/format";
 import { requestTimeMs } from "@/lib/server-time";
+import { parseTheme, THEME_COOKIE } from "@/lib/theme";
 import { gmailStatus } from "@/lib/system/gmail";
 import { reminderStatus } from "@/lib/system/heartbeat";
 
@@ -60,6 +63,7 @@ export default async function SettingsPage({
   const reminders = await reminderStatus(session.userId, { now: new Date(requestTimeMs()) }).catch(
     () => null,
   );
+  const theme = parseTheme((await cookies()).get(THEME_COOKIE)?.value);
   const e = env();
   const key = sp.gmail ?? sp.error ?? "";
   const notice = Object.hasOwn(NOTICES, key) ? NOTICES[key] : undefined;
@@ -87,6 +91,12 @@ export default async function SettingsPage({
         }}
         resendReady={Boolean(e.RESEND_API_KEY && e.RESEND_FROM)}
       />
+      <SettingsCard
+        title="Appearance"
+        description="Light, dark, or follow this device. It is the same switch as in the account menu, and it sticks on every page."
+      >
+        <ThemeSwitch initial={theme} />
+      </SettingsCard>
       <MessagesCard initial={messages.settings} initialSnippets={messages.snippets} />
       <SettingsCard
         title="Hourly reminder scheduler"

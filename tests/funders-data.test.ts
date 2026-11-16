@@ -146,7 +146,7 @@ describe("funders: save, archive, delete", () => {
       max_upsell_points: null,
       psf_cap_pct: null,
       clawback_days: 30,
-      approval_valid_days: 30,
+      approval_valid_days: null, // blank = the shop's default (0510), not a stored 30
       statement_fresh_day: 5,
       commission_paid_after_days: 7,
       renewal_commission_basis: "new_money",
