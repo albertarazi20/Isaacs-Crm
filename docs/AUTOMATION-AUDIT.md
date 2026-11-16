@@ -181,6 +181,8 @@ stream writes to: the rep's and manager's alert feed, drained into email by stre
 | S1-14 | One monthly nudger for Cold merchants: the Cold bucket keeps no email steps; the win-back cold pool owns it                                                                                                                                                                                | exactly one email a month                               |
 | S1-15 | Claim checker on every template and automated send: "approved" or "pre-approved" need a real offer on the deal; "guaranteed", "no upfront fees", "loan" and factor-rate quotes to California merchants are flagged; a template that fails cannot be approved and the worker holds the send | pure checks; template refusal; outbox hold              |
 
+**Result (2026-11-16):** merged into main at 680a24e (`feat/stream-1-send`, 7 commits, migrations 0501–0509, `tests/stream1-*.test.ts` ×7). S1-1…S1-15 all landed; S1-1 and S1-6 run from the inbox cron route (597a62d). Supabase has 0501–0509 except 0508's seeded-step delete, left for the owner (BUILD-NOTES).
+
 ### Stream 2 — the board, the deal, the AI engine
 
 | ID    | Build                                                                                                                                                                                                                                                                                                                                                  | Proves                                           |
@@ -203,6 +205,8 @@ stream writes to: the rep's and manager's alert feed, drained into email by stre
 | S2-16 | "Eligible for more funds" as a deal flag and My Deals filter                                                                                                                                                                                                                                                                                           | listDeals                                        |
 | S2-17 | The reader's eval harness: a labelled corpus under `tests/fixtures/lender-emails/` (seeded with the synthetic cases) and `scripts/eval-reader.mjs` reporting accuracy per event; the owner adds real emails                                                                                                                                            | script runs                                      |
 | S2-18 | Last-synced per mailbox as a query for the Settings page                                                                                                                                                                                                                                                                                               | query                                            |
+
+**Result (2026-11-16):** merged at d0610b2 (`feat/stream-2-deals`, 2 commits, migrations 0510–0515, `tests/stream2-*.test.ts` ×3 plus `tests/fixtures/lender-emails/`). S2-1…S2-18 landed except **S2-12**, which the stream left out; S2-2 runs from the nightly cron route (597a62d). Supabase has 0510–0515 (0512 through a rename of the old signature, left for the owner to drop; BUILD-NOTES).
 
 ### Stream 3 — money, win-back, dashboard, compliance, trust
 
