@@ -52,6 +52,9 @@ beforeAll(async () => {
     q.query("select create_submissions($1, $2::uuid[])", [pizza, [pearl, alpha]]),
   );
   const taco = await insertClient(t.db, rep, "Taco Town");
+  // its own phone: with the helper's one number, the double-submission guard (0512) would call Taco Town the same
+  // owner as Pizza Palace and refuse its file to Pearl
+  await t.pool.query("update clients set phone = '5559876543' where id = $1", [taco]);
   await t.db.withUser(rep, (q) => q.query("select submit_to_ops($1)", [taco]));
   await t.db.withUser(manager, (q) =>
     q.query("select create_submissions($1, $2::uuid[])", [taco, [pearl]]),

@@ -36,11 +36,18 @@ const fakeDrafter =
     } satisfies OpenerOutcome;
   };
 
+let phones = 0;
+
+/**
+ * Each merchant gets its own phone: the helper's one number would make every merchant here the same owner to the
+ * double-submission guard (0512, same phone or email = same file), which refuses the second file to Pearl.
+ */
 async function merchant(name: string, email: string): Promise<string> {
   const id = await insertClient(t.db, rep, name);
+  phones += 1;
   await t.pool.query(
-    "update clients set state = 'NY', email = $2, contact_name = 'Mike Ross' where id = $1",
-    [id, email],
+    "update clients set state = 'NY', email = $2, contact_name = 'Mike Ross', phone = $3 where id = $1",
+    [id, email, `555${String(1_000_000 + phones)}`],
   );
   return id;
 }
@@ -259,6 +266,61 @@ describe("S3-11 pools 2–5, the stops, Cold → win-back, finished stays finish
     expect(m).toHaveLength(1);
     expect(m[0]?.status).toBe("active");
     expect((await outbox(id))[0]?.source).toBe("winback:cold:1");
+  });
+  // Stream 1 found refresh_winback_pools re-enrolling a finished member every night, for every pool; stream 3's
+  // source_id guard (0524) closes it. The two pools the other tests do not walk to the end are walked here: the
+  // clocks roll twice more after the last step and the merchant still has one membership and no extra email.
+  it("approved, never funded: the five-step sequence runs out, and two more nights add nothing", async () => {
+    const { id } = await approved("Finished Flowers", "finishedflowers@x.com", 40);
+    await runWinback({ db: t.db, appUrl: APP });
+    expect((await member(id, "approved_unfunded"))[0]?.status).toBe("active");
+    for (let step = 2; step <= 5; step += 1) {
+      await t.pool.query(
+        "update winback_members set next_due_on = current_date where client_id = $1 and status = 'active'",
+        [id],
+      );
+      await runWinback({ db: t.db, appUrl: APP });
+    }
+    expect((await member(id, "approved_unfunded"))[0]).toMatchObject({
+      status: "stopped",
+      stop_reason: "sequence_done",
+    });
+    expect(await outbox(id)).toHaveLength(5);
+    await runWinback({ db: t.db, appUrl: APP });
+    await runWinback({ db: t.db, appUrl: APP });
+    expect(await member(id, "approved_unfunded")).toHaveLength(1);
+    expect(await outbox(id)).toHaveLength(5);
+  });
+  it("Cold: when the pool's last nudge has gone the Cold enrolment ends too (0508), and two more nights add nothing", async () => {
+    const id = await merchant("Cold Coffee", "coldcoffee@x.com");
+    const cold = (await t.pool.query<{ id: string }>("select id from buckets where key = 'cold'"))
+      .rows[0]!.id;
+    await t.db.withUser(rep, (q) =>
+      q.query("select enroll_in_bucket($1, $2, 'moved')", [id, cold]),
+    );
+    await runWinback({ db: t.db, appUrl: APP });
+    for (let step = 2; step <= 3; step += 1) {
+      await t.pool.query(
+        "update winback_members set next_due_on = current_date where client_id = $1 and status = 'active'",
+        [id],
+      );
+      await runWinback({ db: t.db, appUrl: APP });
+    }
+    expect((await member(id, "cold"))[0]).toMatchObject({
+      status: "stopped",
+      stop_reason: "sequence_done",
+    });
+    const enrolment = (
+      await t.pool.query<{ stop_reason: string | null; live: boolean }>(
+        "select stop_reason, stopped_at is null as live from enrollments where client_id = $1 and bucket_id = $2",
+        [id, cold],
+      )
+    ).rows[0];
+    expect(enrolment).toEqual({ stop_reason: "sequence_done", live: false });
+    await runWinback({ db: t.db, appUrl: APP });
+    await runWinback({ db: t.db, appUrl: APP });
+    expect(await member(id, "cold")).toHaveLength(1);
+    expect(await outbox(id)).toHaveLength(3);
   });
 });
 
