@@ -11,6 +11,7 @@ import { getClientFundersData } from "@/lib/funders/queries";
 import type { ClientFundersData } from "@/lib/funders/types";
 import { z } from "zod";
 import { UserError } from "@/lib/data/mutations";
+import { askDeal, type DealAnswer } from "@/lib/deals/ask";
 import * as m from "@/lib/deals/mutations";
 import { reshopCandidates, startReshop, type ReshopCandidate } from "@/lib/deals/reshop";
 import * as s from "@/lib/deals/schemas";
@@ -121,4 +122,24 @@ export async function startReshopAction(input: unknown): Promise<ActionResult<{ 
     async (q) => ({ id: (await startReshop(q, s.reshopSchema.parse(input).clientId)).id }),
     CAN.workLeads,
   );
+}
+
+// ---------- ask the deal a question (plan §7 Activity) ----------
+const askSchema = z.object({ dealId: z.string().uuid(), question: z.string().min(3).max(500) });
+
+/** "Where does this deal stand?" in plain words, answered from the timeline with verified citations. A read. */
+export async function askDealAction(input: unknown): Promise<ActionResult<DealAnswer>> {
+  const session = await requireSession();
+  try {
+    const i = askSchema.parse(input);
+    const data = await askDeal({
+      db,
+      userId: session.userId,
+      dealId: i.dealId,
+      question: i.question,
+    });
+    return { ok: true, data };
+  } catch (e) {
+    return { ok: false, error: toActionError(e) };
+  }
 }

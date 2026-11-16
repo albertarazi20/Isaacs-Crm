@@ -466,6 +466,42 @@ export async function addDocument(
   });
 }
 
+/**
+ * A document the app made itself (the signed application PDF): filed as a merchant upload, already clean because
+ * no outside bytes were involved. System connection; the row belongs to the merchant's rep.
+ */
+export async function fileGeneratedDocument(
+  q: Db,
+  store: BlobStore,
+  a: {
+    clientId: string;
+    dealId: string | null;
+    kind: DocKind;
+    filename: string;
+    bytes: Uint8Array;
+    today: ISODate;
+  },
+): Promise<Accepted> {
+  const { rows } = await q.query<{ user_id: string }>("select user_id from clients where id = $1", [
+    a.clientId,
+  ]);
+  const userId = rows[0]?.user_id;
+  if (!userId) throw new UserError("Merchant not found");
+  return writeDocument(q, store, {
+    filename: a.filename,
+    contentType: "application/pdf",
+    bytes: a.bytes,
+    clientId: a.clientId,
+    userId,
+    dealId: a.dealId,
+    kind: a.kind,
+    source: "upload_link",
+    uploadedBy: null,
+    scan: "clean",
+    today: a.today,
+  });
+}
+
 // ---------- reading ----------
 
 export interface DocumentRow {

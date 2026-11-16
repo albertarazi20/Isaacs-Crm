@@ -21,6 +21,7 @@ describe("architecture boundaries", () => {
       "lib/buckets/engine.ts", // nightly sequence steps and blasts
       "lib/docs/retention.ts", // stream 3: the nightly purge of documents on dead deals
       "lib/docs/upload.ts", // merchant uploads, lender downloads, the scan
+      "lib/docs/apply.ts", // the merchant signs their application with no login: the token is the key (0530)
       "lib/inbox/process.ts", // the lender-email reader
       "lib/inbox/sync.ts", // Gmail history sync
       "lib/money/close.ts", // stream 3: the month-end close and statements

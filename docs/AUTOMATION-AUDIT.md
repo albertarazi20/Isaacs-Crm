@@ -230,7 +230,7 @@ stream writes to: the rep's and manager's alert feed, drained into email by stre
 ## Not built in this pass, and why
 
 - **Sheet write-back** (§4.9): optional in the plan; needs the Sheets write scope and every user re-consenting. Owner's call.
-- **Plain-words questions over a deal, Import from a screenshot, the application the merchant signs** (§7, §13.5): page-driven features for the design phase. The pasted-text Import lands now.
+- **Plain-words questions over a deal, Import from a screenshot, the application the merchant signs** (§7, §13.5): backends landed later the same day (`src/lib/deals/ask.ts`, `src/lib/inbox/pasteImage.ts`, `src/lib/docs/apply.ts` + `/apply/[token]`, migration 0530; `tests/ask-deal`, `offer-image`, `apply`). The page controls come with the design phase.
 - **The labelled lender-email test set** (§10): the harness lands now; the 100–200 real emails are the owner's (decision 12).
 - **Two-step login** (§13.6): sign-in is Google; 2-step verification is each user's Google account setting.
 - **Admin as a fourth role**: folded into manager, as built. Say so if a separate admin is wanted.
