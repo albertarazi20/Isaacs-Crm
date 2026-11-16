@@ -357,12 +357,12 @@ export function DocumentsPanel({
         </p>
         <div className="flex flex-wrap items-center gap-2">
           {lenders.length > 0 && documents.some((d) => d.scan_status === "clean") ? (
-            <span className="flex items-center gap-1.5">
+            <span className="flex max-w-full flex-wrap items-center gap-1.5">
               <select
                 aria-label="Send to lender"
                 value={lenderSub}
                 onChange={(e) => setLenderSub(e.target.value)}
-                className="h-10 rounded-lg border border-border bg-surface px-2 text-sm text-text transition hover:border-border-strong focus:border-accent focus:ring-2 focus:ring-ring focus:outline-none sm:h-8 sm:text-[13px]"
+                className="h-10 max-w-full rounded-lg border border-border bg-surface px-2 text-sm text-text transition hover:border-border-strong focus:border-accent focus:ring-2 focus:ring-ring focus:outline-none sm:h-8 sm:text-[13px]"
               >
                 {lenders.map((l) => (
                   <option key={l.submissionId} value={l.submissionId}>

@@ -98,16 +98,19 @@ function Scoreboard({ score }: { score: ScoreRow }) {
     <dl className="grid grid-cols-2 gap-x-4 gap-y-2 sm:grid-cols-4 lg:w-[30rem] lg:shrink-0 [&_dt]:whitespace-nowrap">
       <Stat
         label="Sent"
+        caps={false}
         value={String(score.submissions)}
         sub={score.pending > 0 ? `${score.pending} waiting` : undefined}
       />
       <Stat
         label="Approval rate"
+        caps={false}
         value={score.approvalRate === null ? "—" : pct(score.approvalRate)}
         sub={decided === 0 ? "No answers yet" : `${score.approvals} of ${decided} answered`}
       />
       <Stat
         label="Average factor"
+        caps={false}
         value={score.avgFactor === null ? "—" : factorText(score.avgFactor)}
         sub={
           score.offerCount > 0
@@ -117,6 +120,7 @@ function Scoreboard({ score }: { score: ScoreRow }) {
       />
       <Stat
         label="Answers in"
+        caps={false}
         value={answerTime(score.avgDaysToRespond)}
         sub={score.noResponse > 0 ? `${score.noResponse} never answered` : undefined}
       />

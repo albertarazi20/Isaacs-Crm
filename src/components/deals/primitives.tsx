@@ -228,23 +228,36 @@ export function PageHeader({
   );
 }
 
-/** A label over a number, for a stat row inside a `<dl>`. */
+/**
+ * A label over a number, for a stat row inside a `<dl>`. The label is the 11px caps label by default; `caps`
+ * off keeps it in sentence case (innerText follows text-transform, and the browser suites read the scoreboard
+ * as "Sent 1").
+ */
 export function Stat({
   label,
   value,
   sub,
   tone,
+  caps = true,
   className,
 }: {
   label: string;
   value: ReactNode;
   sub?: string | undefined;
   tone?: "good" | "warn" | "bad";
+  caps?: boolean;
   className?: string;
 }) {
   return (
     <div className={cn("min-w-0", className)}>
-      <dt className="text-[11px] font-semibold tracking-wide text-muted uppercase">{label}</dt>
+      <dt
+        className={cn(
+          "text-[11px] font-semibold text-muted",
+          caps ? "tracking-wide uppercase" : "font-medium",
+        )}
+      >
+        {label}
+      </dt>
       <dd
         className={cn(
           "mt-0.5 text-base leading-6 font-semibold tabular-nums",
