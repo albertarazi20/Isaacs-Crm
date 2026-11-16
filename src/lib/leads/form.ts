@@ -56,11 +56,20 @@ const whereItSits = (m: DuplicateMatch) => ({
   place: m.bucket_name ?? stageDef(m.stage).label,
 });
 
+export interface IntakeOptions {
+  /**
+   * A manager's override: add the lead although the number is already in the CRM (the cross-rep block never stops a
+   * manager, and the page asks first). The action refuses it for anyone who is not a manager.
+   */
+  allowDuplicate?: boolean;
+}
+
 export async function intakeLead(
   q: Db,
   i: IntakeInput,
   appUrl: string,
   now = new Date(),
+  opts: IntakeOptions = {},
 ): Promise<IntakeOutcome> {
   const ctx = await userContext(q, now);
   const bucketName = i.bucketId
@@ -115,7 +124,7 @@ export async function intakeLead(
   }
 
   const business = i.businessName || contact || "New lead";
-  const existing = await findDuplicates(q, { phone: i.phone });
+  const existing = opts.allowDuplicate ? [] : await findDuplicates(q, { phone: i.phone });
   if (existing[0]) {
     return {
       clientId: existing[0].id,

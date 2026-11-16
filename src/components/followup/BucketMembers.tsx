@@ -13,11 +13,14 @@ import { useApp } from "@/components/app-context";
 import { UploadLinkButton } from "@/components/deals/UploadLinkButton";
 import { useRun, FormDialog } from "@/components/client/parts";
 import { useToast } from "@/components/overlay";
-import { Badge, Button, buttonClass, Card, EmptyState, Select, cn } from "@/components/ui";
+import { Badge, Button, buttonClass, Card, EmptyState, Input, Select, cn } from "@/components/ui";
 import type { BucketMember, BucketRow, TemplateRow } from "@/lib/buckets/queries";
 import { formatDate, timeAgo } from "@/lib/format";
+import { addDays, type ISODate } from "@/lib/mca/dates";
 import { formatMoneyCompact } from "@/lib/money";
+import type { MemberMeta } from "@/lib/messaging/memberMeta";
 import { mergeValues, resolveMergeFields } from "@/lib/messaging/merge";
+import { pausedLabel, replyChip } from "@/lib/messaging/replyTagLabels";
 
 type Filter = "all" | "due" | "replied" | "quiet" | "no_email" | "paused";
 
@@ -28,11 +31,14 @@ const SELECT_WRAP = "min-w-0 flex-1 sm:flex-none";
 export function BucketMembers({
   bucket,
   members,
+  meta,
   buckets,
   templates,
 }: {
   bucket: BucketRow;
   members: BucketMember[];
+  /** Each lead's latest reply tag and the day a pause lifts, by client id. */
+  meta: Record<string, MemberMeta>;
   buckets: BucketRow[];
   templates: TemplateRow[];
 }) {
@@ -305,7 +311,12 @@ export function BucketMembers({
                       </span>
                     </span>
                     <span className="mt-0.5 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-xs text-muted">
-                      {m.paused ? <Badge tone="warn">Paused</Badge> : null}
+                      {m.paused ? (
+                        <Badge tone="warn">
+                          {pausedLabel(meta[m.client_id]?.resume_on ?? null, today)}
+                        </Badge>
+                      ) : null}
+                      <ReplyChip meta={meta[m.client_id]} today={today} />
                       {m.reply_waiting ? <Badge tone="bad">Replied — answer them</Badge> : null}
                       {m.email_opt_out ? (
                         <Badge tone="bad">Opted out</Badge>
@@ -354,6 +365,16 @@ export function BucketMembers({
                     >
                       {m.paused ? "Resume" : "Pause"}
                     </Button>
+                    <PauseUntil
+                      today={today}
+                      busy={busy}
+                      onPause={(until) =>
+                        act(
+                          `Paused until ${formatDate(until, today)}`,
+                          pauseEnrollmentAction({ clientIds: [m.client_id], paused: true, until }),
+                        )
+                      }
+                    />
                     <Button
                       size="sm"
                       variant="ghost"
@@ -397,5 +418,50 @@ export function BucketMembers({
         </FormDialog>
       ) : null}
     </div>
+  );
+}
+
+/** The merchant's own reply, tagged (S1-6): a chip with the words always on it; the merchant's quote is the tooltip. */
+function ReplyChip({ meta, today }: { meta: MemberMeta | undefined; today: ISODate }) {
+  const chip = meta ? replyChip(meta.tag, meta.tag_revive_on, today) : null;
+  if (!chip || !meta) return null;
+  return (
+    <span
+      title={
+        meta.quote
+          ? `They wrote: "${meta.quote}"${meta.supported ? "" : " (the words could not be checked)"}`
+          : undefined
+      }
+    >
+      <Badge tone={chip.tone}>{chip.label}</Badge>
+    </span>
+  );
+}
+
+/** Pause with a date on it: the engine lifts the pause by itself that day. "Pause" above stays the open-ended one. */
+function PauseUntil({
+  today,
+  busy,
+  onPause,
+}: {
+  today: ISODate;
+  busy: boolean;
+  onPause: (until: ISODate) => void;
+}) {
+  const [until, setUntil] = useState("");
+  return (
+    <span className="flex items-center gap-1.5">
+      <Input
+        type="date"
+        aria-label="Pause until date"
+        min={addDays(today, 1)}
+        value={until}
+        onChange={(e) => setUntil(e.target.value)}
+        className="h-10 w-40 sm:h-8 sm:text-[13px]"
+      />
+      <Button size="sm" disabled={busy || until === ""} onClick={() => onPause(until)}>
+        Pause until
+      </Button>
+    </span>
   );
 }

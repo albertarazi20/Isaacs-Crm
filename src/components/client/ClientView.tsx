@@ -3,6 +3,8 @@
 import { CAN, type Role } from "@/lib/auth/roles";
 import type { ClientDetail } from "@/lib/data/types";
 import type { ClientFundersData } from "@/lib/funders/types";
+import type { MerchantApplication } from "@/lib/leads/application";
+import { ApplicationCard } from "./ApplicationCard";
 import { AskCard } from "./AskCard";
 import { ClientDetails, StickyBar } from "./ClientHeader";
 import { FollowUpPanel } from "./FollowUpPanel";
@@ -24,10 +26,15 @@ export function ClientView({
   serverNow,
   funders,
   role,
+  application,
+  appUrl,
 }: {
   detail: ClientDetail;
   serverNow: number;
   funders?: ClientFundersData;
+  /** The merchant's application link token and latest signed application; absent where the page has none to show. */
+  application?: MerchantApplication | null;
+  appUrl?: string;
   /** The viewer's role: reps and managers get "Submit to ops"; ops does not (it is their own queue). */
   role?: Role;
 }) {
@@ -44,7 +51,15 @@ export function ClientView({
             <Timeline activities={detail.activities} className="order-5" />
           </div>
           <div className="contents lg:flex lg:flex-col lg:gap-4">
-            <FollowUpPanel detail={detail} className="order-3" />
+            <FollowUpPanel detail={detail} application={application} className="order-3" />
+            {application && appUrl ? (
+              <ApplicationCard
+                card={card}
+                application={application}
+                appUrl={appUrl}
+                className="order-3"
+              />
+            ) : null}
             <FundingCard fundings={detail.fundings} timers={detail.timers} className="order-4" />
             {funders ? (
               <SubmissionsCard

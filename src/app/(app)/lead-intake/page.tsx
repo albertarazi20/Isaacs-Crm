@@ -1,3 +1,4 @@
+import { BulkIntake } from "@/components/intake/BulkIntake";
 import { IntakeForm } from "@/components/intake/IntakeForm";
 import { LeadIntakePanel } from "@/components/LeadIntakePanel";
 import { Icon } from "@/components/client/icons";
@@ -6,16 +7,20 @@ import { CAN } from "@/lib/auth/roles";
 import { listBuckets } from "@/lib/buckets/queries";
 import { db } from "@/lib/db";
 import { env } from "@/lib/env";
+import { assistantState } from "@/lib/leads/assistant";
 import { listLeadTokens } from "@/lib/leads/queries";
+import { listStagedRows } from "@/lib/leads/staged";
 
 export const dynamic = "force-dynamic";
 
 export default async function LeadIntakePage() {
   const session = await requirePage("/lead-intake");
   const manager = CAN.manageTeam(session.role);
-  const { buckets, tokens } = await db.withUser(session.userId, async (q) => ({
+  const { buckets, tokens, assistant, staged } = await db.withUser(session.userId, async (q) => ({
     buckets: await listBuckets(q),
     tokens: manager ? await listLeadTokens(q) : [],
+    assistant: await assistantState(q, Boolean(env().ANTHROPIC_API_KEY)),
+    staged: await listStagedRows(q),
   }));
   const defaultBucket = buckets.find((b) => b.key === "interested") ?? buckets[0] ?? null;
   return (
@@ -28,7 +33,17 @@ export default async function LeadIntakePage() {
           up until they act.
         </p>
       </div>
-      <IntakeForm buckets={buckets} defaultBucketId={defaultBucket?.id ?? null} />
+      <IntakeForm
+        buckets={buckets}
+        defaultBucketId={defaultBucket?.id ?? null}
+        assistant={assistant}
+      />
+      <BulkIntake
+        rows={staged.rows}
+        total={staged.total}
+        buckets={buckets}
+        defaultBucketId={defaultBucket?.id ?? null}
+      />
       {manager ? (
         <details className="group rounded-xl border border-border bg-surface">
           <summary className="flex min-h-12 cursor-pointer list-none items-center gap-2 px-4 text-[13px] font-semibold select-none [&::-webkit-details-marker]:hidden">
