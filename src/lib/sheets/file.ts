@@ -1,7 +1,8 @@
 import type { Db, DbAccess } from "../db";
-import { createClient } from "../data/mutations";
+import { createClient, stampClientTimezone } from "../data/mutations";
 import { newClientSchema } from "../data/schemas";
-import { findDuplicates, userContext } from "../data/queries";
+import { findDuplicates, userContext, type DuplicateMatch } from "../data/queries";
+import { parseMoney } from "../money";
 import { enqueueEmail } from "../send/enqueue";
 import { effectiveSignature, mergeValues, resolveMergeFields } from "../messaging/merge";
 
@@ -19,7 +20,7 @@ export interface FileSummary {
   skipped: number;
 }
 
-interface PendingRow {
+export interface PendingRow {
   id: string;
   source_id: string;
   owner_id: string;
@@ -27,14 +28,33 @@ interface PendingRow {
   business_name: string;
   contact_name: string;
   email: string;
+  email2: string;
   phone: string;
   phone2: string;
   industry: string;
   state: string;
   monthly_revenue_cents: number | null;
+  /** The sheet's "amount requested" column as typed: "120k", or free text like "$60k for a second truck". */
   wanted: string;
   notes: string;
   source_name: string;
+}
+
+/** The columns `fileOneRow` needs, for any query that joins a sheet row to its source. */
+export const PENDING_ROW_COLUMNS = `r.id, r.source_id, s.target_bucket_id, s.name as source_name, r.business_name, r.contact_name,
+       r.email, r.email2, r.phone, r.phone2, r.industry, r.state, r.monthly_revenue_cents, r.wanted, r.notes`;
+
+export type FileOutcome =
+  | { result: "filed"; clientId: string; welcomeSent: boolean }
+  /** Already in the CRM: nothing was made; `match` says whose it is and where it sits. */
+  | { result: "duplicate"; clientId: string; match: DuplicateMatch };
+
+/** What the intake form typed over the sheet's row. */
+export interface FileExtras {
+  /** "Amount they want", in cents; when absent the sheet's `wanted` is used if it is a plain amount. */
+  wantedAmountCents?: number | null;
+  /** "What are they looking for", in the merchant's words; when absent, a `wanted` that is not a plain amount. */
+  lookingFor?: string;
 }
 
 export async function fileNewSheetRows(args: {
@@ -48,8 +68,7 @@ export async function fileNewSheetRows(args: {
     async (q) =>
       (
         await q.query<PendingRow>(
-          `select r.id, r.source_id, coalesce(s.owner_id, s.reader_user_id) as owner_id, s.target_bucket_id, s.name as source_name,
-                  r.business_name, r.contact_name, r.email, r.phone, r.phone2, r.industry, r.state, r.monthly_revenue_cents, r.wanted, r.notes
+          `select coalesce(s.owner_id, s.reader_user_id) as owner_id, ${PENDING_ROW_COLUMNS}
              from sheet_rows r join sheet_sources s on s.id = r.source_id
             where s.active and s.auto_file and r.filed_at is null and r.client_id is null
             order by r.first_seen_at limit $1`,
@@ -63,24 +82,36 @@ export async function fileNewSheetRows(args: {
       summary.skipped += 1;
       continue;
     }
-    await args.db.withUser(row.owner_id, async (q) => {
-      const r = await fileOneRow(q, row, args.appUrl, args.now);
-      if (r === "filed") summary.filed += 1;
-      else if (r === "duplicate") summary.duplicates += 1;
-      else summary.skipped += 1;
-    });
+    try {
+      const r = await args.db.withUser(row.owner_id, (q) =>
+        fileOneRow(q, row, args.appUrl, args.now),
+      );
+      if (r.result === "filed") summary.filed += 1;
+      else summary.duplicates += 1;
+    } catch (e) {
+      // The row stays unfiled (nothing was written — the transaction rolled back), so a corrected sheet row
+      // files on a later run instead of being silently marked done with no merchant behind it.
+      summary.skipped += 1;
+      console.error(`sheet row ${row.id} could not be filed:`, e instanceof Error ? e.message : e);
+    }
   }
   return summary;
 }
 
-/** File one staged row as a merchant for the signed-in rep (also what the intake form calls after autofill). */
+/**
+ * File one staged row as a merchant for the signed-in rep (also what the intake form calls after autofill).
+ * A phone (or, with no phone, a name) already in the CRM is a duplicate: the row is marked as that merchant's.
+ * Anything that stops the merchant being made is thrown, not swallowed — the row stays unfiled and the caller
+ * shows the reason.
+ */
 export async function fileOneRow(
   q: Db,
   row: PendingRow,
   appUrl: string,
   now = new Date(),
   bucketOverride?: string | null,
-): Promise<"filed" | "duplicate" | "skipped"> {
+  extras: FileExtras = {},
+): Promise<FileOutcome> {
   const dupes = await findDuplicates(q, { phone: row.phone, businessName: row.business_name });
   const dupe = dupes.find((m) => m.reason === "same phone" || !row.phone || !m.phone);
   if (dupe) {
@@ -88,14 +119,17 @@ export async function fileOneRow(
       row.id,
       dupe.id,
     ]);
-    return "duplicate";
+    return { result: "duplicate", clientId: dupe.id, match: dupe };
   }
   const ctx = await userContext(q, now);
-  let card;
-  try {
-    card = await createClient(
-      q,
-      newClientSchema.parse({
+  // "120k" is an amount; "$60k for a second truck" is what they are looking for, in their words.
+  const sheetAmount = parseMoney(row.wanted);
+  const wantedCents = extras.wantedAmountCents ?? sheetAmount;
+  const lookingFor = extras.lookingFor || (sheetAmount === null ? row.wanted : "");
+  const card = await createClient(
+    q,
+    {
+      ...newClientSchema.parse({
         businessName: row.business_name || row.contact_name,
         contactName: row.contact_name,
         phone: row.phone || row.phone2,
@@ -103,18 +137,20 @@ export async function fileOneRow(
         industry: row.industry,
         state: row.state,
         source: row.source_name,
-        wantedAmount: row.wanted || undefined,
-        monthlyRevenue: row.monthly_revenue_cents ?? undefined,
         stage: "name_in",
         followUpOn: ctx.today,
       }),
-      ctx,
-    );
-  } catch {
-    await q.query("update sheet_rows set filed_at = now() where id = $1", [row.id]);
-    return "skipped";
-  }
-  await q.query("update clients set lead_source_kind = 'sheet' where id = $1", [card.id]);
+      // both are already cents; the schema's money fields take dollars, so they go in beside it, not through it
+      wantedAmount: wantedCents,
+      monthlyRevenue: row.monthly_revenue_cents,
+    },
+    ctx,
+  );
+  await q.query(
+    "update clients set lead_source_kind = 'sheet', phone2 = $2, email2 = $3, looking_for = $4 where id = $1",
+    [card.id, row.phone2, row.email2, lookingFor],
+  );
+  await stampClientTimezone(q, card.id);
   if (row.notes)
     await q.query(
       "insert into activities (user_id, client_id, kind, body) select user_id, id, 'note', $2 from clients where id = $1",
@@ -125,11 +161,12 @@ export async function fileOneRow(
     card.id,
   ]);
   const bucket = bucketOverride === undefined ? row.target_bucket_id : bucketOverride;
+  let welcomeSent = false;
   if (bucket) {
     await q.query("select enroll_in_bucket($1, $2, 'moved')", [card.id, bucket]);
-    await sendWelcome(q, card.id, bucket, appUrl, now);
+    welcomeSent = await sendWelcome(q, card.id, bucket, appUrl, now);
   }
-  return "filed";
+  return { result: "filed", clientId: card.id, welcomeSent };
 }
 
 /** The bucket's step-1 template, sent at once through the intake lane. */

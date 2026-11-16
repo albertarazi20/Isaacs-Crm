@@ -10,11 +10,16 @@ import { useFormState } from "@/components/client/parts";
 import { useToast } from "@/components/overlay";
 import { Button, Card, Field, Input, Select, Textarea, cn } from "@/components/ui";
 import type { BucketRow } from "@/lib/buckets/queries";
+import { stageDef } from "@/lib/mca/stages";
 
 type Lookup =
   | { kind: "sheet"; rowId: string; source: string }
-  | { kind: "crm"; id: string; name: string }
+  | { kind: "crm"; id: string; name: string; owner: string; place: string }
   | null;
+
+/** "Mike's lead, in Missing statements" — whose merchant it is and where it sits. */
+const whose = (owner: string, place: string) =>
+  `${owner ? `${owner}'s lead` : "already a lead"}, in ${place}`;
 
 const blank = () => ({
   firstName: "",
@@ -62,7 +67,14 @@ export function IntakeForm({
     ]);
     setLooking(false);
     if (dup.ok && dup.data[0]) {
-      setLookup({ kind: "crm", id: dup.data[0].id, name: dup.data[0].business_name });
+      const d = dup.data[0];
+      setLookup({
+        kind: "crm",
+        id: d.id,
+        name: d.business_name,
+        owner: d.owner_name,
+        place: d.bucket_name ?? stageDef(d.stage).label,
+      });
       return;
     }
     if (sheet.ok && sheet.data) {
@@ -95,7 +107,10 @@ export function IntakeForm({
     if (!r.ok) return toast({ message: r.error, tone: "error" });
     setDone(r.data);
     if (r.data.result === "duplicate")
-      toast({ message: `${r.data.businessName} is already in the CRM`, tone: "info" });
+      toast({
+        message: `${r.data.businessName} is already in the CRM${r.data.existing ? ` — ${whose(r.data.existing.ownerName, r.data.existing.place)}` : ""}`,
+        tone: "info",
+      });
     else
       toast({
         message: r.data.welcomeSent
@@ -123,7 +138,7 @@ export function IntakeForm({
         </p>
         <p className="text-sm text-muted">
           {done.result === "duplicate"
-            ? "No second merchant was made. Open the existing one and log the call."
+            ? `${done.existing ? `Already in the system: ${whose(done.existing.ownerName, done.existing.place)}. ` : ""}No second merchant was made. Open the existing one and log the call.`
             : done.welcomeSent
               ? `Filed to ${done.bucketName}. The first email is queued and the reminders follow until they reply, upload or sign.`
               : done.bucketName
@@ -131,14 +146,12 @@ export function IntakeForm({
                 : "No bucket chosen, so no emails will go out until you move them."}
         </p>
         <div className="flex gap-2">
-          {done.clientId ? (
-            <Link
-              href={`/clients/${done.clientId}`}
-              className="inline-flex h-10 items-center rounded-lg bg-accent px-4 text-sm font-semibold text-accent-fg"
-            >
-              Open {done.businessName}
-            </Link>
-          ) : null}
+          <Link
+            href={`/clients/${done.clientId}`}
+            className="inline-flex h-10 items-center rounded-lg bg-accent px-4 text-sm font-semibold text-accent-fg"
+          >
+            Open {done.businessName}
+          </Link>
           <Button onClick={reset}>Add another</Button>
         </div>
       </Card>
@@ -214,8 +227,8 @@ export function IntakeForm({
             This number is already in the CRM as{" "}
             <Link href={`/clients/${lookup.id}`} className="font-semibold underline">
               {lookup.name}
-            </Link>
-            . Submitting will not make a second merchant.
+            </Link>{" "}
+            — {whose(lookup.owner, lookup.place)}. Submitting will not make a second merchant.
           </p>
         ) : null}
       </Card>

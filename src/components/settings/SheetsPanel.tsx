@@ -28,6 +28,7 @@ export function SheetsPanel({
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   const { v, bind, set } = useFormState(() => ({
+    name: "",
     url: "",
     tab: "",
     targetBucketId: buckets.find((b) => b.key === "interested")?.id ?? "",
@@ -38,6 +39,7 @@ export function SheetsPanel({
   async function connect() {
     setBusy(true);
     const r = await connectSheetAction({
+      name: v.name,
       url: v.url,
       tab: v.tab,
       targetBucketId: v.targetBucketId || null,
@@ -48,6 +50,7 @@ export function SheetsPanel({
     if (!r.ok) return toast({ message: r.error, tone: "error" });
     toast({ message: `Connected — tabs: ${r.data.tabs.join(", ")}`, tone: "success" });
     set("url", "");
+    set("name", "");
     router.refresh();
   }
 
@@ -70,6 +73,9 @@ export function SheetsPanel({
           </Field>
           <Field label="Tab (blank = first)">
             <Input {...bind("tab")} />
+          </Field>
+          <Field label="Name (blank = the spreadsheet's title)">
+            <Input {...bind("name")} maxLength={80} placeholder="Vendor A — November" />
           </Field>
           <Field label="New leads land in">
             <Select {...bind("targetBucketId")}>
@@ -164,7 +170,7 @@ export function SheetsPanel({
                     onClick={async () => {
                       setBusy(true);
                       const ok = await run(
-                        updateSheetAction({ id: s.id, mapping: {}, autoFile: !s.auto_file }),
+                        updateSheetAction({ id: s.id, autoFile: !s.auto_file }),
                         s.auto_file ? "Auto-file off" : "Auto-file on",
                       );
                       setBusy(false);
@@ -180,7 +186,7 @@ export function SheetsPanel({
                     onClick={async () => {
                       setBusy(true);
                       const ok = await run(
-                        updateSheetAction({ id: s.id, mapping: {}, active: !s.active }),
+                        updateSheetAction({ id: s.id, active: !s.active }),
                         s.active ? "Turned off" : "Turned on",
                       );
                       setBusy(false);

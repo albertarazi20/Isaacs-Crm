@@ -28,7 +28,7 @@ interface SourceRow {
   owner_id: string | null;
 }
 
-type TokenFor = (userId: string) => Promise<string>;
+export type TokenFor = (userId: string) => Promise<string>;
 
 /** An access token for a user's connected Google account. The refresh token stays inside lib/system. */
 export function productionTokenFor(): TokenFor {

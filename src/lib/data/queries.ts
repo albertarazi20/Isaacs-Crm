@@ -96,6 +96,10 @@ export interface DuplicateMatch {
   reason: "same phone" | "same business name";
   /** The matched merchant's phone as stored ("" when none) — name matches only count when one side has no phone. */
   phone: string;
+  /** Whose merchant it is (the rep's name), so two reps don't work the same lead by accident. */
+  owner_name: string;
+  /** The bucket it sits in right now, or null when it is in none (then the stage says where it is). */
+  bucket_name: string | null;
   /**
    * In the trash, but marked do-not-contact (or limited). Those stay matchable so a "stop" can't be undone
    * by re-adding the same number as a fresh lead.
@@ -124,10 +128,15 @@ export async function findDuplicates(
     phone: string;
     by_phone: boolean;
     trashed: boolean;
+    owner_name: string;
+    bucket_name: string | null;
   }>(
     `select id, business_name, contact_name, stage, phone,
             ($1::text is not null and right(regexp_replace(phone, '[^0-9]', '', 'g'), 10) = $1) as by_phone,
-            exists (select 1 from trashed_clients t where t.client_id = clients.id) as trashed
+            exists (select 1 from trashed_clients t where t.client_id = clients.id) as trashed,
+            coalesce((select u.name from app_users u where u.id = clients.user_id), '') as owner_name,
+            (select b.name from enrollments e join buckets b on b.id = e.bucket_id
+              where e.client_id = clients.id and e.stopped_at is null order by e.entered_at desc limit 1) as bucket_name
        from clients
       where (contact_status <> 'ok' or not exists (select 1 from trashed_clients t where t.client_id = clients.id))
         and ($3::uuid is null or id <> $3::uuid)
@@ -145,6 +154,8 @@ export async function findDuplicates(
     reason: r.by_phone ? "same phone" : "same business name",
     phone: r.phone,
     trashed: r.trashed,
+    owner_name: r.owner_name,
+    bucket_name: r.bucket_name,
   }));
 }
 
