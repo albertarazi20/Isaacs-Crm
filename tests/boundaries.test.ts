@@ -24,7 +24,9 @@ describe("architecture boundaries", () => {
       "lib/inbox/sync.ts", // Gmail history sync
       "lib/money/winback.ts", // winback pools
       "lib/send/deliver.ts", // the Gmail / Resend sender
+      "lib/send/external.ts", // stream 1: Sent mail outside the CRM, counted toward the cap
       "lib/send/worker.ts", // the outbox drain
+      "lib/messaging/replyTags.ts", // stream 1: the merchant reply classifier
       "lib/sheets/file.ts", // filing sheet rows as leads
       "lib/sheets/sync.ts", // the daily Google Sheets loop
     ]);
