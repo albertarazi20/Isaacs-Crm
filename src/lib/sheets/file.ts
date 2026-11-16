@@ -3,6 +3,7 @@ import { createClient, stampClientTimezone } from "../data/mutations";
 import { newClientSchema } from "../data/schemas";
 import { findDuplicates, userContext, type DuplicateMatch } from "../data/queries";
 import { parseMoney } from "../money";
+import { OwnedElsewhereError, refuseAnotherReps } from "../leads/owner";
 import { enqueueEmail } from "../send/enqueue";
 import { effectiveSignature, mergeValues, resolveMergeFields } from "../messaging/merge";
 
@@ -34,6 +35,7 @@ export interface PendingRow {
   industry: string;
   state: string;
   monthly_revenue_cents: number | null;
+  time_in_business_months: number | null;
   /** The sheet's "amount requested" column as typed: "120k", or free text like "$60k for a second truck". */
   wanted: string;
   notes: string;
@@ -42,7 +44,7 @@ export interface PendingRow {
 
 /** The columns `fileOneRow` needs, for any query that joins a sheet row to its source. */
 export const PENDING_ROW_COLUMNS = `r.id, r.source_id, s.target_bucket_id, s.name as source_name, r.business_name, r.contact_name,
-       r.email, r.email2, r.phone, r.phone2, r.industry, r.state, r.monthly_revenue_cents, r.wanted, r.notes`;
+       r.email, r.email2, r.phone, r.phone2, r.industry, r.state, r.monthly_revenue_cents, r.time_in_business_months, r.wanted, r.notes`;
 
 export type FileOutcome =
   | { result: "filed"; clientId: string; welcomeSent: boolean }
@@ -89,6 +91,17 @@ export async function fileNewSheetRows(args: {
       if (r.result === "filed") summary.filed += 1;
       else summary.duplicates += 1;
     } catch (e) {
+      if (e instanceof OwnedElsewhereError) {
+        // another rep already has this merchant: the row is theirs, not a new lead for this sheet's owner
+        await args.db.withUser(row.owner_id, (q) =>
+          q.query("update sheet_rows set filed_at = now(), client_id = $2 where id = $1", [
+            row.id,
+            e.owner.client_id,
+          ]),
+        );
+        summary.duplicates += 1;
+        continue;
+      }
       // The row stays unfiled (nothing was written — the transaction rolled back), so a corrected sheet row
       // files on a later run instead of being silently marked done with no merchant behind it.
       summary.skipped += 1;
@@ -121,6 +134,8 @@ export async function fileOneRow(
     ]);
     return { result: "duplicate", clientId: dupe.id, match: dupe };
   }
+  // another rep's merchant is invisible to the check above: ask across the shop and refuse in words (S1-3)
+  await refuseAnotherReps(q, { phone: row.phone || row.phone2, email: row.email }, now);
   const ctx = await userContext(q, now);
   // "120k" is an amount; "$60k for a second truck" is what they are looking for, in their words.
   const sheetAmount = parseMoney(row.wanted);
@@ -147,8 +162,10 @@ export async function fileOneRow(
     ctx,
   );
   await q.query(
-    "update clients set lead_source_kind = 'sheet', phone2 = $2, email2 = $3, looking_for = $4 where id = $1",
-    [card.id, row.phone2, row.email2, lookingFor],
+    `update clients set lead_source_kind = 'sheet', phone2 = $2, email2 = $3, looking_for = $4,
+            time_in_business_months = coalesce($5, time_in_business_months)
+      where id = $1`,
+    [card.id, row.phone2, row.email2, lookingFor, row.time_in_business_months],
   );
   await stampClientTimezone(q, card.id);
   if (row.notes)

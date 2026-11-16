@@ -5,6 +5,7 @@ import { findDuplicates, userContext, type DuplicateMatch } from "../data/querie
 import { id, optMoney } from "../data/schemas";
 import { stageDef } from "../mca/stages";
 import { fileOneRow, PENDING_ROW_COLUMNS, sendWelcome, type PendingRow } from "../sheets/file";
+import { refuseAnotherReps } from "./owner";
 
 /**
  * The Lead Intake page's submit, apart from the session: a merchant row, the bucket, and the bucket's first
@@ -130,6 +131,8 @@ export async function intakeLead(
       existing: whereItSits(existing[0]),
     };
   }
+  // another rep's merchant is invisible to the check above: ask across the shop and refuse in words (S1-3)
+  await refuseAnotherReps(q, { phone: i.phone, email: i.email }, now);
   const card = await createClient(
     q,
     {
@@ -150,6 +153,12 @@ export async function intakeLead(
     [card.id, i.phone2, i.email2, i.lookingFor],
   );
   await stampClientTimezone(q, card.id);
+  // a new lead is a call to make now, not tomorrow: the same timer the lead connections give (S1-10)
+  await q.query("select * from set_follow_up($1, $2, $3)", [
+    card.id,
+    ctx.today,
+    "New lead — call now",
+  ]);
   let welcomeSent = false;
   if (i.bucketId) {
     await q.query("select enroll_in_bucket($1, $2, 'moved')", [card.id, i.bucketId]);
