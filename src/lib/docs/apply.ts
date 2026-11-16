@@ -229,8 +229,7 @@ export async function applicationPdf(a: {
     font,
     grey,
   );
-  // plain object layout, so the words are searchable and the viewer needs nothing special
-  return doc.save({ useObjectStreams: false });
+  return doc.save();
 }
 
 export interface SignedApplication {

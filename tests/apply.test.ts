@@ -2,7 +2,7 @@
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { PDFDocument } from "pdf-lib";
+import { decodePDFRawStream, PDFArray, PDFDocument, PDFRawStream } from "pdf-lib";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import {
   applicationPdf,
@@ -100,11 +100,25 @@ describe("the in-app application", () => {
     });
     const doc = await PDFDocument.load(bytes);
     expect(doc.getPageCount()).toBeGreaterThanOrEqual(1);
-    // pdf-lib writes standard-font text as hex strings; the words are there, hex-encoded
-    const raw = Buffer.from(bytes).toString("latin1").toLowerCase();
+    // the page's content streams are deflated and the standard-font text inside is hex-encoded: unpack both
+    const content = doc
+      .getPages()
+      .flatMap((pg) => {
+        const c = pg.node.Contents();
+        const refs = c instanceof PDFArray ? c.asArray() : c ? [c] : [];
+        return refs.map((r) => doc.context.lookup(r));
+      })
+      .map((s) =>
+        s instanceof PDFRawStream
+          ? Buffer.from(decodePDFRawStream(s).decode()).toString("latin1")
+          : "",
+      )
+      .join("\n")
+      .toLowerCase();
     const hex = (s: string) => Buffer.from(s, "latin1").toString("hex");
-    expect(raw).toContain(hex("Dana Reyes"));
-    expect(raw).toContain(hex("***-***4321"));
+    expect(content).toContain(hex("Dana Reyes"));
+    expect(content).toContain(hex("***-***4321"));
+    expect(content).not.toContain(hex("4321 "));
   });
 
   it("signing files the PDF as the signed application, ticks the checklist, fills the blanks, alerts the rep and emails the merchant", async () => {
