@@ -53,8 +53,8 @@ export async function logAccessAction(input: unknown): Promise<ActionResult<null
 }
 
 export async function trustPanelAction(input: unknown): Promise<ActionResult<TrustRow[]>> {
+  const session = await requireRole(CAN.manageTeam);
   try {
-    const session = await requireRole(CAN.manageTeam);
     const { days } = z
       .object({ days: z.coerce.number().int().min(1).max(365).default(30) })
       .parse(input ?? {});
@@ -66,8 +66,8 @@ export async function trustPanelAction(input: unknown): Promise<ActionResult<Tru
 }
 
 export async function exposureReportAction(input: unknown): Promise<ActionResult<Exposure>> {
+  const session = await requireRole(CAN.manageTeam);
   try {
-    const session = await requireRole(CAN.manageTeam);
     const { clientId } = z.object({ clientId: id }).parse(input);
     const data = await db.withUser(session.userId, (q) => exposureReport(q, clientId));
     return { ok: true, data };
@@ -77,8 +77,8 @@ export async function exposureReportAction(input: unknown): Promise<ActionResult
 }
 
 export async function accessHistoryAction(input: unknown): Promise<ActionResult<AccessLine[]>> {
+  const session = await requireRole(CAN.manageTeam);
   try {
-    const session = await requireRole(CAN.manageTeam);
     const i = z
       .object({ userId: id, days: z.coerce.number().int().min(1).max(365).default(30) })
       .parse(input);
@@ -90,8 +90,8 @@ export async function accessHistoryAction(input: unknown): Promise<ActionResult<
 }
 
 export async function createCanaryAction(input: unknown): Promise<ActionResult<{ id: string }>> {
+  const session = await requireRole(CAN.manageTeam);
   try {
-    const session = await requireRole(CAN.manageTeam);
     const i = z
       .object({
         repId: id,
@@ -111,8 +111,8 @@ export async function createCanaryAction(input: unknown): Promise<ActionResult<{
 
 /** Disable the login, cut the mailbox, move the book, return the 30-day report. One click, one transaction. */
 export async function offboardUserAction(input: unknown): Promise<ActionResult<OffboardReport>> {
+  const session = await requireRole(CAN.manageTeam);
   try {
-    const session = await requireRole(CAN.manageTeam);
     const i = z.object({ userId: id, reassignTo: id }).parse(input);
     const data = await db.withUser(session.userId, (q) => offboardUser(q, i.userId, i.reassignTo));
     revalidatePath("/", "layout");

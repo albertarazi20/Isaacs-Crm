@@ -247,7 +247,7 @@ export async function queueBlast(
   const now = args.now ?? new Date();
   const tpl = (
     await q.query<{ subject: string; body: string }>(
-      "select subject, body from templates where id = $1 and not archived",
+      "select subject, body from templates where id = $1 and not archived and app.template_may_auto_send(id)",
       [args.templateId],
     )
   ).rows[0];

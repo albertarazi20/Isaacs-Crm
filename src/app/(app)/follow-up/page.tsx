@@ -2,7 +2,7 @@ import Link from "next/link";
 import { BucketMembers } from "@/components/followup/BucketMembers";
 import { NewBucket } from "@/components/followup/NewBucket";
 import { Card, EmptyState, cn } from "@/components/ui";
-import { requireSession } from "@/lib/auth/server";
+import { requirePage } from "@/lib/auth/server";
 import { CAN } from "@/lib/auth/roles";
 import {
   listBucketMembers,
@@ -22,7 +22,7 @@ export default async function FollowUpPage({
   searchParams: Promise<{ b?: string }>;
 }) {
   const { b } = await searchParams;
-  const session = await requireSession();
+  const session = await requirePage("/follow-up");
   const manager = CAN.manageTeam(session.role);
   const data = await db.withUser(session.userId, async (q) => {
     const buckets = await listBuckets(q);

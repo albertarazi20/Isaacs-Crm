@@ -232,7 +232,7 @@ export async function monthTotals(q: Db, months = 12): Promise<MonthTotals[]> {
             coalesce(sum(f.commission_cents), 0)::bigint as commission_cents,
             coalesce(sum(f.rep_cut_cents), 0)::bigint as rep_cut_cents,
             coalesce(sum(f.commission_received_cents), 0)::bigint as paid_cents,
-            coalesce(sum(case when f.ledger_state = 'at_risk' then f.commission_cents end), 0)::bigint as at_risk_cents,
+            coalesce(sum(case when f.ledger_state = 'at_risk' or (f.ledger_state = 'paid' and f.clawback_until >= current_date) then f.commission_cents end), 0)::bigint as at_risk_cents,
             coalesce(sum(case when f.ledger_state = 'clawed_back' then f.commission_cents end), 0)::bigint as clawed_back_cents,
             round(avg(app.points_of(f)), 2) as avg_points,
             round(avg(f.amount_cents))::bigint as avg_deal_cents

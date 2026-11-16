@@ -3,7 +3,7 @@ import { ProposalDecision } from "@/components/deals/ProposalDecision";
 import { LenderChip } from "@/components/submissions/LenderChip";
 import { OpsActions } from "@/components/submissions/OpsActions";
 import { Card, EmptyState, SectionTitle, cn } from "@/components/ui";
-import { requireSession } from "@/lib/auth/server";
+import { requirePage } from "@/lib/auth/server";
 import { CAN } from "@/lib/auth/roles";
 import {
   boardFilters,
@@ -21,7 +21,7 @@ import { requestTimeMs } from "@/lib/server-time";
 
 export const dynamic = "force-dynamic";
 
-const UUID = /^[0-9a-f-]{36}$/;
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const LANES: { key: DealFilter; label: string; hint: string }[] = [
   { key: "working_ops", label: "Queued", hint: "New files from the reps" },
   { key: "kicked_back", label: "Kicked back", hint: "Waiting on the rep" },
@@ -96,7 +96,7 @@ export default async function SubmissionBoardPage({
   searchParams: Promise<{ lane?: string; rep?: string; lender?: string; tab?: string }>;
 }) {
   const sp = await searchParams;
-  const session = await requireSession();
+  const session = await requirePage("/board");
   const canEdit = CAN.runOps(session.role);
   const manager = CAN.seeEveryone(session.role);
   const lane: DealFilter = sp.lane && isDealFilter(sp.lane) ? sp.lane : "working_ops";

@@ -23,7 +23,7 @@ export async function checkLeadToken(token: string, access: DbAccess = db): Prom
               window_start = case when t.window_start < now() - interval '1 minute' then now() else t.window_start end,
               last_used_at = now()
          from app_users u
-        where t.token_hash = $1 and t.revoked_at is null and u.id = t.user_id
+        where t.token_hash = $1 and t.revoked_at is null and u.id = t.user_id and u.active
     returning t.id, t.user_id, u.email, t.window_count`,
       [hashToken(token)],
     );

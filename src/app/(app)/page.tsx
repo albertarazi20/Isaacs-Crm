@@ -183,8 +183,8 @@ function NowList({ items, total }: { items: NowItem[]; total: number }) {
   return (
     <Card className="p-0">
       <ol className="divide-y divide-border">
-        {items.map((n) => (
-          <li key={`${n.kind}-${n.client_id}-${n.deal_id ?? ""}`}>
+        {items.map((n, i) => (
+          <li key={`${n.kind}-${n.client_id}-${n.deal_id ?? ""}-${i}`}>
             <Link
               href={n.href}
               className="flex items-start gap-3 px-4 py-3 transition hover:bg-surface-2"
@@ -467,7 +467,12 @@ function Meters({ meters }: { meters: EmailMeter[] }) {
   );
 }
 
-export default async function DashboardPage() {
+export default async function DashboardPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ denied?: string }>;
+}) {
+  const { denied } = await searchParams;
   const session = await requireSession();
   const manager = CAN.seeEveryone(session.role);
   const data = await db.withUser(session.userId, async (q) => {
@@ -505,6 +510,14 @@ export default async function DashboardPage() {
 
   return (
     <div className="space-y-6">
+      {denied ? (
+        <p
+          role="status"
+          className="rounded-lg border border-border bg-surface-2 px-3 py-2 text-sm text-muted"
+        >
+          That page isn&apos;t part of your role, so you&apos;re back on the Dashboard.
+        </p>
+      ) : null}
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Dashboard</h1>

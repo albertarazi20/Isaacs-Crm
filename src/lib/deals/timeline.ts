@@ -60,6 +60,8 @@ export async function listDealTimeline(
          from d join activities a on a.client_id = d.client_id and a.occurred_at >= d.created_at - interval '1 minute'
          left join app_users u on u.id = a.user_id and a.kind in ('note', 'call', 'text')
         where a.body not like '[needs review] %' and a.body not like 'Received %' and a.body not like 'Chased %'
+          -- the lender, offer, funding and ops rows below already say these; the system line would be a duplicate
+          and not (a.kind in ('system', 'funding') and a.body ~ '^(.+ (approved|declined|funded)(:| —|$)|.+ asked for stips|.+: no response$|.+: withdrawn$|.+: waiting for a decision again$|Accepted .+''s offer|Deal D-[0-9]+ (funded|declined|dead|lost)|Funded \$|Submitted to ops as deal|Ops kicked back:|Resubmitted to ops$)')
        union all
        -- lender emails in
        select e.received_at, 'email_in', coalesce(fu.name, e.from_name, e.from_address) || ': ' || left(e.subject, 90),

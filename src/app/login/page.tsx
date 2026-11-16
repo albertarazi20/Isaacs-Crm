@@ -31,11 +31,11 @@ export default async function LoginPage({
             aria-hidden
             className="mb-4 grid size-11 place-items-center rounded-xl bg-gradient-to-br from-indigo-500 to-violet-700 text-xl font-extrabold text-white shadow-md shadow-indigo-500/30"
           >
-            I
+            S
           </span>
           <h1 className="text-2xl font-bold tracking-tight">Selective CRM</h1>
           <p className="mt-1 text-sm text-muted">
-            Follow-ups, funded deals and renewals — one place.
+            Leads, lenders, funded deals and commissions — one place for the whole shop.
           </p>
         </div>
         {error ? (

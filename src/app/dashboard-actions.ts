@@ -18,8 +18,8 @@ const goalSchema = z.object({
 
 /** Managers set the month's goal for the shop (userId null) or one rep. */
 export async function setGoalAction(input: unknown): Promise<ActionResult<null>> {
+  const session = await requireRole(CAN.manageTeam);
   try {
-    const session = await requireRole(CAN.manageTeam);
     const g = goalSchema.parse(input);
     await db.withUser(session.userId, (q) =>
       setGoal(

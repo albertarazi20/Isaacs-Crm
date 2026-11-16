@@ -72,7 +72,7 @@ export async function runReminders(args: {
     async (q) =>
       (
         await q.query<UserRow>(
-          "select id, email, notify_email, timezone, digest_hour from app_users where digest_enabled order by created_at",
+          "select id, email, notify_email, timezone, digest_hour from app_users where digest_enabled and active order by created_at",
         )
       ).rows,
   );
@@ -244,7 +244,7 @@ export async function runCallReminders(args: {
                 (select a.body from activities a where a.client_id = c.id and a.kind = 'call' and a.body <> '' order by a.occurred_at desc limit 1) as last_call_note,
                 (select count(*) from positions p where p.client_id = c.id)::int as position_count
            from clients c join app_users u on u.id = c.user_id
-          where u.digest_enabled and c.scheduled_call_at > $1
+          where u.digest_enabled and u.active and c.scheduled_call_at > $1
             and c.scheduled_call_at <= $1::timestamptz + make_interval(mins => $2)
             and c.contact_status <> 'dnc'
             and not exists (select 1 from trashed_clients tc where tc.client_id = c.id)`,

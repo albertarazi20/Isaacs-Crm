@@ -19,6 +19,11 @@ const ALL: (NavItem & { roles: readonly Role[] })[] = [
   { href: "/settings", label: "Settings", short: "Settings", roles: ["rep", "ops", "manager"] },
 ];
 
+/** Whether a role owns a top-level page (the nav is the source of truth). */
+export function pageAllowed(role: Role, href: string): boolean {
+  return ALL.some((n) => n.href === href && n.roles.includes(role));
+}
+
 export function navFor(role: Role): NavItem[] {
   return ALL.filter((n) => n.roles.includes(role)).map(({ href, label, short }) => ({
     href,

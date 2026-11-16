@@ -1,6 +1,6 @@
 import { IntakeForm } from "@/components/intake/IntakeForm";
 import { LeadIntakePanel } from "@/components/LeadIntakePanel";
-import { requireSession } from "@/lib/auth/server";
+import { requirePage } from "@/lib/auth/server";
 import { CAN } from "@/lib/auth/roles";
 import { listBuckets } from "@/lib/buckets/queries";
 import { db } from "@/lib/db";
@@ -10,7 +10,7 @@ import { listLeadTokens } from "@/lib/leads/queries";
 export const dynamic = "force-dynamic";
 
 export default async function LeadIntakePage() {
-  const session = await requireSession();
+  const session = await requirePage("/lead-intake");
   const manager = CAN.manageTeam(session.role);
   const { buckets, tokens } = await db.withUser(session.userId, async (q) => ({
     buckets: await listBuckets(q),

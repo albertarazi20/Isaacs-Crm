@@ -30,6 +30,8 @@ export interface InboxSyncSummary {
   failed: { userId: string; error: string }[];
   /** Merchants who wrote back this run, for the rep alert. */
   merchantReplies: string[];
+  /** same-address senders that failed SPF/DKIM and were not treated as the merchant */
+  unverified: number;
   /** Attachments filed into Documents. */
   filed: number;
 }
@@ -72,6 +74,7 @@ export async function syncInbox(args: {
     matched: 0,
     failed: [],
     merchantReplies: [],
+    unverified: 0,
     filed: 0,
   };
   const mailboxes = await args.db.withSystem(
@@ -134,8 +137,10 @@ export async function syncInbox(args: {
           },
           candidates,
         );
-        // a merchant replying on a sequence thread: match by the outbox we sent (same thread) → stop the chase
-        const merchant = match
+        // a merchant replying on a sequence thread: match by the outbox we sent (same thread) → stop the chase.
+        // A From header is forgeable; the sender counts as the merchant only when SPF and DKIM both pass, so one
+        // spoofed email cannot stop a sequence, suppress an address shop-wide or tick a statement as received.
+        const sameAddress = match
           ? null
           : await args.db.withSystem(async (q) => {
               const { rows } = await q.query<{ client_id: string }>(
@@ -144,6 +149,9 @@ export async function syncInbox(args: {
               );
               return rows[0]?.client_id ?? null;
             });
+        const merchant =
+          sameAddress && auth.spf === true && auth.dkim === true ? sameAddress : null;
+        if (sameAddress && !merchant) summary.unverified += 1;
         await args.db.withSystem(async (q) => {
           await q.query(
             `insert into inbound_emails (mailbox_user_id, gmail_id, gmail_thread_id, message_id, in_reply_to, references_ids, from_address, from_name,
@@ -173,7 +181,7 @@ export async function syncInbox(args: {
               auth.dkim,
               match?.candidate.dealId ?? null,
               match?.candidate.submissionId ?? null,
-              match?.candidate.clientId ?? merchant,
+              match?.candidate.clientId ?? sameAddress,
               match?.candidate.funderId ?? null,
               match ? match.by : merchant ? "merchant_reply" : "none",
               match

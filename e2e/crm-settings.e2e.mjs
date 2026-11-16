@@ -4,6 +4,8 @@ import { BASE, check, openBrowser, setRole, withDb } from "./lib.mjs";
 const one = (db, sql, params) => db.query(sql, params).then((r) => r.rows[0]);
 
 export default async function settingsFlow({ email }) {
+  // a run that died before its own cleanup leaves shared "E2E welcome" templates in every rep's blast list
+  await withDb((db) => db.query("delete from templates where name like 'E2E welcome %'"));
   await setRole(email, "manager");
   const { browser, page } = await openBrowser(email);
   const stamp = Date.now();

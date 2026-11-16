@@ -1,3 +1,4 @@
+import { pageAllowed } from "@/lib/nav";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { cache } from "react";
@@ -48,4 +49,14 @@ export async function sessionCookie(claims: SessionClaims) {
     value: await signSession(claims, env().SESSION_SECRET),
     ...cookieOptions(SESSION_DAYS * 86_400),
   };
+}
+
+/**
+ * A page outside the role's nav sends the user home with a one-line notice instead of rendering an empty shell
+ * (a rep opening /board, ops opening /lead-intake). Row security still guards the data; this guards the door.
+ */
+export async function requirePage(href: string): Promise<SessionClaims> {
+  const session = await requireSession();
+  if (!pageAllowed(session.role, href)) redirect(`/?denied=${encodeURIComponent(href.slice(1))}`);
+  return session;
 }

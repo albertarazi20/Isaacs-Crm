@@ -54,8 +54,13 @@ export async function closeDealAction(input: unknown): Promise<ActionResult<null
 }
 
 export async function setDealNoteAction(input: unknown): Promise<ActionResult<null>> {
+  const i = s.dealNoteSchema.safeParse(input);
+  const field = i.success ? i.data.field : null;
+  // The page hides the editors; the action is the real gate (a rep posting manager_note from the console).
+  const allowed = (r: Role) =>
+    field === "manager_note" ? CAN.manageTeam(r) : field === "ops_note" ? CAN.runOps(r) : true;
   return run(async (q) => {
-    const i = s.dealNoteSchema.parse(input);
-    return (await m.setDealNote(q, i), null);
-  });
+    const parsed = s.dealNoteSchema.parse(input);
+    return (await m.setDealNote(q, parsed), null);
+  }, allowed);
 }

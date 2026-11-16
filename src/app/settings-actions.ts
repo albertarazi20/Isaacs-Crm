@@ -32,8 +32,8 @@ const shopSchema = z.object({
 
 /** The shop-wide email and lender rules. One row; managers only (RLS enforces it too). */
 export async function saveShopSettingsAction(input: unknown): Promise<ActionResult<null>> {
+  const session = await requireRole(CAN.manageTeam);
   try {
-    const session = await requireRole(CAN.manageTeam);
     const i = shopSchema.parse(input);
     await db.withUser(session.userId, (q) =>
       q.query(
@@ -77,8 +77,8 @@ const aiSchema = z.object({
 });
 
 export async function saveAiSettingsAction(input: unknown): Promise<ActionResult<null>> {
+  const session = await requireRole(CAN.manageTeam);
   try {
-    const session = await requireRole(CAN.manageTeam);
     const i = aiSchema.parse(input);
     await db.withUser(session.userId, (q) =>
       q.query(
@@ -113,8 +113,8 @@ const planSchema = z.object({
 export async function saveCommissionPlanAction(
   input: unknown,
 ): Promise<ActionResult<{ id: string }>> {
+  const session = await requireRole(CAN.manageTeam);
   try {
-    const session = await requireRole(CAN.manageTeam);
     const i = planSchema.parse(input);
     const tiers = i.tiers.map((t) => ({
       from_cents: Math.round(t.fromAmount * 100),
@@ -147,8 +147,8 @@ export async function saveCommissionPlanAction(
 }
 
 export async function deleteSuppressionAction(input: unknown): Promise<ActionResult<null>> {
+  const session = await requireRole(CAN.manageTeam);
   try {
-    const session = await requireRole(CAN.manageTeam);
     const i = z.object({ suppressionId: id }).parse(input);
     await db.withUser(session.userId, (q) =>
       q.query("delete from suppressions where id = $1", [i.suppressionId]),

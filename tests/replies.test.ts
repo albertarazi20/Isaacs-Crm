@@ -297,10 +297,29 @@ describe("replies, bounces, unsubscribes", () => {
 
   it("an inbound email on the automation domain is a merchant reply", async () => {
     await t.pool.query("update clients set reply_waiting_since = null where id = $1", [pizza]);
+    // a From header alone is not the merchant: no SPF/DKIM and no reply to mail we sent → nothing changes
+    expect(
+      await handleResendEvent(t.db, "evt_in0", {
+        type: "email.received",
+        data: { from: "Mike <mike@pizza.com>", subject: "unsubscribe", text: "STOP" },
+      }),
+    ).toEqual({ result: "received:unverified_sender" });
+    expect((await client(pizza)).reply_waiting_subject).toBe("");
+    expect((await client(pizza)).email_opt_out).toBe(false);
     expect(
       await handleResendEvent(t.db, "evt_in", {
         type: "email.received",
-        data: { from: "Mike <mike@pizza.com>", subject: "Re: docs", text: "attached!" },
+        data: {
+          from: "Mike <mike@pizza.com>",
+          subject: "Re: docs",
+          text: "attached!",
+          headers: [
+            {
+              name: "Authentication-Results",
+              value: "mx.resend.com; spf=pass; dkim=pass header.d=pizza.com",
+            },
+          ],
+        },
       }),
     ).toEqual({ result: "received:reply" });
     expect((await client(pizza)).reply_waiting_subject).toBe("Re: docs");

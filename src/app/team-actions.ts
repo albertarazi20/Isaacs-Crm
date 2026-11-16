@@ -11,8 +11,8 @@ import { db } from "@/lib/db";
 import { listTeam, type TeamMember } from "@/lib/trust/queries";
 
 export async function listTeamAction(): Promise<ActionResult<TeamMember[]>> {
+  const session = await requireRole(CAN.manageTeam);
   try {
-    const session = await requireRole(CAN.manageTeam);
     const data = await db.withUser(session.userId, (q) => listTeam(q));
     return { ok: true, data };
   } catch (e) {
@@ -22,8 +22,8 @@ export async function listTeamAction(): Promise<ActionResult<TeamMember[]>> {
 
 /** A manager adds a person by name and email; they sign in with their selectivecap.com Google account. */
 export async function addTeamMemberAction(input: unknown): Promise<ActionResult<{ id: string }>> {
+  const session = await requireRole(CAN.manageTeam);
   try {
-    const session = await requireRole(CAN.manageTeam);
     const i = z
       .object({
         email: z.string().trim().email(),
@@ -49,8 +49,8 @@ export async function addTeamMemberAction(input: unknown): Promise<ActionResult<
 
 /** Change a role, or switch a login off and on. Offboarding (moving the book) is its own action. */
 export async function setTeamMemberAction(input: unknown): Promise<ActionResult<null>> {
+  const session = await requireRole(CAN.manageTeam);
   try {
-    const session = await requireRole(CAN.manageTeam);
     const i = z.object({ userId: id, role: z.enum(ROLES), active: z.boolean() }).parse(input);
     await db.withUser(session.userId, (q) =>
       q.query("select set_team_member($1, $2, $3)", [i.userId, i.role, i.active]),

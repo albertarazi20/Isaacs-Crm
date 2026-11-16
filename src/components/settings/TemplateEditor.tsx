@@ -182,9 +182,11 @@ export function TemplateEditor({
                 ) : null}
               </div>
               <div className="flex gap-1.5">
-                <Button size="sm" onClick={() => setEditing(t)}>
-                  Edit
-                </Button>
+                {manager || t.owner_id !== null ? (
+                  <Button size="sm" onClick={() => setEditing(t)}>
+                    Edit
+                  </Button>
+                ) : null}
                 {manager ? (
                   <Button
                     size="sm"

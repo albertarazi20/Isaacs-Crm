@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { PoolRow, type PoolMember } from "@/components/winback/PoolRow";
 import { Card, EmptyState, SectionTitle } from "@/components/ui";
-import { requireSession } from "@/lib/auth/server";
+import { requirePage } from "@/lib/auth/server";
 import { userContext } from "@/lib/data/queries";
 import { db } from "@/lib/db";
 import { listWinback } from "@/lib/money/winback";
@@ -20,7 +20,7 @@ const POOL_HINT: Record<string, string> = {
 };
 
 export default async function WinbackPage() {
-  const session = await requireSession();
+  const session = await requirePage("/winback");
   const { rows, today } = await db.withUser(session.userId, async (q) => ({
     today: (await userContext(q)).today,
     rows: await listWinback(q),

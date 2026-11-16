@@ -28,13 +28,14 @@ export async function sendNewLeadAlert(args: {
       timezone: string;
       to_email: string;
       digest_enabled: boolean;
+      active: boolean;
       business_name: string;
       contact_name: string;
       phone: string;
       source: string;
       wanted_amount_cents: number | null;
     }>(
-      `select u.timezone, coalesce(u.notify_email, u.email) as to_email, u.digest_enabled,
+      `select u.timezone, coalesce(u.notify_email, u.email) as to_email, u.digest_enabled, u.active,
               c.business_name, c.contact_name, c.phone, c.source,
               (select k.wanted_amount_cents from client_asks k where k.client_id = c.id
                 order by k.created_at desc limit 1) as wanted_amount_cents
@@ -45,7 +46,7 @@ export async function sendNewLeadAlert(args: {
     );
     const lead = rows[0];
     // The reminder switch in Settings is also the switch for this email.
-    if (!lead || !lead.digest_enabled) return "skipped";
+    if (!lead || !lead.digest_enabled || !lead.active) return "skipped";
 
     const day = todayIn(lead.timezone, args.now);
     const { rows: used } = await q.query<{ n: number }>(

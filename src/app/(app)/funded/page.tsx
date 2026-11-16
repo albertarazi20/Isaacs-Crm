@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { FundedSheet } from "@/components/funded/FundedSheet";
 import { Card, SectionTitle, cn } from "@/components/ui";
-import { requireSession } from "@/lib/auth/server";
+import { requirePage } from "@/lib/auth/server";
 import { CAN } from "@/lib/auth/roles";
 import { userContext } from "@/lib/data/queries";
 import { db } from "@/lib/db";
@@ -19,7 +19,7 @@ export default async function FundedPage({
   searchParams: Promise<{ m?: string }>;
 }) {
   const { m } = await searchParams;
-  const session = await requireSession();
+  const session = await requirePage("/funded");
   const manager = CAN.seeEveryone(session.role);
   const data = await db.withUser(session.userId, async (q) => {
     const ctx = await userContext(q);

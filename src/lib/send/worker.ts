@@ -147,6 +147,11 @@ export async function drainOutbox(args: {
       if (job.client_opt_out) return (skip("opted_out"), false);
       if (job.client_dnc) return (skip("dnc"), false);
       const bulk = job.lane === "sequence" || job.lane === "blast";
+      if (bulk && settings.postal_address.trim() === "") {
+        // CAN-SPAM: automated mail carries a postal address or it does not go. Intake and replies still do.
+        await defer(new Date(now.getTime() + 3_600_000), "no_postal_address");
+        return false;
+      }
       if (
         bulk &&
         !merchantCapAllows({

@@ -3,7 +3,8 @@
  * bounces and complaints (Resend webhooks), unsubscribes (the footer link). Everything lands in SQL functions so the
  * rules live in one place; this file is the glue and the alerts.
  */
-import type { DbAccess } from "../db";
+import type { Db, DbAccess } from "../db";
+import { authResults } from "../inbox/match";
 import { isStopMessage } from "../messaging/stop";
 import type { DigestSender } from "./reminders";
 
@@ -11,6 +12,44 @@ import type { DigestSender } from "./reminders";
 export function addressOf(s: string): string {
   const m = s.match(/<([^<>\s]+@[^<>\s]+)>/) ?? s.match(/([^\s<>",;]+@[^\s<>",;]+)/);
   return (m?.[1] ?? "").toLowerCase();
+}
+
+/** Header values of an inbound Resend payload, whichever shape the provider used ({name,value}[] or a map). */
+function headerOf(d: Record<string, unknown>, name: string): string {
+  const h = d["headers"];
+  const want = name.toLowerCase();
+  if (Array.isArray(h)) {
+    for (const x of h) {
+      const r = x as Record<string, unknown>;
+      if (String(r["name"] ?? "").toLowerCase() === want) return String(r["value"] ?? "");
+    }
+    return "";
+  }
+  if (h && typeof h === "object") {
+    for (const [k, v] of Object.entries(h as Record<string, unknown>))
+      if (k.toLowerCase() === want) return String(v ?? "");
+  }
+  return "";
+}
+
+/**
+ * A From header is forgeable. An inbound message counts as the merchant's only when SPF and DKIM both pass, or when
+ * it replies to an email the CRM sent that merchant (In-Reply-To / References name one of our provider ids).
+ */
+async function inboundVerified(
+  q: Db,
+  d: Record<string, unknown>,
+  clientId: string,
+): Promise<boolean> {
+  const auth = authResults(headerOf(d, "authentication-results") || null);
+  if (auth.spf === true && auth.dkim === true) return true;
+  const refs = `${headerOf(d, "in-reply-to")} ${headerOf(d, "references")}`;
+  if (refs.trim() === "") return false;
+  const { rows } = await q.query<{ provider_id: string }>(
+    "select provider_id from outbox where client_id = $1 and status = 'sent' and provider_id is not null",
+    [clientId],
+  );
+  return rows.some((r) => r.provider_id !== "" && refs.includes(r.provider_id));
 }
 
 const mask = (email: string): string => {
@@ -123,6 +162,10 @@ export async function handleResendEvent(
           const clientId = rows[0]?.id;
           if (!clientId) {
             result = "received:unknown_sender";
+            break;
+          }
+          if (!(await inboundVerified(q, d as Record<string, unknown>, clientId))) {
+            result = "received:unverified_sender";
             break;
           }
           const stop = isStopMessage(subject, text);

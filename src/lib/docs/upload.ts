@@ -223,10 +223,23 @@ export async function openUploadPage(
     );
     const clientId = rows[0]?.id;
     if (!clientId) return null;
+    // the same visitor refreshing (or a scripted loop) keeps one session; max_files means something again
+    const open = await q.query<{ token: string }>(
+      `select token from upload_sessions where client_id = $1 and created_by is null and expires_at > now()
+        order by created_at desc limit 1`,
+      [clientId],
+    );
+    if (open.rows[0]) return loadSession(q, open.rows[0].token);
     const wanted = await wantedFor(q, clientId, today);
     const minted = await mintUploadSession(q, { clientId, wanted, createdBy: null });
     return loadSession(q, minted.token);
   });
+}
+
+/** True when the token names a live upload session (the route checks this before reading a body); never mints. */
+export async function uploadSessionLive(db: DbAccess, token: string): Promise<boolean> {
+  if (!/^[A-Za-z0-9]{20,80}$/.test(token)) return false;
+  return db.withSystem(async (q) => (await loadSession(q, token)) !== null);
 }
 
 // ---------- accepting a file ----------

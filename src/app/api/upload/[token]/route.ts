@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { toActionError } from "@/lib/data/errors";
 import { db } from "@/lib/db";
 import { documentStore } from "@/lib/docs/storage";
-import { acceptUpload, openUploadPage } from "@/lib/docs/upload";
+import { acceptUpload, MAX_BYTES, openUploadPage, uploadSessionLive } from "@/lib/docs/upload";
 import { env } from "@/lib/env";
 import { todayIn } from "@/lib/mca/dates";
 
@@ -10,6 +10,8 @@ export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
 const MAX_FILES_PER_REQUEST = 10;
+/** Ten files of 25 MB plus multipart overhead. */
+const MAX_BODY_BYTES = MAX_FILES_PER_REQUEST * MAX_BYTES + 1024 * 1024;
 
 type Params = { params: Promise<{ token: string }> };
 
@@ -31,6 +33,15 @@ export async function GET(_req: Request, { params }: Params) {
 /** The merchant's files, as multipart form data under `file`. One result per file, in order. */
 export async function POST(req: Request, { params }: Params) {
   const { token } = await params;
+  // The token is checked before the body is read: a stranger's multi-gigabyte post is refused for free.
+  if (!(await uploadSessionLive(db, token)))
+    return NextResponse.json({ error: "This link is not valid" }, { status: 404 });
+  const declared = Number(req.headers.get("content-length") ?? "0");
+  if (Number.isFinite(declared) && declared > MAX_BODY_BYTES)
+    return NextResponse.json(
+      { error: "That is too much at once — send fewer files" },
+      { status: 413 },
+    );
   let form: FormData;
   try {
     form = await req.formData();
@@ -52,6 +63,10 @@ export async function POST(req: Request, { params }: Params) {
   const results = [];
   for (const f of files) {
     try {
+      if (f.size > MAX_BYTES) {
+        results.push({ filename: f.name, ok: false, error: "The file is over 25 MB" });
+        continue;
+      }
       const bytes = new Uint8Array(await f.arrayBuffer());
       const r = await acceptUpload(db, store, {
         token,

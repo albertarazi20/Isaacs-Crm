@@ -114,7 +114,7 @@ export async function runWeeklyScorecards(args: {
     async (q) =>
       (
         await q.query<UserRow>(
-          "select id, email, notify_email, timezone, digest_hour from app_users where digest_enabled order by created_at",
+          "select id, email, notify_email, timezone, digest_hour from app_users where digest_enabled and active order by created_at",
         )
       ).rows,
   );
