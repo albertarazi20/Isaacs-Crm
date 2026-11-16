@@ -1,12 +1,13 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useId, useState } from "react";
 import { saveCommissionPlanAction } from "@/app/settings-actions";
 import { useApp } from "@/components/app-context";
 import { useFormState, useRun } from "@/components/client/parts";
-import { Button, Card, Field, Input, SectionTitle, Select, Textarea } from "@/components/ui";
+import { Button, Field, Input, Select, Textarea } from "@/components/ui";
 import type { PlanRow } from "@/lib/settings/queries";
+import { SettingsCard } from "./primitives";
 
 export function PlanForm({
   reps,
@@ -18,6 +19,7 @@ export function PlanForm({
   const { today } = useApp();
   const run = useRun();
   const router = useRouter();
+  const formId = useId();
   const [busy, setBusy] = useState(false);
   const { v, bind } = useFormState(() => ({
     userId: base?.user_id ?? "",
@@ -41,43 +43,48 @@ export function PlanForm({
     note: "",
   }));
   return (
-    <form
-      className="space-y-4"
-      onSubmit={async (e) => {
-        e.preventDefault();
-        setBusy(true);
-        const tiers = [
-          v.tier1From && v.tier1Pct
-            ? { fromAmount: Number(v.tier1From), splitPct: Number(v.tier1Pct) }
-            : null,
-          v.tier2From && v.tier2Pct
-            ? { fromAmount: Number(v.tier2From), splitPct: Number(v.tier2Pct) }
-            : null,
-        ].filter(Boolean);
-        const ok = await run(
-          saveCommissionPlanAction({
-            userId: v.userId || null,
-            effectiveFrom: v.effectiveFrom,
-            splitPct: v.splitPct,
-            selfGenSplitPct: v.selfGenSplitPct || null,
-            psfSharePct: v.psfSharePct || 0,
-            renewalSplitPct: v.renewalSplitPct || null,
-            tiers,
-            managerOverridePct: v.managerOverridePct || 0,
-            clawbackBorneBy: v.clawbackBorneBy,
-            note: v.note,
-          }),
-          "Plan saved",
-        );
-        setBusy(false);
-        if (ok) router.refresh();
-      }}
+    <SettingsCard
+      title="New plan row"
+      description="Plans are kept by effective date; a new row never rewrites an old funding's split."
+      footer={
+        <Button type="submit" form={formId} variant="primary" disabled={busy}>
+          {busy ? "Saving…" : "Save plan"}
+        </Button>
+      }
     >
-      <Card className="space-y-3">
-        <SectionTitle>New plan row</SectionTitle>
-        <p className="text-xs text-muted">
-          Plans are kept by effective date; a new row never rewrites an old funding&apos;s split.
-        </p>
+      <form
+        id={formId}
+        className="space-y-4"
+        onSubmit={async (e) => {
+          e.preventDefault();
+          setBusy(true);
+          const tiers = [
+            v.tier1From && v.tier1Pct
+              ? { fromAmount: Number(v.tier1From), splitPct: Number(v.tier1Pct) }
+              : null,
+            v.tier2From && v.tier2Pct
+              ? { fromAmount: Number(v.tier2From), splitPct: Number(v.tier2Pct) }
+              : null,
+          ].filter(Boolean);
+          const ok = await run(
+            saveCommissionPlanAction({
+              userId: v.userId || null,
+              effectiveFrom: v.effectiveFrom,
+              splitPct: v.splitPct,
+              selfGenSplitPct: v.selfGenSplitPct || null,
+              psfSharePct: v.psfSharePct || 0,
+              renewalSplitPct: v.renewalSplitPct || null,
+              tiers,
+              managerOverridePct: v.managerOverridePct || 0,
+              clawbackBorneBy: v.clawbackBorneBy,
+              note: v.note,
+            }),
+            "Plan saved",
+          );
+          setBusy(false);
+          if (ok) router.refresh();
+        }}
+      >
         <div className="grid gap-3 sm:grid-cols-3">
           <Field label="Applies to">
             <Select {...bind("userId")}>
@@ -128,12 +135,9 @@ export function PlanForm({
           </Field>
         </div>
         <Field label="Note">
-          <Textarea {...bind("note")} rows={2} />
+          <Textarea {...bind("note")} rows={2} className="min-h-16" />
         </Field>
-      </Card>
-      <Button type="submit" variant="primary" disabled={busy}>
-        {busy ? "Saving…" : "Save plan"}
-      </Button>
-    </form>
+      </form>
+    </SettingsCard>
   );
 }

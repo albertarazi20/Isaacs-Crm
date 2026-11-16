@@ -1,7 +1,8 @@
-import { SettingsNav } from "@/components/settings/SettingsNav";
+import { SettingsCard } from "@/components/settings/primitives";
+import { SettingsHeader } from "@/components/settings/SettingsNav";
 import { ShopSettingsForm } from "@/components/settings/ShopSettingsForm";
 import { SuppressionList } from "@/components/settings/SuppressionList";
-import { Card, SectionTitle, cn } from "@/components/ui";
+import { cn } from "@/components/ui";
 import { requireRole } from "@/lib/auth/server";
 import { CAN } from "@/lib/auth/roles";
 import { emailMeters } from "@/lib/dashboard/queries";
@@ -18,37 +19,35 @@ export default async function EmailSettingsPage() {
     suppressions: await listSuppressions(q),
   }));
   return (
-    <div className="mx-auto max-w-5xl space-y-5">
-      <h1 className="text-2xl font-bold tracking-tight">Settings</h1>
-      <SettingsNav role={session.role} current="/settings/email" />
+    <div className="mx-auto max-w-3xl space-y-5">
+      <SettingsHeader role={session.role} current="/settings/email" />
       {meters.length > 0 ? (
-        <Card>
-          <SectionTitle>Mailboxes · last 24 hours</SectionTitle>
-          <ul className="mt-2 space-y-2 text-sm">
+        <SettingsCard title="Mailboxes · last 24 hours" flush>
+          <ul className="divide-y divide-border border-t border-border">
             {meters.map((m) => (
-              <li key={m.mailbox_id}>
-                <div className="flex justify-between">
-                  <span>
-                    {m.owner_name ?? "Shop automation"}{" "}
-                    <span className="text-muted">· {m.address}</span>
+              <li key={m.mailbox_id} className="px-4 py-3">
+                <div className="flex items-baseline justify-between gap-3 text-sm">
+                  <span className="min-w-0 truncate">
+                    <span className="font-medium">{m.owner_name ?? "Shop automation"}</span>{" "}
+                    <span className="text-xs text-muted">· {m.address}</span>
                   </span>
                   <span
                     className={cn(
-                      "tabular-nums",
+                      "shrink-0 text-xs tabular-nums",
                       m.tone === "red"
-                        ? "text-bad"
+                        ? "font-semibold text-bad"
                         : m.tone === "amber"
-                          ? "text-warn"
+                          ? "font-semibold text-warn"
                           : "text-muted",
                     )}
                   >
                     {m.sent_24h} / {m.cap}
                   </span>
                 </div>
-                <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-surface-2">
+                <div className="mt-2 h-1 overflow-hidden rounded-full bg-surface-2">
                   <div
                     className={cn(
-                      "h-full",
+                      "h-full rounded-full",
                       m.tone === "red" ? "bg-bad" : m.tone === "amber" ? "bg-warn" : "bg-good",
                     )}
                     style={{
@@ -59,7 +58,7 @@ export default async function EmailSettingsPage() {
               </li>
             ))}
           </ul>
-        </Card>
+        </SettingsCard>
       ) : null}
       <ShopSettingsForm s={settings} />
       <SuppressionList rows={suppressions} />

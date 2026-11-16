@@ -1,4 +1,4 @@
-import { SettingsNav } from "@/components/settings/SettingsNav";
+import { SettingsHeader } from "@/components/settings/SettingsNav";
 import { TeamPanel } from "@/components/settings/TeamPanel";
 import { requireRole } from "@/lib/auth/server";
 import { CAN } from "@/lib/auth/roles";
@@ -15,8 +15,7 @@ export default async function TeamSettingsPage() {
   }));
   return (
     <div className="mx-auto max-w-5xl space-y-5">
-      <h1 className="text-2xl font-bold tracking-tight">Settings</h1>
-      <SettingsNav role={session.role} current="/settings/team" />
+      <SettingsHeader role={session.role} current="/settings/team" />
       <p className="text-sm text-muted">
         Reps are all the same; ops run the Submission Board; managers do everything and can add
         another manager. The trust score watches copies, exports, contact changes on live files,

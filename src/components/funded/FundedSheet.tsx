@@ -5,17 +5,18 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { confirmFundingAction, recordCommissionPaidAction } from "@/app/money-actions";
 import { FormDialog, useFormState, useRun } from "@/components/client/parts";
-import { Button, Card, EmptyState, Field, Input, cn } from "@/components/ui";
+import { SHEET } from "@/components/settings/primitives";
+import { Badge, Button, Card, EmptyState, Field, Input, cn } from "@/components/ui";
 import { formatDate } from "@/lib/format";
 import { formatMoney, formatMoneyCompact } from "@/lib/money";
 import type { FundedRow } from "@/lib/money/fund";
 
-const STATE_TONE: Record<string, string> = {
-  expected: "bg-surface-2 text-muted",
-  at_risk: "bg-warn-soft text-warn",
-  paid: "bg-good-soft text-good",
-  clear: "bg-good-soft text-good",
-  clawed_back: "bg-bad-soft text-bad",
+const STATE_TONE: Record<string, "neutral" | "warn" | "good" | "bad"> = {
+  expected: "neutral",
+  at_risk: "warn",
+  paid: "good",
+  clear: "good",
+  clawed_back: "bad",
 };
 
 function PaidDialog({ row, onClose }: { row: FundedRow; onClose: () => void }) {
@@ -64,6 +65,25 @@ function PaidDialog({ row, onClose }: { row: FundedRow; onClose: () => void }) {
   );
 }
 
+/** "42%" with a thin, quiet bar beside it. */
+function PaidIn({ pct }: { pct: number }) {
+  return (
+    <span className="inline-flex items-center justify-end gap-2">
+      <span
+        aria-hidden
+        className="hidden h-1 w-12 overflow-hidden rounded-full bg-surface-2 sm:inline-block"
+      >
+        <span
+          className="block h-full rounded-full bg-accent/70"
+          style={{ width: `${Math.min(100, Math.max(0, pct))}%` }}
+        />
+      </span>
+      <span className="tabular-nums">{pct}%</span>
+    </span>
+  );
+}
+
+/** The month's advances as one dense sheet: money right-aligned, the ledger state as a word, actions last. */
 export function FundedSheet({
   rows,
   manager,
@@ -84,34 +104,39 @@ export function FundedSheet({
       </EmptyState>
     );
   return (
-    <Card className="overflow-x-auto p-0">
-      <table className="w-full text-sm">
-        <thead className="text-left text-xs text-muted">
+    <Card className="min-w-0 overflow-x-auto p-0">
+      <table className={SHEET.table}>
+        <thead className={SHEET.thead}>
           <tr>
-            <th className="px-4 py-2 font-medium">Merchant</th>
-            <th className="px-2 py-2 font-medium">Lender</th>
-            <th className="px-2 py-2 text-right font-medium">Funded</th>
-            <th className="px-2 py-2 text-right font-medium">Factor</th>
-            <th className="px-2 py-2 text-right font-medium">Points</th>
-            <th className="px-2 py-2 text-right font-medium">PSF</th>
-            <th className="px-2 py-2 text-right font-medium">Commission</th>
-            <th className="px-2 py-2 text-right font-medium">{manager ? "Rep cut" : "My cut"}</th>
-            <th className="px-2 py-2 text-right font-medium">Paid in</th>
-            <th className="px-2 py-2 font-medium">Ledger</th>
-            <th className="px-4 py-2 font-medium"></th>
+            <th className={cn(SHEET.th, "sticky left-0 z-10 bg-surface-3")}>Merchant</th>
+            <th className={SHEET.th}>Lender</th>
+            <th className={SHEET.thNum}>Funded</th>
+            <th className={SHEET.thNum}>Factor</th>
+            <th className={SHEET.thNum}>Points</th>
+            <th className={SHEET.thNum}>PSF</th>
+            <th className={SHEET.thNum}>Commission</th>
+            <th className={SHEET.thNum}>{manager ? "Rep cut" : "My cut"}</th>
+            <th className={SHEET.thNum}>Paid in</th>
+            <th className={SHEET.th}>Ledger</th>
+            <th className={SHEET.th}></th>
           </tr>
         </thead>
-        <tbody className="divide-y divide-border">
+        <tbody className={SHEET.tbody}>
           {rows.map((r) => (
-            <tr key={r.id} className={cn(!r.confirmed_at && "bg-warn-soft/40")}>
-              <td className="px-4 py-2">
+            <tr key={r.id} className="group transition hover:bg-surface-3">
+              <td
+                className={cn(
+                  SHEET.td,
+                  "sticky left-0 z-10 max-w-56 bg-surface transition group-hover:bg-surface-3",
+                )}
+              >
                 <Link
                   href={r.deal_id ? `/deals/${r.deal_id}` : `/clients/${r.client_id}`}
-                  className="font-semibold hover:underline"
+                  className="block truncate font-semibold hover:underline"
                 >
                   {r.business_name}
                 </Link>
-                <span className="block text-xs text-muted">
+                <span className="block truncate text-xs text-muted">
                   {formatDate(r.funded_on, today)}
                   {manager ? ` · ${r.rep_name}` : ""}
                   {r.renewal_eligible_on
@@ -119,50 +144,38 @@ export function FundedSheet({
                     : ""}
                 </span>
               </td>
-              <td className="px-2 py-2">{r.funder_name || "—"}</td>
-              <td className="px-2 py-2 text-right tabular-nums">
-                {formatMoneyCompact(r.amount_cents)}
-              </td>
-              <td className="px-2 py-2 text-right tabular-nums">
-                {Number(r.factor_rate).toFixed(2)}
-              </td>
-              <td className="px-2 py-2 text-right tabular-nums">{r.points ?? "—"}</td>
-              <td className="px-2 py-2 text-right tabular-nums">
-                {r.psf_cents ? formatMoneyCompact(r.psf_cents) : "—"}
-              </td>
-              <td className="px-2 py-2 text-right tabular-nums font-semibold">
+              <td className={cn(SHEET.td, "whitespace-nowrap")}>{r.funder_name || "—"}</td>
+              <td className={SHEET.tdNum}>{formatMoneyCompact(r.amount_cents)}</td>
+              <td className={SHEET.tdNum}>{Number(r.factor_rate).toFixed(2)}</td>
+              <td className={SHEET.tdNum}>{r.points ?? "—"}</td>
+              <td className={SHEET.tdNum}>{r.psf_cents ? formatMoneyCompact(r.psf_cents) : "—"}</td>
+              <td className={cn(SHEET.tdNum, "font-semibold")}>
                 {r.commission_cents === null ? "—" : formatMoney(r.commission_cents)}
               </td>
-              <td className="px-2 py-2 text-right tabular-nums">
+              <td className={SHEET.tdNum}>
                 {r.rep_cut_cents === null ? "—" : formatMoney(r.rep_cut_cents)}
               </td>
-              <td className="px-2 py-2 text-right tabular-nums">{r.paid_pct}%</td>
-              <td className="px-2 py-2">
+              <td className={SHEET.tdNum}>
+                <PaidIn pct={r.paid_pct} />
+              </td>
+              <td className={SHEET.td}>
                 {r.confirmed_at ? (
-                  <span
-                    className={cn(
-                      "rounded-md px-2 py-0.5 text-[11px] font-semibold",
-                      STATE_TONE[r.ledger_state] ?? "",
-                    )}
-                  >
+                  <Badge tone={STATE_TONE[r.ledger_state] ?? "neutral"}>
                     {r.ledger_state.replace("_", " ")}
                     {r.commission_received_cents &&
                     r.commission_cents &&
                     r.commission_received_cents < r.commission_cents
                       ? " (short)"
                       : ""}
-                  </span>
+                  </Badge>
                 ) : (
-                  <span className="rounded-md bg-warn-soft px-2 py-0.5 text-[11px] font-semibold text-warn">
-                    needs confirm
-                  </span>
+                  <Badge tone="warn">needs confirm</Badge>
                 )}
               </td>
-              <td className="px-4 py-2 text-right whitespace-nowrap">
+              <td className={cn(SHEET.td, "text-right whitespace-nowrap")}>
                 {manager && !r.confirmed_at ? (
                   <Button
                     size="sm"
-                    variant="primary"
                     disabled={busy}
                     onClick={async () => {
                       setBusy(true);

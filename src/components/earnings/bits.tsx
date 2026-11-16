@@ -17,13 +17,13 @@ export function InfoTip({ label, children }: { label: string; children: ReactNod
       <button
         type="button"
         aria-label={label}
-        className="ml-1 inline-flex size-4 items-center justify-center rounded-full border border-border text-[10px] leading-none font-semibold text-muted hover:text-text"
+        className="ml-1 inline-flex size-5 items-center justify-center rounded-full border border-border text-[10px] leading-none font-semibold text-muted transition hover:border-border-strong hover:text-text sm:size-4"
       >
         i
       </button>
       <span
         role="tooltip"
-        className="pointer-events-none invisible absolute inset-x-3 top-full z-30 mt-1 rounded-lg border border-border bg-surface p-2.5 text-xs font-normal tracking-normal text-text normal-case shadow-lg group-focus-within:visible group-hover:visible"
+        className="pointer-events-none invisible absolute inset-x-3 top-full z-30 mt-1 rounded-lg border border-border bg-surface p-2.5 text-xs font-normal tracking-normal text-text normal-case shadow-pop group-focus-within:visible group-hover:visible"
       >
         {children}
       </span>
@@ -31,6 +31,7 @@ export function InfoTip({ label, children }: { label: string; children: ReactNod
   );
 }
 
+/** A KPI tile: label over the number, a note under it, and an "estimate" mark when the figure is worked out. */
 export function Tile({
   label,
   value,
@@ -49,11 +50,16 @@ export function Tile({
   className?: string;
 }) {
   return (
-    <div className={cn("relative rounded-xl border border-border bg-surface p-4", className)}>
-      <p className="flex items-center text-xs font-medium text-muted">
-        {label}
+    <div
+      className={cn(
+        "relative min-w-0 rounded-xl border border-border bg-surface px-4 py-3.5",
+        className,
+      )}
+    >
+      <p className="flex min-w-0 items-center text-[11px] font-semibold tracking-wide text-muted uppercase">
+        <span className="truncate">{label}</span>
         {estimate ? (
-          <span className="ml-1.5 rounded bg-warn-soft px-1 py-px text-[10px] font-semibold text-warn uppercase">
+          <span className="ml-1.5 shrink-0 rounded-md bg-warn-soft px-1.5 py-px text-[10px] font-semibold text-warn">
             estimate
           </span>
         ) : null}
@@ -61,7 +67,9 @@ export function Tile({
           <InfoTip label={tipLabel ?? `How ${label.toLowerCase()} is worked out`}>{tip}</InfoTip>
         ) : null}
       </p>
-      <p className="mt-1 text-2xl font-bold tracking-tight tabular-nums">{value}</p>
+      <p className="mt-1 truncate text-[26px] leading-8 font-semibold tracking-tight tabular-nums">
+        {value}
+      </p>
       {note ? <p className="mt-0.5 text-xs text-muted">{note}</p> : null}
     </div>
   );
@@ -82,7 +90,7 @@ export function Commission({
   if (!value) {
     return (
       <span
-        className="text-muted"
+        className="font-normal text-muted"
         title="Enter a commission on an advance (Update on the client's Funding card) and the CRM estimates the rest"
       >
         {none}
@@ -90,7 +98,7 @@ export function Commission({
     );
   }
   return (
-    <span title={commissionNote(value, average, amountCents)}>
+    <span className="tabular-nums" title={commissionNote(value, average, amountCents)}>
       {value.basis === "entered" ? "" : "~"}
       {formatMoney(value.cents)}
       {value.basis === "entered" ? null : (

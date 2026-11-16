@@ -13,51 +13,51 @@ export function MonthTable({ months }: { months: readonly MonthRow[] }) {
     { fundedCount: 0, fundedCents: 0, commissionCents: 0 },
   );
   return (
-    <div className="overflow-x-auto">
-      <table className="w-full text-sm tabular-nums">
+    <div className="min-w-0 overflow-x-auto rounded-lg border border-border">
+      <table className="w-full text-[13px] tabular-nums">
         <caption className="sr-only">
           Month by month: advances funded and commission received
         </caption>
-        <thead>
-          <tr className="border-b border-border text-left text-xs text-muted">
-            <th scope="col" className="py-1.5 pr-3 font-medium">
+        <thead className="bg-surface-2/60 text-left text-[11px] font-semibold tracking-wide text-muted uppercase">
+          <tr>
+            <th scope="col" className="px-3 py-2 font-semibold">
               Month
             </th>
-            <th scope="col" className="px-3 py-1.5 text-right font-medium">
+            <th scope="col" className="px-3 py-2 text-right font-semibold">
               Advances funded
             </th>
-            <th scope="col" className="px-3 py-1.5 text-right font-medium">
+            <th scope="col" className="px-3 py-2 text-right font-semibold">
               Funded
             </th>
-            <th scope="col" className="py-1.5 pl-3 text-right font-medium">
+            <th scope="col" className="px-3 py-2 text-right font-semibold">
               Commission received
             </th>
           </tr>
         </thead>
-        <tbody>
+        <tbody className="divide-y divide-border">
           {rows.map((m) => (
-            <tr key={m.key} className="border-b border-border/60">
-              <th scope="row" className="py-1.5 pr-3 text-left font-medium whitespace-nowrap">
+            <tr key={m.key} className="transition hover:bg-surface-3">
+              <th scope="row" className="px-3 py-1.5 text-left font-medium whitespace-nowrap">
                 {m.label}
               </th>
               <td className="px-3 py-1.5 text-right">{m.fundedCount || "—"}</td>
               <td className="px-3 py-1.5 text-right">
                 {m.fundedCents ? formatMoney(m.fundedCents) : "—"}
               </td>
-              <td className="py-1.5 pl-3 text-right font-medium">
+              <td className="px-3 py-1.5 text-right font-medium">
                 {m.commissionCents ? formatMoney(m.commissionCents) : "—"}
               </td>
             </tr>
           ))}
         </tbody>
-        <tfoot>
-          <tr className="font-semibold">
-            <th scope="row" className="py-1.5 pr-3 text-left">
+        <tfoot className="border-t border-border bg-surface-2/40 font-semibold">
+          <tr>
+            <th scope="row" className="px-3 py-2 text-left">
               Last 12 months
             </th>
-            <td className="px-3 py-1.5 text-right">{total.fundedCount}</td>
-            <td className="px-3 py-1.5 text-right">{formatMoney(total.fundedCents)}</td>
-            <td className="py-1.5 pl-3 text-right">{formatMoney(total.commissionCents)}</td>
+            <td className="px-3 py-2 text-right">{total.fundedCount}</td>
+            <td className="px-3 py-2 text-right">{formatMoney(total.fundedCents)}</td>
+            <td className="px-3 py-2 text-right">{formatMoney(total.commissionCents)}</td>
           </tr>
         </tfoot>
       </table>

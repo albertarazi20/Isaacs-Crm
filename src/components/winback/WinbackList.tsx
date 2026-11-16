@@ -19,6 +19,7 @@ import { formatMoneyCompact } from "@/lib/money";
 import { useApp } from "../app-context";
 import { ContactActions } from "../ContactActions";
 import { useCall } from "../overlay";
+import { ICON, Icon, Note } from "../settings/primitives";
 import { StageBadge } from "../StageBadge";
 import { Badge, Button, EmptyState, SectionTitle } from "../ui";
 import { useTextCount } from "./useTextCount";
@@ -35,9 +36,9 @@ export function TextCounter() {
         tap “I sent it”
       </p>
       {warning ? (
-        <p role="note" className="rounded-lg bg-warn-soft p-3 text-sm text-warn">
+        <Note tone="warn" role="note">
           {warning}
-        </p>
+        </Note>
       ) : null}
     </div>
   );
@@ -76,41 +77,41 @@ function Item({ row, days }: { row: WinbackRow; days: number }) {
   const due = card.next_due_on;
   const money = moneyLine(row);
   return (
-    <article className="space-y-2.5 rounded-xl border border-border bg-surface p-3.5">
-      <div className="flex flex-wrap items-start justify-between gap-2">
-        <div className="min-w-0 space-y-1">
-          <div className="flex flex-wrap items-center gap-2">
-            <Link
-              href={`/clients/${card.id}`}
-              className="text-base font-semibold hover:text-accent hover:underline"
-            >
-              {card.business_name}
-            </Link>
-            <StageBadge stage={card.stage} />
-            {due ? (
-              <Badge tone={due < today ? "bad" : due === today ? "warn" : "neutral"}>
-                {relativeDay(due, today)}
-              </Badge>
-            ) : null}
-          </div>
-          <p className="text-sm text-muted">
-            {[card.contact_name, card.phone ? formatUS(card.phone) : "", card.industry]
-              .filter(Boolean)
-              .join(" · ")}
-          </p>
-          <p className="text-sm">
-            <span className="text-muted">
-              {stageDef(card.stage).label} {timeAgo(card.stage_changed_at, new Date(nowMs))}
-            </span>
-            {money ? <span className="font-medium"> · {money}</span> : null}
-          </p>
+    <article className="min-w-0 space-y-3 rounded-xl border border-border bg-surface p-4">
+      <div className="min-w-0 space-y-0.5">
+        <div className="flex min-w-0 flex-wrap items-center gap-2">
+          <Link
+            href={`/clients/${card.id}`}
+            className="truncate text-sm font-semibold hover:underline"
+          >
+            {card.business_name}
+          </Link>
+          <StageBadge stage={card.stage} />
+          {due ? (
+            <Badge tone={due < today ? "bad" : due === today ? "warn" : "neutral"}>
+              {relativeDay(due, today)}
+            </Badge>
+          ) : null}
         </div>
+        <p className="truncate text-xs text-muted">
+          {[card.contact_name, card.phone ? formatUS(card.phone) : "", card.industry]
+            .filter(Boolean)
+            .join(" · ")}
+        </p>
+        <p className="text-xs">
+          <span className="text-muted">
+            {stageDef(card.stage).label} {timeAgo(card.stage_changed_at, new Date(nowMs))}
+          </span>
+          {money ? <span className="font-medium text-text tabular-nums"> · {money}</span> : null}
+        </p>
       </div>
-      <blockquote className="rounded-lg border-l-4 border-accent/60 bg-surface-2 px-3 py-2 text-sm">
-        <span className="block text-xs font-medium text-muted">Suggested text</span>
-        {text}
+      <blockquote className="rounded-lg border border-border bg-surface-3 px-3 py-2 text-sm">
+        <span className="block text-[11px] font-semibold tracking-wide text-muted uppercase">
+          Suggested text
+        </span>
+        <span className="mt-0.5 block">{text}</span>
       </blockquote>
-      <div className="flex flex-wrap items-center justify-between gap-2">
+      <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border pt-3">
         <ContactActions client={card} suggestedText={text} />
         <NotNow row={row} days={days} />
       </div>
@@ -124,23 +125,38 @@ function Compact({ rows, empty }: { rows: CompactRow[]; empty?: string }) {
   return (
     <ul className="divide-y divide-border rounded-xl border border-border bg-surface">
       {rows.map((r) => (
-        <li key={r.id} className="flex flex-wrap items-center justify-between gap-2 px-3 py-2">
+        <li
+          key={r.id}
+          className="flex flex-wrap items-center justify-between gap-2 px-4 py-2.5 transition hover:bg-surface-3 sm:py-2"
+        >
           <div className="flex min-w-0 flex-wrap items-center gap-2">
             <Link
               href={`/clients/${r.id}`}
-              className="font-medium hover:text-accent hover:underline"
+              className="truncate text-sm font-semibold hover:underline"
             >
               {r.businessName}
             </Link>
             <StageBadge stage={r.stage} />
           </div>
-          <span className="text-sm text-muted">
+          <span className="text-xs text-muted tabular-nums">
             {r.moneyCents > 0 ? `${formatMoneyCompact(r.moneyCents)} · ` : ""}
             {r.dueOn ? relativeDay(r.dueOn, today) : ""}
           </span>
         </li>
       ))}
     </ul>
+  );
+}
+
+function Fold({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <details className="group min-w-0">
+      <summary className="flex cursor-pointer list-none items-center gap-1.5 text-[13px] font-semibold text-text select-none [&::-webkit-details-marker]:hidden">
+        <Icon d={ICON.chevronDown} className="text-muted transition group-open:rotate-180" />
+        {title}
+      </summary>
+      <div className="mt-2 space-y-2">{children}</div>
+    </details>
   );
 }
 
@@ -160,8 +176,8 @@ export function WinbackList({
   return (
     <div className="space-y-6">
       <TextCounter />
-      <section className="space-y-2" aria-label="Win-back 10">
-        <SectionTitle aside={<span className="text-sm text-muted">{batch.length} of 10</span>}>
+      <section className="space-y-3" aria-label="Win-back 10">
+        <SectionTitle aside={<span className="text-xs text-muted">{batch.length} of 10</span>}>
           Win-back 10
         </SectionTitle>
         {batch.length === 0 ? (
@@ -171,7 +187,7 @@ export function WinbackList({
               : `No dead, declined, lost or not-interested merchants are due in the next ${days} days. Try a longer window.`}
           </EmptyState>
         ) : (
-          <div className="grid gap-3 xl:grid-cols-2">
+          <div className="grid min-w-0 gap-3 xl:grid-cols-2">
             {batch.map((r) => (
               <Item key={r.card.id} row={r} days={days} />
             ))}
@@ -180,30 +196,20 @@ export function WinbackList({
       </section>
 
       {laterCount > 0 ? (
-        <details className="space-y-2">
-          <summary className="cursor-pointer text-sm font-semibold tracking-wide text-muted uppercase">
-            Up next after this batch ({laterCount})
-          </summary>
-          <div className="mt-2 space-y-2">
-            <Compact rows={later} />
-            {laterCount > later.length ? (
-              <p className="text-sm text-muted">
-                …and {laterCount - later.length} more. They slide up as you finish these.
-              </p>
-            ) : null}
-          </div>
-        </details>
+        <Fold title={`Up next after this batch (${laterCount})`}>
+          <Compact rows={later} />
+          {laterCount > later.length ? (
+            <p className="text-sm text-muted">
+              …and {laterCount - later.length} more. They slide up as you finish these.
+            </p>
+          ) : null}
+        </Fold>
       ) : null}
 
       {done.length > 0 ? (
-        <details className="space-y-2">
-          <summary className="cursor-pointer text-sm font-semibold tracking-wide text-muted uppercase">
-            Done today ({done.length})
-          </summary>
-          <div className="mt-2">
-            <Compact rows={done} />
-          </div>
-        </details>
+        <Fold title={`Done today (${done.length})`}>
+          <Compact rows={done} />
+        </Fold>
       ) : null}
     </div>
   );

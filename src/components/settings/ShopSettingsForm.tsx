@@ -1,40 +1,16 @@
 "use client";
 
-import { useState } from "react";
+import { useId, useState } from "react";
 import { saveShopSettingsAction } from "@/app/settings-actions";
 import { useFormState, useRun } from "@/components/client/parts";
-import { Button, Card, Field, Input, SectionTitle, Select } from "@/components/ui";
+import { Button, Field, Input, Select } from "@/components/ui";
 import type { ShopSettingsRow } from "@/lib/settings/queries";
-
-function Toggle({
-  label,
-  hint,
-  checked,
-  onChange,
-}: {
-  label: string;
-  hint?: string;
-  checked: boolean;
-  onChange: (v: boolean) => void;
-}) {
-  return (
-    <label className="flex items-start gap-2 text-sm">
-      <input
-        type="checkbox"
-        className="mt-1"
-        checked={checked}
-        onChange={(e) => onChange(e.target.checked)}
-      />
-      <span>
-        <span className="font-medium">{label}</span>
-        {hint ? <span className="block text-xs text-muted">{hint}</span> : null}
-      </span>
-    </label>
-  );
-}
+import { SettingsCard } from "./primitives";
+import { Toggle } from "./Toggle";
 
 export function ShopSettingsForm({ s }: { s: ShopSettingsRow }) {
   const run = useRun();
+  const formId = useId();
   const [busy, setBusy] = useState(false);
   const { v, bind, set } = useFormState(() => ({
     shopName: s.shop_name,
@@ -55,8 +31,14 @@ export function ShopSettingsForm({ s }: { s: ShopSettingsRow }) {
     lenderChaseMax: String(s.lender_chase_max),
     maxLendersPerDeal: String(s.max_lenders_per_deal),
   }));
+  const save = (
+    <Button type="submit" form={formId} variant="primary" disabled={busy}>
+      {busy ? "Saving…" : "Save settings"}
+    </Button>
+  );
   return (
     <form
+      id={formId}
       className="space-y-5"
       onSubmit={async (e) => {
         e.preventDefault();
@@ -65,8 +47,7 @@ export function ShopSettingsForm({ s }: { s: ShopSettingsRow }) {
         setBusy(false);
       }}
     >
-      <Card className="space-y-3">
-        <SectionTitle>The shop</SectionTitle>
+      <SettingsCard title="The shop">
         <div className="grid gap-3 sm:grid-cols-2">
           <Field label="Shop name (in every footer)">
             <Input {...bind("shopName")} />
@@ -80,7 +61,7 @@ export function ShopSettingsForm({ s }: { s: ShopSettingsRow }) {
               placeholder="Selective Capital <hello@mail.selectivecap.com>"
             />
           </Field>
-          <div className="pt-6">
+          <div className="flex items-end">
             <Toggle
               label="Replies go to the rep"
               hint="Automated emails carry the rep's address as Reply-To"
@@ -89,13 +70,11 @@ export function ShopSettingsForm({ s }: { s: ShopSettingsRow }) {
             />
           </div>
         </div>
-      </Card>
-      <Card className="space-y-3">
-        <SectionTitle>The cap</SectionTitle>
-        <p className="text-xs text-muted">
-          Per mailbox, rolling 24 hours. Google Workspace allows 2,000; 1,500 keeps a margin.
-          Lead-intake emails use the reserved slice and never wait.
-        </p>
+      </SettingsCard>
+      <SettingsCard
+        title="The cap"
+        description="Per mailbox, rolling 24 hours. Google Workspace allows 2,000; 1,500 keeps a margin. Lead-intake emails use the reserved slice and never wait."
+      >
         <div className="grid gap-3 sm:grid-cols-3">
           <Field label="Daily cap">
             <Input {...bind("dailyCap")} inputMode="numeric" />
@@ -113,9 +92,8 @@ export function ShopSettingsForm({ s }: { s: ShopSettingsRow }) {
             <Input {...bind("perMerchantWeekly")} inputMode="numeric" />
           </Field>
         </div>
-      </Card>
-      <Card className="space-y-3">
-        <SectionTitle>When emails go out</SectionTitle>
+      </SettingsCard>
+      <SettingsCard title="When emails go out">
         <div className="grid gap-3 sm:grid-cols-3">
           <Field label="Window starts (merchant's local hour)">
             <Input {...bind("sendWindowStart")} inputMode="numeric" />
@@ -123,7 +101,7 @@ export function ShopSettingsForm({ s }: { s: ShopSettingsRow }) {
           <Field label="Window ends">
             <Input {...bind("sendWindowEnd")} inputMode="numeric" />
           </Field>
-          <div className="space-y-2 pt-6">
+          <div className="space-y-2 sm:col-span-3">
             <Toggle
               label="Send on weekends"
               checked={v.sendOnWeekends}
@@ -137,10 +115,9 @@ export function ShopSettingsForm({ s }: { s: ShopSettingsRow }) {
             />
           </div>
         </div>
-      </Card>
-      <Card className="space-y-3">
-        <SectionTitle>Lenders</SectionTitle>
-        <div className="grid gap-3 sm:grid-cols-4">
+      </SettingsCard>
+      <SettingsCard title="Lenders" footer={save}>
+        <div className="grid gap-3 sm:grid-cols-2">
           <Field label="Chase a quiet lender after (days)">
             <Input {...bind("lenderChaseDays")} inputMode="numeric" />
           </Field>
@@ -157,10 +134,7 @@ export function ShopSettingsForm({ s }: { s: ShopSettingsRow }) {
             <Input {...bind("maxLendersPerDeal")} inputMode="numeric" />
           </Field>
         </div>
-      </Card>
-      <Button type="submit" variant="primary" disabled={busy}>
-        {busy ? "Saving…" : "Save settings"}
-      </Button>
+      </SettingsCard>
     </form>
   );
 }

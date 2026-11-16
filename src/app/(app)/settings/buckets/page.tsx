@@ -1,8 +1,8 @@
-import Link from "next/link";
 import { SequenceEditor } from "@/components/settings/SequenceEditor";
-import { SettingsNav } from "@/components/settings/SettingsNav";
+import { ChipLink, ChipRow, SettingsCard } from "@/components/settings/primitives";
+import { SettingsHeader } from "@/components/settings/SettingsNav";
 import { TemplateEditor } from "@/components/settings/TemplateEditor";
-import { Card, SectionTitle, cn } from "@/components/ui";
+import { Badge, cn } from "@/components/ui";
 import { requireSession } from "@/lib/auth/server";
 import { CAN } from "@/lib/auth/roles";
 import { listBucketSteps, listBuckets, listTemplates } from "@/lib/buckets/queries";
@@ -39,48 +39,37 @@ export default async function BucketsSettingsPage({
   const focus = b && UUID.test(b) ? b : null;
 
   return (
-    <div className="mx-auto max-w-5xl space-y-5">
-      <h1 className="text-2xl font-bold tracking-tight">Settings</h1>
-      <SettingsNav role={session.role} current="/settings/buckets" />
-      <nav className="flex gap-1.5">
-        <Link
-          href="/settings/buckets"
-          aria-current={!winback ? "page" : undefined}
-          className={cn(
-            "rounded-full border px-3 py-1 text-sm",
-            !winback ? "border-accent bg-accent-soft text-accent" : "border-border text-muted",
-          )}
-        >
+    <div className="mx-auto max-w-3xl space-y-5">
+      <SettingsHeader role={session.role} current="/settings/buckets" />
+      <ChipRow>
+        <ChipLink href="/settings/buckets" active={!winback}>
           Buckets
-        </Link>
-        <Link
-          href="/settings/buckets?tab=winback"
-          aria-current={winback ? "page" : undefined}
-          className={cn(
-            "rounded-full border px-3 py-1 text-sm",
-            winback ? "border-accent bg-accent-soft text-accent" : "border-border text-muted",
-          )}
-        >
+        </ChipLink>
+        <ChipLink href="/settings/buckets?tab=winback" active={winback}>
           Winback pools
-        </Link>
-      </nav>
+        </ChipLink>
+      </ChipRow>
       {winback ? (
         <>
-          <Card>
-            <SectionTitle>How the pools email</SectionTitle>
-            <p className="mt-2 text-sm text-muted">
-              Each pool steps down on its own cadence. Write a shared template named exactly{" "}
-              <span className="font-mono">Winback — &lt;pool&gt; — step N</span> and it replaces the
-              built-in wording for that step. Pools:
-            </p>
-            <ul className="mt-2 list-disc pl-5 text-sm text-muted">
+          <SettingsCard
+            title="How the pools email"
+            description={
+              <>
+                Each pool steps down on its own cadence. Write a shared template named exactly{" "}
+                <span className="font-mono text-xs text-text">Winback — &lt;pool&gt; — step N</span>{" "}
+                and it replaces the built-in wording for that step. Pools:
+              </>
+            }
+          >
+            <ul className="divide-y divide-border rounded-lg border border-border text-sm">
               {POOLS.map((p) => (
-                <li key={p}>
-                  <span className="font-mono text-text">Winback — {p} — step 1</span>, step 2, …
+                <li key={p} className="px-3 py-2">
+                  <span className="font-mono text-xs text-text">Winback — {p} — step 1</span>
+                  <span className="text-muted">, step 2, …</span>
                 </li>
               ))}
             </ul>
-          </Card>
+          </SettingsCard>
           <TemplateEditor templates={templates} manager={manager} only="winback" />
         </>
       ) : (
@@ -91,32 +80,34 @@ export default async function BucketsSettingsPage({
             buckets by themselves. Your own buckets are yours to edit; a manager edits the
             shop&apos;s.
           </p>
-          <div className="space-y-3">
+          <div className="space-y-4">
             {buckets.map((x) => (
-              <Card key={x.id} className={cn(focus === x.id && "ring-2 ring-accent")}>
-                <SectionTitle
-                  aside={
-                    <span className="text-xs text-muted">
+              <SettingsCard
+                key={x.id}
+                id={x.id}
+                title={x.name}
+                className={cn(focus === x.id && "ring-2 ring-accent/50")}
+                aside={
+                  <span className="flex flex-wrap items-center justify-end gap-1.5">
+                    <Badge tone={x.owner_id ? "accent" : "neutral"}>
                       {x.owner_id
                         ? "mine"
                         : x.key
                           ? `shop · rule: ${x.rule?.replace(/_/g, " ")}`
-                          : "shop"}{" "}
-                      · {x.members} in it{!x.active ? " · off" : ""}
-                    </span>
-                  }
-                >
-                  {x.name}
-                </SectionTitle>
-                <div className="mt-3">
-                  <SequenceEditor
-                    bucket={x}
-                    steps={steps.get(x.id) ?? []}
-                    templates={templates}
-                    canEdit={manager || x.owner_id === session.userId}
-                  />
-                </div>
-              </Card>
+                          : "shop"}
+                    </Badge>
+                    <span className="tabular-nums">· {x.members} in it</span>
+                    {!x.active ? <Badge tone="warn">off</Badge> : null}
+                  </span>
+                }
+              >
+                <SequenceEditor
+                  bucket={x}
+                  steps={steps.get(x.id) ?? []}
+                  templates={templates}
+                  canEdit={manager || x.owner_id === session.userId}
+                />
+              </SettingsCard>
             ))}
           </div>
           <TemplateEditor templates={templates} manager={manager} only="buckets" />

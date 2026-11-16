@@ -1,6 +1,5 @@
-import Link from "next/link";
 import type { Role } from "@/lib/auth/roles";
-import { cn } from "@/components/ui";
+import { ChipLink, ChipRow } from "./primitives";
 
 const ITEMS: { href: string; label: string; manager?: boolean }[] = [
   { href: "/settings", label: "Me" },
@@ -13,24 +12,25 @@ const ITEMS: { href: string; label: string; manager?: boolean }[] = [
   { href: "/funders", label: "Lender list", manager: true },
 ];
 
+/** The pill nav over every settings page. One row that scrolls on a phone, wraps on a desktop. */
 export function SettingsNav({ role, current }: { role: Role; current: string }) {
   return (
-    <nav aria-label="Settings" className="flex flex-wrap gap-1.5">
+    <ChipRow aria-label="Settings">
       {ITEMS.filter((i) => !i.manager || role === "manager").map((i) => (
-        <Link
-          key={i.href}
-          href={i.href}
-          aria-current={i.href === current ? "page" : undefined}
-          className={cn(
-            "inline-flex h-8 items-center rounded-full border px-3 text-[13px] font-medium transition",
-            i.href === current
-              ? "border-accent/30 bg-accent-soft text-accent"
-              : "border-border bg-surface text-muted hover:border-border-strong hover:text-text",
-          )}
-        >
+        <ChipLink key={i.href} href={i.href} active={i.href === current}>
           {i.label}
-        </Link>
+        </ChipLink>
       ))}
-    </nav>
+    </ChipRow>
+  );
+}
+
+/** The title and the pill nav every settings page starts with. */
+export function SettingsHeader({ role, current }: { role: Role; current: string }) {
+  return (
+    <div className="space-y-3">
+      <h1 className="text-xl font-semibold tracking-tight sm:text-2xl">Settings</h1>
+      <SettingsNav role={role} current={current} />
+    </div>
   );
 }

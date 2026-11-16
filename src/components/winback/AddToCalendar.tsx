@@ -6,6 +6,7 @@ import { formatUS } from "@/lib/mca/phone";
 import { buildCallIcs, googleCalendarUrl, icsFilename, type CallEvent } from "@/lib/messaging/ics";
 import { formatMoney } from "@/lib/money";
 import { useToast } from "../overlay";
+import { ICON, Icon } from "../settings/primitives";
 import { Button, buttonClass } from "../ui";
 
 const noSubscribe = () => () => undefined;
@@ -64,7 +65,8 @@ export function AddToCalendar({ card, topic }: { card: ClientCard; topic?: strin
   return (
     <span className="inline-flex flex-wrap items-center gap-1.5">
       <Button size="sm" onClick={download}>
-        📅 Add to calendar
+        <Icon d={ICON.calendar} className="text-muted" />
+        Add to calendar
       </Button>
       <a
         className={buttonClass("secondary", "sm")}
@@ -73,6 +75,7 @@ export function AddToCalendar({ card, topic }: { card: ClientCard; topic?: strin
         rel="noopener noreferrer"
       >
         Google Calendar
+        <Icon d={ICON.external} className="size-3.5 text-muted" />
       </a>
     </span>
   );

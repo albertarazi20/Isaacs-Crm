@@ -5,9 +5,10 @@ import { useState } from "react";
 import { deleteSuppressionAction } from "@/app/settings-actions";
 import { useApp } from "@/components/app-context";
 import { useRun } from "@/components/client/parts";
-import { Button, Card, SectionTitle } from "@/components/ui";
+import { Badge, Button } from "@/components/ui";
 import { timeAgo } from "@/lib/format";
 import type { SuppressionRow } from "@/lib/settings/queries";
+import { SettingsCard } from "./primitives";
 
 export function SuppressionList({ rows }: { rows: SuppressionRow[] }) {
   const { nowMs } = useApp();
@@ -15,22 +16,25 @@ export function SuppressionList({ rows }: { rows: SuppressionRow[] }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   return (
-    <Card className="p-0">
-      <div className="px-4 pt-4">
-        <SectionTitle aside={<span className="text-xs text-muted">{rows.length}</span>}>
-          Do-not-email list
-        </SectionTitle>
-        <p className="mt-1 text-xs text-muted">
-          Unsubscribes, hard bounces, complaints and STOP replies. The engine checks it right before
-          every send. Remove one only when the person asked.
-        </p>
-      </div>
+    <SettingsCard
+      title="Do-not-email list"
+      description="Unsubscribes, hard bounces, complaints and STOP replies. The engine checks it right before every send. Remove one only when the person asked."
+      aside={
+        <Badge tone="neutral" className="tabular-nums">
+          {rows.length}
+        </Badge>
+      }
+      flush
+    >
       {rows.length === 0 ? (
-        <p className="px-4 pb-4 pt-2 text-sm text-muted">Empty.</p>
+        <p className="border-t border-border px-4 py-3 text-sm text-muted">Empty.</p>
       ) : (
-        <ul className="mt-2 divide-y divide-border text-sm">
+        <ul className="divide-y divide-border border-t border-border text-[13px]">
           {rows.map((s) => (
-            <li key={s.id} className="flex items-center justify-between gap-3 px-4 py-2">
+            <li
+              key={s.id}
+              className="flex items-center justify-between gap-3 px-4 py-2 transition hover:bg-surface-3"
+            >
               <span className="min-w-0 truncate">
                 <span className="font-medium">{s.display ?? "(address purged)"}</span>
                 <span className="text-muted">
@@ -63,6 +67,6 @@ export function SuppressionList({ rows }: { rows: SuppressionRow[] }) {
           ))}
         </ul>
       )}
-    </Card>
+    </SettingsCard>
   );
 }

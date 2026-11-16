@@ -1,7 +1,7 @@
-import Link from "next/link";
 import { PastPayoffPrompt } from "@/components/earnings/PastPayoffPrompt";
 import { PaidInFullRow, RadarRow } from "@/components/earnings/RadarRows";
-import { buttonClass, cn, EmptyState, SectionTitle } from "@/components/ui";
+import { ChipLink, ChipRow, PageHeader } from "@/components/settings/primitives";
+import { EmptyState, LinkButton, SectionTitle } from "@/components/ui";
 import { requireSession } from "@/lib/auth/server";
 import { userContext } from "@/lib/data/queries";
 import { db } from "@/lib/db";
@@ -55,44 +55,28 @@ export default async function RenewalsPage({
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">Renewals</h1>
-          <p className="text-sm text-muted">
-            Merchants paid down enough to offer a renewal, hottest first. Your best leads.
-          </p>
-        </div>
-        <div className="flex flex-wrap items-center gap-3">
-          <nav aria-label="Paid down at least" className="flex flex-wrap items-center gap-1.5">
-            <span className="text-sm text-muted">Paid down at least</span>
-            {chips.map((c) => (
-              <Link
-                key={c.label}
-                href={c.href}
-                aria-current={c.active ? "page" : undefined}
-                className={cn(
-                  "rounded-lg border px-2.5 py-1 text-sm font-medium",
-                  c.active
-                    ? "border-accent bg-accent text-accent-fg"
-                    : "border-border bg-surface hover:bg-surface-2",
-                )}
-              >
-                {c.label}
-              </Link>
-            ))}
-          </nav>
-          <Link href="/earnings" className={buttonClass("secondary", "md")}>
-            Earnings →
-          </Link>
-        </div>
-      </div>
+      <PageHeader
+        title="Renewals"
+        context="Merchants paid down enough to offer a renewal, hottest first. Your best leads."
+        actions={<LinkButton href="/earnings">Earnings →</LinkButton>}
+      />
+      <ChipRow aria-label="Paid down at least" className="items-center">
+        <span className="mr-1 shrink-0 text-xs font-medium whitespace-nowrap text-muted">
+          Paid down at least
+        </span>
+        {chips.map((c) => (
+          <ChipLink key={c.label} href={c.href} active={c.active}>
+            {c.label}
+          </ChipLink>
+        ))}
+      </ChipRow>
 
       <PastPayoffPrompt rows={radar.pastPayoff} />
 
-      <section className="space-y-2">
+      <section className="space-y-3">
         <SectionTitle
           aside={
-            <span className="text-right text-sm text-muted">
+            <span className="text-right text-xs text-muted tabular-nums">
               {formatMoney(totals.outstandingCents)} payback outstanding
               {radar.ready.length > 0 ? (
                 <>
@@ -124,7 +108,7 @@ export default async function RenewalsPage({
             Funded merchants show up here the day they cross the line.
           </EmptyState>
         ) : (
-          <div className="grid gap-3 xl:grid-cols-2">
+          <div className="grid min-w-0 gap-3 xl:grid-cols-2">
             {radar.ready.map((r) => (
               <RadarRow key={r.card.id} row={r} average={commission.average} />
             ))}
@@ -132,7 +116,7 @@ export default async function RenewalsPage({
         )}
       </section>
 
-      <section className="space-y-2">
+      <section className="space-y-3">
         <SectionTitle>Paid in full ({radar.paidInFull.length})</SectionTitle>
         {radar.paidInFull.length === 0 ? (
           <EmptyState title="Nobody has paid off yet" />
@@ -141,7 +125,7 @@ export default async function RenewalsPage({
             <p className="text-sm text-muted">
               Newest first. The first 30 days after a merchant pays off are the best time to call.
             </p>
-            <div className="grid gap-3 xl:grid-cols-2">
+            <div className="grid min-w-0 gap-3 xl:grid-cols-2">
               {radar.paidInFull.map((r) => (
                 <PaidInFullRow key={r.card.id} row={r} average={commission.average} />
               ))}

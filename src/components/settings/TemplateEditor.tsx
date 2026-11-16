@@ -8,18 +8,11 @@ import {
   saveTemplateAction,
 } from "@/app/buckets-actions";
 import { FormDialog, useFormState, useRun } from "@/components/client/parts";
-import {
-  Button,
-  Card,
-  EmptyState,
-  Field,
-  Input,
-  SectionTitle,
-  Textarea,
-  cn,
-} from "@/components/ui";
+import { Badge, Button, EmptyState, Field, Input, Textarea, cn } from "@/components/ui";
 import type { TemplateRow } from "@/lib/buckets/queries";
 import { MERGE_FIELD_HELP, MERGE_FIELDS } from "@/lib/messaging/merge";
+import { SettingsCard } from "./primitives";
+import { Toggle } from "./Toggle";
 
 function Editor({
   t,
@@ -84,28 +77,30 @@ function Editor({
         />
       </Field>
       <p className="text-xs text-muted">
-        Merge fields: {MERGE_FIELDS.map((f) => `{${f}}`).join(" ")}. A field with nothing to fill is
-        never sent as a blank — the email is skipped instead.
+        Merge fields:{" "}
+        <span className="font-mono text-[11px] text-text-2">
+          {MERGE_FIELDS.map((f) => `{${f}}`).join(" ")}
+        </span>
+        . A field with nothing to fill is never sent as a blank — the email is skipped instead.
       </p>
       <details className="text-xs text-muted">
-        <summary className="cursor-pointer">What each field means</summary>
-        <ul className="mt-1 space-y-0.5">
+        <summary className="cursor-pointer font-medium transition hover:text-text">
+          What each field means
+        </summary>
+        <ul className="mt-1.5 space-y-1 rounded-lg border border-border bg-surface-3 p-3">
           {MERGE_FIELDS.map((f) => (
             <li key={f}>
-              <span className="font-mono">{`{${f}}`}</span> — {MERGE_FIELD_HELP[f]}
+              <span className="font-mono text-text-2">{`{${f}}`}</span> — {MERGE_FIELD_HELP[f]}
             </li>
           ))}
         </ul>
       </details>
       {canShare && !t ? (
-        <label className="flex items-center gap-2 text-sm">
-          <input
-            type="checkbox"
-            checked={v.shared}
-            onChange={(e) => set("shared", e.target.checked)}
-          />{" "}
-          Shared with the whole shop
-        </label>
+        <Toggle
+          label="Shared with the whole shop"
+          checked={v.shared}
+          onChange={(x) => set("shared", x)}
+        />
       ) : null}
     </FormDialog>
   );
@@ -132,56 +127,51 @@ export function TemplateEditor({
         ? templates.filter((t) => !isWinback(t))
         : templates;
   return (
-    <Card className="p-0">
-      <div className="flex items-center justify-between px-4 pt-4">
-        <SectionTitle>Templates</SectionTitle>
+    <SettingsCard
+      title="Templates"
+      flush
+      aside={
         <Button size="sm" variant="primary" onClick={() => setEditing("new")}>
           + Template
         </Button>
-      </div>
+      }
+    >
       {shown.length === 0 ? (
-        <div className="p-4">
+        <div className="px-4 pb-4">
           <EmptyState title="No templates yet">
             Write one; a rep&apos;s template waits for a manager&apos;s approval before the engine
             sends it on its own.
           </EmptyState>
         </div>
       ) : (
-        <ul className="mt-2 divide-y divide-border">
+        <ul className="divide-y divide-border border-t border-border">
           {shown.map((t) => (
             <li
               key={t.id}
               className={cn(
-                "flex flex-wrap items-start justify-between gap-3 px-4 py-3",
+                "flex flex-wrap items-start justify-between gap-x-4 gap-y-2 px-4 py-3",
                 t.archived && "opacity-60",
               )}
             >
-              <div className="min-w-0">
-                <p className="text-sm font-semibold">
-                  {t.name}
-                  <span
-                    className={cn(
-                      "ml-2 rounded px-1.5 py-0.5 text-[11px] font-medium",
-                      t.approved ? "bg-good-soft text-good" : "bg-warn-soft text-warn",
-                    )}
-                  >
+              <div className="min-w-0 flex-1 basis-56">
+                <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm font-semibold">
+                  <span className="truncate">{t.name}</span>
+                  <Badge tone={t.approved ? "good" : "warn"}>
                     {t.approved ? "approved" : "needs approval"}
-                  </span>
-                  {t.owner_id ? (
-                    <span className="ml-1 text-xs font-normal text-muted">mine</span>
-                  ) : null}
+                  </Badge>
+                  {t.owner_id ? <span className="text-xs font-normal text-muted">mine</span> : null}
                   {t.archived ? (
-                    <span className="ml-1 text-xs font-normal text-muted">archived</span>
+                    <span className="text-xs font-normal text-muted">archived</span>
                   ) : null}
                 </p>
                 <p className="truncate text-xs text-muted">
                   {t.subject || "(no subject)"} · {t.body.slice(0, 90).replace(/\s+/g, " ")}…
                 </p>
                 {t.used_in.length ? (
-                  <p className="text-xs text-muted">Used in: {t.used_in.join(", ")}</p>
+                  <p className="truncate text-xs text-muted">Used in: {t.used_in.join(", ")}</p>
                 ) : null}
               </div>
-              <div className="flex gap-1.5">
+              <div className="flex shrink-0 flex-wrap gap-1.5">
                 {manager || t.owner_id !== null ? (
                   <Button size="sm" onClick={() => setEditing(t)}>
                     Edit
@@ -190,7 +180,7 @@ export function TemplateEditor({
                 {manager ? (
                   <Button
                     size="sm"
-                    variant={t.approved ? "ghost" : "primary"}
+                    variant={t.approved ? "ghost" : "secondary"}
                     disabled={busy}
                     onClick={async () => {
                       setBusy(true);
@@ -233,6 +223,6 @@ export function TemplateEditor({
           onClose={() => setEditing(null)}
         />
       ) : null}
-    </Card>
+    </SettingsCard>
   );
 }

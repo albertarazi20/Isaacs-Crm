@@ -1,16 +1,17 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useId, useState } from "react";
 import { addTeamMemberAction, setTeamMemberAction } from "@/app/team-actions";
 import { accessHistoryAction, offboardUserAction } from "@/app/trust-actions";
 import { useApp } from "@/components/app-context";
 import { FormDialog, useFormState, useRun } from "@/components/client/parts";
 import { useToast } from "@/components/overlay";
-import { Button, Card, Field, Input, SectionTitle, Select, cn } from "@/components/ui";
+import { Button, Field, Input, Select, cn } from "@/components/ui";
 import { ROLES } from "@/lib/auth/roles";
 import { timeAgo } from "@/lib/format";
 import type { AccessLine, OffboardReport, TeamMember, TrustRow } from "@/lib/trust/queries";
+import { SettingsCard, SHEET } from "./primitives";
 
 const TONE: Record<string, string> = {
   calm: "bg-good-soft text-good",
@@ -21,45 +22,53 @@ const TONE: Record<string, string> = {
 function AddMember() {
   const run = useRun();
   const router = useRouter();
+  const formId = useId();
   const [busy, setBusy] = useState(false);
   const { v, bind, set } = useFormState(() => ({ email: "", name: "", role: "rep" }));
   return (
-    <form
-      className="flex flex-wrap items-end gap-2"
-      onSubmit={async (e) => {
-        e.preventDefault();
-        setBusy(true);
-        const ok = await run(
-          addTeamMemberAction(v),
-          "Added — they sign in with that Google account",
-        );
-        setBusy(false);
-        if (ok) {
-          set("email", "");
-          set("name", "");
-          router.refresh();
-        }
-      }}
+    <SettingsCard
+      title="Add someone"
+      footer={
+        <Button type="submit" form={formId} variant="primary" disabled={busy}>
+          Add
+        </Button>
+      }
     >
-      <Field label="Name">
-        <Input {...bind("name")} placeholder="Sam Rivera" required />
-      </Field>
-      <Field label="selectivecap.com email">
-        <Input {...bind("email")} type="email" placeholder="sam@selectivecap.com" required />
-      </Field>
-      <Field label="Role">
-        <Select {...bind("role")}>
-          {ROLES.map((r) => (
-            <option key={r} value={r}>
-              {r}
-            </option>
-          ))}
-        </Select>
-      </Field>
-      <Button type="submit" variant="primary" disabled={busy}>
-        Add
-      </Button>
-    </form>
+      <form
+        id={formId}
+        className="grid gap-3 sm:grid-cols-[1fr_1.2fr_8rem]"
+        onSubmit={async (e) => {
+          e.preventDefault();
+          setBusy(true);
+          const ok = await run(
+            addTeamMemberAction(v),
+            "Added — they sign in with that Google account",
+          );
+          setBusy(false);
+          if (ok) {
+            set("email", "");
+            set("name", "");
+            router.refresh();
+          }
+        }}
+      >
+        <Field label="Name">
+          <Input {...bind("name")} placeholder="Sam Rivera" required />
+        </Field>
+        <Field label="selectivecap.com email">
+          <Input {...bind("email")} type="email" placeholder="sam@selectivecap.com" required />
+        </Field>
+        <Field label="Role">
+          <Select {...bind("role")}>
+            {ROLES.map((r) => (
+              <option key={r} value={r}>
+                {r}
+              </option>
+            ))}
+          </Select>
+        </Field>
+      </form>
+    </SettingsCard>
   );
 }
 
@@ -91,9 +100,9 @@ function Offboard({
           Login disabled, Gmail cut, {report.clients_moved} merchants and {report.deals_moved} deals
           moved to {report.to}.
         </p>
-        <dl className="grid grid-cols-2 gap-x-4 gap-y-1 text-sm">
+        <dl className="grid grid-cols-2 gap-x-4 text-sm">
           {Object.entries(d).map(([k, val]) => (
-            <div key={k} className="flex justify-between border-b border-border py-1">
+            <div key={k} className="flex justify-between border-b border-border py-1.5">
               <dt className="text-muted">{k.replace(/_/g, " ")}</dt>
               <dd className="font-semibold tabular-nums">{val}</dd>
             </div>
@@ -163,73 +172,67 @@ export function TeamPanel({
 
   return (
     <div className="space-y-5">
-      <Card className="space-y-3">
-        <SectionTitle>Add someone</SectionTitle>
-        <AddMember />
-      </Card>
-      <Card className="overflow-x-auto p-0">
-        <div className="px-4 pt-4">
-          <SectionTitle>The team</SectionTitle>
-        </div>
-        <table className="mt-2 w-full text-sm">
-          <thead className="text-left text-xs text-muted">
+      <AddMember />
+      <SettingsCard title="The team" flush className="min-w-0 overflow-x-auto">
+        <table className={cn(SHEET.table, "border-t border-border")}>
+          <thead className={SHEET.thead}>
             <tr>
-              <th className="px-4 py-2 font-medium">Person</th>
-              <th className="px-2 py-2 font-medium">Role</th>
-              <th className="px-2 py-2 text-right font-medium">Merchants</th>
-              <th className="px-2 py-2 text-right font-medium">Open deals</th>
-              <th className="px-2 py-2 font-medium">Gmail</th>
-              <th className="px-2 py-2 font-medium">Last login</th>
-              <th className="px-2 py-2 font-medium">Trust (30d)</th>
-              <th className="px-4 py-2"></th>
+              <th className={SHEET.th}>Person</th>
+              <th className={SHEET.th}>Role</th>
+              <th className={SHEET.thNum}>Merchants</th>
+              <th className={SHEET.thNum}>Open deals</th>
+              <th className={SHEET.th}>Gmail</th>
+              <th className={SHEET.th}>Last login</th>
+              <th className={SHEET.th}>Trust (30d)</th>
+              <th className={SHEET.th}></th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-border">
+          <tbody className={SHEET.tbody}>
             {members.map((m) => {
               const t = trustBy.get(m.id);
               return (
-                <tr key={m.id} className={cn(!m.active && "opacity-60")}>
-                  <td className="px-4 py-2">
-                    <span className="font-semibold">{m.name || m.email}</span>
-                    <span className="block text-xs text-muted">{m.email}</span>
+                <tr key={m.id} className={cn(SHEET.tr, !m.active && "opacity-60")}>
+                  <td className={cn(SHEET.td, "max-w-56")}>
+                    <span className="block truncate font-semibold">{m.name || m.email}</span>
+                    <span className="block truncate text-xs text-muted">{m.email}</span>
                   </td>
-                  <td className="px-2 py-2">
+                  <td className={SHEET.td}>
                     {m.id === meId ? (
                       <span>{m.role}</span>
                     ) : (
-                      <select
+                      <Select
                         aria-label={`Role for ${m.name || m.email}`}
                         value={m.role}
                         disabled={busy || !m.active}
                         onChange={(e) => void setMember(m, e.target.value, m.active)}
-                        className="rounded border border-border bg-surface px-1 py-0.5 text-sm"
+                        className="h-9 w-28 min-w-28 px-2 text-[13px] sm:h-8"
                       >
                         {ROLES.map((r) => (
                           <option key={r} value={r}>
                             {r}
                           </option>
                         ))}
-                      </select>
+                      </Select>
                     )}
                   </td>
-                  <td className="px-2 py-2 text-right tabular-nums">{m.clients}</td>
-                  <td className="px-2 py-2 text-right tabular-nums">{m.open_deals}</td>
-                  <td className="px-2 py-2 text-xs">
+                  <td className={SHEET.tdNum}>{m.clients}</td>
+                  <td className={SHEET.tdNum}>{m.open_deals}</td>
+                  <td className={cn(SHEET.td, "text-xs")}>
                     {m.gmail_connected ? (
-                      <span className="text-good">connected</span>
+                      <span className="font-medium text-good">connected</span>
                     ) : (
                       <span className="text-muted">—</span>
                     )}
                   </td>
-                  <td className="px-2 py-2 text-xs text-muted">
+                  <td className={cn(SHEET.td, "text-xs whitespace-nowrap text-muted")}>
                     {m.last_login_at ? timeAgo(m.last_login_at, new Date(nowMs)) : "never"}
                   </td>
-                  <td className="px-2 py-2">
+                  <td className={SHEET.td}>
                     {t ? (
                       <button
                         type="button"
                         className={cn(
-                          "rounded-md px-2 py-0.5 text-[11px] font-semibold",
+                          "inline-flex h-7 items-center rounded-md px-2 text-[11px] font-semibold whitespace-nowrap tabular-nums transition hover:brightness-95",
                           TONE[t.tone],
                         )}
                         title={`copies ${t.contact_copies} · exports ${t.exports} · changes on live files ${t.contact_changes} · after-hours opens ${t.after_hours_opens} · canaries ${t.canaries_touched}`}
@@ -243,9 +246,9 @@ export function TeamPanel({
                       </button>
                     ) : null}
                   </td>
-                  <td className="px-4 py-2 text-right whitespace-nowrap">
+                  <td className={cn(SHEET.td, "text-right whitespace-nowrap")}>
                     {m.id !== meId ? (
-                      <>
+                      <span className="inline-flex gap-1">
                         {m.active ? (
                           <Button
                             size="sm"
@@ -273,7 +276,7 @@ export function TeamPanel({
                         >
                           Offboard
                         </Button>
-                      </>
+                      </span>
                     ) : null}
                   </td>
                 </tr>
@@ -281,24 +284,24 @@ export function TeamPanel({
             })}
           </tbody>
         </table>
-      </Card>
+      </SettingsCard>
       {history ? (
-        <Card className="p-0">
-          <div className="flex items-center justify-between px-4 pt-4">
-            <SectionTitle>
-              Last 30 days · {members.find((m) => m.id === history.userId)?.name}
-            </SectionTitle>
+        <SettingsCard
+          title={`Last 30 days · ${members.find((m) => m.id === history.userId)?.name ?? ""}`}
+          flush
+          aside={
             <Button size="sm" variant="ghost" onClick={() => setHistory(null)}>
               Close
             </Button>
-          </div>
+          }
+        >
           {history.lines.length === 0 ? (
-            <p className="px-4 pb-4 pt-2 text-sm text-muted">Nothing logged.</p>
+            <p className="border-t border-border px-4 py-3 text-sm text-muted">Nothing logged.</p>
           ) : (
-            <ul className="mt-2 divide-y divide-border text-sm">
+            <ul className="divide-y divide-border border-t border-border text-[13px]">
               {history.lines.slice(0, 100).map((l, i) => (
-                <li key={i} className="flex justify-between gap-3 px-4 py-1.5">
-                  <span>
+                <li key={i} className="flex justify-between gap-3 px-4 py-2">
+                  <span className="min-w-0">
                     <span className="font-medium">{l.action.replace(/_/g, " ")}</span>
                     {l.business_name ? (
                       <span className="text-muted"> · {l.business_name}</span>
@@ -307,14 +310,14 @@ export function TeamPanel({
                       <span className="block truncate text-xs text-muted">{l.detail}</span>
                     ) : null}
                   </span>
-                  <span className="shrink-0 text-xs text-muted">
+                  <span className="shrink-0 text-xs whitespace-nowrap text-muted">
                     {timeAgo(l.at, new Date(nowMs))}
                   </span>
                 </li>
               ))}
             </ul>
           )}
-        </Card>
+        </SettingsCard>
       ) : null}
       {offboarding ? (
         <Offboard

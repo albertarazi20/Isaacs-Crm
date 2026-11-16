@@ -6,10 +6,12 @@ import { connectSheetAction, syncSheetNowAction, updateSheetAction } from "@/app
 import { useApp } from "@/components/app-context";
 import { useFormState, useRun } from "@/components/client/parts";
 import { useToast } from "@/components/overlay";
-import { Button, Card, EmptyState, Field, Input, SectionTitle, Select } from "@/components/ui";
+import { Badge, Button, Card, EmptyState, Field, Input, Select } from "@/components/ui";
 import type { BucketRow } from "@/lib/buckets/queries";
 import { timeAgo } from "@/lib/format";
 import type { SheetSourceRow } from "@/lib/settings/queries";
+import { Note, SettingsCard } from "./primitives";
+import { Toggle } from "./Toggle";
 
 export function SheetsPanel({
   sources,
@@ -57,16 +59,22 @@ export function SheetsPanel({
   return (
     <div className="space-y-5">
       {!sheetsConnected ? (
-        <p className="rounded-lg bg-warn-soft px-3 py-2 text-sm text-warn">
+        <Note tone="warn">
           Google Sheets is not connected for your account yet.{" "}
           <a href="/api/auth/google?purpose=sheets" className="font-semibold underline">
             Connect Google Sheets
           </a>{" "}
           — read-only; the CRM copies rows in and never writes to the sheet.
-        </p>
+        </Note>
       ) : null}
-      <Card className="space-y-3">
-        <SectionTitle>Connect a sheet</SectionTitle>
+      <SettingsCard
+        title="Connect a sheet"
+        footer={
+          <Button variant="primary" disabled={busy || !v.url} onClick={connect}>
+            {busy ? "Connecting…" : "Connect"}
+          </Button>
+        }
+      >
         <div className="grid gap-3 sm:grid-cols-2">
           <Field label="Google Sheet link">
             <Input {...bind("url")} placeholder="https://docs.google.com/spreadsheets/d/…" />
@@ -87,31 +95,22 @@ export function SheetsPanel({
               ))}
             </Select>
           </Field>
-          <div className="space-y-2 pt-6 text-sm">
-            <label className="flex items-center gap-2">
-              <input
-                type="checkbox"
-                checked={v.autoFile}
-                onChange={(e) => set("autoFile", e.target.checked)}
-              />{" "}
-              File new rows by itself every day
-            </label>
+          <div className="space-y-2 sm:col-span-2">
+            <Toggle
+              label="File new rows by itself every day"
+              checked={v.autoFile}
+              onChange={(x) => set("autoFile", x)}
+            />
             {canShare ? (
-              <label className="flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  checked={v.shared}
-                  onChange={(e) => set("shared", e.target.checked)}
-                />{" "}
-                Shared with the whole shop
-              </label>
+              <Toggle
+                label="Shared with the whole shop"
+                checked={v.shared}
+                onChange={(x) => set("shared", x)}
+              />
             ) : null}
           </div>
         </div>
-        <Button variant="primary" disabled={busy || !v.url} onClick={connect}>
-          {busy ? "Connecting…" : "Connect"}
-        </Button>
-      </Card>
+      </SettingsCard>
       {sources.length === 0 ? (
         <EmptyState title="No sheets yet">
           Paste a link above. The columns are guessed from the header row.
@@ -122,17 +121,15 @@ export function SheetsPanel({
             {sources.map((s) => (
               <li
                 key={s.id}
-                className="flex flex-wrap items-center justify-between gap-3 px-4 py-3"
+                className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 px-4 py-3"
               >
-                <div className="min-w-0">
-                  <p className="text-sm font-semibold">
-                    {s.name}
-                    {s.sheet_title ? <span className="text-muted"> · {s.sheet_title}</span> : null}
-                    {!s.active ? (
-                      <span className="ml-2 rounded bg-surface-2 px-1.5 py-0.5 text-[11px] text-muted">
-                        off
-                      </span>
+                <div className="min-w-0 flex-1 basis-56">
+                  <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm font-semibold">
+                    <span className="truncate">{s.name}</span>
+                    {s.sheet_title ? (
+                      <span className="truncate font-normal text-muted">· {s.sheet_title}</span>
                     ) : null}
+                    {!s.active ? <Badge tone="neutral">off</Badge> : null}
                   </p>
                   <p className="text-xs text-muted">
                     {s.row_count} rows · {s.bucket_name ? `→ ${s.bucket_name}` : "no bucket"} ·{" "}
@@ -145,7 +142,7 @@ export function SheetsPanel({
                   </p>
                   {s.last_error ? <p className="text-xs text-bad">{s.last_error}</p> : null}
                 </div>
-                <div className="flex gap-1.5">
+                <div className="flex shrink-0 flex-wrap gap-1.5">
                   <Button
                     size="sm"
                     disabled={busy}

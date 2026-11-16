@@ -1,8 +1,8 @@
 import Link from "next/link";
 import { SecurityPanel } from "@/components/SecurityPanel";
-import { SettingsNav } from "@/components/settings/SettingsNav";
+import { ICON, Icon, Note, SettingsCard } from "@/components/settings/primitives";
+import { SettingsHeader } from "@/components/settings/SettingsNav";
 import { SettingsPanels } from "@/components/SettingsPanels";
-import { Card, SectionTitle } from "@/components/ui";
 import { MessagesCard } from "@/components/winback/MessagesCard";
 import { requireSession } from "@/lib/auth/server";
 import { db } from "@/lib/db";
@@ -30,6 +30,9 @@ const NOTICES: Record<string, { tone: "good" | "bad"; text: string }> = {
   access_denied: { tone: "bad", text: "Gmail connection was cancelled." },
   bad_state: { tone: "bad", text: "That connect link expired. Try again." },
 };
+
+const LINK =
+  "inline-flex min-h-8 items-center gap-1 text-sm font-medium text-accent hover:underline";
 
 export default async function SettingsPage({
   searchParams,
@@ -62,16 +65,12 @@ export default async function SettingsPage({
   const notice = Object.hasOwn(NOTICES, key) ? NOTICES[key] : undefined;
 
   return (
-    <div className="mx-auto max-w-2xl space-y-6">
-      <h1 className="text-2xl font-bold tracking-tight">Settings</h1>
-      <SettingsNav role={session.role} current="/settings" />
+    <div className="mx-auto max-w-3xl space-y-5">
+      <SettingsHeader role={session.role} current="/settings" />
       {notice ? (
-        <p
-          role="status"
-          className={`rounded-lg p-3 text-sm ${notice.tone === "good" ? "bg-good-soft text-good" : "bg-bad-soft text-bad"}`}
-        >
+        <Note role="status" tone={notice.tone}>
           {notice.text}
-        </p>
+        </Note>
       ) : null}
       <SettingsPanels
         loginEmail={user?.email ?? session.email}
@@ -89,10 +88,10 @@ export default async function SettingsPage({
         resendReady={Boolean(e.RESEND_API_KEY && e.RESEND_FROM)}
       />
       <MessagesCard initial={messages.settings} initialSnippets={messages.snippets} />
-      <Card className="space-y-2 p-4">
-        <SectionTitle>Hourly reminder scheduler</SectionTitle>
-        <p className="text-sm text-muted">
-          {!reminders?.configured
+      <SettingsCard
+        title="Hourly reminder scheduler"
+        description={
+          !reminders?.configured
             ? `Not set up yet. Reminder emails need ${
                 reminders && reminders.missing.length > 0
                   ? reminders.missing.join(", ")
@@ -100,37 +99,37 @@ export default async function SettingsPage({
               } on the server.`
             : reminders.lastRunAt
               ? `Last ran ${timeAgo(reminders.lastRunAt, new Date(requestTimeMs()))}.${reminders.stale ? " That is too long ago — check the scheduler." : ""}`
-              : "Has not run yet."}
-        </p>
-      </Card>
-      <Card className="space-y-2 p-4">
-        <SectionTitle>Lead intake</SectionTitle>
-        <p className="text-sm text-muted">
-          Send new merchants in from a website form, Zapier or a lead vendor. They land on Today as
-          call-now.
-        </p>
-        <Link href="/lead-intake" className="text-sm font-medium text-accent underline">
+              : "Has not run yet."
+        }
+      />
+      <SettingsCard
+        title="Lead intake"
+        description="Send new merchants in from a website form, Zapier or a lead vendor. They land on Today as call-now."
+      >
+        <Link href="/lead-intake" className={LINK}>
           Set up lead intake
+          <Icon d={ICON.arrowRight} className="size-3.5" />
         </Link>
-      </Card>
-      <Card className="space-y-2 p-4">
-        <SectionTitle>Your data</SectionTitle>
-        <p className="text-sm text-muted">
-          Everything you have put in — merchants, advances, offers, notes, timers — as one file you
-          can keep. It holds no passwords, Gmail access or tokens.
-        </p>
-        <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm font-medium">
-          <a href="/api/export/backup" className="text-accent underline" download>
+      </SettingsCard>
+      <SettingsCard
+        title="Your data"
+        description="Everything you have put in — merchants, advances, offers, notes, timers — as one file you can keep. It holds no passwords, Gmail access or tokens."
+      >
+        <div className="flex flex-wrap gap-x-5 gap-y-1">
+          <a href="/api/export/backup" className={LINK} download>
+            <Icon d={ICON.download} className="size-3.5" />
             Download a full backup (.json)
           </a>
-          <a href="/api/export/clients" className="text-accent underline" download>
+          <a href="/api/export/clients" className={LINK} download>
+            <Icon d={ICON.download} className="size-3.5" />
             Merchants (.csv)
           </a>
-          <a href="/api/export/activity" className="text-accent underline" download>
+          <a href="/api/export/activity" className={LINK} download>
+            <Icon d={ICON.download} className="size-3.5" />
             All notes (.csv)
           </a>
         </div>
-      </Card>
+      </SettingsCard>
       <SecurityPanel />
     </div>
   );
