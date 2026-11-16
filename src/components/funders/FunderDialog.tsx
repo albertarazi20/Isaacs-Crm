@@ -137,10 +137,8 @@ export function FunderDialog({
         </Field>
       </div>
 
-      <div>
-        <h3 className="text-xs font-semibold tracking-wide text-muted uppercase">
-          What they write
-        </h3>
+      <div className="border-t border-border pt-3">
+        <h3 className="text-[13px] font-semibold text-text">What they write</h3>
         <p className="mt-1 text-xs text-muted">
           Leave a box empty when they have no limit or you don&apos;t know. The fit check warns you
           before you send — it never stops you.
@@ -178,8 +176,8 @@ export function FunderDialog({
         </Field>
       </div>
 
-      <div>
-        <h3 className="text-xs font-semibold tracking-wide text-muted uppercase">Money terms</h3>
+      <div className="border-t border-border pt-3">
+        <h3 className="text-[13px] font-semibold text-text">Money terms</h3>
         <p className="mt-1 text-xs text-muted">
           What FUND checks a deal with this lender against. Points or a PSF above the cap are
           refused before anything is recorded; the clocks drive the ledger, Renewals and the
@@ -240,10 +238,11 @@ export function FunderDialog({
           </Select>
         </Field>
       </div>
-      <Field label="Notes">
+      <Field label="Notes" className="border-t border-border pt-3">
         <Textarea
           {...bind("notes")}
           rows={2}
+          className="min-h-16"
           placeholder="Quirks, who to ask for, how fast they are"
         />
       </Field>

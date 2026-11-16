@@ -4,9 +4,10 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { confirmFundingAction } from "@/app/money-actions";
 import { useRun } from "@/components/client/parts";
+import { Icon } from "@/components/deals/primitives";
 import { Button } from "@/components/ui";
 
-/** The manager's half of FUND: the commission posts to the ledger only here. */
+/** The manager's half of FUND: the commission posts to the ledger only here. The page's one primary action. */
 export function ConfirmFundingButton({ fundingId }: { fundingId: string }) {
   const run = useRun();
   const router = useRouter();
@@ -14,7 +15,6 @@ export function ConfirmFundingButton({ fundingId }: { fundingId: string }) {
   return (
     <Button
       variant="primary"
-      className="bg-good text-white hover:brightness-110"
       disabled={busy}
       onClick={async () => {
         setBusy(true);
@@ -26,6 +26,7 @@ export function ConfirmFundingButton({ fundingId }: { fundingId: string }) {
         if (ok) router.refresh();
       }}
     >
+      <Icon name="check" className="size-3.5" />
       {busy ? "Confirming…" : "Confirm funding"}
     </Button>
   );

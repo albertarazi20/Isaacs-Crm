@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { decideProposedAction } from "@/app/inbox-actions";
 import { useRun } from "@/components/client/parts";
+import { Icon } from "@/components/deals/primitives";
 import { Button } from "@/components/ui";
 
 /** A manager accepts or rejects what the AI read from a lender email. Money never lands without this. */
@@ -22,8 +23,9 @@ export function ProposalDecision({ id }: { id: string }) {
     if (ok) setDone(decision);
   };
   return (
-    <span className="flex gap-1.5">
-      <Button size="sm" variant="primary" disabled={busy} onClick={() => decide("apply")}>
+    <span className="flex items-center gap-1.5">
+      <Button size="sm" disabled={busy} onClick={() => decide("apply")}>
+        <Icon name="check" className="size-3.5 text-good" />
         Accept
       </Button>
       <Button size="sm" variant="ghost" disabled={busy} onClick={() => decide("reject")}>

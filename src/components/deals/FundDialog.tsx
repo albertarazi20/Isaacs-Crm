@@ -5,6 +5,7 @@ import { useState } from "react";
 import { previewFundAction, proposeFundingAction } from "@/app/money-actions";
 import { FormDialog, useFormState } from "@/components/client/parts";
 import { useApp } from "@/components/app-context";
+import { Icon, Stat } from "@/components/deals/primitives";
 import { useToast } from "@/components/overlay";
 import { Button, Field, Input, Select, Textarea, cn } from "@/components/ui";
 import type { FundPreview } from "@/lib/money/fund";
@@ -32,9 +33,12 @@ interface Checklist {
 
 const FREQ = ["daily", "weekly", "biweekly", "monthly"] as const;
 
+/** A hairline between the groups of fields: who, the terms, the fees, the repayment. */
+const GROUP = "grid gap-3 border-t border-border pt-3 sm:grid-cols-2";
+
 /**
- * The green button. Terms, points and PSF in; the commission out, before anyone commits. A rep's FUND waits for a
- * manager; a manager's FUND confirms in the same click (the action decides).
+ * The page's primary action. Terms, points and PSF in; the commission out, before anyone commits. A rep's FUND
+ * waits for a manager; a manager's FUND confirms in the same click (the action decides).
  *
  * "Mark funded" on an accepted offer lands here through the URL (`?fund=<lender id>`): the page keys this
  * component on that value, so it mounts open with that lender picked, and closing it drops the parameter.
@@ -155,11 +159,7 @@ export function FundDialog({
 
   return (
     <>
-      <Button
-        variant="primary"
-        className="bg-good text-white shadow-good/30 hover:brightness-110"
-        onClick={() => setOpen(true)}
-      >
+      <Button variant="primary" onClick={() => setOpen(true)}>
         FUND
       </Button>
       {open ? (
@@ -170,11 +170,6 @@ export function FundDialog({
           busy={busy}
           submitLabel={canConfirm ? "Fund and confirm" : "Fund (manager confirms)"}
           wide
-          leftFooter={
-            <Button onClick={doPreview} disabled={busy}>
-              Preview commission
-            </Button>
-          }
         >
           <div className="grid gap-3 sm:grid-cols-2">
             <Field label="Lender">
@@ -196,6 +191,8 @@ export function FundDialog({
                 <Input type="date" {...bind("fundedOn")} />
               </Field>
             )}
+          </div>
+          <div className={cn(GROUP, "md:grid-cols-4")}>
             <Field label="Advance amount">
               <Input
                 {...bind("amount")}
@@ -213,6 +210,8 @@ export function FundDialog({
             <Field label="Points (sell − buy, or type them)">
               <Input {...bind("points")} placeholder="7" inputMode="decimal" />
             </Field>
+          </div>
+          <div className={GROUP}>
             <Field label="PSF (professional service fee)">
               <Input {...bind("psf")} placeholder="2,500" inputMode="decimal" />
             </Field>
@@ -223,6 +222,8 @@ export function FundDialog({
                 <option value="none">No PSF</option>
               </Select>
             </Field>
+          </div>
+          <div className={cn(GROUP, "md:grid-cols-4")}>
             <Field label="Remittance">
               <Input {...bind("payment")} placeholder="506.25" inputMode="decimal" />
             </Field>
@@ -242,86 +243,93 @@ export function FundDialog({
               <Input {...bind("positionNo")} placeholder="1" inputMode="numeric" />
             </Field>
           </div>
-          <Field label="Note">
-            <Textarea {...bind("note")} rows={2} placeholder="Anything the ledger should know" />
+          <Field label="Note" className="border-t border-border pt-3">
+            <Textarea
+              {...bind("note")}
+              rows={2}
+              className="min-h-16"
+              placeholder="Anything the ledger should know"
+            />
           </Field>
-          {preview ? (
-            <div
-              className={cn(
-                "rounded-xl border p-3 text-sm",
-                refusals.length > 0
-                  ? "border-bad/40 bg-bad-soft/40"
-                  : "border-border bg-surface-2/60",
-              )}
-              data-preview={refusals.length > 0 ? "refused" : "ok"}
-            >
-              {refusals.length > 0 ? (
-                <div role="alert" className="mb-3 space-y-1">
-                  <p className="text-xs font-semibold tracking-wide text-bad uppercase">
-                    {canConfirm ? "Fund and confirm" : "Fund"} will be refused
-                  </p>
-                  {refusals.map((w) => (
-                    <p key={w} className="font-medium text-bad">
-                      {w}
-                    </p>
-                  ))}
-                </div>
-              ) : null}
-              <dl className="grid grid-cols-2 gap-x-4 gap-y-1.5 sm:grid-cols-4">
-                <div>
-                  <dt className="text-xs text-muted">Payback</dt>
-                  <dd className="font-semibold tabular-nums">
-                    {formatMoney(preview.paybackCents)}
-                  </dd>
-                </div>
-                <div>
-                  <dt className="text-xs text-muted">Points</dt>
-                  <dd
-                    className={cn("font-semibold tabular-nums", refusals.length > 0 && "text-bad")}
-                  >
-                    {preview.points ?? "—"}
-                  </dd>
-                </div>
-                <div>
-                  <dt className="text-xs text-muted">Gross commission</dt>
-                  <dd className="font-semibold tabular-nums text-good">
-                    {preview.grossCommissionCents === null
-                      ? "—"
-                      : formatMoney(preview.grossCommissionCents)}
-                  </dd>
-                </div>
-                <div>
-                  <dt className="text-xs text-muted">Your cut ({preview.splitPct}%)</dt>
-                  <dd className="font-semibold tabular-nums">
-                    {preview.repCutCents === null ? "—" : formatMoney(preview.repCutCents)}
-                  </dd>
-                </div>
-              </dl>
-              <p className="mt-2 text-xs text-muted">
-                {preview.points === null
-                  ? "Enter the points, or a buy rate, to see the commission. "
-                  : ""}
-                Net to merchant {formatMoney(preview.netToMerchantCents)}
-                {preview.houseCutCents !== null
-                  ? ` · house ${formatMoney(preview.houseCutCents)}`
-                  : ""}
+          <div
+            className={cn(
+              "rounded-lg border p-3 text-sm",
+              refusals.length > 0
+                ? "border-bad/40 bg-bad-soft/40"
+                : "border-border bg-surface-2/60",
+            )}
+            data-preview={preview ? (refusals.length > 0 ? "refused" : "ok") : undefined}
+          >
+            <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+              <p className="min-w-0 flex-1 basis-56 text-xs text-muted">
+                {preview
+                  ? "The maths on these terms. Change a number and preview again."
+                  : "Press Preview commission to see payback, points and your cut before you fund."}
               </p>
-              {required.length > 0 ? (
-                <ul className="mt-2 space-y-0.5 text-xs">
-                  {required.map((i) => (
-                    <li key={i.key} className="text-muted">
-                      ☐ {i.label}
-                      {preview.checklist?.state ? ` (${preview.checklist.state})` : ""}
-                    </li>
-                  ))}
-                </ul>
-              ) : null}
+              <Button size="sm" onClick={doPreview} disabled={busy}>
+                <Icon name="refresh" className="size-3.5 text-muted" />
+                Preview commission
+              </Button>
             </div>
-          ) : (
-            <p className="text-xs text-muted">
-              Press Preview commission to see payback, points and your cut before you fund.
-            </p>
-          )}
+            {preview ? (
+              <div className="mt-3 border-t border-border pt-3">
+                {refusals.length > 0 ? (
+                  <div role="alert" className="mb-3 space-y-1">
+                    <p className="flex items-center gap-1.5 text-[11px] font-semibold tracking-wide text-bad uppercase">
+                      <Icon name="alert" className="size-3.5" />
+                      {canConfirm ? "Fund and confirm" : "Fund"} will be refused
+                    </p>
+                    {refusals.map((w) => (
+                      <p key={w} className="font-medium text-bad">
+                        {w}
+                      </p>
+                    ))}
+                  </div>
+                ) : null}
+                <dl className="grid grid-cols-2 gap-x-4 gap-y-2 sm:grid-cols-4">
+                  <Stat label="Payback" value={formatMoney(preview.paybackCents)} />
+                  <Stat
+                    label="Points"
+                    value={preview.points ?? "—"}
+                    tone={refusals.length > 0 ? "bad" : undefined}
+                  />
+                  <Stat
+                    label="Gross commission"
+                    value={
+                      preview.grossCommissionCents === null
+                        ? "—"
+                        : formatMoney(preview.grossCommissionCents)
+                    }
+                    tone="good"
+                  />
+                  <Stat
+                    label={`Your cut (${preview.splitPct}%)`}
+                    value={preview.repCutCents === null ? "—" : formatMoney(preview.repCutCents)}
+                  />
+                </dl>
+                <p className="mt-2 text-xs text-muted">
+                  {preview.points === null
+                    ? "Enter the points, or a buy rate, to see the commission. "
+                    : ""}
+                  Net to merchant {formatMoney(preview.netToMerchantCents)}
+                  {preview.houseCutCents !== null
+                    ? ` · house ${formatMoney(preview.houseCutCents)}`
+                    : ""}
+                </p>
+                {required.length > 0 ? (
+                  <ul className="mt-2 space-y-1 text-xs">
+                    {required.map((i) => (
+                      <li key={i.key} className="flex items-center gap-1.5 text-muted">
+                        <Icon name="square" className="size-3.5" />
+                        {i.label}
+                        {preview.checklist?.state ? ` (${preview.checklist.state})` : ""}
+                      </li>
+                    ))}
+                  </ul>
+                ) : null}
+              </div>
+            ) : null}
+          </div>
         </FormDialog>
       ) : null}
     </>

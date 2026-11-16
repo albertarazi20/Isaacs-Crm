@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { mintUploadLinkAction, rotateUploadTokenAction } from "@/app/docs-actions";
 import { copyText, useRun } from "@/components/client/parts";
+import { Icon } from "@/components/deals/primitives";
 import { useToast } from "@/components/overlay";
 import { Button } from "@/components/ui";
 
@@ -38,6 +39,7 @@ export function UploadLinkButton({
         });
       }}
     >
+      <Icon name="link" className="size-3.5 text-muted" />
       {busy ? "…" : "Copy upload link"}
     </Button>
   );

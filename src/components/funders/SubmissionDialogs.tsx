@@ -271,8 +271,8 @@ export function OfferDialog({
         </Field>
       </div>
       {payback ? (
-        <p className="rounded-lg bg-surface-2 p-3 text-sm">
-          Payback <strong>{formatMoney(payback)}</strong>
+        <p className="rounded-lg border border-border bg-surface-2/60 px-3 py-2 text-sm text-text-2">
+          Payback <strong className="text-text tabular-nums">{formatMoney(payback)}</strong>
         </p>
       ) : null}
       <Field label="Note">

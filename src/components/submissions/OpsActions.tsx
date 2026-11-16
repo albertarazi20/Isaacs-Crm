@@ -9,6 +9,7 @@ import {
   sendContextAction,
 } from "@/app/deals-actions";
 import { FormDialog, useFormState, useRun } from "@/components/client/parts";
+import { Icon } from "@/components/deals/primitives";
 import { SendDialog } from "@/components/funders/SendDialog";
 import { Button, Field, Select, Textarea } from "@/components/ui";
 import { KICKBACK_LABELS, KICKBACK_REASONS, type DealStatus } from "@/lib/deals/types";
@@ -16,6 +17,7 @@ import { KICKBACK_LABELS, KICKBACK_REASONS, type DealStatus } from "@/lib/deals/
 /**
  * What ops does to a file in the queue: send it to lenders (the real picker, which marks the deal sent in the
  * same transaction), note that it already went out another way, or send it back with the reason the rep needs.
+ * Quiet buttons on every row — the board's one loud action would be ten loud actions.
  */
 export function OpsActions({
   dealId,
@@ -35,12 +37,11 @@ export function OpsActions({
   const inQueue = status === "working_ops" || status === "kicked_back";
   if (!inQueue) return null;
   return (
-    <span className="flex gap-1.5">
+    <span className="flex flex-wrap items-center gap-1.5">
       {status === "working_ops" ? (
         <>
           <Button
             size="sm"
-            variant="primary"
             disabled={busy}
             onClick={async () => {
               setBusy(true);
@@ -50,10 +51,12 @@ export function OpsActions({
               else void run(Promise.resolve(r));
             }}
           >
+            <Icon name="send" className="size-3.5 text-muted" />
             Send to lenders
           </Button>
           <Button
             size="sm"
+            variant="ghost"
             disabled={busy}
             title="The file went out another way — just move it along"
             onClick={async () => {
@@ -67,7 +70,13 @@ export function OpsActions({
           </Button>
         </>
       ) : null}
-      <Button size="sm" variant="danger" disabled={busy} onClick={() => setOpen(true)}>
+      <Button
+        size="sm"
+        variant="ghost"
+        className="text-bad hover:bg-bad-soft hover:text-bad"
+        disabled={busy}
+        onClick={() => setOpen(true)}
+      >
         {status === "kicked_back" ? "Kick back again" : "Kick back"}
       </Button>
       {open ? (

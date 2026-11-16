@@ -34,8 +34,8 @@ export function NoteEditor({
   if (readOnly) {
     return (
       <div>
-        <p className="text-xs font-medium text-muted">{label}</p>
-        <p className="mt-0.5 text-sm whitespace-pre-wrap">
+        <p className="text-[12px] font-medium text-text-2">{label}</p>
+        <p className="mt-1 text-sm whitespace-pre-wrap">
           {text || <span className="text-muted">—</span>}
         </p>
       </div>
@@ -43,8 +43,8 @@ export function NoteEditor({
   }
   return (
     <div>
-      <div className="flex items-center justify-between">
-        <p className="text-xs font-medium text-muted">{label}</p>
+      <div className="flex h-8 items-center justify-between">
+        <p className="text-[12px] font-medium text-text-2">{label}</p>
         {dirty ? (
           <Button size="sm" variant="primary" onClick={save} disabled={busy}>
             {busy ? "Saving…" : "Save"}
@@ -57,7 +57,7 @@ export function NoteEditor({
         onBlur={save}
         aria-label={`${label} note`}
         rows={2}
-        className="mt-1 text-sm"
+        className="mt-1 min-h-16 text-sm"
         placeholder="—"
       />
     </div>

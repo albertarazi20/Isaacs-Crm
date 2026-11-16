@@ -11,9 +11,10 @@ import {
 } from "@/app/docs-actions";
 import { useApp } from "@/components/app-context";
 import { ConfirmButton, FormDialog, Muted, copyText, useRun } from "@/components/client/parts";
+import { Icon } from "@/components/deals/primitives";
 import { QuietConfirm } from "@/components/funders/QuietConfirm";
 import { useToast } from "@/components/overlay";
-import { Button, EmptyState, Field, Input, Select, cn } from "@/components/ui";
+import { Badge, Button, EmptyState, Field, Input, Select, buttonClass, cn } from "@/components/ui";
 import type { Freshness } from "@/lib/docs/freshness";
 import { DOC_KINDS, DOC_LABELS, type DocKind } from "@/lib/docs/label";
 import {
@@ -93,7 +94,7 @@ function Relabel({ d, onDone }: { d: DocumentRow; onDone: () => void }) {
         aria-label="Document type"
         value={kind}
         onChange={(e) => setKind(e.target.value as DocKind)}
-        className="h-8 text-sm"
+        className="basis-56"
       >
         {DOC_KINDS.map((k) => (
           <option key={k} value={k}>
@@ -107,7 +108,7 @@ function Relabel({ d, onDone }: { d: DocumentRow; onDone: () => void }) {
           aria-label="Statement month"
           value={period}
           onChange={(e) => setPeriod(e.target.value)}
-          className="h-8 w-40 text-sm"
+          className="basis-44"
         />
       ) : null}
       <Button type="submit" size="sm" variant="primary" disabled={busy}>
@@ -343,7 +344,7 @@ export function DocumentsPanel({
       <div className="flex flex-wrap items-center justify-between gap-3">
         <p
           className={cn(
-            "text-sm",
+            "flex items-center gap-2 text-sm",
             freshness.status === "fresh"
               ? "text-good"
               : freshness.status === "none"
@@ -351,16 +352,17 @@ export function DocumentsPanel({
                 : "text-warn",
           )}
         >
+          <Icon name="file" />
           {freshness.message}
         </p>
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           {lenders.length > 0 && documents.some((d) => d.scan_status === "clean") ? (
             <span className="flex items-center gap-1.5">
               <select
                 aria-label="Send to lender"
                 value={lenderSub}
                 onChange={(e) => setLenderSub(e.target.value)}
-                className="h-8 rounded-lg border border-border bg-surface px-2 text-sm"
+                className="h-10 rounded-lg border border-border bg-surface px-2 text-sm text-text transition hover:border-border-strong focus:border-accent focus:ring-2 focus:ring-ring focus:outline-none sm:h-8 sm:text-[13px]"
               >
                 {lenders.map((l) => (
                   <option key={l.submissionId} value={l.submissionId}>
@@ -373,18 +375,15 @@ export function DocumentsPanel({
                 disabled={busy || checked.size === 0 || !lenderSub}
                 onClick={sendToLender}
               >
+                <Icon name="send" className="size-3.5 text-muted" />
                 Send checked ({checked.size})
               </Button>
             </span>
           ) : null}
           <UploadLinkButton clientId={clientId} dealId={dealId} />
           <ResetUploadLinkButton clientId={clientId} />
-          <Button
-            size="sm"
-            variant="primary"
-            disabled={busy}
-            onClick={() => input.current?.click()}
-          >
+          <Button size="sm" disabled={busy} onClick={() => input.current?.click()}>
+            <Icon name="upload" className="size-3.5 text-muted" />
             {busy ? "Filing…" : "Add files"}
           </Button>
           <input
@@ -409,31 +408,33 @@ export function DocumentsPanel({
             const live = links.filter((l) => l.document_id === d.id);
             const fresh = minted?.documentId === d.id ? minted : null;
             return (
-              <li key={d.id} className="px-4 py-3">
-                <div className="flex flex-wrap items-start justify-between gap-3">
-                  <div className="flex min-w-0 items-start gap-2">
+              <li key={d.id} className="px-4 py-3 sm:py-2.5">
+                <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2">
+                  <div className="flex min-w-0 flex-1 basis-64 items-start gap-2.5">
                     {lenders.length > 0 ? (
                       <input
                         type="checkbox"
-                        className="mt-1"
+                        className="mt-1 size-4 shrink-0 accent-accent"
                         aria-label={`Check ${d.label}`}
                         disabled={d.scan_status !== "clean"}
                         checked={checked.has(d.id)}
                         onChange={() => toggle(d.id)}
                       />
-                    ) : null}
+                    ) : (
+                      <Icon name="file" className="mt-1 text-muted" />
+                    )}
                     <div className="min-w-0">
-                      <p className="text-sm font-semibold">
+                      <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm font-semibold">
                         {d.label}
                         {d.label_confidence < 0.8 && d.label_by === "rule" ? (
-                          <span className="ml-2 rounded bg-warn-soft px-1.5 py-0.5 text-[11px] font-medium text-warn">
+                          <Badge tone="warn" className="font-medium">
                             check the label
-                          </span>
+                          </Badge>
                         ) : null}
                         {d.scan_status !== "clean" ? (
-                          <span className="ml-2 rounded bg-surface-2 px-1.5 py-0.5 text-[11px] font-medium text-muted">
+                          <Badge className="font-medium">
                             {d.scan_status === "pending" ? "being checked" : d.scan_status}
-                          </span>
+                          </Badge>
                         ) : null}
                       </p>
                       <p className="truncate text-xs text-muted">
@@ -448,19 +449,26 @@ export function DocumentsPanel({
                       </p>
                     </div>
                   </div>
-                  <div className="flex flex-wrap gap-1.5">
+                  <div className="flex flex-wrap items-center gap-1.5">
                     {d.scan_status === "clean" ? (
                       <a
                         href={`/api/docs/${d.id}`}
                         target="_blank"
                         rel="noreferrer"
-                        className="inline-flex h-8 items-center rounded-lg border border-border px-2.5 text-sm font-semibold hover:bg-surface-2"
+                        className={buttonClass("secondary", "sm")}
                       >
+                        <Icon name="external" className="size-3.5 text-muted" />
                         Open
                       </a>
                     ) : null}
                     {d.scan_status === "clean" ? (
-                      <Button size="sm" disabled={busy} onClick={() => setLinking(d)}>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        disabled={busy}
+                        onClick={() => setLinking(d)}
+                      >
+                        <Icon name="link" className="size-3.5" />
                         Lender link
                       </Button>
                     ) : null}
@@ -502,9 +510,10 @@ export function DocumentsPanel({
                 ) : null}
                 {fresh ? (
                   <div
-                    className="mt-2 flex flex-wrap items-center gap-2 rounded-lg border border-good/40 bg-good-soft px-3 py-2 text-sm"
+                    className="mt-2 flex flex-wrap items-center gap-2 rounded-lg border border-good/30 bg-good-soft px-3 py-2 text-sm"
                     data-minted-link
                   >
+                    <Icon name="link" className="text-good" />
                     <span className="font-medium text-good">
                       Link for {fresh.lenderName || "the lender"}
                     </span>
@@ -525,8 +534,9 @@ export function DocumentsPanel({
                       <li
                         key={l.id}
                         data-link={l.id}
-                        className="flex flex-wrap items-center gap-x-2 gap-y-1 rounded-lg bg-surface-2 px-3 py-1.5 text-xs"
+                        className="flex flex-wrap items-center gap-x-2 gap-y-1 rounded-lg bg-surface-2 px-3 py-1 text-xs"
                       >
+                        <Icon name="link" className="size-3.5 text-muted" />
                         <span className="font-medium text-text">{linkName(l)}</span>
                         <span className="text-muted">
                           expires {expiresIn(l.expires_at, nowMs)} · {l.downloads} of{" "}
