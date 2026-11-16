@@ -370,10 +370,14 @@ describe("column grants on app_users are exactly what we meant", () => {
         order by column_name`,
     );
     expect(grants.map((g) => g.column_name)).toEqual([
+      // role, active and invited_by are writable only through the manager guard trigger (0290)
+      "active",
       "application_link",
       "digest_enabled",
       "digest_hour",
+      "invited_by",
       "name",
+      "role",
       "signature",
       "timezone",
     ]);

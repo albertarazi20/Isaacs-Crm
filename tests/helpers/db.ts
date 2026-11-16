@@ -22,7 +22,13 @@ export async function createTestDb(): Promise<TestDb> {
   await admin.query(`create database ${name}`);
   const url = new URL(ADMIN_URL);
   url.pathname = `/${name}`;
-  const pool = new pg.Pool({ connectionString: url.toString(), max: 5 });
+  // The test pool speaks UTC whatever the machine's Postgres was initialised with (a laptop's is its local zone),
+  // so `today` below and every date a test computes agree with a UTC user's session at any hour.
+  const pool = new pg.Pool({
+    connectionString: url.toString(),
+    max: 5,
+    options: "-c timezone=UTC",
+  });
   const setup = await pool.connect();
   try {
     await migrate(setup, join(process.cwd(), "db", "migrations"));

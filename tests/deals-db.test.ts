@@ -9,11 +9,6 @@ let ops: string;
 let manager: string;
 let pizza: string;
 
-const as = <T>(
-  user: string,
-  fn: Parameters<typeof t.db.withUser>[1] & ((q: never) => Promise<T>),
-) => t.db.withUser(user, fn as Parameters<typeof t.db.withUser>[1]) as Promise<T>;
-
 beforeAll(async () => {
   t = await createTestDb();
   rep = await insertUser(t.pool, "rep@x.com");

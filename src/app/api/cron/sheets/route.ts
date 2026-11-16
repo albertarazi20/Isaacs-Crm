@@ -21,7 +21,7 @@ async function handle(req: Request): Promise<NextResponse> {
   const e = env();
   if (!authorised(req, e.CRON_SECRET))
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
-  const sync = await syncSheets({ db, tokenFor: productionTokenFor(db) });
+  const sync = await syncSheets({ db, tokenFor: productionTokenFor() });
   const filed = await fileNewSheetRows({ db, appUrl: e.APP_URL });
   await recordHeartbeat("sheets");
   return NextResponse.json({ sync, filed }, { status: sync.failed.length > 0 ? 207 : 200 });

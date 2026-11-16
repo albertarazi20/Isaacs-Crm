@@ -3,8 +3,8 @@ import { documentStore } from "../docs/storage";
 import { fileEmailAttachment } from "../docs/upload";
 import { todayIn } from "../mca/dates";
 import { isStopMessage } from "../messaging/stop";
-import { accessTokenFor } from "../email/gmail";
 import { env } from "../env";
+import { googleAccessTokenFor } from "../system/gmail";
 import { authResults, matchEmail, type Candidate } from "./match";
 import {
   getAttachment,
@@ -36,36 +36,11 @@ export interface InboxSyncSummary {
 
 type TokenFor = (userId: string) => Promise<string>;
 
-export function productionMailTokenFor(db: DbAccess): TokenFor {
-  return async (userId) => {
-    const e = env();
-    if (!e.GOOGLE_CLIENT_ID || !e.GOOGLE_CLIENT_SECRET) throw new Error("Google is not configured");
-    const row = await db.withSystem(async (q) => {
-      const { rows } = await q.query<{
-        google_email: string;
-        refresh_token_enc: string;
-        can_read_mail: boolean;
-      }>(
-        "select google_email, refresh_token_enc, can_read_mail from gmail_connections where user_id = $1 and status = 'ok'",
-        [userId],
-      );
-      return rows[0];
-    });
-    if (!row) throw new Error("Google is not connected");
-    if (!row.can_read_mail)
-      throw new Error("Google was connected without inbox access — reconnect with inbox reading");
-    return accessTokenFor(
-      { refreshTokenEnc: row.refresh_token_enc, googleEmail: row.google_email },
-      {
-        clientId: e.GOOGLE_CLIENT_ID,
-        clientSecret: e.GOOGLE_CLIENT_SECRET,
-        tokenEncKey: e.TOKEN_ENC_KEY,
-      },
-    );
-  };
+/** An access token for reading a user's inbox. The refresh token stays inside lib/system. */
+export function productionMailTokenFor(): TokenFor {
+  return (userId) => googleAccessTokenFor(userId, "mail");
 }
 
-/** Open submissions across the shop, with what the ladder needs. Loaded once per sync. */
 export async function loadCandidates(q: Db): Promise<Candidate[]> {
   const { rows } = await q.query<Candidate>(
     `select s.id as "submissionId", d.id as "dealId", c.id as "clientId", f.id as "funderId",

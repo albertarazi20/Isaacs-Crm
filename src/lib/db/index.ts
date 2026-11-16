@@ -51,6 +51,12 @@ export function makeDb(pool: pg.Pool): DbAccess {
           // One round trip, not three (these are plain statements, no parameters).
           await db.query("set local role isaac_app; set local statement_timeout = '15s'");
           await db.query("select set_config('app.user_id', $1, true)", [userId]);
+          // "Today" in SQL (current_date, now()::date, the timers' due dates) is the user's own day, not the server's.
+          // Without this a rep in New York at 9pm would get tomorrow's dates from every function that says current_date.
+          await db.query(
+            "select set_config('timezone', coalesce((select timezone from app_users where id = $1::uuid), 'UTC'), true)",
+            [userId],
+          );
         },
         fn,
       ),

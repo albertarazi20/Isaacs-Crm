@@ -854,9 +854,9 @@ describe("set_offer_status and remove_submission", () => {
 });
 
 describe("funders table", () => {
-  it("keeps names unique per user ignoring case and spaces", async () => {
+  it("keeps names unique across the shop ignoring case and spaces", async () => {
     await funder("Unique Capital");
-    await expect(funder("  unique capital ")).rejects.toThrow(/funders_user_name_key/);
+    await expect(funder("  unique capital ")).rejects.toThrow(/funders_name_key/);
   });
   it("refuses an inverted advance range and out-of-range appetite values", async () => {
     await expect(

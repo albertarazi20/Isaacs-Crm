@@ -25,7 +25,7 @@ async function handle(req: Request): Promise<NextResponse> {
   const e = env();
   if (!authorised(req, e.CRON_SECRET))
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
-  const sync = await syncInbox({ db, tokenFor: productionMailTokenFor(db) });
+  const sync = await syncInbox({ db, tokenFor: productionMailTokenFor() });
   const processed = e.ANTHROPIC_API_KEY
     ? await processInbox({ db })
     : { skipped: "ANTHROPIC_API_KEY not set" };

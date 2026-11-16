@@ -1,7 +1,12 @@
 import { db } from "../db";
 import { encryptSecret } from "../crypto";
 import { env } from "../env";
-import { GmailReconnectError, sendViaGmail, type OutgoingMessage } from "../email/gmail";
+import {
+  accessTokenFor,
+  GmailReconnectError,
+  sendViaGmail,
+  type OutgoingMessage,
+} from "../email/gmail";
 
 export interface GmailStatus {
   connected: boolean;
@@ -103,4 +108,55 @@ export async function sendEmailAsUser(userId: string, message: OutgoingMessage) 
     }
     throw err;
   }
+}
+
+/**
+ * An access token for a user's connected Google account, for the system jobs (sheet sync, inbox sync). The refresh
+ * token never leaves this module: the jobs get a short-lived access token and nothing else.
+ */
+export async function googleAccessTokenFor(
+  userId: string,
+  purpose: "sheets" | "mail",
+): Promise<string> {
+  const e = env();
+  if (!e.GOOGLE_CLIENT_ID || !e.GOOGLE_CLIENT_SECRET) throw new Error("Google is not configured");
+  const row = await db.withSystem(async (q) => {
+    const { rows } = await q.query<{
+      google_email: string;
+      refresh_token_enc: string;
+      can_read_sheets: boolean;
+      can_read_mail: boolean;
+    }>(
+      "select google_email, refresh_token_enc, can_read_sheets, can_read_mail from gmail_connections where user_id = $1 and status = 'ok'",
+      [userId],
+    );
+    return rows[0];
+  });
+  if (!row) throw new Error("Google is not connected for this user");
+  if (purpose === "sheets" && !row.can_read_sheets)
+    throw new Error("Google was connected without Sheets access — reconnect with Sheets");
+  if (purpose === "mail" && !row.can_read_mail)
+    throw new Error("Google was connected without inbox access — reconnect with inbox reading");
+  return accessTokenFor(
+    { refreshTokenEnc: row.refresh_token_enc, googleEmail: row.google_email },
+    {
+      clientId: e.GOOGLE_CLIENT_ID,
+      clientSecret: e.GOOGLE_CLIENT_SECRET,
+      tokenEncKey: e.TOKEN_ENC_KEY,
+    },
+  );
+}
+
+/** Whether a user's Gmail can send right now, for the outbox worker: the address, or null when not connected / broken. */
+export async function gmailSenderFor(
+  userId: string,
+): Promise<{ address: string; ok: boolean } | null> {
+  return db.withSystem(async (q) => {
+    const { rows } = await q.query<{ google_email: string; ok: boolean }>(
+      "select google_email, status = 'ok' as ok from gmail_connections where user_id = $1",
+      [userId],
+    );
+    const r = rows[0];
+    return r ? { address: r.google_email, ok: r.ok } : null;
+  });
 }

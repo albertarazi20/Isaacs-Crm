@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import type { ReadInput, ReadOutcome, ReaderResult } from "@/lib/ai/readLenderEmail";
+import type { ReadOutcome, ReaderResult } from "@/lib/ai/readLenderEmail";
 import { listProposed, processInbox, type Reader } from "@/lib/inbox/process";
 import { loadCandidates } from "@/lib/inbox/sync";
 import { submitToLenders, type Sender } from "@/lib/inbox/submit";

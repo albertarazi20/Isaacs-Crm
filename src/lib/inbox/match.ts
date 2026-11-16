@@ -110,13 +110,20 @@ export function matchEmail(h: InboundHeaders, candidates: readonly Candidate[]):
     for (const c of fromFunder) {
       const names = [c.businessName, c.dba].filter(Boolean);
       // a name that appears in the email (ignoring punctuation) is as good as a thread
+      // "Mike's Pizza" and "Mikes Pizza" are the same name: apostrophes vanish, everything else non-alphanumeric is a space
       const squash = (x: string) =>
         x
           .toLowerCase()
+          .replace(/['’]/g, "")
           .replace(/[^a-z0-9]+/g, " ")
           .trim();
       const hayS = squash(hay);
-      let score = names.some((n) => squash(n).length >= 4 && hayS.includes(squash(n))) ? 0.95 : 0;
+      const core = (x: string) =>
+        squash(x)
+          .replace(/\b(llc|inc|corp|corporation|co|ltd|dba)\b/g, "")
+          .replace(/\s+/g, " ")
+          .trim();
+      let score = names.some((n) => core(n).length >= 4 && hayS.includes(core(n))) ? 0.95 : 0;
       if (!score) {
         // otherwise compare against each line of the subject/body that might be the business
         for (const line of hay.split(/\n|[|·•]/).slice(0, 60)) {

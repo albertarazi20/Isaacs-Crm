@@ -3,13 +3,17 @@ import { addBusinessDays } from "@/lib/mca/dates";
 import { funderScoreboard, listClientSubmissions, listFunders } from "@/lib/funders/queries";
 import { createTestDb, insertClient, insertUser, type TestDb } from "./helpers/db";
 
+/**
+ * Since 0300 the lender list is one list for the whole shop: every rep reads every lender and may send a merchant to
+ * any of them. Submissions, offers and chase timers stay the rep's own. 0440 makes a lender's name unique shop-wide.
+ */
 let t: TestDb;
 let a: string;
 let b: string;
 let clientA: string;
 let clientB: string;
-let funderA: string;
-let funderB: string;
+let pearl: string;
+let libertas: string;
 let subA: string;
 let offerA: string;
 
@@ -20,18 +24,18 @@ beforeAll(async () => {
   clientA = await insertClient(t.db, a, "A Pizza");
   clientB = await insertClient(t.db, b, "B Bakery");
   const f = await t.pool.query<{ id: string }>(
-    "insert into funders (user_id, name) values ($1, 'Pearl'), ($2, 'Pearl') returning id, user_id",
-    [a, b],
+    "insert into funders (user_id, name) values ($1, 'Pearl'), ($1, 'Libertas') returning id",
+    [a],
   );
-  funderA = f.rows[0]?.id as string;
-  funderB = f.rows[1]?.id as string;
+  pearl = f.rows[0]?.id as string;
+  libertas = f.rows[1]?.id as string;
   subA = await t.db.withUser(
     a,
     async (q) =>
       (
         await q.query<{ id: string }>("select * from create_submissions($1, $2::uuid[])", [
           clientA,
-          [funderA],
+          [pearl],
         ])
       ).rows[0]?.id as string,
   );
@@ -46,12 +50,8 @@ beforeAll(async () => {
       ).rows[0]?.id as string,
   );
   // a second, still-waiting submission so A has an open chase timer to protect
-  const f2 = await t.pool.query<{ id: string }>(
-    "insert into funders (user_id, name) values ($1, 'Libertas') returning id",
-    [a],
-  );
   await t.db.withUser(a, (q) =>
-    q.query("select * from create_submissions($1, $2::uuid[])", [clientA, [f2.rows[0]?.id]]),
+    q.query("select * from create_submissions($1, $2::uuid[])", [clientA, [libertas]]),
   );
 });
 afterAll(async () => {
@@ -68,25 +68,24 @@ const count = async (userId: string, table: string, where = "true") =>
         .rows[0]?.n,
   );
 
-describe("funders, submissions and offers: row-level security", () => {
-  it("shows each user only their own rows (the lender list itself is shared across the shop)", async () => {
-    // Lenders are one list for the whole shop since 0300: both users read all three. Submissions and offers stay per user.
-    expect(await count(a, "funders")).toBe(3);
+describe("lenders (shared), submissions and offers (per rep): row-level security", () => {
+  it("both reps read the whole lender list; submissions, offers and chase timers are their own", async () => {
+    expect(await count(a, "funders")).toBe(2);
+    expect(await count(b, "funders")).toBe(2);
     expect(await count(a, "submissions")).toBe(2);
     expect(await count(a, "offers")).toBe(1);
     expect(await count(a, "timers", "kind = 'chase' and done_at is null")).toBe(1);
-    expect(await count(b, "funders")).toBe(3);
     expect(await count(b, "submissions")).toBe(0);
     expect(await count(b, "offers")).toBe(0);
     expect(await count(b, "timers", "kind = 'chase' and done_at is null")).toBe(0);
   });
 
-  it("shows nothing when no user is set on the session", async () => {
+  it("with no user on the session, merchant rows are invisible (the lender list is shop-wide, not personal)", async () => {
     const c = await t.pool.connect();
     try {
       await c.query("begin");
       await c.query("set local role isaac_app");
-      for (const table of ["funders", "submissions", "offers"]) {
+      for (const table of ["submissions", "offers"]) {
         expect((await c.query(`select count(*)::int as n from ${table}`)).rows[0].n).toBe(0);
       }
       await c.query("rollback");
@@ -95,20 +94,20 @@ describe("funders, submissions and offers: row-level security", () => {
     }
   });
 
-  it("the query helpers return nothing for another user's merchant or funders", async () => {
+  it("the query helpers show B every lender but none of A's merchant rows", async () => {
     expect(await asB((q) => listClientSubmissions(q, clientA))).toEqual([]);
-    expect((await asB((q) => listFunders(q))).map((f) => f.id)).toEqual([funderB]);
-    const board = await asB((q) => funderScoreboard(q, [funderA, funderB]));
-    expect(board[funderA]?.submissions).toBe(0);
-    expect(board[funderA]?.offerCount).toBe(0);
-    const own = await asB(async (q) => listClientSubmissions(q, clientA));
-    expect(own).toEqual([]);
+    expect((await asB((q) => listFunders(q))).map((f) => f.id).sort()).toEqual(
+      [pearl, libertas].sort(),
+    );
+    const board = await asB((q) => funderScoreboard(q, [pearl]));
+    expect(board[pearl]?.submissions).toBe(0);
+    expect(board[pearl]?.offerCount).toBe(0);
   });
 
-  it("blocks another user's update and delete on funders, submissions and offers; the rows are untouched", async () => {
+  it("a rep cannot edit or delete a lender they did not add, nor another rep's submissions and offers", async () => {
     const res = await asB(async (q) => ({
-      f: (await q.query("update funders set name = 'HACKED' where id = $1", [funderA])).rowCount,
-      fd: (await q.query("delete from funders where id = $1", [funderA])).rowCount,
+      f: (await q.query("update funders set name = 'HACKED' where id = $1", [pearl])).rowCount,
+      fd: (await q.query("delete from funders where id = $1", [pearl])).rowCount,
       s: (await q.query("update submissions set status = 'withdrawn' where id = $1", [subA]))
         .rowCount,
       sd: (await q.query("delete from submissions where id = $1", [subA])).rowCount,
@@ -116,7 +115,7 @@ describe("funders, submissions and offers: row-level security", () => {
       od: (await q.query("delete from offers where id = $1", [offerA])).rowCount,
     }));
     expect(res).toEqual({ f: 0, fd: 0, s: 0, sd: 0, o: 0, od: 0 });
-    const f = await t.pool.query("select name from funders where id = $1", [funderA]);
+    const f = await t.pool.query("select name from funders where id = $1", [pearl]);
     const s = await t.pool.query("select status from submissions where id = $1", [subA]);
     const o = await t.pool.query("select status from offers where id = $1", [offerA]);
     expect([f.rows[0].name, s.rows[0].status, o.rows[0].status]).toEqual([
@@ -126,16 +125,13 @@ describe("funders, submissions and offers: row-level security", () => {
     ]);
   });
 
-  it("rejects inserting a row owned by someone else", async () => {
-    await expect(
-      asB((q) => q.query("insert into funders (user_id, name) values ($1, 'Evil')", [a])),
-    ).rejects.toThrow(/row-level security/);
+  it("rejects inserting a submission or offer owned by someone else", async () => {
     await expect(
       asB((q) =>
         q.query("insert into submissions (user_id, client_id, funder_id) values ($1, $2, $3)", [
           a,
           clientA,
-          funderA,
+          pearl,
         ]),
       ),
     ).rejects.toThrow(/row-level security/);
@@ -149,28 +145,26 @@ describe("funders, submissions and offers: row-level security", () => {
     ).rejects.toThrow(/row-level security/);
   });
 
-  it("cannot attach a submission, offer or chase timer to someone else's merchant, funder or submission", async () => {
+  it("cannot attach a submission, offer or chase timer to someone else's merchant or submission; any lender is fine", async () => {
     // B's own user id, A's merchant
     await expect(
       asB((q) =>
         q.query("insert into submissions (user_id, client_id, funder_id) values ($1, $2, $3)", [
           b,
           clientA,
-          funderB,
+          pearl,
         ]),
       ),
     ).rejects.toThrow(/foreign key/);
-    // B's merchant, A's funder
-    await expect(
-      asB((q) =>
-        q.query("insert into submissions (user_id, client_id, funder_id) values ($1, $2, $3)", [
-          b,
-          clientB,
-          funderA,
-        ]),
-      ),
-    ).rejects.toThrow(/foreign key/);
-    // an offer on A's submission
+    // B's merchant, a lender A added: the list is shared, so this is a normal submission
+    await asB((q) =>
+      q.query("insert into submissions (user_id, client_id, funder_id) values ($1, $2, $3)", [
+        b,
+        clientB,
+        pearl,
+      ]),
+    );
+    // an offer on A's submission (the one-offer-per-submission key fires before the foreign key; either way: no)
     await expect(
       asB((q) =>
         q.query(
@@ -178,7 +172,7 @@ describe("funders, submissions and offers: row-level security", () => {
           [b, clientB, subA],
         ),
       ),
-    ).rejects.toThrow(/foreign key/);
+    ).rejects.toThrow(/foreign key|duplicate key/);
     // a chase timer pointing at A's submission
     await expect(
       asB((q) =>
@@ -191,15 +185,17 @@ describe("funders, submissions and offers: row-level security", () => {
     const n = await t.pool.query("select count(*)::int as n from submissions where user_id = $1", [
       b,
     ]);
-    expect(n.rows[0].n).toBe(0);
+    expect(n.rows[0].n).toBe(1);
   });
 
-  it("both users can have a funder with the same name", async () => {
-    expect(await count(a, "funders", "lower(name) = 'pearl'")).toBe(1);
+  it("a lender's name is unique across the shop, whoever adds it", async () => {
+    await expect(
+      asB((q) => q.query("insert into funders (user_id, name) values ($1, ' pearl ')", [b])),
+    ).rejects.toThrow(/funders_name_key/);
     expect(await count(b, "funders", "lower(name) = 'pearl'")).toBe(1);
   });
 
-  it("every function says 'not found' for another user's records and changes nothing", async () => {
+  it("every function says 'not found' for another rep's records and changes nothing; their own merchant to a shared lender works", async () => {
     const before = await t.pool.query(
       `select (select status from submissions where id = $1) as sub,
               (select status from offers where id = $2) as offer,
@@ -209,11 +205,14 @@ describe("funders, submissions and offers: row-level security", () => {
       [subA, offerA, clientA],
     );
     await expect(
-      asB((q) => q.query("select * from create_submissions($1, $2::uuid[])", [clientA, [funderB]])),
+      asB((q) => q.query("select * from create_submissions($1, $2::uuid[])", [clientA, [pearl]])),
     ).rejects.toThrow(/client not found/);
-    await expect(
-      asB((q) => q.query("select * from create_submissions($1, $2::uuid[])", [clientB, [funderA]])),
-    ).rejects.toThrow(/funder not found/);
+    const mine = await asB(
+      async (q) =>
+        (await q.query("select * from create_submissions($1, $2::uuid[])", [clientB, [libertas]]))
+          .rowCount,
+    );
+    expect(mine).toBe(1);
     await expect(
       asB((q) =>
         q.query("select * from set_submission_status($1, 'declined', 'credit', '')", [subA]),
@@ -248,7 +247,7 @@ describe("funders, submissions and offers: row-level security", () => {
     expect(after.rows[0].chase).toBe(1);
   });
 
-  it("the owner's own call still works (the failures above are about B, not the setup)", async () => {
+  it("the owner's own chase timer is where it should be", async () => {
     const { rows } = await t.db.withUser(a, (q) =>
       q.query<{ due_on: string }>(
         "select t.due_on::text from timers t where t.client_id = $1 and t.kind = 'chase' and t.done_at is null",

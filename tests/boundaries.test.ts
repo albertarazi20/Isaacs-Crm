@@ -66,7 +66,9 @@ describe("architecture boundaries", () => {
       .filter(
         (f) =>
           !rel(f).startsWith("lib/system/") &&
-          /gmail_connections|reminders_sent/.test(readFileSync(f, "utf8")),
+          // the refresh token (the secret) and the reminder ledger; the connection's address/status is not a secret
+          // and the outbox worker reads those two columns to pick a sender
+          /refresh_token_enc|reminders_sent/.test(readFileSync(f, "utf8")),
       )
       .map(rel);
     expect(offenders).toEqual([]);

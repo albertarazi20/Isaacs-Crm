@@ -34,7 +34,7 @@ export async function connectSheetAction(
     if (!spreadsheetId) throw new UserError("That doesn't look like a Google Sheets link");
     if (i.shared && !CAN.manageTeam(session.role))
       throw new UserError("Only a manager can share a sheet with everyone");
-    const token = await productionTokenFor(db)(session.userId);
+    const token = await productionTokenFor()(session.userId);
     const meta = await listTabs(token, spreadsheetId);
     const gid = gidFrom(i.url);
     const tab = i.tab || meta.tabs.find((t) => t.gid === gid)?.title || meta.tabs[0]?.title || "";
@@ -55,7 +55,7 @@ export async function connectSheetAction(
       return rows[0]?.id;
     });
     if (!created) throw new Error("sheet_sources insert returned no row");
-    await syncSheets({ db, tokenFor: productionTokenFor(db), sourceId: created });
+    await syncSheets({ db, tokenFor: productionTokenFor(), sourceId: created });
     revalidatePath("/settings");
     return { ok: true, data: { id: created, tabs: meta.tabs.map((t) => t.title) } };
   } catch (e) {
@@ -92,7 +92,7 @@ export async function updateSheetAction(input: unknown): Promise<ActionResult<nu
       ),
     );
     if (i.active !== false)
-      await syncSheets({ db, tokenFor: productionTokenFor(db), sourceId: i.id });
+      await syncSheets({ db, tokenFor: productionTokenFor(), sourceId: i.id });
     revalidatePath("/settings");
     return { ok: true, data: null };
   } catch (e) {
@@ -106,7 +106,7 @@ export async function syncSheetNowAction(
   await requireSession();
   try {
     const { id: sourceId } = z.object({ id }).parse(input);
-    const s = await syncSheets({ db, tokenFor: productionTokenFor(db), sourceId });
+    const s = await syncSheets({ db, tokenFor: productionTokenFor(), sourceId });
     if (s.failed[0]) throw new UserError(s.failed[0].error);
     revalidatePath("/settings");
     return { ok: true, data: { rows: s.rows, added: s.added } };

@@ -1,7 +1,6 @@
 import { createHash } from "node:crypto";
 import type { Db, DbAccess } from "../db";
-import { accessTokenFor } from "../email/gmail";
-import { env } from "../env";
+import { googleAccessTokenFor } from "../system/gmail";
 import { listTabs, readTab } from "./api";
 import { guessMapping, isLeadRow, parseRow, type Mapping } from "./mapping";
 
@@ -31,34 +30,9 @@ interface SourceRow {
 
 type TokenFor = (userId: string) => Promise<string>;
 
-/** An access token for a user's connected Google account, from the stored refresh token. */
-export function productionTokenFor(db: DbAccess): TokenFor {
-  return async (userId) => {
-    const e = env();
-    if (!e.GOOGLE_CLIENT_ID || !e.GOOGLE_CLIENT_SECRET) throw new Error("Google is not configured");
-    const row = await db.withSystem(async (q) => {
-      const { rows } = await q.query<{
-        google_email: string;
-        refresh_token_enc: string;
-        can_read_sheets: boolean;
-      }>(
-        "select google_email, refresh_token_enc, can_read_sheets from gmail_connections where user_id = $1 and status = 'ok'",
-        [userId],
-      );
-      return rows[0];
-    });
-    if (!row) throw new Error("Google is not connected for this user");
-    if (!row.can_read_sheets)
-      throw new Error("Google was connected without Sheets access — reconnect with Sheets");
-    return accessTokenFor(
-      { refreshTokenEnc: row.refresh_token_enc, googleEmail: row.google_email },
-      {
-        clientId: e.GOOGLE_CLIENT_ID,
-        clientSecret: e.GOOGLE_CLIENT_SECRET,
-        tokenEncKey: e.TOKEN_ENC_KEY,
-      },
-    );
-  };
+/** An access token for a user's connected Google account. The refresh token stays inside lib/system. */
+export function productionTokenFor(): TokenFor {
+  return (userId) => googleAccessTokenFor(userId, "sheets");
 }
 
 const hashRow = (cells: readonly string[]) =>
