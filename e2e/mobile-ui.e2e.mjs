@@ -65,172 +65,6 @@ export default async function mobileUi({ email }) {
     return d.toISOString().slice(0, 10);
   };
 
-  // ======================= I-20: stage-group tabs on the phone Board =======================
-  console.log("\n-- I-20 stage-group tabs");
-  if (on("I-20")) {
-    const m = await openBrowser(email, PHONE, TOUCH);
-    const p = m.page;
-    await p.goto(`${BASE}/pipeline?view=pipeline`, { waitUntil: "domcontentloaded" });
-    await p.locator("article").first().waitFor({ timeout: 15000 });
-    const tabs = p.getByRole("navigation", { name: "Jump to a stage group" });
-    check("the tab row is on the phone Board", await tabs.isVisible());
-    const fit0 = await pageFits(p);
-    check("the Board page fits a 390px phone without being shrunk", fit0.ok, JSON.stringify(fit0));
-    const labels = await tabs.getByRole("button").allInnerTexts();
-    check(
-      "it has a tab for each stage group, with counts",
-      labels.length === 5 && labels.every((l) => /\d/.test(l)),
-      JSON.stringify(labels),
-    );
-    const small = await tabs
-      .getByRole("button")
-      .evaluateAll((els) => els.filter((e) => e.getBoundingClientRect().height < 40).length);
-    check("every tab is at least 40px tall", small === 0, `${small} too short`);
-    const lit = () =>
-      tabs
-        .locator("[aria-current=true]")
-        .innerText()
-        .catch(() => "");
-    check("the first group is lit at the start", /Prospecting/.test(await lit()), await lit());
-    await shot(p, "board-tabs-start");
-
-    const board = p.getByRole("region", { name: /Pipeline board/ });
-    const edgeOf = (group) =>
-      board.evaluate((b, g) => {
-        const s = b.querySelector(`[data-group="${g}"]`);
-        return s
-          ? Math.round(s.getBoundingClientRect().left - b.getBoundingClientRect().left)
-          : null;
-      }, group);
-    await tabs.getByRole("button", { name: /^Funded/ }).tap();
-    const atFunded = await until(async () => {
-      const e = await edgeOf("funded");
-      return e !== null && Math.abs(e) <= 24 ? { e } : null;
-    }, 4000);
-    check(
-      "tapping Funded scrolls the board so Funded starts at the left edge",
-      atFunded !== null,
-      `Funded starts ${await edgeOf("funded")}px from the left`,
-    );
-    check(
-      "and the Funded tab lights up",
-      !!(await until(async () => /Funded/.test(await lit()), 2500)),
-      await lit(),
-    );
-    await settled(board);
-    await shot(p, "board-tabs-funded");
-
-    await tabs.getByRole("button", { name: /^Exits/ }).tap();
-    check(
-      "tapping Exits (the last group) lights Exits even though the board stops scrolling",
-      !!(await until(async () => /Exits/.test(await lit()), 4000)),
-      await lit(),
-    );
-    await settled(board);
-    await shot(p, "board-tabs-exits");
-
-    // A swipe back to the start lights Prospecting again.
-    await board.evaluate((b) => b.scrollTo({ left: 0, behavior: "instant" }));
-    check(
-      "scrolling back to the start lights Prospecting again",
-      !!(await until(async () => /Prospecting/.test(await lit()), 3000)),
-      await lit(),
-    );
-
-    // A collapsed group opens when its tab is tapped.
-    await p
-      .getByRole("button", { name: /^Hide Funded stages/ })
-      .first()
-      .scrollIntoViewIfNeeded();
-    await p
-      .getByRole("button", { name: /^Hide Funded stages/ })
-      .first()
-      .tap();
-    await p.getByRole("button", { name: /^Show Funded stages/ }).waitFor({ timeout: 4000 });
-    await tabs.getByRole("button", { name: /^Funded/ }).tap();
-    check(
-      "tapping the tab of a collapsed group opens it",
-      !!(await until(
-        async () => (await p.getByRole("button", { name: /^Hide Funded stages/ }).count()) === 1,
-        4000,
-      )),
-    );
-    const there = await until(async () => {
-      const e = await edgeOf("funded");
-      return e !== null && Math.abs(e) <= 24 ? { e } : null;
-    }, 4000);
-    check("…and scrolls to it", there !== null, `${await edgeOf("funded")}px`);
-    await m.browser.close();
-
-    const d = await openBrowser(email, { width: 1440, height: 900 });
-    await d.page.goto(`${BASE}/pipeline?view=pipeline`, { waitUntil: "domcontentloaded" });
-    await d.page.locator("article").first().waitFor({ timeout: 15000 });
-    check(
-      "the tab row is hidden on a desktop screen",
-      !(await d.page.getByRole("navigation", { name: "Jump to a stage group" }).isVisible()),
-    );
-    await d.browser.close();
-  }
-
-  // ======================= I-9: the Board reopens in the view he used last =======================
-  console.log("\n-- I-9 remembered view");
-  if (on("I-9")) {
-    const m = await openBrowser(email, PHONE, TOUCH);
-    const p = m.page;
-    await p.goto(`${BASE}/pipeline`, { waitUntil: "domcontentloaded" });
-    await p.locator("article").first().waitFor({ timeout: 15000 });
-    check(
-      "a first visit opens Pipeline",
-      (await p
-        .getByRole("navigation", { name: "Board view" })
-        .locator("[aria-current=page]")
-        .innerText()) === "Pipeline",
-    );
-    await p
-      .getByRole("navigation", { name: "Board view" })
-      .getByRole("link", { name: "Follow-ups" })
-      .tap();
-    await p.waitForURL(/view=followups/);
-    // the phone tab bar no longer carries the kanban (it is under More as "Pipeline board"); a bare /pipeline is the
-    // same door and must still remember the view
-    await p.goto(`${BASE}/pipeline`, { waitUntil: "domcontentloaded" });
-    await p.locator("article").first().waitFor({ timeout: 15000 });
-    check(
-      "a bare /pipeline opens Follow-ups after he used it",
-      (await p
-        .getByRole("navigation", { name: "Board view" })
-        .locator("[aria-current=page]")
-        .innerText()) === "Follow-ups",
-    );
-    await p
-      .getByRole("navigation", { name: "Board view" })
-      .getByRole("link", { name: "Pipeline" })
-      .tap();
-    await p.waitForURL(/view=pipeline/);
-    await p.waitForFunction(() => document.cookie.includes("isaac_board_view=pipeline"));
-    await p.goto(`${BASE}/pipeline`, { waitUntil: "domcontentloaded" });
-    await p.locator("article").first().waitFor({ timeout: 15000 });
-    check(
-      "choosing Pipeline again is remembered too",
-      (await p
-        .getByRole("navigation", { name: "Board view" })
-        .locator("[aria-current=page]")
-        .innerText()) === "Pipeline",
-    );
-    await p.goto(`${BASE}/pipeline?view=followups`, { waitUntil: "domcontentloaded" });
-    await p.locator("article").first().waitFor({ timeout: 15000 });
-    await p.goto(`${BASE}/pipeline?view=pipeline`, { waitUntil: "domcontentloaded" });
-    await p.locator("article").first().waitFor({ timeout: 15000 });
-    check(
-      "an explicit ?view= always wins over what was remembered",
-      (await p
-        .getByRole("navigation", { name: "Board view" })
-        .locator("[aria-current=page]")
-        .innerText()) === "Pipeline",
-    );
-    await m.browser.close();
-  }
-
   // ======================= I-14: Clients on a phone =======================
   console.log("\n-- I-14 Clients page on a phone");
   if (on("I-14")) {
@@ -506,14 +340,6 @@ export default async function mobileUi({ email }) {
     );
     await dlg.getByRole("button", { name: "Cancel" }).tap();
 
-    // The same merchant's card on the Board, on a phone.
-    await p.goto(`${BASE}/pipeline?view=pipeline`, { waitUntil: "domcontentloaded" });
-    await p.locator("article").first().waitFor({ timeout: 15000 });
-    const art = p.locator('article[aria-label^="Rivera Auto Repair,"]');
-    await art.scrollIntoViewIfNeeded();
-    const cardHint = art.getByText(/Not a usable phone number/);
-    check("the Board card says why on a phone too", await cardHint.isVisible());
-    await shot(p, "board-card-bad-phone");
     await rows("update clients set phone = $2 where id = $1", [rivera.id, rivera.phone]);
     await m.browser.close();
   }
@@ -525,7 +351,6 @@ export default async function mobileUi({ email }) {
     const p = m.page;
     const rivera = await client("Rivera Auto Repair");
     for (const [name, path, ready] of [
-      ["board-tabs-dark", "/board?view=pipeline", "article"],
       ["clients-dark", "/clients", "ul[aria-label=Clients] > li"],
       ["import-dark", "/import", "label"],
       ["client-dark", `/clients/${rivera.id}`, "#new-note"],

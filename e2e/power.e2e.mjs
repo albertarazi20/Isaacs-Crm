@@ -794,7 +794,7 @@ export default async function powerFlow({ email }) {
     (await mp.getByRole("dialog", { name: "More" }).count()) === 0 ||
       !(await mp.getByRole("dialog", { name: "More" }).isVisible()),
   );
-  for (const path of ["/", "/pipeline", "/clients", "/dial"]) {
+  for (const path of ["/", "/clients", "/dial"]) {
     await mp.goto(`${BASE}${path}`, { waitUntil: "networkidle" });
     const overflow = await mp.evaluate(
       () => document.documentElement.scrollWidth - window.innerWidth,
@@ -829,22 +829,6 @@ export default async function powerFlow({ email }) {
     "at desktop width the tab bar is hidden and the top links show",
     !(await wide.page.getByRole("navigation", { name: "Primary" }).isVisible()) &&
       (await wide.page.getByRole("navigation", { name: "Main" }).isVisible()),
-  );
-  const boardTitle = await (async () => {
-    await wide.page.goto(`${BASE}/pipeline`, { waitUntil: "networkidle" });
-    return wide.page.title();
-  })();
-  const dueNow = await one(
-    `select count(distinct t.client_id)::int as n from timers t join app_users u on u.id = t.user_id
-      where u.email = $1 and t.done_at is null and t.due_on <= ${NY_TODAY}`,
-    [email],
-  );
-  check(
-    "the Board tab title carries the due count",
-    dueNow.n === 0
-      ? boardTitle === "Pipeline — Selective CRM"
-      : boardTitle === `(${dueNow.n}) Pipeline — Selective CRM`,
-    `${boardTitle} vs ${dueNow.n}`,
   );
   await wide.browser.close();
 }

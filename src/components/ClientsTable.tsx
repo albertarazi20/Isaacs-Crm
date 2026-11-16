@@ -18,7 +18,7 @@ import { reminderText } from "@/lib/mca/reminder";
 import { CORE_STAGES, STAGE_GROUPS, type StageKey } from "@/lib/mca/stages";
 import { formatMoneyCompact } from "@/lib/money";
 import { useApp } from "./app-context";
-import { ReminderTag } from "./board/parts";
+import { ReminderTag } from "@/components/ReminderTag";
 import { ClientCards } from "./ClientCards";
 import { StageBadge } from "./StageBadge";
 import { Badge, Button, cn, EmptyState, Input, Select } from "./ui";

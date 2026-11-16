@@ -19,7 +19,7 @@ import { TimerPicker } from "../TimerPicker";
 import { Button, cn, Field, Input } from "../ui";
 import { AddToCalendar } from "../winback/AddToCalendar";
 import { dueTone } from "./logic";
-import { ReminderTag } from "../board/parts";
+import { ReminderTag } from "@/components/ReminderTag";
 import { Muted, Panel, useRun } from "./parts";
 
 export function FollowUpPanel({ detail, className }: { detail: ClientDetail; className?: string }) {

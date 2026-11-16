@@ -13,7 +13,7 @@ import { formatUS } from "@/lib/mca/phone";
 import { TIMER_LABELS } from "@/lib/mca/stages";
 import { formatMoney, formatMoneyCompact } from "@/lib/money";
 import { useApp } from "./app-context";
-import { ReminderTag } from "./board/parts";
+import { ReminderTag } from "@/components/ReminderTag";
 import { ContactActions } from "./ContactActions";
 import { toggleHot } from "./power/prefs";
 import { SnoozeMenu } from "./power/SnoozeMenu";
