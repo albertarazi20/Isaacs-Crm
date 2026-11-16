@@ -250,3 +250,46 @@ Stream 3 is appended below when it lands.
 - **Supabase:** 0520–0527 applied the same way (schema_migrations has 77 rows; local has 77 files). Nothing new
   from the security advisor; the performance advisor's new unindexed foreign keys became 0527 (2ab296d, applied).
   The two statements left for the owner's hand are unchanged (0508's delete, the retired 0512 signature's drop).
+
+## Design phase and the page controls (2026-11-16, evening): on main at 2c1cdbb
+
+The owner asked for the look next ("precise and minimal, light by default with a dark switch, compact, the Selective
+Capital brand, top bar") and then for everything to be finished. What landed, all merged to main:
+
+- **The look** (`docs/DESIGN.md` is the spec): tokens in `globals.css` with `light-dark()` so one set serves both
+  modes; the mode is a cookie (`theme`: light default, dark, device) set from the account menu or Settings → Me;
+  Geist from the brand site; the S logomark in `public/brand/`; one gradient (blue → violet → fuchsia) used only on a
+  screen's primary action. Three agents restyled every page and component to it, then verified at 1440 and 390 px,
+  light and dark.
+- **New pages**: the alert feed (`/alerts`, the bell in the header), the first-login policy gate (`/policy`), the
+  merchant's application (`/apply/[token]`), month-end statements (`/funded/statements/[period]`,
+  `/settings/plan/statements/[id]`), the state-rules editor (`/settings/states`).
+- **Every backend now has its control**: four agents wired the settings (DNS check, deals inbox, approval validity,
+  chase mode, holidays, scores, retention, statements, trust cards, AI spend), intake and follow-up (paste a lead
+  line, cross-rep duplicate line with manager override, bulk intake, reply tags, pause until a date, bucket scores,
+  application link), the board and deal page (undo an AI update, chase drafts, import a pasted offer or screenshot,
+  offer compare, reshop, state badge, ask a question about the deal with verified citations, ask a manager) and the
+  money pages (why it did not fund, the opener tray, recovered money, rescue nudges, statements, late payouts,
+  corrections, start renewal, speed numbers). Each has a browser check that drives the control and reads the
+  database (`e2e/wire-*.e2e.mjs`) and unit tests (`tests/wire-*.test.ts`).
+- **Bugs found on the way, all fixed with tests**: signing the application failed for a merchant with no DBA (a null
+  into a not-null column); a late native `close` event from one dialog closed the next one opened right after it
+  (log a call, start another at once, and the second prompt vanished; `Dialog` now ignores the close events of its
+  own `close()`); the alert feed's labels did not match the kinds the code writes; late-payout alerts linked to a
+  page that does not exist.
+- **Dependencies**: Next.js 16.4.2 → 16.4.6 (GHSA-mfr8-8qww-v76h, a `use cache` issue the app does not use; the patch
+  is inside the caret range). `pnpm audit --prod` is clean. The old Pipeline board (kanban) is gone, with its two
+  suites; the vocabulary test now takes the plan's own words (lender, payment) and still bans loan, borrower,
+  interest rate, APR, principal and customer.
+- **Gates on main at 2c1cdbb**: typecheck, lint (0 warnings), format:check green; `pnpm -s vitest run` 122 files,
+  1,911 tests, all green; `pnpm -s build` green; the browser suites 688 of 688 checks against the redesigned
+  screens (`BASE_URL=http://localhost:3001 node e2e/run.mjs`, Chrome driven locally, never in CI). One thing the
+  browser helper now ignores on purpose: React 19.2's development-only "negative time stamp" page error thrown when a
+  server page calls `notFound()` (the merchant page does it on main too; it is not in a production build).
+- **Supabase `aztoxzcmnvqaypjuuuwj`**: applied through 0531 (79 migrations, matching local). The two statements the
+  migration tool refuses to run unattended are unchanged (see "Automations pass").
+- **Known limits, said plainly**: the AI controls (ask a question, screenshot import, paste) were proved end to end
+  against a local stand-in for the model, not a real Anthropic key; a real Gmail send was proved only with a fake
+  sender. Ops cannot read AI proposals (row security from 0340: proposals are the manager's tray), so an ops user sees
+  chase drafts but an empty proposals list; changing that is a decision and a migration, so it is left as it is.
+  Lenders saved before the "blank approval days = shop default" change still carry an explicit 30.
