@@ -28,6 +28,7 @@ import {
   type Scoreboard,
 } from "@/lib/dashboard/queries";
 import { dueCount, userContext } from "@/lib/data/queries";
+import { dealStatusCounts } from "@/lib/deals/queries";
 import { db } from "@/lib/db";
 import { formatDate } from "@/lib/format";
 import { formatMoneyCompact } from "@/lib/money";
@@ -172,7 +173,15 @@ function PaceBar({
   );
 }
 
-function NowList({ items, total }: { items: NowItem[]; total: number }) {
+function NowList({
+  items,
+  total,
+  owners,
+}: {
+  items: NowItem[];
+  total: number;
+  owners?: Record<string, string>;
+}) {
   if (items.length === 0)
     return (
       <EmptyState title="Nothing is waiting on you">
@@ -198,6 +207,9 @@ function NowList({ items, total }: { items: NowItem[]; total: number }) {
                 {KIND_LABEL[n.kind]}
               </span>
               <span className="min-w-0 flex-1">
+                {owners?.[n.client_id] ? (
+                  <span className="float-right ml-2 text-xs text-muted">{owners[n.client_id]}</span>
+                ) : null}
                 <span className="block truncate text-sm font-semibold">
                   {n.label} <span className="font-normal text-muted">· {n.business_name}</span>
                 </span>
@@ -475,6 +487,7 @@ export default async function DashboardPage({
   const { denied } = await searchParams;
   const session = await requireSession();
   const manager = CAN.seeEveryone(session.role);
+  const ops = session.role === "ops";
   const data = await db.withUser(session.userId, async (q) => {
     const ctx = await userContext(q);
     const month = monthOf(ctx.today);
@@ -483,6 +496,21 @@ export default async function DashboardPage({
     const money = await moneyOnTable(q, ctx.today);
     const counts = await funnelCounts(q, month);
     const now = await nowItems(q, ctx.today, { manager });
+    // the queue tiles for ops (their Dashboard is the board's front door, not a commission sheet)
+    const queue = ops ? await dealStatusCounts(q) : null;
+    // whose merchant each line is, for anyone who sees more than their own book (P2-2)
+    const owners: Record<string, string> =
+      (manager || ops) && now.length > 0
+        ? Object.fromEntries(
+            (
+              await q.query<{ id: string; name: string }>(
+                `select c.id, coalesce(nullif(u.name, ''), u.email) as name
+                   from clients c join app_users u on u.id = c.user_id where c.id = any($1::uuid[])`,
+                [Array.from(new Set(now.map((n) => n.client_id)))],
+              )
+            ).rows.map((r) => [r.id, r.name]),
+          )
+        : {};
     const goals = await listGoals(q, month);
     const due = await dueCount(q, ctx.today);
     const extra = manager
@@ -497,9 +525,9 @@ export default async function DashboardPage({
           ).rows[0]?.n ?? 0,
         ] as const)
       : null;
-    return { ctx, month, score, money, counts, now, goals, due, extra };
+    return { ctx, month, score, money, counts, now, goals, due, extra, queue, owners };
   });
-  const { ctx, month, score, money, counts, now, goals, due, extra } = data;
+  const { ctx, month, score, money, counts, now, goals, due, extra, queue, owners } = data;
   const monthName = `${MONTHS[Number(month.slice(5, 7)) - 1]} ${month.slice(0, 4)}`;
   const shopGoal = goals.find((g) => g.user_id === null)?.funded_cents ?? 0;
   const myGoal = goals.find((g) => g.user_id === session.userId)?.funded_cents ?? 0;
@@ -537,57 +565,65 @@ export default async function DashboardPage({
         </div>
       </div>
 
-      <div className={cn("grid gap-3", manager ? "md:grid-cols-2" : "")}>
-        {manager ? (
-          <PaceBar
-            p={pace(scoreboard.funded_cents, shopGoal, ctx.today)}
-            label="Shop"
-            month={month}
-            userId={null}
-            canEdit
-          />
-        ) : null}
-        <PaceBar
-          p={pace(myFunded, myGoal, ctx.today)}
-          label={manager ? "My own book" : "My month"}
-          month={month}
-          userId={session.userId}
-          canEdit={manager}
-        />
-      </div>
+      {ops && queue ? (
+        <OpsQueue queue={queue} />
+      ) : (
+        <>
+          <div className={cn("grid gap-3", manager ? "md:grid-cols-2" : "")}>
+            {manager ? (
+              <PaceBar
+                p={pace(scoreboard.funded_cents, shopGoal, ctx.today)}
+                label="Shop"
+                month={month}
+                userId={null}
+                canEdit
+              />
+            ) : null}
+            <PaceBar
+              p={pace(myFunded, myGoal, ctx.today)}
+              label={manager ? "My own book" : "My month"}
+              month={month}
+              userId={session.userId}
+              canEdit={manager}
+            />
+          </div>
 
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
-        <Kpi
-          label="Funded"
-          value={formatMoneyCompact(scoreboard.funded_cents)}
-          sub={`${scoreboard.funded_count} deal${scoreboard.funded_count === 1 ? "" : "s"}`}
-          tone={scoreboard.funded_count > 0 ? "good" : undefined}
-        />
-        <Kpi
-          label={manager ? "Commission" : "My cut"}
-          value={formatMoneyCompact(
-            manager ? scoreboard.commission_cents : scoreboard.rep_cut_cents,
-          )}
-          sub={scoreboard.avg_points !== null ? `${scoreboard.avg_points} pts avg` : undefined}
-        />
-        <Kpi label="Submitted" value={scoreboard.submitted} />
-        <Kpi
-          label="Approved"
-          value={scoreboard.approved}
-          sub={`${scoreboard.offers_in} offers in`}
-        />
-        <Kpi
-          label="New leads"
-          value={scoreboard.new_leads}
-          sub={`${scoreboard.apps_in} applications in`}
-        />
-        <Kpi
-          label="Avg deal"
-          value={
-            scoreboard.avg_deal_cents === null ? "—" : formatMoneyCompact(scoreboard.avg_deal_cents)
-          }
-        />
-      </div>
+          <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
+            <Kpi
+              label="Funded"
+              value={formatMoneyCompact(scoreboard.funded_cents)}
+              sub={`${scoreboard.funded_count} deal${scoreboard.funded_count === 1 ? "" : "s"}`}
+              tone={scoreboard.funded_count > 0 ? "good" : undefined}
+            />
+            <Kpi
+              label={manager ? "Commission" : "My cut"}
+              value={formatMoneyCompact(
+                manager ? scoreboard.commission_cents : scoreboard.rep_cut_cents,
+              )}
+              sub={scoreboard.avg_points !== null ? `${scoreboard.avg_points} pts avg` : undefined}
+            />
+            <Kpi label="Submitted" value={scoreboard.submitted} />
+            <Kpi
+              label="Approved"
+              value={scoreboard.approved}
+              sub={`${scoreboard.offers_in} offers in`}
+            />
+            <Kpi
+              label="New leads"
+              value={scoreboard.new_leads}
+              sub={`${scoreboard.apps_in} applications in`}
+            />
+            <Kpi
+              label="Avg deal"
+              value={
+                scoreboard.avg_deal_cents === null
+                  ? "—"
+                  : formatMoneyCompact(scoreboard.avg_deal_cents)
+              }
+            />
+          </div>
+        </>
+      )}
 
       <div className="grid gap-6 xl:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
         <section className="space-y-3">
@@ -600,7 +636,7 @@ export default async function DashboardPage({
           >
             Do this now
           </SectionTitle>
-          <NowList items={now.slice(0, 12)} total={now.length} />
+          <NowList items={now.slice(0, 12)} total={now.length} owners={owners} />
         </section>
         <aside className="space-y-6">
           <MoneyBlock m={money} />
@@ -617,6 +653,31 @@ export default async function DashboardPage({
           </div>
         </div>
       ) : null}
+    </div>
+  );
+}
+
+/** Ops see what is waiting on them, by lane, instead of a rep's money tiles (P2-4). */
+function OpsQueue({ queue }: { queue: Record<string, number> }) {
+  const tiles: { key: string; label: string; lane: string | null; tone?: "warn" | "good" }[] = [
+    { key: "working_ops", label: "Waiting on you", lane: null, tone: "warn" },
+    { key: "kicked_back", label: "Back with the rep", lane: "kicked_back" },
+    { key: "pending_lenders", label: "With lenders", lane: "pending_lenders" },
+    { key: "stips_needed", label: "A lender asked for more", lane: "stips_needed" },
+    { key: "needs_pitch", label: "Approved, not presented", lane: "needs_pitch", tone: "good" },
+    { key: "contracts_out", label: "Contracts out", lane: "contracts_out" },
+  ];
+  return (
+    <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
+      {tiles.map((t) => (
+        <Link key={t.key} href={t.lane ? `/board?lane=${t.lane}` : "/board"} className="block">
+          <Kpi
+            label={t.label}
+            value={queue[t.key] ?? 0}
+            tone={(queue[t.key] ?? 0) > 0 ? t.tone : undefined}
+          />
+        </Link>
+      ))}
     </div>
   );
 }
