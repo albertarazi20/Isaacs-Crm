@@ -220,8 +220,8 @@ export default async function SubmissionBoardPage({
       {review ? (
         proposed.length === 0 ? (
           <EmptyState title="Nothing to review">
-            When the AI reads an approval, a decline or an offer in a lender's email, it lands here
-            for a manager's yes before it touches the deal.
+            When the AI reads an approval, a decline or an offer in a lender&apos;s email, it lands
+            here for a manager&apos;s yes before it touches the deal.
           </EmptyState>
         ) : (
           <Card className="p-0">
