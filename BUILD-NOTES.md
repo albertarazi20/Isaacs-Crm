@@ -105,3 +105,14 @@ Still red, and why:
   channels) — the flow still speaks the old one.
 - `today.e2e` 1 check: quick-add's 3-month timer lands 92 days out on the 16th (month length), the check hard-codes 90.
 - `power.e2e` 1 check: the "$ at stake" explanation regex vs the note's exact wording.
+
+## Browser suite, final pass (2026-11-16, ~03:00 ET)
+
+Every old flow that the new UI had broken is green again (`pnpm e2e <name>`, Chrome driven locally):
+today 21/21, power 73/73, client 203/203, backup 9/9, leads 21/21 — on top of the new-page flows above.
+The client fix landed in two commits: 1f99210 claimed 203/203 before the patch had applied; 32d2390 is the run that
+made it true (a past day is refused by the picker's own validation, the database stays unchanged).
+
+Still red, by the owner's decision rather than a bug: `board.e2e` 53/77 and `mobile-ui.e2e` 2/5 (the kanban drag
+flows, see "Browser suite after the role fix" above). Unit suite: 90/91 files — `tests/language.test.ts` waits on
+the lender-vs-funder / payment-vs-remittance vocabulary call (OWNER-TODO).
