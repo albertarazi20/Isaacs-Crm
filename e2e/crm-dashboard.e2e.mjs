@@ -23,7 +23,7 @@ export default async function dashboardFlow({ email }) {
   );
 
   // set the shop goal: the pace bar must read it back and the row must exist in the database
-  await page.getByRole("button", { name: /Set a shop goal|Goal .* edit/ }).click();
+  await page.getByRole("button", { name: /Set a goal for the shop|Goal .* edit/ }).click();
   await page.getByPlaceholder("250k").fill("300k");
   await page.getByRole("button", { name: "Save" }).click();
   await page.getByText(/Goal saved/).waitFor({ timeout: 8000 });

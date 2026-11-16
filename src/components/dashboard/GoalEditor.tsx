@@ -29,9 +29,11 @@ export function GoalEditor({
         type="button"
         onClick={() => setEditing(true)}
         className="text-xs font-medium text-accent hover:underline"
-        title={`Set this month's goal for ${label}`}
+        title={`Set this month's goal for ${label === "shop" ? "the shop" : label}`}
       >
-        {fundedCents > 0 ? `Goal ${formatMoneyCompact(fundedCents)} · edit` : "Set a goal"}
+        {fundedCents > 0
+          ? `Goal ${formatMoneyCompact(fundedCents)} · edit`
+          : `Set a goal for ${label === "shop" ? "the shop" : label}`}
       </button>
     );
   }

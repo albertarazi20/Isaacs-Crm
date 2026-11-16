@@ -15,7 +15,10 @@ export default async function settingsFlow({ email }) {
   check("Team & trust page", await page.getByText("The team").isVisible());
   await page.getByPlaceholder("Sam Rivera").fill("E2E Ops");
   await page.getByPlaceholder("sam@selectivecap.com").fill(`e2e-ops-${stamp}@selectivecap.com`);
-  await page.getByLabel("Role").selectOption("ops");
+  await page
+    .locator("form", { hasText: "selectivecap.com email" })
+    .getByLabel("Role")
+    .selectOption("ops");
   await page.getByRole("button", { name: "Add", exact: true }).click();
   await page.getByText(/Added — they sign in/).waitFor({ timeout: 8000 });
   await page.waitForTimeout(600);
