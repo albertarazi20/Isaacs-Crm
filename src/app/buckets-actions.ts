@@ -7,10 +7,12 @@ import { queueBlast } from "@/lib/buckets/engine";
 import { setTemplateApproved } from "@/lib/buckets/templates";
 import { toActionError } from "@/lib/data/errors";
 import { UserError } from "@/lib/data/mutations";
+import { userContext } from "@/lib/data/queries";
 import { id } from "@/lib/data/schemas";
 import type { ActionResult } from "@/lib/data/types";
 import { db } from "@/lib/db";
 import { env } from "@/lib/env";
+import { addDays } from "@/lib/mca/dates";
 
 const ids = z.array(id).min(1).max(2000);
 
@@ -103,14 +105,41 @@ export async function removeFromBucketAction(
   }
 }
 
+/**
+ * Pause or resume. `until` (a day after today) pauses with a date on it: the engine lifts the pause by itself that
+ * day, in the merchant's zone, and the lead line says "Paused until Nov 30". Without it the pause lasts until a
+ * person resumes. Resuming clears the date (set_enrollment_paused).
+ */
 export async function pauseEnrollmentAction(input: unknown): Promise<ActionResult<null>> {
   const session = await requireSession();
   try {
-    const i = z.object({ clientIds: ids, paused: z.boolean() }).parse(input);
+    const i = z
+      .object({
+        clientIds: ids,
+        paused: z.boolean(),
+        until: z
+          .string()
+          .regex(/^\d{4}-\d{2}-\d{2}$/, "Pick a day")
+          .optional(),
+      })
+      .parse(input);
+    if (i.until && !i.paused) throw new UserError("A date only goes with a pause");
     // the SQL function holds or releases the queued steps with the flag, so a pause reaches the outbox (S1-2)
     await db.withUser(session.userId, async (q) => {
-      for (const c of i.clientIds)
+      if (i.until) {
+        const { today } = await userContext(q);
+        if (i.until <= today) throw new UserError("Pick a day after today");
+        if (i.until > addDays(today, 365)) throw new UserError("Pick a day within a year");
+      }
+      for (const c of i.clientIds) {
         await q.query("select set_enrollment_paused($1, $2)", [c, i.paused]);
+        // the function pauses; the date is the engine's cue to resume (enrollments.resume_on, 0501)
+        if (i.until)
+          await q.query(
+            "update enrollments set resume_on = $2 where client_id = $1 and stopped_at is null and paused",
+            [c, i.until],
+          );
+      }
     });
     revalidatePath("/follow-up");
     return { ok: true, data: null };

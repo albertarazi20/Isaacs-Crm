@@ -9,13 +9,15 @@ import {
   splitLeadText,
   type SplitResult,
 } from "@/lib/ai/splitLeadLine";
-import { requireSession } from "@/lib/auth/server";
+import { CAN, requireSession } from "@/lib/auth/server";
 import { toActionError } from "@/lib/data/errors";
 import { UserError } from "@/lib/data/mutations";
 import type { ActionResult } from "@/lib/data/types";
 import { db } from "@/lib/db";
 import { env } from "@/lib/env";
+import { assistantRefusal, ASSISTANT_REFUSALS } from "@/lib/leads/assistant";
 import { intakeLead, intakeSchema, type IntakeOutcome } from "@/lib/leads/form";
+import { lookupLeadOwner, ownedElsewhereMessage } from "@/lib/leads/owner";
 
 export type { IntakeOutcome } from "@/lib/leads/form";
 
@@ -29,7 +31,7 @@ export async function splitLeadLineAction(
   const session = await requireSession();
   try {
     const { text } = z.object({ text: z.string().max(4_000) }).parse(input);
-    if (!env().ANTHROPIC_API_KEY) throw new UserError("The assistant is not set up on this server");
+    if (!env().ANTHROPIC_API_KEY) throw new UserError(ASSISTANT_REFUSALS.notSetUp);
     const settings = await db.withUser(
       session.userId,
       async (q) =>
@@ -44,9 +46,14 @@ export async function splitLeadLineAction(
           )
         ).rows[0],
     );
-    if (!settings?.ai_enabled) throw new UserError("The assistant is switched off in Settings");
-    if (Number(settings.spent) >= settings.ai_daily_cap_cents)
-      throw new UserError("The assistant has used today's budget — type the lead in by hand");
+    if (!settings) throw new UserError(ASSISTANT_REFUSALS.off);
+    const refusal = assistantRefusal({
+      keySet: true,
+      enabled: settings.ai_enabled,
+      capCents: settings.ai_daily_cap_cents,
+      spentCents: Number(settings.spent),
+    });
+    if (refusal) throw new UserError(refusal);
     const { fields, outcome } = await splitLeadText(
       text,
       (t, model) => splitLeadLine(t, { model }),
@@ -69,15 +76,66 @@ export async function splitLeadLineAction(
   }
 }
 
+/** Another rep's merchant behind a phone or email, as the intake form's warning shows it. */
+export interface LeadOwnerInfo {
+  /** The server's words: "Already in the system: Mike's lead, in Missing statements, touched 3 days ago". */
+  line: string;
+  matchedOn: "phone" | "email";
+  /** Only a manager is told which merchant it is (a rep's answer carries no more than the line). */
+  clientId: string | null;
+  businessName: string | null;
+}
+
+/**
+ * Before submit: does another rep already own this phone or email? Row security hides their merchants from the form's
+ * own duplicate check, so this asks across the shop (lead_owner) and answers with the same line the server refuses
+ * with. A merchant that is the caller's own is not a cross-rep case and comes back as null. A manager may add the
+ * lead anyway (`override` on the submit); a rep may not.
+ */
+export async function leadOwnerAction(
+  input: unknown,
+): Promise<ActionResult<{ owner: LeadOwnerInfo | null; canOverride: boolean }>> {
+  const session = await requireSession();
+  try {
+    const i = z
+      .object({ phone: z.string().max(40).default(""), email: z.string().max(200).default("") })
+      .parse(input);
+    const manager = CAN.manageTeam(session.role);
+    const owner = await db.withUser(session.userId, (q) => lookupLeadOwner(q, i));
+    if (!owner || owner.owner_id === session.userId)
+      return { ok: true, data: { owner: null, canOverride: manager } };
+    return {
+      ok: true,
+      data: {
+        owner: {
+          line: ownedElsewhereMessage(owner),
+          matchedOn: owner.matched_on,
+          clientId: manager ? owner.client_id : null,
+          businessName: manager ? owner.business_name : null,
+        },
+        canOverride: manager,
+      },
+    };
+  } catch (e) {
+    return { ok: false, error: toActionError(e) };
+  }
+}
+
 /**
  * The intake form's submit. Created, filed from a sheet, or a duplicate (with the existing merchant) come back
  * as data; anything that stopped the merchant being made comes back as the error, in words, with nothing written.
+ * `override` (managers only) adds the lead although the number is already in the CRM.
  */
 export async function intakeLeadAction(input: unknown): Promise<ActionResult<IntakeOutcome>> {
   const session = await requireSession();
   try {
     const i = intakeSchema.parse(input);
-    const data = await db.withUser(session.userId, (q) => intakeLead(q, i, env().APP_URL));
+    const { override } = z.object({ override: z.boolean().default(false) }).parse(input);
+    if (override && !CAN.manageTeam(session.role))
+      throw new UserError("Only a manager can add a lead another rep already has");
+    const data = await db.withUser(session.userId, (q) =>
+      intakeLead(q, i, env().APP_URL, new Date(), { allowDuplicate: override }),
+    );
     revalidatePath("/", "layout");
     return { ok: true, data };
   } catch (e) {

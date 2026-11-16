@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { cancelCallAction, scheduleCallAction, setFollowUpAction } from "@/app/actions";
 import type { ClientDetail } from "@/lib/data/types";
+import type { MerchantApplication } from "@/lib/leads/application";
 import { callbackAt, callbackLabel, CALLBACK_HOURS, slotAt } from "@/lib/mca/callback";
 import {
   CHANNEL_LABEL,
@@ -16,17 +17,42 @@ import { formatDate, formatDateTime, relativeDay } from "@/lib/format";
 import { useApp } from "../app-context";
 import { TimeSelect } from "../TimeSelect";
 import { TimerPicker } from "../TimerPicker";
-import { Button, cn, Field, Input } from "../ui";
+import { Badge, Button, cn, Field, Input } from "../ui";
 import { AddToCalendar } from "../winback/AddToCalendar";
-import { dueTone } from "./logic";
+import { dateInTz, dueTone } from "./logic";
 import { ReminderTag } from "@/components/ReminderTag";
 import { Muted, Panel, useRun } from "./parts";
 
-export function FollowUpPanel({ detail, className }: { detail: ClientDetail; className?: string }) {
+export function FollowUpPanel({
+  detail,
+  application,
+  className,
+}: {
+  detail: ClientDetail;
+  /** Whether the merchant has signed their application (S1: the application page, 0530). */
+  application?: MerchantApplication | null;
+  className?: string;
+}) {
   const { card, timers } = detail;
   const { today, timezone } = useApp();
+  const signed = application?.latest ?? null;
   return (
     <Panel title="Next follow-up" className={className}>
+      {application ? (
+        <div className="mb-3 flex items-center justify-between gap-3 rounded-lg border border-border bg-surface-2 px-3 py-2">
+          <div className="min-w-0">
+            <p className="text-sm font-medium">Application</p>
+            <p className="text-xs text-muted wrap-anywhere">
+              {signed
+                ? `Signed ${formatDate(dateInTz(signed.signed_at, timezone), today)} by ${signed.signer_name}`
+                : "Waiting on the merchant — send the link from the Application card"}
+            </p>
+          </div>
+          <Badge tone={signed ? "good" : "neutral"}>
+            {signed ? "Application signed" : "Not signed yet"}
+          </Badge>
+        </div>
+      ) : null}
       {timers.length === 0 ? (
         <p className="rounded-lg border border-warn/30 bg-warn-soft p-3 text-sm text-warn">
           No follow-up date is set. Pick one below so this client doesn&apos;t go quiet.
@@ -213,7 +239,7 @@ function ScheduleCall({ clientId }: { clientId: string }) {
             aria-pressed={c === channel}
             onClick={() => setChannel(c)}
             className={cn(
-              "h-9 rounded-md px-3 text-[13px] font-medium transition sm:h-7",
+              "h-10 rounded-md px-3 text-[13px] font-medium transition sm:h-7",
               c === channel ? "bg-text text-bg" : "text-muted hover:bg-surface-2 hover:text-text",
             )}
           >

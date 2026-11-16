@@ -1,20 +1,24 @@
 import Link from "next/link";
 import { BucketMembers } from "@/components/followup/BucketMembers";
+import { BucketScoreStrip } from "@/components/followup/BucketScoreStrip";
 import { NewBucket } from "@/components/followup/NewBucket";
 import { Card, EmptyState, buttonClass, cn } from "@/components/ui";
 import { requirePage } from "@/lib/auth/server";
 import { CAN } from "@/lib/auth/roles";
 import {
+  bucketScores,
   listBucketMembers,
   listBucketSteps,
   listBuckets,
   listTemplates,
 } from "@/lib/buckets/queries";
 import { db } from "@/lib/db";
+import { loadMemberMeta } from "@/lib/messaging/memberMeta";
 
 export const dynamic = "force-dynamic";
 
 const UUID = /^[0-9a-f-]{36}$/;
+const SCORE_DAYS = 90;
 
 export default async function FollowUpPage({
   searchParams,
@@ -32,14 +36,21 @@ export default async function FollowUpPage({
       buckets[0] ??
       null;
     const members = selected ? await listBucketMembers(q, selected.id) : [];
+    const meta = await loadMemberMeta(
+      q,
+      members.map((m) => m.client_id),
+    );
+    const score = selected
+      ? (await bucketScores(q, SCORE_DAYS)).find((x) => x.bucket_id === selected.id)
+      : undefined;
     const steps = selected ? await listBucketSteps(q, selected.id) : [];
     const templates = await listTemplates(q);
     const postal =
       (await q.query<{ postal_address: string }>("select postal_address from shop_settings"))
         .rows[0]?.postal_address ?? "";
-    return { buckets, selected, members, steps, templates, postal };
+    return { buckets, selected, members, meta, score, steps, templates, postal };
   });
-  const { buckets, selected, members, steps, templates, postal } = data;
+  const { buckets, selected, members, meta, score, steps, templates, postal } = data;
   const shared = buckets.filter((x) => x.owner_id === null);
   const mine = buckets.filter((x) => x.owner_id !== null);
 
@@ -148,9 +159,11 @@ export default async function FollowUpPage({
                   </Link>
                 </p>
               </div>
+              <BucketScoreStrip score={score} days={SCORE_DAYS} />
               <BucketMembers
                 bucket={selected}
                 members={members}
+                meta={meta}
                 buckets={buckets}
                 templates={templates}
               />
