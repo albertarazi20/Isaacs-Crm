@@ -103,6 +103,8 @@ export async function syncSheets(args: {
             src.id,
             JSON.stringify(mapping),
           ]);
+        if (!src.sheet_title && title)
+          await q.query("update sheet_sources set sheet_title = $2 where id = $1", [src.id, title]);
         let added = 0;
         let changed = 0;
         let rows = 0;
