@@ -13,13 +13,16 @@ import { useApp } from "@/components/app-context";
 import { UploadLinkButton } from "@/components/deals/UploadLinkButton";
 import { useRun, FormDialog } from "@/components/client/parts";
 import { useToast } from "@/components/overlay";
-import { Button, Card, EmptyState, Select, cn } from "@/components/ui";
+import { Badge, Button, buttonClass, Card, EmptyState, Select, cn } from "@/components/ui";
 import type { BucketMember, BucketRow, TemplateRow } from "@/lib/buckets/queries";
 import { formatDate, timeAgo } from "@/lib/format";
 import { formatMoneyCompact } from "@/lib/money";
 import { mergeValues, resolveMergeFields } from "@/lib/messaging/merge";
 
 type Filter = "all" | "due" | "replied" | "quiet" | "no_email" | "paused";
+
+/** A select's wrapper in the toolbar: fills the row on a phone, shrinks to its longest option on a desktop. */
+const SELECT_WRAP = "min-w-0 flex-1 sm:flex-none";
 
 /** The lead lines of one bucket: check, blast, move, pause, remove — and the row's own popup. */
 export function BucketMembers({
@@ -143,99 +146,116 @@ export function BucketMembers({
 
   return (
     <div className="space-y-3">
+      {/* The toolbar: what is shown on the left, what to do with the checked rows on the right. */}
       <div className="flex flex-wrap items-center gap-2">
-        <label className="flex items-center gap-1.5 text-sm">
+        <label className="flex h-10 items-center gap-2 rounded-lg border border-border bg-surface px-3 text-sm sm:h-9 sm:text-[13px]">
           <input
             type="checkbox"
+            className="size-4 accent-accent"
             checked={allShown}
             onChange={toggleAll}
             aria-label="Check every row shown"
           />
-          {ids.length ? `${ids.length} checked` : "Check all"}
+          <span className="tabular-nums">{ids.length ? `${ids.length} checked` : "Check all"}</span>
         </label>
-        <Select
-          value={filter}
-          onChange={(e) => setFilter(e.target.value as Filter)}
-          className="h-9 text-sm"
-          aria-label="Show"
-        >
-          <option value="all">Everyone ({members.length})</option>
-          <option value="due">Step due today</option>
-          <option value="replied">Replied, unanswered</option>
-          <option value="quiet">No touch in 7 days</option>
-          <option value="no_email">No usable email</option>
-          <option value="paused">Paused</option>
-        </Select>
-        {zones.length > 1 ? (
+        {/* Each select sits in a wrapper that shrinks to the longest option, so the row reads as a toolbar. */}
+        <div className={SELECT_WRAP}>
           <Select
-            value={tz}
-            onChange={(e) => setTz(e.target.value)}
-            className="h-9 text-sm"
-            aria-label="Time zone"
+            value={filter}
+            onChange={(e) => setFilter(e.target.value as Filter)}
+            className="text-[13px]"
+            aria-label="Show"
           >
-            <option value="">Every time zone</option>
-            {zones.map((z) => (
-              <option key={z} value={z}>
-                {z}
-              </option>
-            ))}
+            <option value="all">Everyone ({members.length})</option>
+            <option value="due">Step due today</option>
+            <option value="replied">Replied, unanswered</option>
+            <option value="quiet">No touch in 7 days</option>
+            <option value="no_email">No usable email</option>
+            <option value="paused">Paused</option>
           </Select>
+        </div>
+        {zones.length > 1 ? (
+          <div className={SELECT_WRAP}>
+            <Select
+              value={tz}
+              onChange={(e) => setTz(e.target.value)}
+              className="text-[13px]"
+              aria-label="Time zone"
+            >
+              <option value="">Every time zone</option>
+              {zones.map((z) => (
+                <option key={z} value={z}>
+                  {z}
+                </option>
+              ))}
+            </Select>
+          </div>
         ) : null}
-        <span className="flex-1" />
-        <Select
-          value={templateId}
-          onChange={(e) => setTemplateId(e.target.value)}
-          className="h-9 text-sm"
-          aria-label="Blast template"
-        >
-          <option value="">Blast template…</option>
-          {templates
-            .filter((t) => !t.archived)
-            .map((t) => (
-              <option key={t.id} value={t.id} disabled={!t.approved}>
-                {t.name}
-                {t.approved ? "" : " (needs approval)"}
-              </option>
-            ))}
-        </Select>
-        <Button
-          variant="primary"
-          size="sm"
-          disabled={busy || !templateId || ids.length === 0}
-          onClick={() => setConfirmBlast(true)}
-        >
-          Blast {ids.length || ""}
-        </Button>
-        <Select
-          value={moveTo}
-          onChange={(e) => setMoveTo(e.target.value)}
-          className="h-9 text-sm"
-          aria-label="Move to bucket"
-        >
-          <option value="">Move to…</option>
-          {buckets
-            .filter((b) => b.id !== bucket.id)
-            .map((b) => (
-              <option key={b.id} value={b.id}>
-                {b.name}
-              </option>
-            ))}
-        </Select>
-        <Button
-          size="sm"
-          disabled={busy || !moveTo || ids.length === 0}
-          onClick={() => act("Moved", moveToBucketAction({ clientIds: ids, bucketId: moveTo }))}
-        >
-          Move
-        </Button>
-        <Button
-          size="sm"
-          variant="ghost"
-          disabled={busy || ids.length === 0}
-          onClick={() => act("Removed from the bucket", removeFromBucketAction({ clientIds: ids }))}
-        >
-          Remove
-        </Button>
+        <span className="hidden flex-1 sm:block" />
+        <div className="flex w-full items-center gap-2 sm:w-auto">
+          <div className={SELECT_WRAP}>
+            <Select
+              value={templateId}
+              onChange={(e) => setTemplateId(e.target.value)}
+              className="text-[13px]"
+              aria-label="Blast template"
+            >
+              <option value="">Blast template…</option>
+              {templates
+                .filter((t) => !t.archived)
+                .map((t) => (
+                  <option key={t.id} value={t.id} disabled={!t.approved}>
+                    {t.name}
+                    {t.approved ? "" : " (needs approval)"}
+                  </option>
+                ))}
+            </Select>
+          </div>
+          <Button
+            variant="primary"
+            size="sm"
+            disabled={busy || !templateId || ids.length === 0}
+            onClick={() => setConfirmBlast(true)}
+          >
+            Blast {ids.length || ""}
+          </Button>
+        </div>
+        <div className="flex w-full items-center gap-2 sm:w-auto">
+          <div className={SELECT_WRAP}>
+            <Select
+              value={moveTo}
+              onChange={(e) => setMoveTo(e.target.value)}
+              className="text-[13px]"
+              aria-label="Move to bucket"
+            >
+              <option value="">Move to…</option>
+              {buckets
+                .filter((b) => b.id !== bucket.id)
+                .map((b) => (
+                  <option key={b.id} value={b.id}>
+                    {b.name}
+                  </option>
+                ))}
+            </Select>
+          </div>
+          <Button
+            size="sm"
+            disabled={busy || !moveTo || ids.length === 0}
+            onClick={() => act("Moved", moveToBucketAction({ clientIds: ids, bucketId: moveTo }))}
+          >
+            Move
+          </Button>
+          <Button
+            size="sm"
+            variant="ghost"
+            disabled={busy || ids.length === 0}
+            onClick={() =>
+              act("Removed from the bucket", removeFromBucketAction({ clientIds: ids }))
+            }
+          >
+            Remove
+          </Button>
+        </div>
       </div>
 
       {shown.length === 0 ? (
@@ -252,12 +272,15 @@ export function BucketMembers({
             {shown.map((m) => (
               <li
                 key={m.enrollment_id}
-                className={cn("px-3 py-2.5", checked.has(m.client_id) && "bg-accent-soft/40")}
+                className={cn(
+                  "px-3 py-2 transition sm:px-4",
+                  checked.has(m.client_id) ? "bg-accent-soft/40" : "hover:bg-surface-3",
+                )}
               >
                 <div className="flex items-start gap-3">
                   <input
                     type="checkbox"
-                    className="mt-1"
+                    className="mt-1 size-4 shrink-0 accent-accent"
                     checked={checked.has(m.client_id)}
                     onChange={() => toggle(m.client_id)}
                     aria-label={`Check ${m.business_name}`}
@@ -281,27 +304,27 @@ export function BucketMembers({
                           : ""}
                       </span>
                     </span>
-                    <span className="block text-xs text-muted">
-                      {m.paused ? <span className="text-warn">Paused · </span> : null}
-                      {m.reply_waiting ? (
-                        <span className="text-bad">Replied — answer them · </span>
-                      ) : null}
+                    <span className="mt-0.5 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-xs text-muted">
+                      {m.paused ? <Badge tone="warn">Paused</Badge> : null}
+                      {m.reply_waiting ? <Badge tone="bad">Replied — answer them</Badge> : null}
                       {m.email_opt_out ? (
-                        <span className="text-bad">Opted out · </span>
+                        <Badge tone="bad">Opted out</Badge>
                       ) : m.email_bounced ? (
-                        <span className="text-bad">Email bounced · </span>
+                        <Badge tone="bad">Email bounced</Badge>
                       ) : null}
-                      Step {m.next_step}
-                      {m.next_due_on ? ` due ${formatDate(m.next_due_on, today)}` : ""} ·{" "}
-                      {m.steps_sent} sent
-                      {m.stips_missing
-                        ? ` · ${m.stips_missing} stip${m.stips_missing === 1 ? "" : "s"} missing`
-                        : ""}
-                      {" · "}
-                      {m.last_touch_at
-                        ? `touched ${timeAgo(m.last_touch_at, new Date(nowMs))}`
-                        : "never touched"}
-                      {" · "}in bucket {timeAgo(m.entered_at, new Date(nowMs))}
+                      <span>
+                        Step {m.next_step}
+                        {m.next_due_on ? ` due ${formatDate(m.next_due_on, today)}` : ""} ·{" "}
+                        {m.steps_sent} sent
+                        {m.stips_missing
+                          ? ` · ${m.stips_missing} stip${m.stips_missing === 1 ? "" : "s"} missing`
+                          : ""}
+                        {" · "}
+                        {m.last_touch_at
+                          ? `touched ${timeAgo(m.last_touch_at, new Date(nowMs))}`
+                          : "never touched"}
+                        {" · "}in bucket {timeAgo(m.entered_at, new Date(nowMs))}
+                      </span>
                     </span>
                   </button>
                 </div>
@@ -309,15 +332,12 @@ export function BucketMembers({
                   <div className="mt-2 flex flex-wrap gap-1.5 pl-7">
                     <Link
                       href={`/clients/${m.client_id}`}
-                      className="inline-flex h-8 items-center rounded-lg bg-accent px-2.5 text-sm font-semibold text-accent-fg"
+                      className={buttonClass("secondary", "sm")}
                     >
                       Open
                     </Link>
                     {m.phone ? (
-                      <a
-                        href={`tel:${m.phone}`}
-                        className="inline-flex h-8 items-center rounded-lg border border-border px-2.5 text-sm font-semibold"
-                      >
+                      <a href={`tel:${m.phone}`} className={buttonClass("secondary", "sm")}>
                         Call
                       </a>
                     ) : null}

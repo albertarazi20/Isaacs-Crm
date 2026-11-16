@@ -9,7 +9,7 @@ export function StreakBadge({ streak, className }: { streak: Streak; className?:
   const { current, best, openNow } = streak;
   return (
     <p
-      className={cn("flex flex-wrap items-center gap-x-3 gap-y-1 text-sm", className)}
+      className={cn("flex flex-wrap items-center gap-x-3 gap-y-1 text-[13px]", className)}
       title="A day counts when every follow-up due that day or earlier was handled by the end of it. Weekends don't break a streak."
     >
       <span className={cn("font-semibold", current > 0 ? "text-good" : "text-muted")}>

@@ -89,14 +89,16 @@ function ContactStatusDialog({ card, onClose }: { card: ClientCard; onClose: () 
           <label
             key={s}
             className={cn(
-              "flex cursor-pointer items-start gap-3 rounded-lg border p-3",
-              status === s ? "border-accent bg-accent-soft" : "border-border",
+              "flex cursor-pointer items-start gap-3 rounded-lg border p-3 transition",
+              status === s
+                ? "border-accent/40 bg-accent-soft"
+                : "border-border hover:border-border-strong hover:bg-surface-3",
             )}
           >
             <input
               type="radio"
               name="contact-status"
-              className="mt-1"
+              className="mt-0.5 size-4 accent-accent"
               checked={status === s}
               onChange={() => setStatus(s)}
             />

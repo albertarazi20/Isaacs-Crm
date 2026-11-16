@@ -35,7 +35,7 @@ export function ClientView({
   const canSubmitToOps = role !== undefined && CAN.workLeads(role);
   return (
     <NowProvider serverNow={serverNow}>
-      <div className="flex flex-col gap-4">
+      <div className="flex min-w-0 flex-col gap-4">
         <StickyBar card={card} />
         <ClientDetails detail={detail} className="order-2 lg:order-1" />
         <div className="contents lg:order-2 lg:grid lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)] lg:items-start lg:gap-4">

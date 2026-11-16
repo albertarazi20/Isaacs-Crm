@@ -31,10 +31,10 @@ export function TimerPicker({
               aria-pressed={selected}
               onClick={() => onChange(date)}
               className={cn(
-                "h-10 min-w-11 rounded-lg border px-2 text-sm font-medium transition sm:h-8",
+                "h-10 min-w-11 rounded-full border px-2.5 text-sm font-medium tabular-nums transition sm:h-8 sm:text-[13px]",
                 selected
-                  ? "border-accent bg-accent text-accent-fg"
-                  : "border-border bg-surface hover:bg-surface-2",
+                  ? "border-accent/40 bg-accent-soft text-accent"
+                  : "border-border bg-surface text-text-2 hover:border-border-strong hover:bg-surface-3 hover:text-text",
               )}
             >
               {p.key}
@@ -43,16 +43,20 @@ export function TimerPicker({
         })}
       </div>
       <div className="flex items-center gap-3">
-        <Input
-          type="date"
-          aria-label="Follow-up date"
-          className="w-44"
-          min={today}
-          max={addMonths(today, 36)}
-          value={value}
-          onChange={(e) => e.target.value && onChange(e.target.value)}
-        />
-        {value ? <span className="text-sm text-muted">{relativeDay(value, today)}</span> : null}
+        {/* The wrapper fixes the width: the field itself is always full-width. */}
+        <div className="w-44 shrink-0">
+          <Input
+            type="date"
+            aria-label="Follow-up date"
+            min={today}
+            max={addMonths(today, 36)}
+            value={value}
+            onChange={(e) => e.target.value && onChange(e.target.value)}
+          />
+        </div>
+        {value ? (
+          <span className="text-xs whitespace-nowrap text-muted">{relativeDay(value, today)}</span>
+        ) : null}
       </div>
     </div>
   );

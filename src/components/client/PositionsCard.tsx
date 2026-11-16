@@ -7,7 +7,7 @@ import { formatDate } from "@/lib/format";
 import type { Frequency } from "@/lib/mca/funding";
 import { formatMoney } from "@/lib/money";
 import { useApp } from "../app-context";
-import { Button, EmptyState, Field, Input, Select } from "../ui";
+import { Badge, Button, EmptyState, Field, Input, Select } from "../ui";
 import {
   FREQUENCY_LABELS,
   nextPositionNo,
@@ -54,7 +54,7 @@ export function PositionsCard({
         </EmptyState>
       ) : (
         <>
-          <p className="rounded-lg bg-surface-2 p-3 text-sm">
+          <p className="rounded-lg border border-border bg-surface-2 p-3 text-sm">
             <strong>
               {roll.count} {roll.count === 1 ? "position" : "positions"}
             </strong>{" "}
@@ -72,11 +72,9 @@ export function PositionsCard({
               return (
                 <li key={p.id} className="rounded-lg border border-border p-3">
                   <div className="flex items-start justify-between gap-2">
-                    <p className="min-w-0 font-medium">
-                      <span className="mr-2 rounded-md bg-accent-soft px-1.5 py-0.5 text-xs font-semibold text-accent">
-                        {ordinal(p.position_no)}
-                      </span>
-                      {p.funder_name || "Funder not named"}
+                    <p className="flex min-w-0 items-center gap-2 text-sm font-medium">
+                      <Badge tone="accent">{ordinal(p.position_no)}</Badge>
+                      <span className="truncate">{p.funder_name || "Funder not named"}</span>
                     </p>
                     <Button size="sm" variant="ghost" onClick={() => setEditing(p)}>
                       Edit

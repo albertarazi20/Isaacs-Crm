@@ -4,6 +4,7 @@ import type { ClientCard } from "@/lib/data/types";
 import { formatDate } from "@/lib/format";
 import type { ISODate } from "@/lib/mca/dates";
 import { stageDef } from "@/lib/mca/stages";
+import { Icon } from "../client/icons";
 
 export interface RecentMove {
   key: number;
@@ -44,7 +45,7 @@ export function MoveToasts({
       {items.map((r) => (
         <div
           key={r.key}
-          className="pointer-events-auto flex max-w-xl flex-wrap items-center gap-x-2 gap-y-1 rounded-xl border border-border bg-surface px-4 py-2 text-sm shadow-lg"
+          className="pointer-events-auto flex max-w-xl flex-wrap items-center gap-x-2 gap-y-1 rounded-xl border border-border bg-surface px-4 py-2 text-sm shadow-pop"
         >
           <span>
             <strong className="font-semibold">{r.card.business_name}</strong> →{" "}
@@ -63,10 +64,10 @@ export function MoveToasts({
             <button
               type="button"
               aria-label="Dismiss"
-              className="rounded-md px-2 py-1 text-muted hover:bg-surface-2"
+              className="inline-flex size-8 items-center justify-center rounded-md text-muted transition hover:bg-surface-2 hover:text-text"
               onClick={() => onDismiss(r.key)}
             >
-              ✕
+              <Icon name="x" />
             </button>
           </span>
         </div>

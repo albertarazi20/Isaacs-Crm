@@ -10,13 +10,16 @@ import { StageBadge } from "./StageBadge";
 import { Badge } from "./ui";
 
 /**
- * The Clients list on a phone (under 640px): one card per merchant with the name, the stage and the date
+ * The Clients list on a phone (under 640px): one row per merchant with the name, the stage and the date
  * he is due, so nothing needs a sideways swipe (I-14). Wider screens use the table instead.
  */
 export function ClientCards({ rows }: { rows: readonly ClientCard[] }) {
   const { today, nowMs } = useApp();
   return (
-    <ul className="space-y-2 sm:hidden" aria-label="Clients">
+    <ul
+      className="divide-y divide-border rounded-xl border border-border bg-surface sm:hidden"
+      aria-label="Clients"
+    >
       {rows.map((c) => {
         const overdue = c.next_due_on !== null && c.next_due_on < today;
         const who = [c.contact_name, c.phone ? formatUS(c.phone) : ""].filter(Boolean).join(" · ");
@@ -24,17 +27,17 @@ export function ClientCards({ rows }: { rows: readonly ClientCard[] }) {
           <li key={c.id}>
             <Link
               href={`/clients/${c.id}`}
-              className="block rounded-xl border border-border bg-surface p-3.5 active:bg-surface-2"
+              className="block min-h-12 px-3.5 py-2.5 transition active:bg-surface-2"
             >
               <div className="flex items-start justify-between gap-3">
-                <span className="min-w-0 font-semibold break-words">{c.business_name}</span>
+                <span className="min-w-0 text-sm font-semibold break-words">{c.business_name}</span>
                 <span className="shrink-0 text-right">
                   {c.next_due_on ? (
                     <>
                       <Badge tone={overdue ? "bad" : c.next_due_on === today ? "warn" : "neutral"}>
                         {relativeDay(c.next_due_on, today)}
                       </Badge>
-                      <span className="mt-0.5 block text-xs text-muted">
+                      <span className="mt-0.5 block text-xs text-muted tabular-nums">
                         {formatDate(c.next_due_on, today)}
                       </span>
                     </>
@@ -43,15 +46,15 @@ export function ClientCards({ rows }: { rows: readonly ClientCard[] }) {
                   )}
                 </span>
               </div>
-              <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1">
+              <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1">
                 <StageBadge stage={c.stage} />
                 {c.wanted_amount_cents !== null ? (
-                  <span className="text-xs font-medium">
+                  <span className="text-xs font-medium tabular-nums">
                     Wants {formatMoneyCompact(c.wanted_amount_cents)}
                   </span>
                 ) : null}
               </div>
-              <p className="mt-1.5 text-xs text-muted">
+              <p className="mt-1 text-xs text-muted">
                 {who ? `${who} · ` : ""}
                 Last contact {c.last_touch_at ? timeAgo(c.last_touch_at, new Date(nowMs)) : "never"}
               </p>

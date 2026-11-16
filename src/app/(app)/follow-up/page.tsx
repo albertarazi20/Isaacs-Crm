@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { BucketMembers } from "@/components/followup/BucketMembers";
 import { NewBucket } from "@/components/followup/NewBucket";
-import { Card, EmptyState, cn } from "@/components/ui";
+import { Card, EmptyState, buttonClass, cn } from "@/components/ui";
 import { requirePage } from "@/lib/auth/server";
 import { CAN } from "@/lib/auth/roles";
 import {
@@ -43,20 +43,39 @@ export default async function FollowUpPage({
   const shared = buckets.filter((x) => x.owner_id === null);
   const mine = buckets.filter((x) => x.owner_id !== null);
 
+  // A pill in a scrolling row on a phone; a row of the left rail from lg up.
+  const bucketLink = (x: (typeof buckets)[number]) => (
+    <Link
+      key={x.id}
+      href={`/follow-up?b=${x.id}`}
+      aria-current={selected?.id === x.id ? "page" : undefined}
+      className={cn(
+        "flex h-10 shrink-0 items-center gap-2 rounded-full border px-3 text-sm whitespace-nowrap transition lg:h-8 lg:w-full lg:justify-between lg:rounded-lg lg:border-transparent lg:px-2.5 lg:text-[13px]",
+        selected?.id === x.id
+          ? "border-accent/40 bg-accent-soft font-semibold text-accent"
+          : "border-border bg-surface text-text-2 hover:border-border-strong hover:bg-surface-3 hover:text-text lg:bg-transparent lg:hover:bg-surface-2",
+      )}
+    >
+      <span className="truncate">{x.name}</span>
+      <span
+        className={cn("text-xs tabular-nums", selected?.id === x.id ? "opacity-80" : "text-muted")}
+      >
+        {x.members}
+      </span>
+    </Link>
+  );
+
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">Follow Up</h1>
-          <p className="text-sm text-muted">
+        <div className="min-w-0">
+          <h1 className="text-xl font-semibold tracking-tight sm:text-2xl">Follow Up</h1>
+          <p className="mt-0.5 text-sm text-muted">
             Each bucket emails its people on its own schedule and stops the moment they reply,
             upload or sign. Check names to blast or move them.
           </p>
         </div>
-        <Link
-          href="/settings/buckets"
-          className="text-sm font-semibold text-accent hover:underline"
-        >
+        <Link href="/settings/buckets" className={buttonClass("secondary", "sm")}>
           Sequences & templates →
         </Link>
       </div>
@@ -80,63 +99,37 @@ export default async function FollowUpPage({
           . Welcome emails and replies still go out.
         </p>
       ) : null}
-      <div className="grid gap-5 lg:grid-cols-[240px_minmax(0,1fr)]">
-        <aside className="space-y-4">
-          <nav aria-label="Buckets" className="space-y-1">
-            <p className="px-2 text-[11px] font-semibold tracking-wide text-muted uppercase">
-              Shop
+      {/* Phone: bucket chips, then the bucket, then the new-bucket form. Wide: the rail holds chips and form, the bucket sits beside it. */}
+      <div className="grid grid-cols-[minmax(0,1fr)] gap-5 lg:grid-cols-[240px_minmax(0,1fr)] lg:grid-rows-[auto_1fr] lg:items-start">
+        <nav
+          aria-label="Buckets"
+          className="-mx-4 flex min-w-0 gap-1.5 overflow-x-auto px-4 pb-1 lg:col-start-1 lg:row-start-1 lg:mx-0 lg:flex-col lg:gap-1 lg:overflow-visible lg:px-0 lg:pb-0"
+        >
+          <p className="hidden px-2.5 pb-1 text-[11px] font-semibold tracking-wide text-muted uppercase lg:block">
+            Shop
+          </p>
+          {shared.map(bucketLink)}
+          {mine.length > 0 ? (
+            <p className="hidden px-2.5 pt-3 pb-1 text-[11px] font-semibold tracking-wide text-muted uppercase lg:block">
+              Mine
             </p>
-            {shared.map((x) => (
-              <Link
-                key={x.id}
-                href={`/follow-up?b=${x.id}`}
-                aria-current={selected?.id === x.id ? "page" : undefined}
-                className={cn(
-                  "flex items-center justify-between rounded-lg px-2 py-1.5 text-sm",
-                  selected?.id === x.id
-                    ? "bg-accent-soft font-semibold text-accent"
-                    : "text-muted hover:bg-surface-2 hover:text-text",
-                )}
-              >
-                <span className="truncate">{x.name}</span>
-                <span className="tabular-nums">{x.members}</span>
-              </Link>
-            ))}
-            {mine.length > 0 ? (
-              <p className="px-2 pt-2 text-[11px] font-semibold tracking-wide text-muted uppercase">
-                Mine
-              </p>
-            ) : null}
-            {mine.map((x) => (
-              <Link
-                key={x.id}
-                href={`/follow-up?b=${x.id}`}
-                aria-current={selected?.id === x.id ? "page" : undefined}
-                className={cn(
-                  "flex items-center justify-between rounded-lg px-2 py-1.5 text-sm",
-                  selected?.id === x.id
-                    ? "bg-accent-soft font-semibold text-accent"
-                    : "text-muted hover:bg-surface-2 hover:text-text",
-                )}
-              >
-                <span className="truncate">{x.name}</span>
-                <span className="tabular-nums">{x.members}</span>
-              </Link>
-            ))}
-          </nav>
-          <Card className="p-3">
-            <NewBucket canShare={manager} />
-          </Card>
-        </aside>
-        <section className="space-y-4">
+          ) : null}
+          {mine.map(bucketLink)}
+        </nav>
+        <Card className="order-last p-3 lg:order-none lg:col-start-1 lg:row-start-2">
+          <NewBucket canShare={manager} />
+        </Card>
+        <section className="min-w-0 space-y-4 lg:col-start-2 lg:row-span-2 lg:row-start-1">
           {selected ? (
             <>
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <h2 className="text-lg font-semibold">
+              <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-1">
+                <h2 className="text-base font-semibold tracking-tight">
                   {selected.name}{" "}
-                  <span className="text-sm font-normal text-muted">· {members.length}</span>
+                  <span className="text-sm font-normal text-muted tabular-nums">
+                    · {members.length}
+                  </span>
                 </h2>
-                <p className="text-xs text-muted">
+                <p className="min-w-0 text-xs text-muted">
                   {steps.length === 0
                     ? "No sequence yet — nothing goes out on its own."
                     : steps
@@ -149,7 +142,7 @@ export default async function FollowUpPage({
                   {" · "}
                   <Link
                     href={`/settings/buckets?b=${selected.id}`}
-                    className="text-accent hover:underline"
+                    className="font-medium text-accent hover:underline"
                   >
                     edit
                   </Link>

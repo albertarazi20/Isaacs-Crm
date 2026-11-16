@@ -3,6 +3,7 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { clockNow, TIME_SLOTS } from "@/lib/mca/callback";
 import { useApp } from "./app-context";
+import { Icon } from "./client/icons";
 import { cn } from "./ui";
 
 type Period = "AM" | "PM";
@@ -98,8 +99,8 @@ export function TimeSelect({
 
   const btn = (selected: boolean, disabled: boolean) =>
     cn(
-      "h-11 w-full rounded-lg px-3 text-center text-sm font-medium transition sm:h-9",
-      selected ? "bg-accent text-accent-fg" : "hover:bg-surface-2",
+      "h-11 w-full rounded-lg px-3 text-center text-sm font-medium tabular-nums transition sm:h-9",
+      selected ? "bg-accent-soft text-accent" : "text-text-2 hover:bg-surface-2 hover:text-text",
       disabled && "pointer-events-none opacity-30",
     );
 
@@ -116,14 +117,12 @@ export function TimeSelect({
           setOpen((o) => !o);
         }}
         className={cn(
-          "flex h-10 w-full items-center justify-between rounded-lg border border-border bg-surface px-3 text-left text-sm",
-          value ? "font-medium" : "text-muted",
+          "flex h-10 w-full items-center justify-between gap-2 rounded-lg border border-border bg-surface px-3 text-left text-sm transition hover:border-border-strong focus:border-accent focus:ring-2 focus:ring-ring focus:outline-none sm:h-9",
+          value ? "font-medium text-text" : "text-muted/70",
         )}
       >
-        <span>{value ? labelOf(value) : (none ?? "Pick a time")}</span>
-        <span aria-hidden className="text-muted">
-          🕒
-        </span>
+        <span className="truncate">{value ? labelOf(value) : (none ?? "Pick a time")}</span>
+        <Icon name="clock" className="text-muted" />
       </button>
       {open ? (
         <div
@@ -131,7 +130,7 @@ export function TimeSelect({
           role="dialog"
           aria-label={label}
           className={cn(
-            "absolute right-0 z-30 w-56 rounded-xl border border-border bg-surface p-2 shadow-xl",
+            "absolute right-0 z-30 w-56 rounded-xl border border-border bg-surface p-2 shadow-pop",
             up ? "bottom-full mb-1" : "mt-1",
           )}
         >
@@ -191,7 +190,7 @@ export function TimeSelect({
                 onChange("");
                 setOpen(false);
               }}
-              className="mt-2 w-full rounded-lg px-3 py-2 text-sm text-muted hover:bg-surface-2"
+              className="mt-2 h-10 w-full rounded-lg px-3 text-sm text-muted transition hover:bg-surface-2 hover:text-text sm:h-8"
             >
               {none}
             </button>

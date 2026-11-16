@@ -49,7 +49,7 @@ export function StipsCard({
         <p className="text-sm text-muted">
           Stips are the documents underwriting asks for — statements, ID, a voided check.
         </p>
-        <Button className="mt-3" variant="primary" disabled={starting} onClick={() => void start()}>
+        <Button className="mt-3" disabled={starting} onClick={() => void start()}>
           {starting ? "Starting…" : "Start the checklist"}
         </Button>
       </Panel>
@@ -70,18 +70,18 @@ export function StipsCard({
       }
     >
       {roll.ready ? (
-        <p className="mb-3 rounded-lg bg-good-soft p-3 text-sm font-semibold text-good">
+        <p className="mb-3 rounded-lg border border-good/30 bg-good-soft p-3 text-sm font-semibold text-good">
           Ready to submit — every required document is in.
         </p>
       ) : (
-        <p className="mb-3 rounded-lg bg-warn-soft p-3 text-sm text-warn">
+        <p className="mb-3 rounded-lg border border-warn/30 bg-warn-soft p-3 text-sm text-warn">
           <strong>Missing:</strong> {roll.missing.join(", ")}
         </p>
       )}
       <Checklist items={required} onToggle={toggle} />
       {optional.length > 0 ? (
         <>
-          <p className="mt-3 mb-1 text-xs font-medium text-muted">When the funder asks</p>
+          <p className="mt-3 mb-1 text-[12px] font-medium text-text-2">When the funder asks</p>
           <Checklist items={optional} onToggle={toggle} />
         </>
       ) : null}
@@ -105,10 +105,10 @@ function Checklist({
         const got = s.received_at !== null;
         return (
           <li key={s.id}>
-            <label className="flex min-h-11 cursor-pointer items-center gap-3 rounded-lg px-2 hover:bg-surface-2">
+            <label className="flex min-h-11 cursor-pointer items-center gap-3 rounded-lg px-2 transition hover:bg-surface-2 sm:min-h-9">
               <input
                 type="checkbox"
-                className="size-5 shrink-0 accent-accent"
+                className="size-4 shrink-0 accent-accent"
                 checked={got}
                 onChange={(e) => onToggle(s, e.target.checked)}
               />

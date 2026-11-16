@@ -31,12 +31,17 @@ export function NewBucket({ canShare }: { canShare: boolean }) {
         value={name}
         onChange={(e) => setName(e.target.value)}
         placeholder="New bucket…"
-        className="h-9 text-sm"
+        className="text-sm"
       />
       <div className="flex items-center justify-between gap-2">
         {canShare ? (
-          <label className="flex items-center gap-1.5 text-xs text-muted">
-            <input type="checkbox" checked={shared} onChange={(e) => setShared(e.target.checked)} />{" "}
+          <label className="flex min-h-8 items-center gap-1.5 text-xs text-muted">
+            <input
+              type="checkbox"
+              className="size-4 accent-accent"
+              checked={shared}
+              onChange={(e) => setShared(e.target.checked)}
+            />{" "}
             shared with everyone
           </label>
         ) : (

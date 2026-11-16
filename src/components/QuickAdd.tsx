@@ -166,7 +166,7 @@ function QuickAddDialog({ onClose }: { onClose: () => void }) {
         <Field label="Business name *">
           <Input name="businessName" required autoFocus placeholder="Mike's Pizza" />
         </Field>
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid gap-3 sm:grid-cols-2">
           <Field label="Merchant's name">
             <Input name="contactName" placeholder="Mike Ross" />
           </Field>
@@ -221,7 +221,7 @@ function QuickAddDialog({ onClose }: { onClose: () => void }) {
         {dupes && pending ? (
           <div
             role="alert"
-            className="space-y-2 rounded-lg border border-warn bg-warn-soft p-3 text-sm"
+            className="space-y-2 rounded-lg border border-warn/40 bg-warn-soft p-3 text-sm"
           >
             <p className="font-semibold text-warn">This looks like someone you already have:</p>
             <ul className="space-y-1">

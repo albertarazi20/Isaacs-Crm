@@ -230,11 +230,7 @@ export function SubmissionsCard({
           >
             Copy summary
           </Button>
-          <Button
-            size="sm"
-            variant={canSubmitToOps && !deal ? "secondary" : "primary"}
-            onClick={() => setDialog({ kind: "send" })}
-          >
+          <Button size="sm" variant="secondary" onClick={() => setDialog({ kind: "send" })}>
             Send to funders
           </Button>
           {canSubmitToOps && !deal ? (
@@ -251,7 +247,10 @@ export function SubmissionsCard({
       {deal ? <DealLine deal={deal} canSubmitToOps={canSubmitToOps} clientId={card.id} /> : null}
 
       {chips.length > 0 ? (
-        <p className="mb-3 rounded-lg bg-surface-2 p-3 text-sm" aria-label="Offers in">
+        <p
+          className="mb-3 rounded-lg border border-border bg-surface-2 p-3 text-sm"
+          aria-label="Offers in"
+        >
           <span className="font-medium">Offers in:</span>{" "}
           {chips.map((c, i) => (
             <span key={c.offerId}>
@@ -278,7 +277,7 @@ export function SubmissionsCard({
               : "Send this merchant to funders to start tracking who answers. A reminder to chase each funder is set for the next business day."}
         </EmptyState>
       ) : (
-        <ul className="space-y-3">
+        <ul className="space-y-2">
           {submissions.map((sub) => (
             <li
               key={sub.id}
@@ -287,7 +286,7 @@ export function SubmissionsCard({
               className="rounded-lg border border-border p-3"
             >
               <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                <p className="min-w-0 truncate font-medium">{sub.funder_name}</p>
+                <p className="min-w-0 truncate text-sm font-semibold">{sub.funder_name}</p>
                 <Badge tone={STATUS_TONE[sub.status]}>{SUBMISSION_STATUS_LABELS[sub.status]}</Badge>
                 <span className="text-xs text-muted">Sent {formatDate(sub.sent_on, today)}</span>
                 <EmailPackageLink
@@ -436,7 +435,7 @@ function DealLine({
         kicked ? "border-warn/40 bg-warn-soft" : "border-border bg-surface-2",
       )}
     >
-      <Link href={`/deals/${deal.id}`} className="font-semibold hover:underline">
+      <Link href={`/deals/${deal.id}`} className="font-semibold tabular-nums hover:underline">
         Deal D-{deal.number}
       </Link>
       <Badge tone={kicked ? "warn" : "accent"}>{label}</Badge>
@@ -491,12 +490,12 @@ function OfferItem({
       data-offer={o.status}
       className={cn(
         "rounded-lg border p-2.5",
-        o.status === "accepted" ? "border-good bg-good-soft" : "border-border bg-surface-2",
+        o.status === "accepted" ? "border-good/30 bg-good-soft" : "border-border bg-surface-2",
         o.status === "declined" || o.status === "expired" ? "opacity-70" : "",
       )}
     >
       <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-        <p className="text-sm">{offerTerms(o, formatMoney)}</p>
+        <p className="text-sm font-medium tabular-nums">{offerTerms(o, formatMoney)}</p>
         <Badge tone={OFFER_TONE[o.status]}>{OFFER_STATUS_LABELS[o.status]}</Badge>
       </div>
       <p className="text-xs text-muted">
@@ -505,7 +504,7 @@ function OfferItem({
       {o.note ? <p className="mt-1 text-sm whitespace-pre-wrap">{o.note}</p> : null}
       <div className="mt-2 flex flex-wrap items-center gap-1.5">
         {live ? (
-          <Button size="sm" variant="primary" disabled={busy} onClick={onAccept}>
+          <Button size="sm" variant="secondary" disabled={busy} onClick={onAccept}>
             Accept
           </Button>
         ) : null}
@@ -514,7 +513,6 @@ function OfferItem({
             <Button
               size="sm"
               variant="primary"
-              className="bg-good text-white shadow-good/30 hover:brightness-110"
               disabled={busy}
               title="Opens FUND on the deal page with this lender picked"
               onClick={onFund}

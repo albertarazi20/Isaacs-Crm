@@ -14,7 +14,7 @@ import { useApp } from "../app-context";
 import { bookedToday } from "@/lib/mca/booked";
 import { ContactActions } from "../ContactActions";
 import { StageBadge } from "../StageBadge";
-import { Badge, cn } from "../ui";
+import { Badge, buttonClass, cn } from "../ui";
 import { useHotIds } from "./prefs";
 import { SnoozeButtons } from "./SnoozeMenu";
 
@@ -35,8 +35,8 @@ const SHORTCUTS: [string, string][] = [
 
 function Row({ label, children }: { label: string; children: ReactNode }) {
   return (
-    <div className="grid grid-cols-[7.5rem_1fr] gap-3 text-base sm:grid-cols-[9rem_1fr]">
-      <dt className="text-sm font-medium text-muted">{label}</dt>
+    <div className="grid grid-cols-[7.5rem_1fr] gap-3 py-2 text-sm sm:grid-cols-[9rem_1fr]">
+      <dt className="text-xs font-medium text-muted">{label}</dt>
       <dd className="min-w-0 break-words">{children}</dd>
     </div>
   );
@@ -144,9 +144,9 @@ export function DialRunner({ items }: { items: DialItem[] }) {
       aria-label="Power dial"
       className="fixed inset-0 z-[45] flex flex-col bg-bg text-text"
     >
-      <header className="flex items-center gap-3 border-b border-border bg-surface px-4 py-3 pt-[max(0.75rem,env(safe-area-inset-top))]">
+      <header className="flex items-center gap-3 border-b border-border bg-surface px-4 py-3 pt-[max(0.75rem,env(safe-area-inset-top))] sm:px-6">
         <div className="min-w-0 flex-1">
-          <p className="text-sm font-semibold tabular-nums" aria-live="polite">
+          <p className="text-[13px] font-semibold tabular-nums" aria-live="polite">
             {n === 0
               ? total === 0
                 ? "No calls due"
@@ -159,7 +159,7 @@ export function DialRunner({ items }: { items: DialItem[] }) {
             aria-valuemin={0}
             aria-valuemax={total}
             aria-valuenow={done}
-            className="mt-1 h-2 overflow-hidden rounded-full bg-surface-2"
+            className="mt-1.5 h-1.5 max-w-xl overflow-hidden rounded-full bg-surface-2"
           >
             <div
               className="h-full rounded-full bg-accent transition-all"
@@ -172,14 +172,15 @@ export function DialRunner({ items }: { items: DialItem[] }) {
           aria-label="Keyboard shortcuts"
           aria-expanded={help}
           onClick={() => setHelp((v) => !v)}
-          className="hidden size-10 rounded-lg border border-border text-base font-semibold hover:bg-surface-2 sm:inline-flex sm:items-center sm:justify-center"
+          className={buttonClass(
+            "secondary",
+            "md",
+            "hidden size-9 px-0 font-mono sm:inline-flex sm:w-9",
+          )}
         >
           ?
         </button>
-        <Link
-          href="/"
-          className="inline-flex h-10 items-center rounded-lg bg-surface-2 px-4 text-sm font-medium hover:bg-border"
-        >
+        <Link href="/" className={buttonClass("secondary", "md")}>
           Done for today
         </Link>
       </header>
@@ -188,11 +189,11 @@ export function DialRunner({ items }: { items: DialItem[] }) {
         <div role="note" className="border-b border-border bg-surface-2 px-4 py-3 text-sm">
           <ul className="mx-auto max-w-xl space-y-1">
             {SHORTCUTS.map(([k, v]) => (
-              <li key={k} className="flex gap-3">
-                <kbd className="w-6 shrink-0 rounded border border-border bg-surface text-center font-mono">
+              <li key={k} className="flex items-center gap-3">
+                <kbd className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md border border-border bg-surface font-mono text-xs">
                   {k}
                 </kbd>
-                <span>{v}</span>
+                <span className="text-text-2">{v}</span>
               </li>
             ))}
           </ul>
@@ -204,15 +205,12 @@ export function DialRunner({ items }: { items: DialItem[] }) {
           {current ? (
             <DialCard key={current.card.id} item={current} timezone={timezone} cardRef={cardRef} />
           ) : (
-            <div className="rounded-2xl border border-dashed border-border p-10 text-center">
-              <h1 className="text-3xl font-bold">You&apos;re done</h1>
-              <p className="mt-2 text-muted">
+            <div className="rounded-xl border border-dashed border-border-strong p-10 text-center">
+              <h1 className="text-2xl font-semibold tracking-tight">You&apos;re done</h1>
+              <p className="mt-2 text-sm text-muted">
                 {total === 0 ? "Nothing is due to call right now." : `${done} of ${total} handled.`}
               </p>
-              <Link
-                href="/"
-                className="mt-6 inline-flex h-12 items-center rounded-xl bg-accent px-6 font-semibold text-accent-fg"
-              >
+              <Link href="/" className={buttonClass("primary", "md", "mt-6")}>
                 Back to Today
               </Link>
             </div>
@@ -228,17 +226,17 @@ export function DialRunner({ items }: { items: DialItem[] }) {
               onClick={() =>
                 setSkipped((s) => [...s.filter((id) => id !== current.card.id), current.card.id])
               }
-              className="h-12 flex-1 rounded-xl border border-border bg-surface text-base font-medium hover:bg-surface-2"
+              className={buttonClass("secondary", "md", "h-12 flex-1 text-base sm:h-12")}
             >
-              Skip <span className="text-muted">(S)</span>
+              Skip <span className="font-normal text-muted">(S)</span>
             </button>
             <button
               type="button"
               onClick={() => n > 0 && setCursor((idx + 1) % n)}
               disabled={n < 2}
-              className="h-12 flex-1 rounded-xl border border-border bg-surface text-base font-medium hover:bg-surface-2 disabled:opacity-50"
+              className={buttonClass("secondary", "md", "h-12 flex-1 text-base sm:h-12")}
             >
-              Next <span className="text-muted">(N)</span>
+              Next <span className="font-normal text-muted">(N)</span>
             </button>
           </div>
         </footer>
@@ -275,9 +273,9 @@ function DialCard({
     <div ref={cardRef} className="space-y-4">
       <article
         aria-label={card.business_name}
-        className="space-y-5 rounded-2xl border border-border bg-surface p-5"
+        className="space-y-4 rounded-xl border border-border bg-surface p-4 sm:p-5"
       >
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex flex-wrap items-center gap-1.5">
           <StageBadge stage={card.stage} />
           {due ? (
             <Badge tone={overdue ? "bad" : due === today ? "warn" : "neutral"}>
@@ -292,8 +290,10 @@ function DialCard({
         </div>
 
         <div>
-          <h1 className="text-3xl leading-tight font-bold break-words">{card.business_name}</h1>
-          <p className="mt-1 text-lg text-muted">
+          <h1 className="text-2xl leading-tight font-semibold tracking-tight break-words sm:text-[28px]">
+            {card.business_name}
+          </h1>
+          <p className="mt-1 text-sm text-muted">
             {[
               card.contact_name,
               card.dba && card.dba !== card.business_name ? `dba ${card.dba}` : "",
@@ -301,12 +301,12 @@ function DialCard({
               .filter(Boolean)
               .join(" · ") || "No merchant name"}
           </p>
-          <p className="mt-2 text-2xl font-semibold tabular-nums">
+          <p className="mt-2 text-xl font-semibold tracking-tight tabular-nums">
             {card.phone ? formatUS(card.phone) : "No phone number"}
           </p>
         </div>
 
-        <dl className="space-y-3">
+        <dl className="divide-y divide-border border-t border-border">
           <Row label="Wants">{wants || <span className="text-muted">Not recorded</span>}</Row>
           <Row label="Funders would approve">
             {card.est_approval_cents ? (
@@ -365,7 +365,7 @@ function DialCard({
 
         <div
           className={cn(
-            "[&>div]:w-full [&>div]:gap-2 [&_button]:h-14 [&_button]:flex-1 [&_button]:text-base",
+            "border-t border-border pt-4 [&>div]:w-full [&>div]:gap-2 [&_button]:h-12 [&_button]:flex-1 [&_button]:text-base",
           )}
         >
           <ContactActions client={card} size="md" />
@@ -373,7 +373,7 @@ function DialCard({
       </article>
 
       <section aria-label="Snooze this client" className="space-y-2">
-        <h2 className="text-sm font-semibold tracking-wide text-muted uppercase">Not now</h2>
+        <h2 className="text-[13px] font-semibold text-text">Not now</h2>
         <SnoozeButtons key={card.id} card={card} />
       </section>
     </div>

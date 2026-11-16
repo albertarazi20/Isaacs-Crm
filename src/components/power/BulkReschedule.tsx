@@ -94,7 +94,7 @@ function BulkDialog({ overdue, onClose }: { overdue: ClientCard[]; onClose: () =
     >
       <div className="space-y-4">
         <div>
-          <p id="bulk-days-label" className="text-xs font-medium text-muted">
+          <p id="bulk-days-label" className="text-[12px] font-medium text-text-2">
             Spread them over this many business days
           </p>
           <div className="mt-1 flex gap-2" role="group" aria-labelledby="bulk-days-label">
@@ -106,10 +106,10 @@ function BulkDialog({ overdue, onClose }: { overdue: ClientCard[]; onClose: () =
                 aria-label={`${d} business days`}
                 onClick={() => setDays(d)}
                 className={cn(
-                  "h-10 flex-1 rounded-lg border text-sm font-medium transition",
+                  "h-10 flex-1 rounded-lg border text-sm font-medium tabular-nums transition sm:h-9",
                   days === d
-                    ? "border-accent bg-accent text-accent-fg"
-                    : "border-border bg-surface hover:bg-surface-2",
+                    ? "border-accent/40 bg-accent-soft text-accent"
+                    : "border-border bg-surface text-text-2 hover:border-border-strong hover:bg-surface-3 hover:text-text",
                 )}
               >
                 {d}
@@ -121,7 +121,7 @@ function BulkDialog({ overdue, onClose }: { overdue: ClientCard[]; onClose: () =
         <label className="flex items-start gap-2 text-sm">
           <input
             type="checkbox"
-            className="mt-0.5 size-4"
+            className="mt-0.5 size-4 accent-accent"
             checked={keep}
             onChange={(e) => setKeep(e.target.checked)}
           />
@@ -134,7 +134,7 @@ function BulkDialog({ overdue, onClose }: { overdue: ClientCard[]; onClose: () =
           </span>
         </label>
 
-        <div className="rounded-xl bg-surface-2 p-3" aria-live="polite">
+        <div className="rounded-lg border border-border bg-surface-2 p-3" aria-live="polite">
           {n === 0 ? (
             <p className="text-sm">Nothing to move with these settings.</p>
           ) : (

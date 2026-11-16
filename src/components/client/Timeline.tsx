@@ -10,6 +10,8 @@ import { outcomeLabel } from "@/lib/mca/touch";
 import { useApp } from "../app-context";
 import { Badge, Button, cn, EmptyState, Textarea } from "../ui";
 import { HintChips } from "../winback/HintChips";
+import { Icon, type IconName } from "./icons";
+import { Chip } from "./primitives";
 import {
   activityBody,
   countByFilter,
@@ -22,15 +24,15 @@ import {
 } from "./logic";
 import { Muted, useNowMs, useRun } from "./parts";
 
-const KIND_META: Record<ActivityRow["kind"], { icon: string; label: string }> = {
-  note: { icon: "📝", label: "Note" },
-  call: { icon: "📞", label: "Call" },
-  text: { icon: "💬", label: "Text" },
-  email: { icon: "✉️", label: "Email" },
-  stage_change: { icon: "🔀", label: "Stage change" },
-  timer: { icon: "⏰", label: "Follow-up" },
-  funding: { icon: "💵", label: "Funding" },
-  system: { icon: "⚙️", label: "Update" },
+const KIND_META: Record<ActivityRow["kind"], { icon: IconName; label: string }> = {
+  note: { icon: "note", label: "Note" },
+  call: { icon: "phone", label: "Call" },
+  text: { icon: "message", label: "Text" },
+  email: { icon: "mail", label: "Email" },
+  stage_change: { icon: "shuffle", label: "Stage change" },
+  timer: { icon: "bell", label: "Follow-up" },
+  funding: { icon: "banknote", label: "Funding" },
+  system: { icon: "info", label: "Update" },
 };
 
 const OUTCOME_TONE = {
@@ -77,27 +79,21 @@ export function Timeline({
   const shown = rows.slice(0, limit);
 
   return (
-    <section aria-label="Notes and history" className={cn("space-y-4", className)}>
+    <section aria-label="Notes and history" className={cn("space-y-3", className)}>
       <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label="Show">
         {TIMELINE_FILTERS.map((f) => (
-          <button
+          <Chip
             key={f.key}
-            type="button"
             title={f.hint}
-            aria-pressed={filter === f.key}
+            active={filter === f.key}
+            count={counts[f.key]}
             onClick={() => {
               setFilter(f.key);
               setLimit(PAGE);
             }}
-            className={cn(
-              "h-10 rounded-full border px-3 text-sm font-medium transition sm:h-8",
-              filter === f.key
-                ? "border-accent bg-accent text-accent-fg"
-                : "border-border bg-surface hover:bg-surface-2",
-            )}
           >
-            {f.label} <span className="opacity-70">{counts[f.key]}</span>
-          </button>
+            {f.label}
+          </Chip>
         ))}
       </div>
       {rows.length === 0 ? (
@@ -109,7 +105,7 @@ export function Timeline({
           <EmptyState title="Nothing here">No entries match this filter.</EmptyState>
         )
       ) : (
-        <ol className="space-y-2">
+        <ol className="divide-y divide-border overflow-hidden rounded-xl border border-border bg-surface">
           {shown.map((a) => (
             <Entry key={a.id} a={a} />
           ))}
@@ -135,14 +131,14 @@ function LastContact({ card, activities }: { card: ClientCard; activities: Activ
       ? touch
       : null;
   return (
-    <div className="rounded-xl border border-border bg-surface p-4">
+    <div className="rounded-xl border border-border bg-surface px-4 py-3">
       {last.never ? (
-        <p className="font-medium">
+        <p className="text-sm font-medium">
           Never called yet
           <span className="font-normal text-muted"> — no call has been logged.</span>
         </p>
       ) : (
-        <p>
+        <p className="text-sm">
           <span className="font-semibold" title={fullDateTime(last.atIso, timezone)}>
             Last call {last.ago}
           </span>
@@ -203,7 +199,7 @@ function NoteComposer({ card }: { card: ClientCard }) {
 
   return (
     <form
-      className="rounded-xl border border-accent/40 bg-surface p-3 shadow-sm"
+      className="rounded-xl border border-border bg-surface p-3 transition focus-within:border-accent"
       onSubmit={(e) => {
         e.preventDefault();
         void save();
@@ -267,19 +263,19 @@ function Entry({ a }: { a: ActivityRow }) {
   );
 
   return (
-    <li
-      className={cn(
-        "rounded-xl border p-3",
-        isNote ? "border-border bg-surface" : "border-transparent bg-surface-2/60",
-      )}
-    >
-      <div className="flex items-start gap-2.5">
-        <span aria-hidden className="mt-0.5 text-base leading-none">
-          {meta.icon}
+    <li className={cn("px-4 py-2.5 transition", isNote ? "bg-surface" : "bg-surface-3/60")}>
+      <div className="flex items-start gap-3">
+        <span
+          className={cn(
+            "mt-0.5 inline-flex size-6 shrink-0 items-center justify-center rounded-md",
+            isNote ? "bg-accent-soft text-accent" : "bg-surface-2 text-muted",
+          )}
+        >
+          <Icon name={meta.icon} className="size-3.5" />
         </span>
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
-            <div className="flex flex-wrap items-center gap-2 text-sm font-semibold">
+            <div className="flex flex-wrap items-center gap-2 text-[13px] font-semibold">
               {a.kind === "stage_change" ? (
                 <StageChangeLabel from={a.from_stage} to={a.to_stage} />
               ) : (
@@ -294,8 +290,8 @@ function Entry({ a }: { a: ActivityRow }) {
           {body ? (
             <p
               className={cn(
-                "mt-1 break-words whitespace-pre-wrap",
-                isNote ? "text-[0.95rem]" : "text-sm text-muted",
+                "mt-0.5 break-words whitespace-pre-wrap",
+                isNote ? "text-sm text-text" : "text-[13px] text-text-2",
               )}
             >
               {body}

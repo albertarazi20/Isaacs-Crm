@@ -22,7 +22,7 @@ export function CopyContact({
       type="button"
       aria-label={`Copy ${kind}`}
       title={`Copy ${kind}`}
-      className="ml-1 rounded px-1 text-xs font-semibold text-accent hover:bg-accent-soft"
+      className="ml-1 inline-flex h-6 items-center rounded-md px-1.5 text-[11px] font-semibold text-accent transition hover:bg-accent-soft"
       onClick={() => {
         void copy(value, kind);
         void logAccessAction({ action: kind === "phone" ? "copy_phone" : "copy_email", clientId });
