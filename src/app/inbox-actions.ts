@@ -8,7 +8,10 @@ import { UserError } from "@/lib/data/mutations";
 import { id, text } from "@/lib/data/schemas";
 import type { ActionResult } from "@/lib/data/types";
 import { db } from "@/lib/db";
+import { aiFailureWords, NO_KEY_WORDS } from "@/lib/deals/aiWords";
+import { GmailReconnectError } from "@/lib/email/gmail";
 import { env } from "@/lib/env";
+import { sendChaseDraft } from "@/lib/inbox/chaseDrafts";
 import { chaseLender, forwardToLender, submitToLenders } from "@/lib/inbox/submit";
 import { importPastedOffer, type PastedOfferResult } from "@/lib/inbox/paste";
 import { importOfferImage, type OfferImageResult } from "@/lib/inbox/pasteImage";
@@ -142,6 +145,7 @@ export async function importPastedOfferAction(
   const session = await requireSession();
   try {
     if (!CAN.editOffers(session.role)) throw new UserError("Only a manager can import pasted text");
+    if (!env().ANTHROPIC_API_KEY) throw new UserError(NO_KEY_WORDS);
     const i = z
       .object({ dealId: id, submissionId: id.nullable().default(null), text: text(20_000) })
       .parse(input);
@@ -149,7 +153,7 @@ export async function importPastedOfferAction(
     revalidatePath("/", "layout");
     return { ok: true, data };
   } catch (e) {
-    return { ok: false, error: toActionError(e) };
+    return { ok: false, error: aiFailureWords(e) ?? toActionError(e) };
   }
 }
 
@@ -199,6 +203,7 @@ export async function importOfferImageAction(
   try {
     if (!CAN.editOffers(session.role))
       throw new UserError("Only a manager can import a screenshot");
+    if (!env().ANTHROPIC_API_KEY) throw new UserError(NO_KEY_WORDS);
     const meta = z.object({ dealId: id, submissionId: id.nullable().default(null) }).parse({
       dealId: form.get("dealId"),
       submissionId: form.get("submissionId") || null,
@@ -214,6 +219,43 @@ export async function importOfferImageAction(
     revalidatePath("/", "layout");
     return { ok: true, data };
   } catch (e) {
+    return { ok: false, error: aiFailureWords(e) ?? toActionError(e) };
+  }
+}
+
+/**
+ * Ops (or a manager) sends a drafted chase on the lender's thread and clears the draft (S2-6, 'draft' mode). It goes
+ * from the deal's rep's mailbox, like the automatic mode; when that mailbox is not connected the words say so and
+ * the draft stays, to copy or dismiss.
+ */
+export async function sendChaseDraftAction(
+  input: unknown,
+): Promise<ActionResult<{ funderName: string }>> {
+  const session = await requireSession();
+  try {
+    if (!CAN.runOps(session.role)) throw new UserError("Only ops or a manager can send a chase");
+    const i = z.object({ alertId: z.string().regex(/^\d+$/) }).parse(input);
+    const data = await db.withUser(session.userId, (q) =>
+      sendChaseDraft(q, {
+        alertId: i.alertId,
+        sendFor: (userId) => (m) => sendEmailAsUser(userId, m),
+      }),
+    );
+    revalidatePath("/", "layout");
+    return { ok: true, data };
+  } catch (e) {
+    if (e instanceof GmailReconnectError)
+      return {
+        ok: false,
+        error:
+          "The rep's Gmail isn't connected, so the nudge can't go out on the thread. Copy it, or dismiss it.",
+      };
+    if (e instanceof Error && e.message === "Google is not configured")
+      return {
+        ok: false,
+        error:
+          "Google isn't set up on this server, so nothing can be sent from here. Copy the nudge instead.",
+      };
     return { ok: false, error: toActionError(e) };
   }
 }

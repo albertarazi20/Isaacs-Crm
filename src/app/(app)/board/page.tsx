@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { ProposalDecision } from "@/components/deals/ProposalDecision";
+import { AppliedUpdatesCard, ChaseDraftsCard } from "@/components/deals/ReviewTray";
 import { DealStatusBadge, FilterChip, Icon, PageHeader } from "@/components/deals/primitives";
 import { LenderChip } from "@/components/submissions/LenderChip";
 import { OpsActions } from "@/components/submissions/OpsActions";
@@ -16,6 +17,8 @@ import {
 import { DEAL_STATUS_LABELS, type DealCard, type DealFilter } from "@/lib/deals/types";
 import { db } from "@/lib/db";
 import { timeAgo } from "@/lib/format";
+import { listAppliedUpdates } from "@/lib/inbox/appliedUpdates";
+import { listChaseDrafts } from "@/lib/inbox/chaseDrafts";
 import { listProposed } from "@/lib/inbox/process";
 import { formatMoneyCompact } from "@/lib/money";
 import { requestTimeMs } from "@/lib/server-time";
@@ -142,9 +145,11 @@ export default async function SubmissionBoardPage({
       deals.map((d) => d.id),
     );
     const proposed = manager || canEdit ? await listProposed(q) : [];
-    return { filters, counts, deals, subs, proposed };
+    const chaseDrafts = manager || canEdit ? await listChaseDrafts(q) : [];
+    const applied = review && (manager || canEdit) ? await listAppliedUpdates(q) : [];
+    return { filters, counts, deals, subs, proposed, chaseDrafts, applied };
   });
-  const { filters, counts, deals, subs, proposed } = data;
+  const { filters, counts, deals, subs, proposed, chaseDrafts, applied } = data;
   const byDeal = new Map<string, BoardSubmission[]>();
   for (const s of subs) byDeal.set(s.deal_id, [...(byDeal.get(s.deal_id) ?? []), s]);
   const nowMs = requestTimeMs();
@@ -211,8 +216,8 @@ export default async function SubmissionBoardPage({
           <FilterChip
             href={qs({ tab: "review" })}
             active={review}
-            count={proposed.length}
-            tone={proposed.length > 0 ? "warn" : "neutral"}
+            count={proposed.length + chaseDrafts.length}
+            tone={proposed.length + chaseDrafts.length > 0 ? "warn" : "neutral"}
           >
             Review tray
           </FilterChip>
@@ -220,56 +225,65 @@ export default async function SubmissionBoardPage({
       </nav>
 
       {review ? (
-        proposed.length === 0 ? (
-          <EmptyState title="Nothing to review">
-            When the AI reads an approval, a decline or an offer in a lender&apos;s email, it lands
-            here for a manager&apos;s yes before it touches the deal.
-          </EmptyState>
-        ) : (
-          <Card className="p-0">
-            <ul className="divide-y divide-border">
-              {proposed.map((p) => (
-                <li
-                  key={p.id}
-                  className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2 px-4 py-3"
-                >
-                  <div className="min-w-0 flex-1 basis-64">
-                    <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm font-semibold">
-                      <Link href={`/deals/${p.deal_id}`} className="hover:underline">
-                        {p.business_name}
-                      </Link>
-                      <span className="text-xs font-normal text-muted">
-                        D-{p.deal_number} · {p.funder_name ?? p.from_address} ·{" "}
-                        {Math.round(p.confidence * 100)}% sure
-                      </span>
-                    </p>
-                    <p className="mt-0.5 text-sm">{p.summary}</p>
-                    {p.evidence.length > 0 ? (
-                      <ul className="mt-1 space-y-0.5 border-l-2 border-border pl-2.5 text-xs text-muted">
-                        {p.evidence.slice(0, 3).map((e, i) => (
-                          <li key={i}>
-                            <span className="font-medium text-text-2">{e.field}:</span> “{e.quote}”
-                          </li>
-                        ))}
-                      </ul>
-                    ) : null}
-                    {p.next_step ? (
-                      <p className="mt-1 flex items-center gap-1 text-xs text-accent">
-                        <Icon name="sparkles" className="size-3.5" />
-                        {p.next_step}
+        <div className="space-y-6">
+          {proposed.length === 0 ? (
+            <EmptyState title="Nothing to review">
+              When the AI reads an approval, a decline or an offer in a lender&apos;s email, it
+              lands here for a manager&apos;s yes before it touches the deal.
+            </EmptyState>
+          ) : (
+            <Card className="p-0">
+              <ul className="divide-y divide-border">
+                {proposed.map((p) => (
+                  <li
+                    key={p.id}
+                    className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2 px-4 py-3"
+                  >
+                    <div className="min-w-0 flex-1 basis-64">
+                      <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm font-semibold">
+                        <Link href={`/deals/${p.deal_id}`} className="hover:underline">
+                          {p.business_name}
+                        </Link>
+                        <span className="text-xs font-normal text-muted">
+                          D-{p.deal_number} · {p.funder_name ?? p.from_address} ·{" "}
+                          {Math.round(p.confidence * 100)}% sure
+                        </span>
                       </p>
-                    ) : null}
-                  </div>
-                  {CAN.editOffers(session.role) ? (
-                    <ProposalDecision id={p.id} />
-                  ) : (
-                    <span className="text-xs text-muted">manager decides</span>
-                  )}
-                </li>
-              ))}
-            </ul>
-          </Card>
-        )
+                      <p className="mt-0.5 text-sm">{p.summary}</p>
+                      {p.evidence.length > 0 ? (
+                        <ul className="mt-1 space-y-0.5 border-l-2 border-border pl-2.5 text-xs text-muted">
+                          {p.evidence.slice(0, 3).map((e, i) => (
+                            <li key={i}>
+                              <span className="font-medium text-text-2">{e.field}:</span> “{e.quote}
+                              ”
+                            </li>
+                          ))}
+                        </ul>
+                      ) : null}
+                      {p.next_step ? (
+                        <p className="mt-1 flex items-center gap-1 text-xs text-accent">
+                          <Icon name="sparkles" className="size-3.5" />
+                          {p.next_step}
+                        </p>
+                      ) : null}
+                    </div>
+                    {CAN.editOffers(session.role) ? (
+                      <ProposalDecision id={p.id} />
+                    ) : (
+                      <span className="text-xs text-muted">manager decides</span>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            </Card>
+          )}
+          <ChaseDraftsCard drafts={chaseDrafts} canSend={canEdit} nowMs={nowMs} />
+          <AppliedUpdatesCard
+            updates={applied}
+            manager={CAN.editOffers(session.role)}
+            nowMs={nowMs}
+          />
+        </div>
       ) : deals.length === 0 ? (
         <EmptyState title="Nothing in this lane">{current?.hint || "Nothing matches."}</EmptyState>
       ) : (

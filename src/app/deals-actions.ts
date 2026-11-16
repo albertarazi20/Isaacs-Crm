@@ -12,6 +12,8 @@ import type { ClientFundersData } from "@/lib/funders/types";
 import { z } from "zod";
 import { UserError } from "@/lib/data/mutations";
 import { askDeal, type DealAnswer } from "@/lib/deals/ask";
+import { aiFailureWords, NO_KEY_WORDS } from "@/lib/deals/aiWords";
+import { env } from "@/lib/env";
 import * as m from "@/lib/deals/mutations";
 import { reshopCandidates, startReshop, type ReshopCandidate } from "@/lib/deals/reshop";
 import * as s from "@/lib/deals/schemas";
@@ -125,13 +127,20 @@ export async function startReshopAction(input: unknown): Promise<ActionResult<{ 
 }
 
 // ---------- ask the deal a question (plan §7 Activity) ----------
-const askSchema = z.object({ dealId: z.string().uuid(), question: z.string().min(3).max(500) });
+const askSchema = z.object({
+  dealId: z.string().uuid(),
+  question: z
+    .string()
+    .min(3, "Ask a question first")
+    .max(500, "Keep the question under 500 characters"),
+});
 
 /** "Where does this deal stand?" in plain words, answered from the timeline with verified citations. A read. */
 export async function askDealAction(input: unknown): Promise<ActionResult<DealAnswer>> {
   const session = await requireSession();
   try {
     const i = askSchema.parse(input);
+    if (!env().ANTHROPIC_API_KEY) throw new UserError(NO_KEY_WORDS);
     const data = await askDeal({
       db,
       userId: session.userId,
@@ -140,6 +149,6 @@ export async function askDealAction(input: unknown): Promise<ActionResult<DealAn
     });
     return { ok: true, data };
   } catch (e) {
-    return { ok: false, error: toActionError(e) };
+    return { ok: false, error: aiFailureWords(e) ?? toActionError(e) };
   }
 }
