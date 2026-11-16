@@ -5,6 +5,8 @@ import { env } from "@/lib/env";
 import { processInbox } from "@/lib/inbox/process";
 import { autoChase } from "@/lib/inbox/submit";
 import { productionMailTokenFor, syncInbox } from "@/lib/inbox/sync";
+import { tagMerchantReplies } from "@/lib/messaging/replyTags";
+import { recordExternalSends } from "@/lib/send/external";
 import { sendEmailAsUser } from "@/lib/system/gmail";
 import { sendViaResend } from "@/lib/email/resend";
 import { recordHeartbeat } from "@/lib/system/heartbeat";
@@ -25,9 +27,17 @@ async function handle(req: Request): Promise<NextResponse> {
   const e = env();
   if (!authorised(req, e.CRON_SECRET))
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
-  const sync = await syncInbox({ db, tokenFor: productionMailTokenFor() });
+  const tokenFor = productionMailTokenFor();
+  const sync = await syncInbox({ db, tokenFor });
+  // mail a rep sent outside the CRM counts toward the mailbox cap (S1-1): each connected mailbox's Sent mail since
+  // its watermark lands in the ledger
+  const external = await recordExternalSends({ db, tokenFor });
   const processed = e.ANTHROPIC_API_KEY
     ? await processInbox({ db })
+    : { skipped: "ANTHROPIC_API_KEY not set" };
+  // the merchant replies the sync stored get their tag (S1-6), on the same key and spend cap as the lender reader
+  const replyTags = e.ANTHROPIC_API_KEY
+    ? await tagMerchantReplies({ db })
     : { skipped: "ANTHROPIC_API_KEY not set" };
   const alerts =
     sync.merchantReplies.length > 0 && e.RESEND_API_KEY && e.RESEND_FROM
@@ -47,8 +57,8 @@ async function handle(req: Request): Promise<NextResponse> {
   );
   await recordHeartbeat("inbox");
   return NextResponse.json(
-    { sync, processed, alerts, chase },
-    { status: sync.failed.length > 0 ? 207 : 200 },
+    { sync, external, processed, replyTags, alerts, chase },
+    { status: sync.failed.length > 0 || external.failed.length > 0 ? 207 : 200 },
   );
 }
 

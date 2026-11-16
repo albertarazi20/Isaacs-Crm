@@ -2,6 +2,7 @@ import { timingSafeEqual } from "node:crypto";
 import { NextResponse } from "next/server";
 import { runBucketSteps } from "@/lib/buckets/engine";
 import { db } from "@/lib/db";
+import { runDealClocks } from "@/lib/deals/clocks";
 import { env } from "@/lib/env";
 import { runWinback } from "@/lib/money/winback";
 import { recordHeartbeat } from "@/lib/system/heartbeat";
@@ -18,7 +19,8 @@ function authorised(req: Request, secret: string | undefined): boolean {
 
 /**
  * Hourly: bucket steps and win-back steps queue what is due (the outbox worker sends inside each merchant's window);
- * the money clocks roll (clawback windows clear, renewal warm-ups and eligibility become tasks).
+ * the money clocks roll (clawback windows clear, renewal warm-ups and eligibility become tasks); the deal clocks roll
+ * (approvals past their date expire, the month's new statement joins each open deal's checklist).
  */
 async function handle(req: Request): Promise<NextResponse> {
   const e = env();
@@ -29,8 +31,9 @@ async function handle(req: Request): Promise<NextResponse> {
   const clocks = await db.withSystem(
     async (q) => (await q.query("select * from roll_funding_clocks()")).rows[0],
   );
+  const deals = await db.withSystem((q) => runDealClocks(q));
   await recordHeartbeat("nightly");
-  return NextResponse.json({ buckets, winback, clocks });
+  return NextResponse.json({ buckets, winback, clocks, deals });
 }
 
 export const GET = handle;
