@@ -52,6 +52,51 @@ export interface WindowInput {
   startHour: number;
   endHour: number;
   weekends: boolean;
+  /** Send on US federal holidays too (Settings; off by default, S1-11). */
+  holidays?: boolean;
+}
+
+/** The nth weekday (0 = Sunday) of a month; n = -1 for the last one. Returns YYYY-MM-DD. */
+function nthWeekday(year: number, month: number, weekday: number, n: number): ISODate {
+  if (n > 0) {
+    const first = new Date(Date.UTC(year, month - 1, 1));
+    const day = 1 + ((weekday - first.getUTCDay() + 7) % 7) + (n - 1) * 7;
+    return new Date(Date.UTC(year, month - 1, day)).toISOString().slice(0, 10);
+  }
+  const last = new Date(Date.UTC(year, month, 0));
+  const day = last.getUTCDate() - ((last.getUTCDay() - weekday + 7) % 7);
+  return new Date(Date.UTC(year, month - 1, day)).toISOString().slice(0, 10);
+}
+
+/** A fixed-date holiday falling on a Saturday is observed the Friday before; on a Sunday, the Monday after. */
+function observed(year: number, month: number, day: number): ISODate {
+  const d = new Date(Date.UTC(year, month - 1, day));
+  if (d.getUTCDay() === 6) d.setUTCDate(d.getUTCDate() - 1);
+  else if (d.getUTCDay() === 0) d.setUTCDate(d.getUTCDate() + 1);
+  return d.toISOString().slice(0, 10);
+}
+
+/** The eleven US federal holidays of a year, as observed, by date. */
+export function usFederalHolidays(year: number): Map<ISODate, string> {
+  return new Map<ISODate, string>([
+    [observed(year, 1, 1), "New Year's Day"],
+    [nthWeekday(year, 1, 1, 3), "Martin Luther King Jr. Day"],
+    [nthWeekday(year, 2, 1, 3), "Presidents' Day"],
+    [nthWeekday(year, 5, 1, -1), "Memorial Day"],
+    [observed(year, 6, 19), "Juneteenth"],
+    [observed(year, 7, 4), "Independence Day"],
+    [nthWeekday(year, 9, 1, 1), "Labor Day"],
+    [nthWeekday(year, 10, 1, 2), "Columbus Day"],
+    [observed(year, 11, 11), "Veterans Day"],
+    [nthWeekday(year, 11, 4, 4), "Thanksgiving"],
+    [observed(year, 12, 25), "Christmas Day"],
+  ]);
+}
+
+/** The holiday a calendar day is (as observed), or null. New Year's observed on Dec 31 belongs to the next year's list. */
+export function usFederalHoliday(date: ISODate): string | null {
+  const year = Number(date.slice(0, 4));
+  return usFederalHolidays(year).get(date) ?? usFederalHolidays(year + 1).get(date) ?? null;
 }
 
 function partsIn(
@@ -82,6 +127,7 @@ function partsIn(
 export function inSendWindow(at: Date, w: WindowInput): boolean {
   const p = partsIn(w.timezone, at);
   if (!w.weekends && (p.weekday === 0 || p.weekday === 6)) return false;
+  if (!w.holidays && usFederalHoliday(p.date)) return false;
   return p.hour >= w.startHour && p.hour < w.endHour;
 }
 

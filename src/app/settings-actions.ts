@@ -1,5 +1,6 @@
 "use server";
 
+import { promises as dns } from "node:dns";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { CAN, requireRole } from "@/lib/auth/server";
@@ -7,6 +8,7 @@ import { toActionError } from "@/lib/data/errors";
 import { id } from "@/lib/data/schemas";
 import type { ActionResult } from "@/lib/data/types";
 import { db } from "@/lib/db";
+import { checkAutomationDns, describeDnsCheck, storeDnsCheck } from "@/lib/send/dns";
 
 const pct = z.coerce.number().min(0).max(100);
 
@@ -20,6 +22,8 @@ const shopSchema = z.object({
   sendWindowStart: z.coerce.number().int().min(0).max(23),
   sendWindowEnd: z.coerce.number().int().min(1).max(24),
   sendOnWeekends: z.boolean(),
+  /** US federal holidays (S1-11); a form that does not send it leaves the window closed on them. */
+  sendOnHolidays: z.boolean().default(false),
   perMerchantDaily: z.coerce.number().int().min(1).max(5),
   perMerchantWeekly: z.coerce.number().int().min(1).max(20),
   automationFrom: z.string().trim().max(200).default(""),
@@ -40,7 +44,8 @@ export async function saveShopSettingsAction(input: unknown): Promise<ActionResu
         `update shop_settings set shop_name = $1, postal_address = $2, daily_cap = $3, amber_at = $4, reserved_for_intake = $5,
                 sequences_enabled = $6, send_window_start = $7, send_window_end = $8, send_on_weekends = $9,
                 per_merchant_daily = $10, per_merchant_weekly = $11, automation_from = $12, automation_reply_to_rep = $13,
-                lender_chase_days = $14, lender_chase_mode = $15, lender_chase_max = $16, max_lenders_per_deal = $17`,
+                lender_chase_days = $14, lender_chase_mode = $15, lender_chase_max = $16, max_lenders_per_deal = $17,
+                send_on_holidays = $18`,
         [
           i.shopName,
           i.postalAddress,
@@ -59,11 +64,36 @@ export async function saveShopSettingsAction(input: unknown): Promise<ActionResu
           i.lenderChaseMode,
           i.lenderChaseMax,
           i.maxLendersPerDeal,
+          i.sendOnHolidays,
         ],
       ),
     );
     revalidatePath("/", "layout");
     return { ok: true, data: null };
+  } catch (e) {
+    return { ok: false, error: toActionError(e) };
+  }
+}
+
+/**
+ * The DNS gate (S1-4): look up SPF, DKIM and DMARC for the automation address and store the result. The outbox worker
+ * sends from the Resend domain only while the stored result says all three are there.
+ */
+export async function checkAutomationDnsAction(): Promise<
+  ActionResult<{ ok: boolean; summary: string }>
+> {
+  const session = await requireRole(CAN.manageTeam);
+  try {
+    const from = await db.withUser(
+      session.userId,
+      async (q) =>
+        (await q.query<{ automation_from: string }>("select automation_from from shop_settings"))
+          .rows[0]?.automation_from ?? "",
+    );
+    const check = await checkAutomationDns(from, { resolveTxt: (h) => dns.resolveTxt(h) });
+    await db.withUser(session.userId, (q) => storeDnsCheck(q, check));
+    revalidatePath("/settings/email");
+    return { ok: true, data: { ok: check.ok, summary: describeDnsCheck(check) } };
   } catch (e) {
     return { ok: false, error: toActionError(e) };
   }

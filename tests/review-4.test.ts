@@ -402,9 +402,11 @@ describe("C-6: an older backup still restores after a new column with a default"
       "goals",
       "inbound_emails",
       "mail_sync_state",
+      "mailbox_sent_sync", // stream 1: the Sent-mail watermark per mailbox
       "mailboxes",
       "outbox",
       "proposed_updates",
+      "reply_tags", // stream 1: which merchant replies the classifier has tagged, and how
       "send_ledger",
       "sheet_rows",
       "sheet_sources",

@@ -14,6 +14,8 @@ export interface EnqueueInput {
   when?: "now" | "window";
   /** Drop it if it has not gone by then (a stale reminder must not fire a week late). */
   expiresInHours?: number;
+  /** The template it came from, for the per-template scores and the bounce-spike pause (S1-7). */
+  templateId?: string | null;
 }
 
 export type EnqueueResult =
@@ -33,6 +35,7 @@ interface Window {
   send_window_start: number;
   send_window_end: number;
   send_on_weekends: boolean;
+  send_on_holidays: boolean;
 }
 
 /**
@@ -65,7 +68,7 @@ export async function enqueueEmail(
   ) {
     const w = (
       await q.query<Window>(
-        "select send_window_start, send_window_end, send_on_weekends from shop_settings",
+        "select send_window_start, send_window_end, send_on_weekends, send_on_holidays from shop_settings",
       )
     ).rows[0];
     notBefore = nextSendTime(now, {
@@ -73,14 +76,15 @@ export async function enqueueEmail(
       startHour: w?.send_window_start ?? 9,
       endHour: w?.send_window_end ?? 11,
       weekends: w?.send_on_weekends ?? false,
+      holidays: w?.send_on_holidays ?? false,
     });
   }
   const expires = input.expiresInHours
     ? new Date(notBefore.getTime() + input.expiresInHours * 3_600_000)
     : null;
   const ins = await q.query<{ id: string }>(
-    `insert into outbox (user_id, client_id, deal_id, lane, source, to_address, subject, text_body, not_before, expires_at)
-     values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) returning id`,
+    `insert into outbox (user_id, client_id, deal_id, lane, source, to_address, subject, text_body, not_before, expires_at, template_id)
+     values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) returning id`,
     [
       c.user_id,
       input.clientId,
@@ -92,6 +96,7 @@ export async function enqueueEmail(
       input.text,
       notBefore.toISOString(),
       expires?.toISOString() ?? null,
+      input.templateId ?? null,
     ],
   );
   const id = ins.rows[0]?.id;
