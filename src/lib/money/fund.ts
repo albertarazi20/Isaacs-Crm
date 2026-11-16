@@ -179,6 +179,9 @@ export interface FundedRow {
   funder_name: string;
   amount_cents: number;
   factor_rate: number;
+  /** The funding's own buy and sell rates; with both on file the points follow them. */
+  sell_rate: number | null;
+  buy_rate: number | null;
   payback_cents: number;
   payment_cents: number;
   frequency: string;

@@ -24,7 +24,7 @@ export interface CorrectionLine {
 export interface FundingExtra {
   expected_on: string | null;
   owed_cents: number;
-  /** Positive = days past the lender's own pay-after date with commission still owed; null = not tracked. */
+  /** Days past the lender's own pay-after date with commission still owed (negative = days to go); null = nothing owed or not tracked. */
   late_days: number | null;
   /** Active advance paid down past the lender's renewal line. */
   eligible_more: boolean;

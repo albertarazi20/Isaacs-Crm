@@ -2,13 +2,7 @@ import { SHEET } from "@/components/settings/primitives";
 import { Card, SectionTitle, cn } from "@/components/ui";
 import { formatMoneyCompact } from "@/lib/money";
 import type { RecoveredRow } from "@/lib/money/winback";
-
-/** "winback:approved_unfunded:2" → "Step 2 email"; no email before the money came back → a plain sentence. */
-export function templateLabel(source: string | null): string {
-  const step = source ? /^winback:[^:]+:(\d+)$/.exec(source)?.[1] : undefined;
-  if (step) return `Step ${step} email`;
-  return source ? source : "Funded before any email";
-}
+import { templateLabel } from "@/lib/money/winbackLabels";
 
 /** What funded after a member was worked: per pool, and inside each pool per email (the last one that went). */
 export function RecoveredCard({ rows, months }: { rows: RecoveredRow[]; months: number }) {

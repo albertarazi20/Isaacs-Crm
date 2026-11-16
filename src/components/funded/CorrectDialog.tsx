@@ -41,6 +41,8 @@ export function CorrectDialog({ row, onClose }: { row: FundedRow; onClose: () =>
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<{ field: "reason" | "changes"; message: string } | null>(null);
+  // with a buy and a sell rate on file the points are their difference, so typing points would change nothing
+  const ratesSet = row.sell_rate !== null && row.buy_rate !== null;
   const { v, bind } = useFormState(() => ({
     reason: "",
     amount: "",
@@ -116,8 +118,16 @@ export function CorrectDialog({ row, onClose }: { row: FundedRow; onClose: () =>
         <Field label="Buy rate">
           <Input {...bind("buyRate")} inputMode="decimal" placeholder="Keep" />
         </Field>
-        <Field label="Points">
-          <Input {...bind("points")} inputMode="decimal" placeholder={String(row.points ?? "")} />
+        <Field
+          label="Points"
+          hint={ratesSet ? "Set by the factor and buy rates; correct those instead." : undefined}
+        >
+          <Input
+            {...bind("points")}
+            inputMode="decimal"
+            disabled={ratesSet}
+            placeholder={String(row.points ?? "")}
+          />
         </Field>
         <Field label="Frequency">
           <Select {...bind("frequency")}>

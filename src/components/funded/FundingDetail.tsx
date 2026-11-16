@@ -2,39 +2,8 @@ import { Badge, Button } from "@/components/ui";
 import { formatDate } from "@/lib/format";
 import { formatMoney } from "@/lib/money";
 import type { FundedRow } from "@/lib/money/fund";
-import type { CorrectionLine, FundingExtra } from "@/lib/money/fundedExtras";
-
-/** What a correction can touch, in the order a person reads a funding, and how each reads. */
-const FIELDS: { key: string; label: string; kind: "money" | "plain" }[] = [
-  { key: "amount_cents", label: "Amount", kind: "money" },
-  { key: "sell_rate", label: "Factor", kind: "plain" },
-  { key: "buy_rate", label: "Buy rate", kind: "plain" },
-  { key: "points", label: "Points", kind: "plain" },
-  { key: "psf_cents", label: "PSF", kind: "money" },
-  { key: "commission_cents", label: "Commission", kind: "money" },
-  { key: "rep_cut_cents", label: "Rep cut", kind: "money" },
-  { key: "funder_name", label: "Lender", kind: "plain" },
-  { key: "payment_cents", label: "Payment", kind: "money" },
-  { key: "frequency", label: "Frequency", kind: "plain" },
-  { key: "term_days", label: "Term", kind: "plain" },
-];
-
-function show(v: unknown, kind: "money" | "plain"): string {
-  if (v === null || v === undefined || v === "") return "—";
-  return kind === "money" ? formatMoney(Number(v)) : String(v);
-}
-
-/** "Amount $80,000 → $75,000; Commission $5,600 → $5,250": only what changed. */
-export function changeLines(c: Pick<CorrectionLine, "old_values" | "new_values">): string[] {
-  return FIELDS.filter(
-    (f) => show(c.old_values[f.key], f.kind) !== show(c.new_values[f.key], f.kind),
-  ).map(
-    (f) => `${f.label} ${show(c.old_values[f.key], f.kind)} → ${show(c.new_values[f.key], f.kind)}`,
-  );
-}
-
-const signed = (cents: number | null): string =>
-  cents === null ? "—" : `${cents < 0 ? "−" : "+"}${formatMoney(Math.abs(cents))}`;
+import { changeLines, signedMoney } from "@/lib/money/correctionLines";
+import type { FundingExtra } from "@/lib/money/fundedExtras";
 
 /** The row's detail: where the lender's payout stands, and every correction as a dated line. */
 export function FundingDetail({
@@ -99,9 +68,10 @@ export function FundingDetail({
                 </div>
                 <p className="text-right text-xs text-muted tabular-nums">
                   Commission{" "}
-                  <span className="font-semibold text-text">{signed(c.gross_cents)}</span>
+                  <span className="font-semibold text-text">{signedMoney(c.gross_cents)}</span>
                   <br />
-                  Rep cut <span className="font-semibold text-text">{signed(c.rep_cents)}</span>
+                  Rep cut{" "}
+                  <span className="font-semibold text-text">{signedMoney(c.rep_cents)}</span>
                 </p>
               </li>
             ))}
