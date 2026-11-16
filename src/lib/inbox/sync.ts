@@ -1,4 +1,5 @@
 import type { Db, DbAccess } from "../db";
+import { isStopMessage } from "../messaging/stop";
 import { accessTokenFor } from "../email/gmail";
 import { env } from "../env";
 import { authResults, matchEmail, type Candidate } from "./match";
@@ -23,6 +24,8 @@ export interface InboxSyncSummary {
   stored: number;
   matched: number;
   failed: { userId: string; error: string }[];
+  /** Merchants who wrote back this run, for the rep alert. */
+  merchantReplies: string[];
 }
 
 type TokenFor = (userId: string) => Promise<string>;
@@ -81,7 +84,14 @@ export async function syncInbox(args: {
   lookbackDays?: number;
   maxPerMailbox?: number;
 }): Promise<InboxSyncSummary> {
-  const summary: InboxSyncSummary = { mailboxes: 0, fetched: 0, stored: 0, matched: 0, failed: [] };
+  const summary: InboxSyncSummary = {
+    mailboxes: 0,
+    fetched: 0,
+    stored: 0,
+    matched: 0,
+    failed: [],
+    merchantReplies: [],
+  };
   const mailboxes = await args.db.withSystem(
     async (q) =>
       (
@@ -193,7 +203,16 @@ export async function syncInbox(args: {
                     : "unknown",
             ],
           );
-          if (merchant) await q.query("select stop_enrollment($1, 'replied')", [merchant]);
+          if (merchant) {
+            await q.query("select record_merchant_reply($1, $2, $3, $4, $5)", [
+              merchant,
+              m.headers["subject"] ?? "",
+              m.snippet,
+              from.address,
+              isStopMessage(m.headers["subject"] ?? "", m.text),
+            ]);
+            summary.merchantReplies.push(merchant);
+          }
         });
         summary.stored += 1;
         if (match) summary.matched += 1;

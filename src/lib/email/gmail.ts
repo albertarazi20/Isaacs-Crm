@@ -66,6 +66,7 @@ export interface OutgoingMessage {
   references?: readonly string[];
   /** Gmail thread to append to (a chase on the same thread). */
   threadId?: string;
+  headers?: Readonly<Record<string, string>>;
 }
 
 export async function sendViaGmail(
@@ -83,6 +84,7 @@ export async function sendViaGmail(
     messageId: message.messageId,
     inReplyTo: message.inReplyTo,
     references: message.references,
+    headers: message.headers,
   });
   const res = await fetchImpl("https://gmail.googleapis.com/gmail/v1/users/me/messages/send", {
     method: "POST",

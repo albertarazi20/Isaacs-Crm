@@ -290,19 +290,32 @@ export async function nowItems(
   };
   type R = Omit<Raw, "kind" | "href">;
 
-  // 1. merchant replied and nobody has acted on it (the reader flagged it; the row is still proposed)
+  // 1. merchant replied and nobody has answered: the merchant row's flag (any inbound), plus the reader's event
   push(
     "merchant_replied",
     await json<R>(
       q,
       `select to_jsonb(x) as j from (
-         select d.client_id, d.id as deal_id, c.business_name,
-                'Answer ' || coalesce(nullif(c.contact_name, ''), c.business_name) as label,
-                coalesce(nullif(p.summary, ''), 'The merchant wrote back') as detail,
-                coalesce(d.requested_cents, 0) as cents,
-                extract(day from now() - p.created_at)::int as age_days
-           from proposed_updates p join deals d on d.id = p.deal_id join clients c on c.id = d.client_id
-          where p.event = 'merchant_replied' and p.status = 'proposed'
+         select distinct on (client_id) * from (
+           select c.id as client_id, d.id as deal_id, c.business_name,
+                  'Answer ' || coalesce(nullif(c.contact_name, ''), c.business_name) as label,
+                  coalesce(nullif(c.reply_waiting_subject, ''), 'The merchant wrote back') as detail,
+                  coalesce(d.requested_cents, k.wanted_amount_cents, 0)::bigint as cents,
+                  extract(day from now() - c.reply_waiting_since)::int as age_days
+             from clients c
+             left join lateral (select d.id, d.requested_cents from deals d where d.client_id = c.id and d.outcome = 'open' order by d.created_at desc limit 1) d on true
+             left join lateral (select wanted_amount_cents from client_asks k where k.client_id = c.id order by k.created_at desc limit 1) k on true
+            where c.reply_waiting_since is not null
+              and not exists (select 1 from trashed_clients tc where tc.client_id = c.id)
+           union all
+           select d.client_id, d.id as deal_id, c.business_name,
+                  'Answer ' || coalesce(nullif(c.contact_name, ''), c.business_name) as label,
+                  coalesce(nullif(p.summary, ''), 'The merchant wrote back') as detail,
+                  coalesce(d.requested_cents, 0)::bigint as cents,
+                  extract(day from now() - p.created_at)::int as age_days
+             from proposed_updates p join deals d on d.id = p.deal_id join clients c on c.id = d.client_id
+            where p.event = 'merchant_replied' and p.status = 'proposed'
+         ) u order by client_id, age_days desc
        ) x`,
     ),
   );

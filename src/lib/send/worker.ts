@@ -3,7 +3,10 @@ import { capAllows, legalFooter, merchantCapAllows, textToHtml, type Lane } from
 
 export interface Deliverer {
   /** Send through the rep's Gmail. Returns the provider id. */
-  gmail(userId: string, m: { to: string; subject: string; text: string }): Promise<string>;
+  gmail(
+    userId: string,
+    m: { to: string; subject: string; text: string; headers?: Readonly<Record<string, string>> },
+  ): Promise<string>;
   /** Send through the shop's Resend domain. Returns the provider id. */
   resend(m: {
     to: string;
@@ -11,6 +14,7 @@ export interface Deliverer {
     text: string;
     html: string;
     replyTo?: string;
+    headers?: Readonly<Record<string, string>>;
   }): Promise<string>;
 }
 
@@ -199,7 +203,13 @@ export async function drainOutbox(args: {
       // The footer is the engine's, not the template's: every automated email carries it.
       let text = job.text_body;
       let html = textToHtml(job.text_body);
+      // RFC 8058 one-click unsubscribe: Gmail and Yahoo require it on bulk mail
+      let headers: Record<string, string> | undefined;
       if (bulk && job.unsubscribe_token) {
+        headers = {
+          "List-Unsubscribe": `<${args.appUrl}/api/unsubscribe/${job.unsubscribe_token}>`,
+          "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
+        };
         const f = legalFooter({
           shopName: settings.shop_name,
           postalAddress: settings.postal_address,
@@ -218,11 +228,13 @@ export async function drainOutbox(args: {
               html,
               replyTo:
                 settings.automation_reply_to_rep && job.rep_email ? job.rep_email : undefined,
+              headers,
             })
           : await args.deliver.gmail(job.user_id, {
               to: job.to_address,
               subject: job.subject,
               text,
+              headers,
             });
         await q.query(
           "update outbox set status = 'sent', provider = $2, provider_id = $3, sent_at = $4 where id = $1",

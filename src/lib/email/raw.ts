@@ -9,6 +9,8 @@ export interface RawEmail {
   /** Threading headers when this is a reply (a chase on the same thread). */
   inReplyTo?: string;
   references?: readonly string[];
+  /** Extra headers, e.g. List-Unsubscribe. Names are validated; values may not break lines. */
+  headers?: Readonly<Record<string, string>>;
 }
 
 function assertHeaderSafe(name: string, value: string): void {
@@ -54,6 +56,10 @@ export function buildRawEmail(m: RawEmail): string {
   })) {
     assertHeaderSafe(k, v);
   }
+  for (const [k, v] of Object.entries(m.headers ?? {})) {
+    if (!/^[A-Za-z][A-Za-z0-9-]{0,60}$/.test(k)) throw new Error(`bad header name: ${k}`);
+    assertHeaderSafe(k, v);
+  }
   if (!SINGLE_ADDRESS.test(m.to)) throw new Error("to must be exactly one email address");
   const body = Buffer.from(m.text, "utf8")
     .toString("base64")
@@ -65,6 +71,7 @@ export function buildRawEmail(m: RawEmail): string {
     ...(m.messageId ? [`Message-ID: ${m.messageId}`] : []),
     ...(m.inReplyTo ? [`In-Reply-To: ${m.inReplyTo}`] : []),
     ...(m.references && m.references.length ? [`References: ${m.references.join(" ")}`] : []),
+    ...Object.entries(m.headers ?? {}).map(([k, v]) => `${k}: ${v}`),
     `Subject: ${encodeSubject(m.subject)}`,
     "MIME-Version: 1.0",
     'Content-Type: text/plain; charset="UTF-8"',

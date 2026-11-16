@@ -8,7 +8,14 @@ export interface ResendConfig {
 /** Plain REST call — one endpoint, no SDK. Returns Resend's message id. */
 export async function sendViaResend(
   cfg: ResendConfig,
-  message: { to: string; subject: string; text: string; html: string },
+  message: {
+    to: string;
+    subject: string;
+    text: string;
+    html: string;
+    replyTo?: string;
+    headers?: Readonly<Record<string, string>>;
+  },
   fetchImpl: Fetch = fetch,
 ): Promise<string> {
   const res = await fetchImpl("https://api.resend.com/emails", {
@@ -21,6 +28,8 @@ export async function sendViaResend(
       subject: message.subject,
       text: message.text,
       html: message.html,
+      ...(message.replyTo ? { reply_to: message.replyTo } : {}),
+      ...(message.headers ? { headers: message.headers } : {}),
     }),
   });
   const body = (await res.json().catch(() => ({}))) as { id?: string; message?: string };
