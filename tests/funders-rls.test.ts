@@ -146,14 +146,13 @@ describe("lenders (shared), submissions and offers (per rep): row-level security
   });
 
   it("cannot attach a submission, offer or chase timer to someone else's merchant or submission; any lender is fine", async () => {
-    // B's own user id, A's merchant
+    // B's own user id, A's merchant (a later sent_on so the one-per-day key does not fire first)
     await expect(
       asB((q) =>
-        q.query("insert into submissions (user_id, client_id, funder_id) values ($1, $2, $3)", [
-          b,
-          clientA,
-          pearl,
-        ]),
+        q.query(
+          "insert into submissions (user_id, client_id, funder_id, sent_on) values ($1, $2, $3, current_date + 1)",
+          [b, clientA, pearl],
+        ),
       ),
     ).rejects.toThrow(/foreign key/);
     // B's merchant, a lender A added: the list is shared, so this is a normal submission

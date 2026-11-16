@@ -101,7 +101,12 @@ describe("full backup", () => {
   it("an empty account still backs up (empty tables, not an error)", async () => {
     const c = await insertUser(t.pool, "empty@x.com", "UTC");
     const backup = await t.db.withUser(c, (q) => buildBackup(q));
-    expect(Object.values(backup.counts).every((n) => n === 0)).toBe(true);
+    // the lender list is shop-wide (0300), so a fresh account still sees it; everything else is empty
+    expect(
+      Object.entries(backup.counts)
+        .filter(([table]) => table !== "funders")
+        .every(([, n]) => n === 0),
+    ).toBe(true);
     expect(backup.profile).toMatchObject({ email: "empty@x.com" });
   });
 });

@@ -294,7 +294,9 @@ describe("a trashed client is really gone from everything else", () => {
       ReturnType<typeof vi.fn>;
     const now = `${t.today}T13:00:00Z`;
     await runReminders({ db: t.db, now: new Date(now), appUrl: "https://app.test", send });
-    const text: string = send.mock.calls[0]?.[1]?.text ?? "";
+    // other users in this file also have calls due today; take this user's digest, not the first one sent
+    const mine = send.mock.calls.find((c) => c[0] === "digest@x.com");
+    const text: string = mine?.[1]?.text ?? "";
     expect(text).toContain("Visible Pizza");
     expect(text).not.toContain("Ghost Pizza");
     expect(live).not.toBe(ghost);
