@@ -97,13 +97,7 @@ export function AskDeal({
       <div>
         <SectionTitle>Ask about this deal</SectionTitle>
         <form onSubmit={(e) => void ask(e)} className="mt-3 flex flex-wrap items-end gap-2">
-          <Field
-            label="Your question"
-            hint={
-              blockedReason ?? "Answered from this deal's timeline, with the lines it rests on."
-            }
-            className="min-w-0 flex-1 basis-64"
-          >
+          <Field label="Your question" className="min-w-0 flex-1 basis-64">
             <Input
               value={question}
               onChange={(e) => setQuestion(e.target.value)}
@@ -116,12 +110,14 @@ export function AskDeal({
             type="submit"
             variant="secondary"
             disabled={off || busy || question.trim().length < 3}
-            className="mb-[1.375rem]"
           >
             <Icon name="sparkles" className="size-3.5 text-muted" />
             {busy ? "Reading the timeline…" : "Ask"}
           </Button>
         </form>
+        <p className="mt-1.5 text-xs text-muted">
+          {blockedReason ?? "Answered from this deal's timeline, with the lines it rests on."}
+        </p>
         {answer ? (
           <div
             role="status"
@@ -189,11 +185,7 @@ export function AskDeal({
         onSubmit={(e) => void askManager(e)}
         className="flex flex-wrap items-end gap-2 border-t border-border pt-4"
       >
-        <Field
-          label="Ask a manager"
-          hint="One line. Every manager gets an alert with this deal's context."
-          className="min-w-0 flex-1 basis-64"
-        >
+        <Field label="Ask a manager" className="min-w-0 flex-1 basis-64">
           <Input
             value={managerLine}
             onChange={(e) => setManagerLine(e.target.value)}
@@ -205,10 +197,12 @@ export function AskDeal({
           type="submit"
           variant="secondary"
           disabled={managerBusy || managerLine.trim() === ""}
-          className="mb-[1.375rem]"
         >
           {managerBusy ? "Sending…" : "Ask manager"}
         </Button>
+        <p className="basis-full text-xs text-muted">
+          One line. Every manager gets an alert with this deal&apos;s context.
+        </p>
       </form>
     </Card>
   );

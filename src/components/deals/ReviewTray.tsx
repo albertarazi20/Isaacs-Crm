@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Badge, Card, SectionTitle } from "@/components/ui";
+import { Badge, Card } from "@/components/ui";
 import { ChaseDraftActions, UndoAiUpdate } from "@/components/deals/ReviewTrayActions";
 import { SUB_TONE } from "@/components/deals/primitives";
 import { timeAgo } from "@/lib/format";
@@ -17,10 +17,9 @@ const statusLabel = (s: string | null): string =>
 
 function ListHeader({ title, aside }: { title: string; aside: string }) {
   return (
-    <div className="border-b border-border px-4 py-2.5">
-      <SectionTitle aside={<span className="text-xs text-muted">{aside}</span>}>
-        {title}
-      </SectionTitle>
+    <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5 border-b border-border px-4 py-2.5">
+      <h2 className="text-[13px] font-semibold text-text">{title}</h2>
+      <span className="text-xs text-muted">{aside}</span>
     </div>
   );
 }

@@ -859,7 +859,7 @@ export default async function wireDeals({ email }) {
           "Hello, W3 Pearl here. After review we have to decline this deal. Monthly revenue is too low for our program.",
         );
       await page.getByRole("button", { name: "Read the text" }).click();
-      await page.getByText("In the Review tray").first().waitFor({ timeout: 15000 });
+      await page.locator("[data-import-landed='text']").waitFor({ timeout: 15000 });
       const pasted = await val(
         `select count(*)::int as n, bool_and(status = 'proposed') as proposed, bool_and(event = 'declined') as declined, bool_and(submission_id = $2) as sub,
                 (select count(*)::int from ai_runs where purpose = 'read_pasted_offer' and deal_id = $1) as runs

@@ -79,6 +79,7 @@ function NextStep({ s, dealId, clientId }: { s: Suggestion; dealId: string; clie
       action = link(`/clients/${clientId}`, "Open the merchant →");
       break;
     case "present":
+    case "reshop":
     case "close":
     case "chase":
     case "contracts":
