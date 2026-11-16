@@ -7,7 +7,7 @@ import { toActionError } from "@/lib/data/errors";
 import { UserError } from "@/lib/data/mutations";
 import { id } from "@/lib/data/schemas";
 import type { ActionResult } from "@/lib/data/types";
-import { db } from "@/lib/db";
+import { db, type Db } from "@/lib/db";
 import { fileOneRow, PENDING_ROW_COLUMNS, type PendingRow } from "@/lib/sheets/file";
 import {
   connectSheet,
@@ -40,12 +40,24 @@ export async function connectSheetAction(
   }
 }
 
+/**
+ * The sync runs on the owner connection with the sheet reader's Google token, so the caller must be able to see
+ * the sheet under row security first (P2-32): a stranger's sheet id gets "not found", never a Google read.
+ */
+async function assertSheetVisible(q: Db, sourceId: string): Promise<void> {
+  const r = await q.query("select 1 from sheet_sources where id = $1", [sourceId]);
+  if (r.rowCount === 0) throw new UserError("That sheet isn't yours to sync");
+}
+
 /** Settings on a connected sheet; a field that is not sent is left as it is (a toggle never wipes the mapping). */
 export async function updateSheetAction(input: unknown): Promise<ActionResult<null>> {
   const session = await requireSession();
   try {
     const i = updateSheetSchema.parse(input);
-    await db.withUser(session.userId, (q) => updateSheetSource(q, i));
+    await db.withUser(session.userId, async (q) => {
+      await assertSheetVisible(q, i.id);
+      await updateSheetSource(q, i);
+    });
     if (i.active !== false)
       await syncSheets({ db, tokenFor: productionTokenFor(), sourceId: i.id });
     revalidatePath("/settings");
@@ -58,9 +70,10 @@ export async function updateSheetAction(input: unknown): Promise<ActionResult<nu
 export async function syncSheetNowAction(
   input: unknown,
 ): Promise<ActionResult<{ rows: number; added: number }>> {
-  await requireSession();
+  const session = await requireSession();
   try {
     const { id: sourceId } = z.object({ id }).parse(input);
+    await db.withUser(session.userId, (q) => assertSheetVisible(q, sourceId));
     const s = await syncSheets({ db, tokenFor: productionTokenFor(), sourceId });
     if (s.failed[0]) throw new UserError(s.failed[0].error);
     revalidatePath("/settings");
