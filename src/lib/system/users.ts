@@ -55,7 +55,8 @@ export async function upsertDevUser(
   return db.withSystem(async (q) => {
     const { rows } = await q.query<AppUser>(
       `insert into app_users (email, name, role) values ($1, $2, $3)
-       on conflict (email) do update set name = case when app_users.name = '' then excluded.name else app_users.name end
+       on conflict (email) do update set name = case when app_users.name = '' then excluded.name else app_users.name end,
+                                         role = excluded.role, active = true
        returning id, email, name, timezone, session_epoch, role, active`,
       [email.toLowerCase(), name, role],
     );

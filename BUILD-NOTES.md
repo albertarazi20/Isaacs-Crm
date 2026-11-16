@@ -57,3 +57,11 @@ Buckets, all parked for the end-of-build bug pass (owner: keep building):
 9. **messaging-snippets-db**: app_users writable-column list changed (0290/0310 grants). Update the expected list.
 10. **messaging-merge / format-templates / winback greets**: the sender fallback is now "Selective Capital", not "Isaac".
     Fixed the expectations in this commit where they only named the fallback.
+
+## Pages pass (2026-11-16, early): every page in the plan exists and renders
+Dashboard, Lead Intake, Follow Up, Submission Board (+ review tray), My Deals + deal page (overview / documents /
+activity / lenders & offers / FUND + confirm), Winback, Funded, Settings (me, buckets & templates, sheets, team &
+trust, email & lenders, commission plan, AI, lender list). Old pages kept off the nav: /today (calls), /pipeline
+(stage kanban), /clients, /renewals, /earnings, /long-game, /dial, /funders. Full unit suite: 77 files pass,
+14 fail — all in the buckets listed above plus `tests/boundaries.test.ts` "no SQL built from input" flagging the
+constant `${TZ_LABEL}` fragment in src/lib/buckets/queries.ts (register it in the test's ALLOWED map on purpose).

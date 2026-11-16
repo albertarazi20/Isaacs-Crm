@@ -49,6 +49,7 @@ describe("architecture boundaries", () => {
       "lib/messaging/queries.ts": 2, // ${offerSql}
       "lib/data/mutations.ts": 2, // ${sets} from the CLIENT_COLUMNS map; ${fn} from a fixed list
       "lib/data/queries.ts": 1, // ${NAME_KEY_SQL("business_name")}
+      "lib/buckets/queries.ts": 1, // ${TZ_LABEL}: a constant CASE expression (time-zone label), no input in it
     };
     const counts: Record<string, number> = {};
     for (const f of files) {
