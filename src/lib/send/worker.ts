@@ -119,8 +119,8 @@ export async function drainOutbox(args: {
            (select contact_status in ('dnc', 'no_email') from clients c where c.id = o.client_id) as client_dnc,
            app.is_suppressed('email', o.to_address) as suppressed,
            (select unsubscribe_token from clients c where c.id = o.client_id) as unsubscribe_token,
-           coalesce((select app.merchant_sent(o.client_id, interval '24 hours')), 0) as merchant_24h,
-           coalesce((select app.merchant_sent(o.client_id, interval '7 days')), 0) as merchant_7d`,
+           coalesce((select app.merchant_sent(o.client_id, interval '24 hours', $1::timestamptz)), 0) as merchant_24h,
+           coalesce((select app.merchant_sent(o.client_id, interval '7 days', $1::timestamptz)), 0) as merchant_7d`,
         [now.toISOString()],
       );
       const job = rows[0];
@@ -177,8 +177,12 @@ export async function drainOutbox(args: {
         mailboxId = await mailboxFor(q, "gmail", job.user_id, job.gmail_address, providerLimit);
       }
       const sent24h =
-        (await q.query<{ n: number }>("select app.mailbox_sent_24h($1) as n", [mailboxId])).rows[0]
-          ?.n ?? 0;
+        (
+          await q.query<{ n: number }>("select app.mailbox_sent_24h($1, $2::timestamptz) as n", [
+            mailboxId,
+            now.toISOString(),
+          ])
+        ).rows[0]?.n ?? 0;
       const cap = capAllows(job.lane, {
         shopCap: settings.daily_cap,
         providerLimit,
@@ -189,8 +193,8 @@ export async function drainOutbox(args: {
         // the window rolls: the oldest send ages out 24h after it went
         const oldest = (
           await q.query<{ t: string | null }>(
-            "select min(sent_at)::text as t from send_ledger where mailbox_id = $1 and sent_at > now() - interval '24 hours'",
-            [mailboxId],
+            "select min(sent_at)::text as t from send_ledger where mailbox_id = $1 and sent_at > $2::timestamptz - interval '24 hours'",
+            [mailboxId, now.toISOString()],
           )
         ).rows[0]?.t;
         const until = oldest

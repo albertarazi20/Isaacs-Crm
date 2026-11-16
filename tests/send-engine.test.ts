@@ -175,7 +175,9 @@ describe("the outbox, from a real database", () => {
     expect(r3).toEqual({ queued: false, reason: "suppressed" });
   });
   it("the worker sends due rows through Gmail, writes the ledger and the timeline, appends the footer to bulk mail", async () => {
-    const now = new Date("2026-11-16T18:00:00Z");
+    // The sequence row was spread at random across the 17:00–19:00Z window (nextSendTime); draining at the window's
+    // end is due for any spread. Draining mid-window made this a coin flip.
+    const now = new Date("2026-11-16T19:00:00Z");
     const s = await drainOutbox({ db: t.db, deliver, now, appUrl: "https://crm.test" });
     expect(s.sent).toBe(2);
     expect(sent.map((x) => x.subject).sort()).toEqual(["Statements", "Welcome"]);
@@ -206,7 +208,7 @@ describe("the outbox, from a real database", () => {
     const s = await drainOutbox({
       db: t.db,
       deliver,
-      now: new Date("2026-11-16T18:30:00Z"),
+      now: new Date("2026-11-16T19:30:00Z"),
       appUrl: "https://crm.test",
     });
     expect(s.deferred).toBe(1);
@@ -246,7 +248,7 @@ describe("the outbox, from a real database", () => {
     const s = await drainOutbox({
       db: t.db,
       deliver,
-      now: new Date("2026-11-16T19:00:00Z"),
+      now: new Date("2026-11-16T20:00:00Z"),
       appUrl: "https://crm.test",
     });
     expect(s.sent).toBe(1);
