@@ -18,6 +18,8 @@ export interface RunSummary {
   moved: number;
   finished: number;
   skipped: number;
+  /** Enrolments paused with a date ("not now until…") that re-opened today. */
+  resumed: number;
 }
 
 interface DueRow {
@@ -80,12 +82,45 @@ export async function runBucketSteps(args: {
   appUrl: string;
 }): Promise<RunSummary> {
   const now = args.now ?? new Date();
-  const summary: RunSummary = { due: 0, emailed: 0, called: 0, moved: 0, finished: 0, skipped: 0 };
+  const summary: RunSummary = {
+    due: 0,
+    emailed: 0,
+    called: 0,
+    moved: 0,
+    finished: 0,
+    skipped: 0,
+    resumed: 0,
+  };
   const sequences = await args.db.withSystem(
     async (q) =>
       (await q.query<{ v: boolean }>("select sequences_enabled as v from shop_settings")).rows[0]
         ?.v ?? true,
   );
+  // a pause with a date on it ("not now until January", S1-6) lifts by itself on the day, in the merchant's zone
+  summary.resumed = await args.db.withSystem(async (q) => {
+    const { rows } = await q.query<{ user_id: string; client_id: string; bucket_name: string }>(
+      `with lifted as (
+         update enrollments e set paused = false, resume_on = null
+           from clients c
+          where e.client_id = c.id and e.stopped_at is null and e.paused and e.resume_on is not null
+            and e.resume_on <= (($1::timestamptz at time zone app.client_timezone(c))::date)
+          returning e.user_id, e.client_id, e.bucket_id),
+       cleared as (
+         update clients c set revive_on = null from lifted l where c.id = l.client_id and c.revive_on is not null)
+       select l.user_id, l.client_id, b.name as bucket_name from lifted l join buckets b on b.id = l.bucket_id`,
+      [now.toISOString()],
+    );
+    for (const r of rows)
+      await q.query(
+        "insert into activities (user_id, client_id, kind, body) values ($1, $2, 'system', $3)",
+        [
+          r.user_id,
+          r.client_id,
+          `Follow-up emails resumed — the merchant said to check back now (${r.bucket_name})`,
+        ],
+      );
+    return rows.length;
+  });
   const due = await args.db.withSystem(async (q) => {
     const { rows } = await q.query<DueRow>(
       `select e.id as enrollment_id, e.user_id, e.client_id, e.bucket_id, b.name as bucket_name, e.next_step, e.steps_sent,

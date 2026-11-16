@@ -406,6 +406,7 @@ describe("C-6: an older backup still restores after a new column with a default"
       "mailboxes",
       "outbox",
       "proposed_updates",
+      "reply_tags", // stream 1: which merchant replies the classifier has tagged, and how
       "send_ledger",
       "sheet_rows",
       "sheet_sources",
