@@ -20,7 +20,7 @@ export function StatementsCard({ months }: { months: ClosedMonth[] }) {
         </Badge>
       }
       flush
-      className="min-w-0 overflow-x-auto"
+      className="relative min-w-0 overflow-x-auto"
     >
       {months.length === 0 ? (
         <p className="border-t border-border px-4 py-3 text-sm text-muted">

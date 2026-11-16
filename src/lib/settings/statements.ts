@@ -72,7 +72,18 @@ export async function listClosedMonths(q: Db, limit = 12): Promise<ClosedMonth[]
   return closes.rows.map((c) => ({
     ...c,
     label: monthLabel(c.period),
-    statements: sts.rows.filter((s) => s.period === c.period).map(({ period: _p, ...s }) => s),
+    statements: sts.rows
+      .filter((s) => s.period === c.period)
+      .map((s) => ({
+        id: s.id,
+        user_id: s.user_id,
+        name: s.name,
+        line_count: s.line_count,
+        gross_cents: s.gross_cents,
+        rep_cents: s.rep_cents,
+        house_cents: s.house_cents,
+        emailed_at: s.emailed_at,
+      })),
   }));
 }
 

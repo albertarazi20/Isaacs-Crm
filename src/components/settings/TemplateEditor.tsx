@@ -134,7 +134,7 @@ export function TemplateEditor({
     const ok = await run(approveTemplateAction({ templateId: t.id, approved }), done);
     setBusy(false);
     if (ok) {
-      setRefused(({ [t.id]: _gone, ...rest }) => rest);
+      setRefused((cur) => Object.fromEntries(Object.entries(cur).filter(([k]) => k !== t.id)));
       router.refresh();
     } else if (approved) {
       // the same pure check the server ran, so the reasons stay on the page after the toast is gone
@@ -171,6 +171,7 @@ export function TemplateEditor({
           {shown.map((t) => (
             <li
               key={t.id}
+              data-template={t.id}
               className={cn(
                 "flex flex-wrap items-start justify-between gap-x-4 gap-y-2 px-4 py-3",
                 t.archived && "opacity-60",

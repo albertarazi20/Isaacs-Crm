@@ -141,7 +141,7 @@ export function StatesEditor({ lines }: { lines: StateLine[] }) {
         title="Registrations by state"
         description="A deal for a state that needs a broker registration is flagged when it goes to ops and the shop has none registered. Managers are told 30 days before a registration renews."
         flush
-        className="min-w-0 overflow-x-auto"
+        className="relative min-w-0 overflow-x-auto"
         aside={
           <Button
             size="sm"
