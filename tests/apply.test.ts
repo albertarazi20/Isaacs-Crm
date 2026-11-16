@@ -214,6 +214,35 @@ describe("the in-app application", () => {
     expect((await openApplicationPage(t.db, token))?.signed_at).toBe(SIGNED_ISO);
   });
 
+  it("a merchant who types no DBA and no industry still signs (the columns are not-null and empty means empty)", async () => {
+    const other = (
+      await t.pool.query<{ id: string; tok: string }>(
+        "insert into clients (user_id, business_name, contact_name, phone, email) values ($1, 'Plain Co', 'Sam Lee', '3055550177', 'sam@plain.co') returning id, application_token as tok",
+        [rep],
+      )
+    ).rows[0]!;
+    const out = await signApplication(t.db, store, {
+      token: other.tok,
+      fields: {
+        ...FIELDS,
+        legal_business_name: "Plain Co",
+        dba: "",
+        industry: "",
+        owner_name: "Sam Lee",
+        signer_name: "Sam Lee",
+      },
+      ip: "203.0.113.10",
+      userAgent: "Chrome",
+      today: t.today,
+    });
+    const c = await t.pool.query<{ dba: string; industry: string }>(
+      "select dba, industry from clients where id = $1",
+      [other.id],
+    );
+    expect(c.rows[0]).toEqual({ dba: "", industry: "" });
+    expect(out.applicationId).toBeTruthy();
+  });
+
   it("a second signature on the same deal is refused, and a bad form never writes", async () => {
     await expect(
       signApplication(t.db, store, {

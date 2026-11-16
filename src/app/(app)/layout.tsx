@@ -72,7 +72,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
             <Link
               href="/"
               aria-label="Selective CRM home"
-              className="flex shrink-0 items-center pr-1 sm:pr-2"
+              className="flex min-h-10 min-w-10 shrink-0 items-center justify-center sm:min-h-0 sm:min-w-0 sm:justify-start sm:pr-2"
             >
               <Image
                 src="/brand/SC-logomark-light-web.png"
