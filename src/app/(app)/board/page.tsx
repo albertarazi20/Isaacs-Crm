@@ -75,7 +75,7 @@ function Row({
             </span>
           </p>
         </div>
-        {canEdit ? <OpsActions dealId={d.id} status={d.status} /> : null}
+        {canEdit ? <OpsActions dealId={d.id} clientId={d.client_id} status={d.status} /> : null}
       </div>
       {subs.length > 0 ? (
         <div className="mt-2 flex flex-wrap gap-1.5">

@@ -14,11 +14,15 @@ export const loadShell = cache(async (userId: string) =>
     );
     // the starred merchants ("always on top"): a few ids, so every page can show a star without its own query
     const hot = await q.query<{ id: string }>("select id from clients where hot");
+    const shop = await q.query<{ n: number }>(
+      "select max_lenders_per_deal as n from shop_settings",
+    );
     return {
       ctx,
       user: rows[0],
       due: await dueCount(q, ctx.today),
       hotIds: hot.rows.map((r) => r.id),
+      maxLendersPerDeal: shop.rows[0]?.n ?? 6,
     };
   }),
 );

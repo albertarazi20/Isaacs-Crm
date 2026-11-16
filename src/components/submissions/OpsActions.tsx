@@ -2,16 +2,34 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { kickBackDealAction, markDealSentAction } from "@/app/deals-actions";
+import {
+  kickBackDealAction,
+  markDealSentAction,
+  type SendContext,
+  sendContextAction,
+} from "@/app/deals-actions";
 import { FormDialog, useFormState, useRun } from "@/components/client/parts";
+import { SendDialog } from "@/components/funders/SendDialog";
 import { Button, Field, Select, Textarea } from "@/components/ui";
 import { KICKBACK_LABELS, KICKBACK_REASONS, type DealStatus } from "@/lib/deals/types";
 
-/** What ops does to a file in the queue: send it on, or send it back with the reason the rep needs. */
-export function OpsActions({ dealId, status }: { dealId: string; status: DealStatus }) {
+/**
+ * What ops does to a file in the queue: send it to lenders (the real picker, which marks the deal sent in the
+ * same transaction), note that it already went out another way, or send it back with the reason the rep needs.
+ */
+export function OpsActions({
+  dealId,
+  clientId,
+  status,
+}: {
+  dealId: string;
+  clientId: string;
+  status: DealStatus;
+}) {
   const run = useRun();
   const router = useRouter();
   const [open, setOpen] = useState(false);
+  const [send, setSend] = useState<SendContext | null>(null);
   const [busy, setBusy] = useState(false);
   const { v, bind } = useFormState(() => ({ reason: "missing_statement_month", note: "" }));
   const inQueue = status === "working_ops" || status === "kicked_back";
@@ -19,19 +37,35 @@ export function OpsActions({ dealId, status }: { dealId: string; status: DealSta
   return (
     <span className="flex gap-1.5">
       {status === "working_ops" ? (
-        <Button
-          size="sm"
-          variant="primary"
-          disabled={busy}
-          onClick={async () => {
-            setBusy(true);
-            const ok = await run(markDealSentAction({ dealId }), "Marked sent to lenders");
-            setBusy(false);
-            if (ok) router.refresh();
-          }}
-        >
-          Sent to lenders
-        </Button>
+        <>
+          <Button
+            size="sm"
+            variant="primary"
+            disabled={busy}
+            onClick={async () => {
+              setBusy(true);
+              const r = await sendContextAction({ clientId });
+              setBusy(false);
+              if (r.ok) setSend(r.data);
+              else void run(Promise.resolve(r));
+            }}
+          >
+            Send to lenders
+          </Button>
+          <Button
+            size="sm"
+            disabled={busy}
+            title="The file went out another way — just move it along"
+            onClick={async () => {
+              setBusy(true);
+              const ok = await run(markDealSentAction({ dealId }), "Marked sent to lenders");
+              setBusy(false);
+              if (ok) router.refresh();
+            }}
+          >
+            Already sent
+          </Button>
+        </>
       ) : null}
       <Button size="sm" variant="danger" disabled={busy} onClick={() => setOpen(true)}>
         {status === "kicked_back" ? "Kick back again" : "Kick back"}
@@ -73,6 +107,17 @@ export function OpsActions({ dealId, status }: { dealId: string; status: DealSta
             />
           </Field>
         </FormDialog>
+      ) : null}
+      {send ? (
+        <SendDialog
+          card={send.card}
+          funders={send.funders}
+          submissions={send.submissions}
+          onClose={() => {
+            setSend(null);
+            router.refresh();
+          }}
+        />
       ) : null}
     </span>
   );

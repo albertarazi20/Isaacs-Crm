@@ -81,7 +81,7 @@ export function SendDialog({
   submissions: SubmissionRow[];
   onClose: () => void;
 }) {
-  const { today } = useApp();
+  const { today, maxLendersPerDeal } = useApp();
   const run = useRun();
   const facts = merchantFacts(card);
   const latest = latestByFunder(submissions);
@@ -114,6 +114,14 @@ export function SendDialog({
       else next.add(id);
       return next;
     });
+
+  // The shotgun check (P2-40): lenders that already hold this file plus the ones ticked now. A warning,
+  // never a block — sometimes six lenders is the right call, but it should never happen by accident.
+  const holding = candidates
+    .filter((c) => c.earlier && isLiveSubmission(c.earlier))
+    .map((c) => c.funder.id);
+  const wouldHold = new Set([...holding, ...picked]).size;
+  const shotgun = wouldHold > maxLendersPerDeal;
 
   async function send() {
     if (picked.size === 0) {
@@ -168,7 +176,7 @@ export function SendDialog({
       submitLabel={
         picked.size === 0
           ? "Send"
-          : `Send to ${picked.size} ${picked.size === 1 ? "funder" : "funders"}`
+          : `Send${shotgun ? " anyway" : ""} to ${picked.size} ${picked.size === 1 ? "funder" : "funders"}`
       }
       wide
     >
@@ -178,6 +186,13 @@ export function SendDialog({
         </p>
       ) : null}
       <MerchantLine card={card} />
+      {shotgun ? (
+        <p role="status" className="rounded-lg bg-warn-soft text-warn p-3 text-sm">
+          <span className="font-semibold">Shotgun warning.</span> This file would be with{" "}
+          {wouldHold} lenders; the shop limit is {maxLendersPerDeal}. Every lender who sees it is a
+          backdoor risk — untick some, or send anyway on purpose.
+        </p>
+      ) : null}
       <ul className="divide-y divide-border rounded-lg border border-border" aria-label="Funders">
         {candidates.map(({ funder, fit, earlier }) => {
           const on = picked.has(funder.id);

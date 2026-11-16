@@ -5,6 +5,11 @@ import { CAN, requireSession } from "@/lib/auth/server";
 import { toActionError } from "@/lib/data/errors";
 import type { ActionResult } from "@/lib/data/types";
 import { db, type Db } from "@/lib/db";
+import { getCard } from "@/lib/data/queries";
+import type { ClientCard } from "@/lib/data/types";
+import { getClientFundersData } from "@/lib/funders/queries";
+import type { ClientFundersData } from "@/lib/funders/types";
+import { z } from "zod";
 import { UserError } from "@/lib/data/mutations";
 import * as m from "@/lib/deals/mutations";
 import * as s from "@/lib/deals/schemas";
@@ -19,6 +24,29 @@ async function run<T>(
     if (!allowed(session.role)) throw new UserError("Your account can't do that");
     const data = await db.withUser(session.userId, fn);
     revalidatePath("/", "layout");
+    return { ok: true, data };
+  } catch (e) {
+    return { ok: false, error: toActionError(e) };
+  }
+}
+
+export type SendContext = ClientFundersData & { card: ClientCard };
+const sendContextSchema = z.object({ clientId: z.string().uuid() });
+
+/**
+ * What the board's "Send to lenders" needs to open the lender picker for a deal it knows only by id (P2-39):
+ * the merchant's card, the funder list and this merchant's earlier submissions. A read, so no revalidate.
+ */
+export async function sendContextAction(input: unknown): Promise<ActionResult<SendContext>> {
+  const session = await requireSession();
+  try {
+    if (!CAN.runOps(session.role)) throw new UserError("Your account can't do that");
+    const { clientId } = sendContextSchema.parse(input);
+    const data = await db.withUser(session.userId, async (q) => {
+      const card = await getCard(q, clientId);
+      if (!card) throw new UserError("That merchant isn't in your view");
+      return { card, ...(await getClientFundersData(q, clientId)) };
+    });
     return { ok: true, data };
   } catch (e) {
     return { ok: false, error: toActionError(e) };

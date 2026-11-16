@@ -51,6 +51,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         gmailNeedsReconnect: gmail.needsReconnect,
         hotIds: me.hotIds,
         nowMs: requestTimeMs(),
+        maxLendersPerDeal: me.maxLendersPerDeal,
       }}
     >
       <ToastProvider>

@@ -34,9 +34,9 @@ export default async function submissionsFlow({ email }) {
     text.includes(first.business_name) && text.includes(second.business_name),
   );
 
-  // mark the first sent
+  // the first went out another way — mark it sent without picking lenders
   const row1 = page.locator("li", { hasText: first.business_name }).first();
-  await row1.getByRole("button", { name: "Sent to lenders" }).click();
+  await row1.getByRole("button", { name: "Already sent" }).click();
   await page.getByText(/Marked sent to lenders/).waitFor({ timeout: 8000 });
   await page.waitForTimeout(600);
   const d1 = await withDb((db) =>
