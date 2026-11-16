@@ -40,7 +40,9 @@ const VIEWPORTS = [
 ];
 
 for (const [label, viewport] of VIEWPORTS) {
-  const { browser, page } = await openBrowser(email, viewport, { colorScheme: scheme });
+  const { browser, context, page } = await openBrowser(email, viewport, { colorScheme: scheme });
+  // the app's mode comes from the "theme" cookie (light is the default), not from the device setting
+  await context.addCookies([{ name: "theme", value: scheme, url: BASE }]);
   for (const path of PAGES) {
     await page.goto(`${BASE}${path}`, { waitUntil: "networkidle" });
     const name = path === "/" ? "dashboard" : path.slice(1).replace(/\//g, "-");
