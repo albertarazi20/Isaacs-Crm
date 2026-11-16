@@ -1,89 +1,108 @@
 import Link from "next/link";
-import { WinbackList } from "@/components/winback/WinbackList";
-import { cn } from "@/components/ui";
+import { PoolRow, type PoolMember } from "@/components/winback/PoolRow";
+import { Card, EmptyState, SectionTitle } from "@/components/ui";
 import { requireSession } from "@/lib/auth/server";
 import { userContext } from "@/lib/data/queries";
 import { db } from "@/lib/db";
-import { loadWinback } from "@/lib/messaging/queries";
-import {
-  compact,
-  parseWinbackDays,
-  splitBatch,
-  WINBACK_DAY_CHOICES,
-} from "@/lib/messaging/winback";
+import { listWinback } from "@/lib/money/winback";
 import { formatMoneyCompact } from "@/lib/money";
 
-const LATER_SHOWN = 40;
+export const dynamic = "force-dynamic";
 
-function Kpi({ label, value }: { label: string; value: string | number }) {
-  return (
-    <div className="rounded-xl border border-border bg-surface px-4 py-3">
-      <p className="text-xs font-medium text-muted">{label}</p>
-      <p className="mt-0.5 text-2xl font-bold tabular-nums">{value}</p>
-    </div>
-  );
-}
+const POOL_HINT: Record<string, string> = {
+  approved_unfunded:
+    "Approved and never closed. Thirty days after the approval they get a daily-cadence email that steps down; the moment they reply, the sequence stops and they are yours to call.",
+  declined_curable:
+    "Declined for something that heals — NSFs, time in business, a position. The cure date sets the first email.",
+  funded_elsewhere: "Took another lender's money. Their renewal window is the next shot.",
+  paid_off: "Paid in full. The easiest money there is.",
+  cold: "Went quiet before an application. Light touches, long gaps.",
+};
 
-export default async function WinbackPage({
-  searchParams,
-}: {
-  searchParams: Promise<{ days?: string | string[] }>;
-}) {
-  const { days: rawDays } = await searchParams;
-  const days = parseWinbackDays(Array.isArray(rawDays) ? rawDays[0] : rawDays);
+export default async function WinbackPage() {
   const session = await requireSession();
-  const rows = await db.withUser(session.userId, async (q) =>
-    loadWinback(q, await userContext(q), days),
-  );
-  const { batch, later, done } = splitBatch(rows);
-  const onTheTable = rows.reduce((sum, r) => sum + r.moneyCents, 0);
-  const choices = WINBACK_DAY_CHOICES.includes(days)
-    ? WINBACK_DAY_CHOICES
-    : [...WINBACK_DAY_CHOICES, days].sort((a, b) => a - b);
+  const { rows, today } = await db.withUser(session.userId, async (q) => ({
+    today: (await userContext(q)).today,
+    rows: await listWinback(q),
+  }));
+  const pools = new Map<string, { name: string; members: PoolMember[] }>();
+  for (const r of rows) {
+    const p = pools.get(r.pool) ?? { name: r.pool_name, members: [] };
+    p.members.push(r);
+    pools.set(r.pool, p);
+  }
+  const replied = rows.filter((r) => r.status === "replied");
+  const onTable = rows.reduce((n, r) => n + (r.best_offer_cents ?? 0), 0);
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Win-back</h1>
+          <h1 className="text-2xl font-bold tracking-tight">Winback</h1>
           <p className="text-sm text-muted">
-            Merchants who said no, went quiet, were declined or funded elsewhere — and are due for a
-            call. Ten at a time, biggest money first.
+            Approved-and-unfunded after 30 days, curable declines, paid-offs and the ones who went
+            elsewhere. The pools email on their own cadence; a reply stops the emails and puts them
+            at the top.
           </p>
         </div>
-        <nav aria-label="Due within" className="flex flex-wrap items-center gap-1.5">
-          <span className="text-sm text-muted">Due within</span>
-          {choices.map((d) => (
-            <Link
-              key={d}
-              href={`/winback?days=${d}`}
-              aria-current={d === days ? "page" : undefined}
-              className={cn(
-                "rounded-lg border px-2.5 py-1 text-sm font-medium",
-                d === days
-                  ? "border-accent bg-accent text-accent-fg"
-                  : "border-border bg-surface hover:bg-surface-2",
-              )}
-            >
-              {d} days
-            </Link>
-          ))}
-        </nav>
+        <Link
+          href="/settings/buckets?tab=winback"
+          className="text-sm font-semibold text-accent hover:underline"
+        >
+          Pool emails →
+        </Link>
       </div>
-
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
-        <Kpi label={`Due in the next ${days} days`} value={rows.length} />
-        <Kpi label="Still to work" value={batch.length + later.length} />
-        <Kpi label="Money on the table" value={formatMoneyCompact(onTheTable)} />
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+        <div className="rounded-xl border border-border bg-surface px-4 py-3">
+          <p className="text-[11px] font-semibold tracking-wide text-muted uppercase">
+            In the pools
+          </p>
+          <p className="mt-1 text-2xl font-bold tabular-nums">{rows.length}</p>
+        </div>
+        <div className="rounded-xl border border-border bg-surface px-4 py-3">
+          <p className="text-[11px] font-semibold tracking-wide text-muted uppercase">
+            Replied, waiting
+          </p>
+          <p className={`mt-1 text-2xl font-bold tabular-nums ${replied.length ? "text-bad" : ""}`}>
+            {replied.length}
+          </p>
+        </div>
+        <div className="rounded-xl border border-border bg-surface px-4 py-3">
+          <p className="text-[11px] font-semibold tracking-wide text-muted uppercase">
+            Active sequences
+          </p>
+          <p className="mt-1 text-2xl font-bold tabular-nums">
+            {rows.filter((r) => r.status === "active").length}
+          </p>
+        </div>
+        <div className="rounded-xl border border-border bg-surface px-4 py-3">
+          <p className="text-[11px] font-semibold tracking-wide text-muted uppercase">
+            Was on the table
+          </p>
+          <p className="mt-1 text-2xl font-bold tabular-nums">{formatMoneyCompact(onTable)}</p>
+        </div>
       </div>
-
-      <WinbackList
-        batch={batch}
-        later={later.slice(0, LATER_SHOWN).map(compact)}
-        laterCount={later.length}
-        done={done.map(compact)}
-        days={days}
-      />
+      {rows.length === 0 ? (
+        <EmptyState title="Nobody to win back yet">
+          Approvals that sit 30 days, curable declines and paid-offs land here on their own.
+        </EmptyState>
+      ) : (
+        [...pools.entries()].map(([key, p]) => (
+          <Card key={key} className="p-0">
+            <div className="px-4 pt-4">
+              <SectionTitle aside={<span className="text-xs text-muted">{p.members.length}</span>}>
+                {p.name}
+              </SectionTitle>
+              {POOL_HINT[key] ? <p className="mt-1 text-xs text-muted">{POOL_HINT[key]}</p> : null}
+            </div>
+            <ul className="mt-2 divide-y divide-border">
+              {p.members.map((m) => (
+                <PoolRow key={m.id} m={m} today={today} />
+              ))}
+            </ul>
+          </Card>
+        ))
+      )}
     </div>
   );
 }

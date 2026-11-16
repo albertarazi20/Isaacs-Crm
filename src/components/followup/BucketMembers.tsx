@@ -55,9 +55,7 @@ export function BucketMembers({
           case "replied":
             return m.reply_waiting;
           case "quiet":
-            return (
-              !m.last_touch_at || Date.now() - new Date(m.last_touch_at).getTime() > 7 * 86400e3
-            );
+            return !m.last_touch_at || nowMs - new Date(m.last_touch_at).getTime() > 7 * 86400e3;
           case "no_email":
             return !m.email || m.email_opt_out || m.email_bounced;
           case "paused":
@@ -66,7 +64,7 @@ export function BucketMembers({
             return true;
         }
       }),
-    [members, filter, tz, today],
+    [members, filter, tz, today, nowMs],
   );
   const ids = [...checked].filter((id) => shown.some((m) => m.client_id === id));
   const allShown = shown.length > 0 && shown.every((m) => checked.has(m.client_id));
