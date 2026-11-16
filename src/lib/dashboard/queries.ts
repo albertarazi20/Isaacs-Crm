@@ -301,7 +301,7 @@ export async function emailMeters(q: Db): Promise<EmailMeter[]> {
 type Raw = Omit<NowItem, "score">;
 
 /**
- * Everything that wants a human in the next hour, from eight sources, ranked by `rankNow`. A rep gets their own
+ * Everything that wants a human in the next hour, from eleven sources, ranked by `rankNow`. A rep gets their own
  * merchants (RLS); a manager also gets the AI's proposed updates waiting for a decision.
  */
 export async function nowItems(
@@ -310,13 +310,16 @@ export async function nowItems(
   opts: { manager: boolean; limit?: number },
 ): Promise<NowItem[]> {
   const items: Raw[] = [];
-  const push = (kind: NowKind, rows: Omit<Raw, "kind" | "href">[]) => {
+  /** A source may carry its own link (a late payout opens its month on Funded); the rest open the deal or merchant. */
+  const push = (kind: NowKind, rows: (Omit<Raw, "kind" | "href"> & { href?: string })[]) => {
     for (const r of rows) {
       items.push({
         kind,
         ...r,
         cents: Number(r.cents),
-        href: r.deal_id ? `/deals/${r.deal_id}` : `/clients/${r.client_id}`,
+        href:
+          r.href ||
+          (r.deal_id ? `/deals/${r.deal_id}` : r.client_id ? `/clients/${r.client_id}` : "/alerts"),
       });
     }
   };
@@ -493,6 +496,51 @@ export async function nowItems(
       [today],
     ),
   );
+
+  // 9. a lender past its own pay-after date with commission still owed (S3-6). Live, so it clears when the lender pays.
+  push(
+    "late_payout",
+    await json<R & { href: string }>(
+      q,
+      `select to_jsonb(x) as j from (
+         select f.client_id, f.deal_id, c.business_name,
+                'Chase ' || coalesce(nullif(f.funder_name, ''), 'the lender') || ' for the commission' as label,
+                '$' || to_char((coalesce(f.commission_cents, 0) - coalesce(f.commission_received_cents, 0)) / 100.0, 'FM999,999,990')
+                  || ' was expected ' || to_char(f.commission_expected_on, 'Mon DD') as detail,
+                (coalesce(f.commission_cents, 0) - coalesce(f.commission_received_cents, 0))::bigint as cents,
+                ($1::date - f.commission_expected_on)::int as age_days,
+                '/funded?m=' || to_char(f.funded_on, 'YYYY-MM') as href
+           from fundings f join clients c on c.id = f.client_id
+          where f.confirmed_at is not null and f.commission_expected_on is not null
+            and f.ledger_state in ('expected', 'at_risk')
+            and coalesce(f.commission_received_cents, 0) < coalesce(f.commission_cents, 0)
+            and f.commission_expected_on < $1::date
+            and not exists (select 1 from trashed_clients tc where tc.client_id = c.id)
+       ) x`,
+      [today],
+    ),
+  );
+
+  // 10. the alerts stream 3 writes that no source above already shows (S3-2, S3-7, S3-9): the person's own unread ones.
+  // A deal alert is dropped when the same deal is already in the list for another reason.
+  const seenDeals = new Set(items.map((i) => i.deal_id).filter((d): d is string => d !== null));
+  const alertRows = await json<R & { href: string; kind: "stale_deal" | "registration" | "trust" }>(
+    q,
+    `select to_jsonb(x) as j from (
+       select a.kind, a.client_id, a.deal_id, coalesce(c.business_name, '') as business_name,
+              a.title as label, a.body as detail, 0::bigint as cents,
+              greatest(0, extract(day from now() - a.created_at)::int) as age_days, a.href
+         from user_alerts a left join clients c on c.id = a.client_id
+        where a.user_id = app.current_user_id() and a.read_at is null
+          and a.kind in ('stale_deal', 'registration', 'trust')
+          and not exists (select 1 from trashed_clients tc where tc.client_id = a.client_id)
+     ) x`,
+  );
+  for (const a of alertRows) {
+    if (a.kind === "stale_deal" && a.deal_id && seenDeals.has(a.deal_id)) continue;
+    const { kind, ...rest } = a;
+    push(kind, [rest]);
+  }
 
   const ranked = rankNow(items);
   return opts.limit ? ranked.slice(0, opts.limit) : ranked;

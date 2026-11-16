@@ -1,11 +1,18 @@
+import { OpenerTray } from "@/components/winback/OpenerTray";
 import { PoolRow, type PoolMember } from "@/components/winback/PoolRow";
+import { RecoveredCard } from "@/components/winback/RecoveredCard";
 import { PageHeader, StatTile } from "@/components/settings/primitives";
 import { Badge, Card, EmptyState, LinkButton, SectionTitle } from "@/components/ui";
+import { CAN } from "@/lib/auth/roles";
 import { requirePage } from "@/lib/auth/server";
 import { userContext } from "@/lib/data/queries";
 import { db } from "@/lib/db";
-import { listWinback } from "@/lib/money/winback";
+import { formatDate } from "@/lib/format";
+import { listWinback, listWinbackReasons, winbackRecovered } from "@/lib/money/winback";
+import { draftedOpeners, memberExtras, openerMode } from "@/lib/money/winbackExtras";
 import { formatMoneyCompact } from "@/lib/money";
+
+const RECOVERED_MONTHS = 12;
 
 export const dynamic = "force-dynamic";
 
@@ -21,10 +28,20 @@ const POOL_HINT: Record<string, string> = {
 
 export default async function WinbackPage() {
   const session = await requirePage("/winback");
-  const { rows, today } = await db.withUser(session.userId, async (q) => ({
-    today: (await userContext(q)).today,
-    rows: await listWinback(q),
-  }));
+  // the tray is the manager's: only a manager can release an opener
+  const manager = CAN.confirmFunding(session.role);
+  const { rows, today, reasons, extras, drafted, mode, recovered } = await db.withUser(
+    session.userId,
+    async (q) => ({
+      today: (await userContext(q)).today,
+      rows: await listWinback(q),
+      reasons: await listWinbackReasons(q),
+      extras: await memberExtras(q),
+      drafted: manager ? await draftedOpeners(q) : [],
+      mode: manager ? await openerMode(q) : "review",
+      recovered: await winbackRecovered(q, RECOVERED_MONTHS),
+    }),
+  );
   const pools = new Map<string, { name: string; members: PoolMember[] }>();
   for (const r of rows) {
     const p = pools.get(r.pool) ?? { name: r.pool_name, members: [] };
@@ -60,6 +77,19 @@ export default async function WinbackPage() {
         />
         <StatTile label="Was on the table" value={formatMoneyCompact(onTable)} />
       </div>
+      {manager && (drafted.length > 0 || mode === "review") ? (
+        <OpenerTray
+          rows={drafted.map((d) => ({
+            id: d.id,
+            client_id: d.client_id,
+            business_name: d.business_name,
+            contact_name: d.contact_name,
+            pool_name: d.pool_name,
+            opener: d.opener,
+            holds_until: d.hold_until ? formatDate(d.hold_until.slice(0, 10), today) : "two days",
+          }))}
+        />
+      ) : null}
       {rows.length === 0 ? (
         <EmptyState title="Nobody to win back yet">
           Approvals that sit 30 days, curable declines and paid-offs land here on their own.
@@ -84,13 +114,19 @@ export default async function WinbackPage() {
               </div>
               <ul className="divide-y divide-border border-t border-border">
                 {p.members.map((m) => (
-                  <PoolRow key={m.id} m={m} today={today} />
+                  <PoolRow
+                    key={m.id}
+                    m={{ ...m, ...extras[m.id] }}
+                    today={today}
+                    reasons={reasons}
+                  />
                 ))}
               </ul>
             </Card>
           ))}
         </div>
       )}
+      <RecoveredCard rows={recovered} months={RECOVERED_MONTHS} />
     </div>
   );
 }

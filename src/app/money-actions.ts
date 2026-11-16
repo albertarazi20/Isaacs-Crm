@@ -192,3 +192,39 @@ export async function reviewWinbackOpenerAction(input: unknown): Promise<ActionR
     return { ok: false, error: toActionError(e) };
   }
 }
+
+/** Review mode: "Send all" releases the drafted lines in one go, each with the text the manager left in the box. */
+export async function approveOpenersAction(
+  input: unknown,
+): Promise<ActionResult<{ approved: number }>> {
+  const session = await requireSession();
+  try {
+    if (!CAN.confirmFunding(session.role))
+      throw new UserError("Only a manager can approve a win-back opener");
+    const { items } = z
+      .object({
+        items: z
+          .array(
+            z.object({
+              memberId: id,
+              text: z
+                .string()
+                .trim()
+                .min(1, "A line is empty")
+                .max(300, "A line is over 300 characters"),
+            }),
+          )
+          .min(1)
+          .max(200),
+      })
+      .parse(input);
+    await db.withUser(session.userId, async (q) => {
+      for (const it of items)
+        await reviewWinbackOpener(q, { memberId: it.memberId, text: it.text, approve: true });
+    });
+    revalidatePath("/", "layout");
+    return { ok: true, data: { approved: items.length } };
+  } catch (e) {
+    return { ok: false, error: toActionError(e) };
+  }
+}
