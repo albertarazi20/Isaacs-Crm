@@ -434,7 +434,7 @@ function Meters({ meters }: { meters: EmailMeter[] }) {
     <Card>
       <SectionTitle
         aside={
-          <Link href="/settings#email" className="text-xs text-accent hover:underline">
+          <Link href="/settings/email" className="text-xs text-accent hover:underline">
             Email settings
           </Link>
         }

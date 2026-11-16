@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { SecurityPanel } from "@/components/SecurityPanel";
+import { SettingsNav } from "@/components/settings/SettingsNav";
 import { SettingsPanels } from "@/components/SettingsPanels";
 import { Card, SectionTitle } from "@/components/ui";
 import { MessagesCard } from "@/components/winback/MessagesCard";
@@ -63,6 +64,7 @@ export default async function SettingsPage({
   return (
     <div className="mx-auto max-w-2xl space-y-6">
       <h1 className="text-2xl font-bold tracking-tight">Settings</h1>
+      <SettingsNav role={session.role} current="/settings" />
       {notice ? (
         <p
           role="status"
