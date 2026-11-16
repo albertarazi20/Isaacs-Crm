@@ -1,5 +1,5 @@
 import { createHash, randomBytes } from "node:crypto";
-import { BASE, check, openBrowser, withDb } from "./lib.mjs";
+import { BASE, check, openBrowser, setRole, withDb } from "./lib.mjs";
 
 const hash = (t) => createHash("sha256").update(t).digest("hex");
 
@@ -112,8 +112,10 @@ export default async function leadsFlow({ email }) {
   );
 
   // The Lead intake page: make a connection, see the token once, use it, turn it off.
+  await setRole(email, "manager"); // the web connections panel is a manager's
   const { browser, page } = await openBrowser(email);
   await page.goto(`${BASE}/lead-intake`, { waitUntil: "networkidle" });
+  await page.getByText("Web lead connections").click(); // folded under a details block on the intake page
   await page.getByLabel("Where will the leads come from?").fill("E2E panel");
   await page.getByRole("button", { name: "Make a connection" }).click();
   const shown = await page.getByRole("alert").locator("code").first().innerText();
@@ -135,6 +137,7 @@ export default async function leadsFlow({ email }) {
   });
   check("the token from the page works", live.status === 201, String(live.status));
   await page.reload({ waitUntil: "networkidle" });
+  await page.getByText("Web lead connections").click();
   check(
     "after a reload the token is gone from the page",
     (await page.content()).includes(shown) === false,

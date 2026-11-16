@@ -1,7 +1,8 @@
 import { readFileSync } from "node:fs";
-import { BASE, check, openBrowser, withDb } from "./lib.mjs";
+import { BASE, check, openBrowser, setRole, withDb } from "./lib.mjs";
 
 export default async function backupFlow({ email }) {
+  await setRole(email, "manager"); // exports are manager-only and logged
   const { browser, page } = await openBrowser(
     email,
     { width: 1280, height: 900 },

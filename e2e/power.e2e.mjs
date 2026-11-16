@@ -738,9 +738,8 @@ export default async function powerFlow({ email }) {
   );
   const labels = await bar.locator("a, button").allInnerTexts();
   check(
-    "tabs: Today, Board, Clients, Renewals, More",
-    labels.map((l) => l.replace(/\d+/g, "").trim()).join("|") ===
-      "Today|Board|Clients|Renewals|More",
+    "tabs: Home, Intake, Follow, Deals, More",
+    labels.map((l) => l.replace(/\d+/g, "").trim()).join("|") === "Home|Intake|Follow|Deals|More",
     labels.join("|"),
   );
   check("Today shows the due badge", (await bar.getByLabel(/follow-ups due/).count()) === 1);
@@ -753,7 +752,7 @@ export default async function powerFlow({ email }) {
   );
   check(
     "brand, search and Add client are still in the header",
-    (await mp.getByText("Isaac", { exact: true }).first().isVisible()) &&
+    (await mp.getByText("Selective CRM", { exact: true }).first().isVisible()) &&
       (await mp.getByRole("button", { name: "Find a client" }).isVisible()) &&
       (await mp.getByRole("button", { name: "+ Add client" }).isVisible()),
   );
@@ -775,8 +774,8 @@ export default async function powerFlow({ email }) {
   await sheet.waitFor();
   const more = (await sheet.innerText()).replace(/\n+/g, "|");
   check(
-    "More lists Long game, Import, Settings and Log out",
-    ["Long game", "Import", "Settings", "Log out"].every((x) => more.includes(x)),
+    "More lists Pipeline board, Today's calls, Settings and Log out",
+    ["Pipeline board", "Today's calls", "Settings", "Log out"].every((x) => more.includes(x)),
     more,
   );
   await shot(mp, "more-390");
@@ -787,7 +786,7 @@ export default async function powerFlow({ email }) {
     (await mp.getByRole("dialog", { name: "More" }).count()) === 0 ||
       !(await mp.getByRole("dialog", { name: "More" }).isVisible()),
   );
-  for (const path of ["/", "/board", "/clients", "/dial"]) {
+  for (const path of ["/", "/pipeline", "/clients", "/dial"]) {
     await mp.goto(`${BASE}${path}`, { waitUntil: "networkidle" });
     const overflow = await mp.evaluate(
       () => document.documentElement.scrollWidth - window.innerWidth,
@@ -834,7 +833,9 @@ export default async function powerFlow({ email }) {
   );
   check(
     "the Board tab title carries the due count",
-    dueNow.n === 0 ? boardTitle === "Board — Isaac" : boardTitle === `(${dueNow.n}) Board — Isaac`,
+    dueNow.n === 0
+      ? boardTitle === "Pipeline — Selective CRM"
+      : boardTitle === `(${dueNow.n}) Pipeline — Selective CRM`,
     `${boardTitle} vs ${dueNow.n}`,
   );
   await wide.browser.close();

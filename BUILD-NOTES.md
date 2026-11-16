@@ -72,3 +72,9 @@ dashboard 8/8, deals + FUND 13/13, submissions 6/6, intake 6/6, follow-up 5/5, w
 the database changed, not just the screen. The older flows (today, pipeline, clients, client, funders, power,
 mobile-ui, import, leads, source, text-guard, trash, session, backup, earnings, contact, funder-package) target pages
 that still exist but moved off the main nav; the full-suite log says which of their checks the nav changes broke.
+
+## Legacy pages (2026-11-16)
+`/earnings` and `/renewals` are superseded by Funded (ledger, rep cuts, month totals) and Winback's paid-off pool;
+`/today` and `/pipeline` stay as the calls list and the stage kanban under More. `e2e/earnings.legacy.mjs` is the old
+earnings flow, kept out of the suite (run.mjs only picks `*.e2e.mjs`); delete it with the page when the owner signs
+off on Funded. The kanban's own view links now point at /pipeline (they still said /board).

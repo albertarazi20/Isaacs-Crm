@@ -191,12 +191,12 @@ export default async function mobileUi({ email }) {
       .getByRole("link", { name: "Follow-ups" })
       .tap();
     await p.waitForURL(/view=followups/);
-    await p.goto(`${BASE}/clients`, { waitUntil: "domcontentloaded" });
-    await p.getByRole("navigation", { name: "Primary" }).getByRole("link", { name: "Board" }).tap();
-    await p.waitForURL(/\/board/);
+    // the phone tab bar no longer carries the kanban (it is under More as "Pipeline board"); a bare /pipeline is the
+    // same door and must still remember the view
+    await p.goto(`${BASE}/pipeline`, { waitUntil: "domcontentloaded" });
     await p.locator("article").first().waitFor({ timeout: 15000 });
     check(
-      "the tab-bar Board link opens Follow-ups after he used it",
+      "a bare /pipeline opens Follow-ups after he used it",
       (await p
         .getByRole("navigation", { name: "Board view" })
         .locator("[aria-current=page]")

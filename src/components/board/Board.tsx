@@ -81,7 +81,7 @@ function ViewLink({
   const active = view === current;
   return (
     <Link
-      href={`/board?view=${view}`}
+      href={`/pipeline?view=${view}`}
       prefetch={false}
       aria-current={active ? "page" : undefined}
       className={cn(
