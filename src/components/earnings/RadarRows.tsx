@@ -17,8 +17,10 @@ const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? o
 function Fact({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="min-w-0">
-      <dt className="text-xs text-muted">{label}</dt>
-      <dd className="text-sm font-medium">{children}</dd>
+      <dt className="truncate text-[11px] font-semibold tracking-wide text-muted uppercase">
+        {label}
+      </dt>
+      <dd className="mt-0.5 text-sm font-medium tabular-nums">{children}</dd>
     </div>
   );
 }
@@ -33,16 +35,16 @@ function agoText(days: number | null): string {
 function Header({ card }: { card: RadarRowData["card"] }) {
   return (
     <>
-      <div className="flex flex-wrap items-center gap-2">
+      <div className="flex min-w-0 flex-wrap items-center gap-2">
         <Link
           href={`/clients/${card.id}`}
-          className="text-base font-semibold hover:text-accent hover:underline"
+          className="truncate text-sm font-semibold hover:underline"
         >
           {card.business_name}
         </Link>
         <StageBadge stage={card.stage} />
       </div>
-      <p className="text-sm text-muted">
+      <p className="truncate text-xs text-muted">
         {[card.contact_name, card.phone ? formatUS(card.phone) : "", card.industry]
           .filter(Boolean)
           .join(" · ")}
@@ -59,12 +61,12 @@ export function RadarRow({ row, average }: { row: RadarRowData; average: Average
   return (
     <article
       className={cn(
-        "rounded-xl border bg-surface p-3.5",
-        row.notContactedSinceEligible ? "border-warn/60" : "border-border",
+        "min-w-0 rounded-xl border bg-surface p-4",
+        row.notContactedSinceEligible ? "border-warn/50" : "border-border",
       )}
     >
       <div className="flex flex-wrap items-start justify-between gap-2">
-        <div className="min-w-0 space-y-1">
+        <div className="min-w-0 flex-1 space-y-0.5">
           <Header card={card} />
         </div>
         {row.notContactedSinceEligible ? (
@@ -72,9 +74,9 @@ export function RadarRow({ row, average }: { row: RadarRowData; average: Average
         ) : null}
       </div>
 
-      <div className="mt-2.5 space-y-1">
+      <div className="mt-3 space-y-1.5">
         <div
-          className="relative h-2 overflow-hidden rounded-full bg-surface-2"
+          className="relative h-1.5 overflow-hidden rounded-full bg-surface-2"
           role="img"
           aria-label={`${p.pct}% paid down`}
         >
@@ -83,18 +85,18 @@ export function RadarRow({ row, average }: { row: RadarRowData; average: Average
             style={{ width: `${Math.min(100, p.pct)}%` }}
           />
           <div
-            className="absolute inset-y-0 w-px bg-text/40"
+            className="absolute inset-y-0 w-px bg-text/50"
             style={{ left: `${p.thresholdPct}%` }}
             aria-hidden
           />
         </div>
-        <p className="text-xs text-muted">
+        <p className="text-xs text-muted tabular-nums">
           {p.pct}% paid down · renews from {p.thresholdPct}% ·{" "}
           {formatMoney(row.advance.paymentCents)} {row.advance.frequency} remittance
         </p>
       </div>
 
-      <dl className="mt-2.5 grid grid-cols-2 gap-x-4 gap-y-2 sm:grid-cols-4">
+      <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2.5 sm:grid-cols-4">
         <Fact label="Eligible">
           {row.eligibleDays === 0 ? "Since today" : plural(row.eligibleDays, "day")}
           {since && row.eligibleDays > 0 ? (
@@ -124,7 +126,7 @@ export function RadarRow({ row, average }: { row: RadarRowData; average: Average
         </Fact>
       </dl>
 
-      <div className="mt-3">
+      <div className="mt-3 border-t border-border pt-3">
         <ContactActions client={card} />
       </div>
     </article>
@@ -138,15 +140,15 @@ export function PaidInFullRow({ row, average }: { row: PaidRow; average: Average
   return (
     <article
       className={cn(
-        "rounded-xl border bg-surface p-3.5",
-        row.hot ? "border-good/60" : "border-border",
+        "min-w-0 rounded-xl border bg-surface p-4",
+        row.hot ? "border-good/50" : "border-border",
       )}
     >
       <div className="flex flex-wrap items-start justify-between gap-2">
-        <div className="min-w-0 space-y-1">
+        <div className="min-w-0 flex-1 space-y-0.5">
           <Header card={card} />
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1.5">
           {row.hot ? <Badge tone="good">Hot</Badge> : null}
           <Badge tone="neutral">
             Paid off{" "}
@@ -154,7 +156,7 @@ export function PaidInFullRow({ row, average }: { row: PaidRow; average: Average
           </Badge>
         </div>
       </div>
-      <dl className="mt-2.5 grid grid-cols-2 gap-x-4 gap-y-2 sm:grid-cols-4">
+      <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2.5 sm:grid-cols-4">
         <Fact label="Last advance">
           {advance ? (
             <>
@@ -192,7 +194,7 @@ export function PaidInFullRow({ row, average }: { row: PaidRow; average: Average
           {card.next_due_on ? formatDate(card.next_due_on, today) : "—"}
         </Fact>
       </dl>
-      <div className="mt-3">
+      <div className="mt-3 border-t border-border pt-3">
         <ContactActions client={card} />
       </div>
     </article>

@@ -28,7 +28,7 @@ export function GoalEditor({
       <button
         type="button"
         onClick={() => setEditing(true)}
-        className="text-xs font-medium text-accent hover:underline"
+        className="-my-1 inline-flex min-h-8 items-center rounded-md px-1 text-xs font-medium whitespace-nowrap text-accent transition hover:bg-accent-soft"
         title={`Set this month's goal for ${label === "shop" ? "the shop" : label}`}
       >
         {fundedCents > 0
@@ -39,7 +39,7 @@ export function GoalEditor({
   }
   return (
     <form
-      className="flex items-center gap-2"
+      className="flex flex-wrap items-center gap-1.5"
       onSubmit={async (e) => {
         e.preventDefault();
         setBusy(true);
@@ -56,13 +56,13 @@ export function GoalEditor({
         onChange={(e) => setValue(e.target.value)}
         aria-label={`${label} goal for this month`}
         placeholder="250k"
-        className="h-8 w-28 text-sm"
+        className="h-9 w-28 text-sm tabular-nums sm:h-8 sm:text-[13px]"
         autoFocus
       />
       <Button type="submit" variant="primary" size="sm" disabled={busy}>
         Save
       </Button>
-      <Button size="sm" onClick={() => setEditing(false)}>
+      <Button size="sm" variant="ghost" onClick={() => setEditing(false)}>
         Cancel
       </Button>
     </form>

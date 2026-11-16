@@ -151,7 +151,7 @@ export function MonthChart({ months }: { months: readonly MonthRow[] }) {
       {active && hover !== null ? (
         <div
           role="status"
-          className="pointer-events-none absolute z-10 w-44 rounded-lg border border-border bg-surface px-2.5 py-2 text-xs shadow-lg"
+          className="pointer-events-none absolute z-10 w-44 rounded-lg border border-border bg-surface px-2.5 py-2 text-xs shadow-pop"
           style={{
             left: `${Math.min(88, Math.max(12, (cx(hover) / W) * 100))}%`,
             top: `${(Math.max(PAD.top, y(active.commissionCents)) / H) * 100}%`,
@@ -159,7 +159,9 @@ export function MonthChart({ months }: { months: readonly MonthRow[] }) {
           }}
         >
           <p className="text-muted">{active.label}</p>
-          <p className="text-base font-bold tabular-nums">{formatMoney(active.commissionCents)}</p>
+          <p className="text-base font-semibold tabular-nums">
+            {formatMoney(active.commissionCents)}
+          </p>
           <p className="text-muted">
             from {active.commissionCount} advance{active.commissionCount === 1 ? "" : "s"}
           </p>

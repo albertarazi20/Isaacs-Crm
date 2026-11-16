@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { setWinbackStatusAction } from "@/app/winback-actions";
 import { useRun } from "@/components/client/parts";
-import { Button, cn } from "@/components/ui";
+import { Badge, Button, buttonClass } from "@/components/ui";
 import { formatDate } from "@/lib/format";
 import { formatMoneyCompact } from "@/lib/money";
 
@@ -26,6 +26,7 @@ export interface PoolMember {
   best_offer_cents: number | null;
 }
 
+/** One pool member: who they are, where the sequence stands, the old offer beside them, and Call / Stop. */
 export function PoolRow({ m, today }: { m: PoolMember; today: string }) {
   const run = useRun();
   const router = useRouter();
@@ -44,20 +45,22 @@ export function PoolRow({ m, today }: { m: PoolMember; today: string }) {
     setBusy(false);
     if (ok) router.refresh();
   };
+  const tone = m.status === "replied" ? "bad" : m.status === "active" ? "good" : "neutral";
   return (
-    <li className="flex flex-wrap items-center justify-between gap-3 px-4 py-2.5">
+    <li className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-2 px-4 py-3 transition hover:bg-surface-3 sm:grid-cols-[minmax(0,1fr)_auto_auto] sm:py-2">
       <div className="min-w-0">
-        <Link
-          href={m.deal_id ? `/deals/${m.deal_id}` : `/clients/${m.client_id}`}
-          className="text-sm font-semibold hover:underline"
-        >
-          {m.business_name}
-        </Link>
-        <span className="ml-2 text-xs text-muted">
-          {m.contact_name || "—"} · {m.phone || "no phone"} · {m.email || "no email"}
-          {m.best_offer_cents ? ` · was offered ${formatMoneyCompact(m.best_offer_cents)}` : ""}
-        </span>
-        <p className="text-xs text-muted">
+        <div className="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-0.5">
+          <Link
+            href={m.deal_id ? `/deals/${m.deal_id}` : `/clients/${m.client_id}`}
+            className="truncate text-sm font-semibold hover:underline"
+          >
+            {m.business_name}
+          </Link>
+          <span className="min-w-0 truncate text-xs text-muted">
+            {m.contact_name || "—"} · {m.phone || "no phone"} · {m.email || "no email"}
+          </span>
+        </div>
+        <p className="truncate text-xs text-muted">
           {m.reason ? `${m.reason} · ` : ""}
           {m.status === "replied" ? (
             <span className="font-semibold text-bad">replied — call them</span>
@@ -72,24 +75,20 @@ export function PoolRow({ m, today }: { m: PoolMember; today: string }) {
           )}
         </p>
       </div>
-      <div className="flex items-center gap-1.5">
-        <span
-          className={cn(
-            "rounded-md px-2 py-0.5 text-[11px] font-semibold",
-            m.status === "replied"
-              ? "bg-bad-soft text-bad"
-              : m.status === "active"
-                ? "bg-good-soft text-good"
-                : "bg-surface-2 text-muted",
-          )}
-        >
-          {m.status}
-        </span>
+      <div className="flex items-center justify-end gap-2 sm:w-44 sm:flex-col sm:items-end sm:gap-0.5">
+        {m.best_offer_cents ? (
+          <span className="text-xs whitespace-nowrap text-muted">
+            was offered{" "}
+            <span className="text-[13px] font-semibold text-text tabular-nums">
+              {formatMoneyCompact(m.best_offer_cents)}
+            </span>
+          </span>
+        ) : null}
+        <Badge tone={tone}>{m.status}</Badge>
+      </div>
+      <div className="col-span-2 flex items-center justify-end gap-1.5 sm:col-span-1">
         {m.phone ? (
-          <a
-            href={`tel:${m.phone}`}
-            className="inline-flex h-8 items-center rounded-lg border border-border px-2.5 text-sm font-semibold"
-          >
+          <a href={`tel:${m.phone}`} className={buttonClass("secondary", "sm")}>
             Call
           </a>
         ) : null}

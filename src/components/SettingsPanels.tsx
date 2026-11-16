@@ -3,7 +3,8 @@
 import { useState } from "react";
 import { disconnectGmailAction, sendTestReminderAction, updateSettingsAction } from "@/app/actions";
 import { useCall, useToast } from "./overlay";
-import { Button, buttonClass, Card, Field, Select } from "./ui";
+import { ICON, Icon, SettingsCard } from "./settings/primitives";
+import { Button, buttonClass, Field, Select } from "./ui";
 
 const ZONES = [
   ["America/New_York", "Eastern"],
@@ -59,83 +60,83 @@ export function SettingsPanels({ loginEmail, settings, gmail, resendReady }: Pro
   }
 
   return (
-    <div className="space-y-6">
-      <Card className="space-y-4 p-5">
-        <div>
-          <h2 className="text-base font-semibold">Reminders</h2>
-          <p className="text-sm text-muted">
-            One email each morning listing what&apos;s overdue and due today, with a link to each
-            client.
+    <div className="space-y-5">
+      <SettingsCard
+        title="Reminders"
+        description="One email each morning listing what's overdue and due today, with a link to each client."
+        footer={
+          <>
+            {!resendReady ? (
+              <span className="mr-auto text-xs text-warn">
+                Email sending isn&apos;t set up on the server yet.
+              </span>
+            ) : null}
+            <Button disabled={busy !== null || !resendReady} onClick={() => void test()}>
+              {busy === "test" ? "Sending…" : "Send me a test email"}
+            </Button>
+            <Button variant="primary" disabled={busy !== null} onClick={() => void save()}>
+              {busy === "save" ? "Saving…" : "Save"}
+            </Button>
+          </>
+        }
+      >
+        <div className="space-y-4">
+          <label className="flex min-h-10 items-center gap-2.5 text-sm sm:min-h-0">
+            <input
+              type="checkbox"
+              className="size-4 accent-accent"
+              checked={form.digestEnabled}
+              onChange={(e) => setForm({ ...form, digestEnabled: e.target.checked })}
+            />
+            Email me my follow-ups every morning
+          </label>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Field label="Send at">
+              <Select
+                value={form.digestHour}
+                onChange={(e) => setForm({ ...form, digestHour: Number(e.target.value) })}
+              >
+                {Array.from({ length: 24 }, (_, h) => (
+                  <option key={h} value={h}>
+                    {hourLabel(h)}
+                  </option>
+                ))}
+              </Select>
+            </Field>
+            <Field label="My time zone">
+              <Select
+                value={form.timezone}
+                onChange={(e) => setForm({ ...form, timezone: e.target.value })}
+              >
+                {zones.map(([z, label]) => (
+                  <option key={z} value={z}>
+                    {label}
+                  </option>
+                ))}
+              </Select>
+            </Field>
+          </div>
+          <p className="text-xs text-muted">
+            Reminders go to <strong className="font-medium text-text">{loginEmail}</strong> — the
+            Google account you signed in with.
           </p>
         </div>
-        <label className="flex items-center gap-2 text-sm">
-          <input
-            type="checkbox"
-            className="size-4"
-            checked={form.digestEnabled}
-            onChange={(e) => setForm({ ...form, digestEnabled: e.target.checked })}
-          />
-          Email me my follow-ups every morning
-        </label>
-        <div className="grid gap-3 sm:grid-cols-2">
-          <Field label="Send at">
-            <Select
-              value={form.digestHour}
-              onChange={(e) => setForm({ ...form, digestHour: Number(e.target.value) })}
-            >
-              {Array.from({ length: 24 }, (_, h) => (
-                <option key={h} value={h}>
-                  {hourLabel(h)}
-                </option>
-              ))}
-            </Select>
-          </Field>
-          <Field label="My time zone">
-            <Select
-              value={form.timezone}
-              onChange={(e) => setForm({ ...form, timezone: e.target.value })}
-            >
-              {zones.map(([z, label]) => (
-                <option key={z} value={z}>
-                  {label}
-                </option>
-              ))}
-            </Select>
-          </Field>
-        </div>
-        <p className="text-sm text-muted">
-          Reminders go to <strong>{loginEmail}</strong> — the Google account you signed in with.
-        </p>
-        <div className="flex flex-wrap items-center gap-2">
-          <Button variant="primary" disabled={busy !== null} onClick={() => void save()}>
-            {busy === "save" ? "Saving…" : "Save"}
-          </Button>
-          <Button disabled={busy !== null || !resendReady} onClick={() => void test()}>
-            {busy === "test" ? "Sending…" : "Send me a test email"}
-          </Button>
-          {!resendReady ? (
-            <span className="text-sm text-warn">
-              Email sending isn&apos;t set up on the server yet.
-            </span>
-          ) : null}
-        </div>
-      </Card>
+      </SettingsCard>
 
-      <Card className="space-y-3 p-5">
-        <div>
-          <h2 className="text-base font-semibold">Gmail</h2>
-          <p className="text-sm text-muted">
-            Connect your Gmail so emails to merchants go out from your own address and land in your
-            Sent folder.
-          </p>
-        </div>
+      <SettingsCard
+        title="Gmail"
+        description="Connect your Gmail so emails to merchants go out from your own address and land in your Sent folder."
+      >
         {!gmail.configured ? (
           <p className="text-sm text-warn">
             Google sign-in isn&apos;t configured on the server yet.
           </p>
         ) : gmail.connected ? (
-          <div className="flex flex-wrap items-center gap-2">
-            <p className="text-sm text-good">Connected as {gmail.googleEmail}</p>
+          <div className="flex flex-wrap items-center gap-3">
+            <p className="flex items-center gap-1.5 text-sm text-good">
+              <Icon d={ICON.check} />
+              Connected as {gmail.googleEmail}
+            </p>
             <Button
               variant="ghost"
               size="sm"
@@ -161,7 +162,7 @@ export function SettingsPanels({ loginEmail, settings, gmail, resendReady }: Pro
             </a>
           </div>
         )}
-      </Card>
+      </SettingsCard>
     </div>
   );
 }

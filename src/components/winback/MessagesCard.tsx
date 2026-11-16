@@ -19,7 +19,8 @@ import type { MessageSettings, SnippetRow } from "@/lib/messaging/queries";
 import { MAX_SNIPPETS, SIGNATURE_MAX, SNIPPET_BODY_MAX } from "@/lib/messaging/schemas";
 import { useApp } from "../app-context";
 import { Dialog, useCall } from "../overlay";
-import { Badge, Button, Card, cn, Field, Input, Select, Textarea } from "../ui";
+import { chipClass, Note, SettingsCard } from "../settings/primitives";
+import { Badge, Button, cn, Field, Input, Select, Textarea } from "../ui";
 
 const KIND_LABEL: Record<SnippetKind, string> = { text: "Text message", email: "Email" };
 
@@ -40,6 +41,31 @@ const SAMPLE: Record<MergeField, string> = {
   upload_link: "https://crm.selectivecap.com/upload/abc123",
 };
 
+/** One snippet in the list: name, kind, two lines of the body, and its buttons on the right (under it on a phone). */
+function SnippetRowView({
+  title,
+  badge,
+  body,
+  actions,
+}: {
+  title: string;
+  badge: React.ReactNode;
+  body: string;
+  actions: React.ReactNode;
+}) {
+  return (
+    <li className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2 px-4 py-3">
+      <div className="min-w-0 flex-1 basis-56">
+        <p className="flex flex-wrap items-center gap-2 text-sm font-semibold">
+          {title} {badge}
+        </p>
+        <p className="line-clamp-2 text-xs whitespace-pre-line text-muted">{body}</p>
+      </div>
+      <div className="flex shrink-0 flex-wrap gap-1.5">{actions}</div>
+    </li>
+  );
+}
+
 /** Settings → Messages: signature, application link, and saved snippets. */
 export function MessagesCard({
   initial,
@@ -55,6 +81,7 @@ export function MessagesCard({
   const [editing, setEditing] = useState<Draft | null>(null);
   const [deleting, setDeleting] = useState<string | null>(null);
   const usingDefaults = snippets.length === 0;
+  const formId = useId();
 
   async function saveSettings() {
     setBusy(true);
@@ -70,172 +97,175 @@ export function MessagesCard({
   }
 
   return (
-    <Card className="space-y-5 p-5">
-      <div>
-        <h2 className="text-base font-semibold">Messages</h2>
-        <p className="text-sm text-muted">
-          Your signature, your application link, and the messages you send over and over.
-        </p>
-      </div>
-
-      <form
-        className="space-y-3"
-        // Our own message ("Enter a full web address…") says it better than the browser's tooltip.
-        noValidate
-        onSubmit={(e) => {
-          e.preventDefault();
-          void saveSettings();
-        }}
+    <>
+      <SettingsCard
+        title="Messages"
+        description="Your signature, your application link, and the messages you send over and over."
+        footer={
+          <Button type="submit" form={formId} variant="primary" disabled={busy}>
+            {busy ? "Saving…" : "Save signature and link"}
+          </Button>
+        }
       >
-        <Field
-          label="Email signature"
-          hint={`Added to the end of every email you send from here. Leave it empty to end with “Thanks,” and your name. (${form.signature.length}/${SIGNATURE_MAX})`}
+        <form
+          id={formId}
+          className="space-y-3"
+          // Our own message ("Enter a full web address…") says it better than the browser's tooltip.
+          noValidate
+          onSubmit={(e) => {
+            e.preventDefault();
+            void saveSettings();
+          }}
         >
-          <Textarea
-            rows={4}
-            value={form.signature}
-            maxLength={SIGNATURE_MAX}
-            placeholder={"Josh\nSelective Capital · (305) 555-0100"}
-            onChange={(e) => setForm({ ...form, signature: e.target.value })}
-          />
-        </Field>
-        <Field
-          label="Application link"
-          hint="Wherever a message says {application_link}, this is what goes in."
-        >
-          <Input
-            type="url"
-            inputMode="url"
-            value={form.applicationLink}
-            maxLength={500}
-            placeholder="https://…"
-            onChange={(e) => setForm({ ...form, applicationLink: e.target.value })}
-          />
-        </Field>
-        <Button type="submit" variant="primary" disabled={busy}>
-          {busy ? "Saving…" : "Save signature and link"}
-        </Button>
-      </form>
+          <Field
+            label="Email signature"
+            hint={`Added to the end of every email you send from here. Leave it empty to end with “Thanks,” and your name. (${form.signature.length}/${SIGNATURE_MAX})`}
+          >
+            <Textarea
+              rows={4}
+              value={form.signature}
+              maxLength={SIGNATURE_MAX}
+              placeholder={"Josh\nSelective Capital · (305) 555-0100"}
+              onChange={(e) => setForm({ ...form, signature: e.target.value })}
+            />
+          </Field>
+          <Field
+            label="Application link"
+            hint="Wherever a message says {application_link}, this is what goes in."
+          >
+            <Input
+              type="url"
+              inputMode="url"
+              value={form.applicationLink}
+              maxLength={500}
+              placeholder="https://…"
+              onChange={(e) => setForm({ ...form, applicationLink: e.target.value })}
+            />
+          </Field>
+        </form>
+      </SettingsCard>
 
-      <div className="space-y-3 border-t border-border pt-4">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <h3 className="text-sm font-semibold">Saved snippets</h3>
+      <SettingsCard
+        title="Saved snippets"
+        flush
+        aside={
           <Button
             size="sm"
-            variant="primary"
             disabled={snippets.length >= MAX_SNIPPETS}
             onClick={() => setEditing({ title: "", kind: "text", body: "" })}
           >
             + Add snippet
           </Button>
-        </div>
-
+        }
+      >
         {usingDefaults ? (
           <>
-            <p className="rounded-lg bg-surface-2 p-3 text-sm text-muted">
-              You&apos;re using the six built-in snippets. Save one of your own and your list
-              replaces them everywhere. “Customize” starts you from a built-in one.
-            </p>
-            <ul className="divide-y divide-border rounded-xl border border-border">
+            <div className="px-4 pb-3">
+              <Note>
+                You&apos;re using the six built-in snippets. Save one of your own and your list
+                replaces them everywhere. “Customize” starts you from a built-in one.
+              </Note>
+            </div>
+            <ul className="divide-y divide-border border-t border-border">
               {defaultSnippets("text").map((d, i) => (
-                <li key={d.id} className="flex items-start justify-between gap-3 p-3">
-                  <div className="min-w-0">
-                    <p className="text-sm font-medium">
-                      {d.title} <Badge>Built-in</Badge>
-                    </p>
-                    <p className="line-clamp-2 text-sm text-muted">{d.body}</p>
-                  </div>
-                  <div className="flex shrink-0 gap-1">
-                    <Button
-                      size="sm"
-                      onClick={() => setEditing({ title: d.title, kind: "text", body: d.body })}
-                    >
-                      Customize text
-                    </Button>
-                    <Button
-                      size="sm"
-                      onClick={() =>
-                        setEditing({
-                          title: d.title,
-                          kind: "email",
-                          body: defaultSnippets("email")[i]?.body ?? "",
-                        })
-                      }
-                    >
-                      Customize email
-                    </Button>
-                  </div>
-                </li>
+                <SnippetRowView
+                  key={d.id}
+                  title={d.title}
+                  badge={<Badge>Built-in</Badge>}
+                  body={d.body}
+                  actions={
+                    <>
+                      <Button
+                        size="sm"
+                        onClick={() => setEditing({ title: d.title, kind: "text", body: d.body })}
+                      >
+                        Customize text
+                      </Button>
+                      <Button
+                        size="sm"
+                        onClick={() =>
+                          setEditing({
+                            title: d.title,
+                            kind: "email",
+                            body: defaultSnippets("email")[i]?.body ?? "",
+                          })
+                        }
+                      >
+                        Customize email
+                      </Button>
+                    </>
+                  }
+                />
               ))}
             </ul>
           </>
         ) : (
           <>
-            <ul className="divide-y divide-border rounded-xl border border-border">
+            <ul className="divide-y divide-border border-t border-border">
               {snippets.map((s) => (
-                <li key={s.id} className="flex items-start justify-between gap-3 p-3">
-                  <div className="min-w-0">
-                    <p className="text-sm font-medium">
-                      {s.title} <Badge tone="accent">{KIND_LABEL[s.kind]}</Badge>
-                    </p>
-                    <p className="line-clamp-2 text-sm whitespace-pre-line text-muted">{s.body}</p>
-                  </div>
-                  <div className="flex shrink-0 gap-1">
-                    <Button
-                      size="sm"
-                      onClick={() =>
-                        setEditing({ id: s.id, title: s.title, kind: s.kind, body: s.body })
-                      }
-                    >
-                      Edit
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="danger"
-                      disabled={deleting === s.id}
-                      aria-label={`Delete ${s.title}`}
-                      onClick={() => void remove(s.id)}
-                    >
-                      {deleting === s.id ? "Deleting…" : "Delete"}
-                    </Button>
-                  </div>
-                </li>
+                <SnippetRowView
+                  key={s.id}
+                  title={s.title}
+                  badge={<Badge tone="accent">{KIND_LABEL[s.kind]}</Badge>}
+                  body={s.body}
+                  actions={
+                    <>
+                      <Button
+                        size="sm"
+                        onClick={() =>
+                          setEditing({ id: s.id, title: s.title, kind: s.kind, body: s.body })
+                        }
+                      >
+                        Edit
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="danger"
+                        disabled={deleting === s.id}
+                        aria-label={`Delete ${s.title}`}
+                        onClick={() => void remove(s.id)}
+                      >
+                        {deleting === s.id ? "Deleting…" : "Delete"}
+                      </Button>
+                    </>
+                  }
+                />
               ))}
             </ul>
             {/* A kind with no saved snippet still uses the built-ins in its picker; show them so they can be seen and edited. */}
             {(["text", "email"] as const)
               .filter((kind) => !snippets.some((s) => s.kind === kind))
               .map((kind) => (
-                <div key={kind} className="space-y-2">
-                  <p className="rounded-lg bg-surface-2 p-3 text-sm text-muted">
-                    You haven&apos;t saved any {kind} snippets, so the {kind} picker still uses the
-                    built-in ones. “Customize” starts you from one.
-                  </p>
-                  <ul className="divide-y divide-border rounded-xl border border-border">
+                <div key={kind} className="border-t border-border">
+                  <div className="px-4 py-3">
+                    <Note>
+                      You haven&apos;t saved any {kind} snippets, so the {kind} picker still uses
+                      the built-in ones. “Customize” starts you from one.
+                    </Note>
+                  </div>
+                  <ul className="divide-y divide-border border-t border-border">
                     {defaultSnippets(kind).map((d) => (
-                      <li key={d.id} className="flex items-start justify-between gap-3 p-3">
-                        <div className="min-w-0">
-                          <p className="text-sm font-medium">
-                            {d.title} <Badge>Built-in {kind}</Badge>
-                          </p>
-                          <p className="line-clamp-2 text-sm whitespace-pre-line text-muted">
-                            {d.body}
-                          </p>
-                        </div>
-                        <Button
-                          size="sm"
-                          onClick={() => setEditing({ title: d.title, kind, body: d.body })}
-                        >
-                          Customize
-                        </Button>
-                      </li>
+                      <SnippetRowView
+                        key={d.id}
+                        title={d.title}
+                        badge={<Badge>Built-in {kind}</Badge>}
+                        body={d.body}
+                        actions={
+                          <Button
+                            size="sm"
+                            onClick={() => setEditing({ title: d.title, kind, body: d.body })}
+                          >
+                            Customize
+                          </Button>
+                        }
+                      />
                     ))}
                   </ul>
                 </div>
               ))}
           </>
         )}
-      </div>
+      </SettingsCard>
 
       {editing ? (
         <SnippetEditor
@@ -247,7 +277,7 @@ export function MessagesCard({
           }}
         />
       ) : null}
-    </Card>
+    </>
   );
 }
 
@@ -364,15 +394,15 @@ function SnippetEditor({
           />
         </Field>
         <div>
-          <p className="text-xs font-medium text-muted">Insert a field</p>
-          <div className="mt-1 flex flex-wrap gap-1.5">
+          <p className="text-[12px] font-medium text-text-2">Insert a field</p>
+          <div className="mt-1.5 flex flex-wrap gap-1.5">
             {MERGE_FIELDS.map((f) => (
               <button
                 key={f}
                 type="button"
                 title={MERGE_FIELD_HELP[f]}
                 onClick={() => insert(f)}
-                className="h-8 rounded-full border border-border bg-surface px-3 text-sm hover:bg-surface-2"
+                className={chipClass(false, "font-mono text-xs")}
               >
                 {`{${f}}`}
               </button>
@@ -380,21 +410,25 @@ function SnippetEditor({
           </div>
         </div>
         {problem ? (
-          <p role="alert" className="rounded-lg bg-bad-soft p-2 text-sm text-bad">
+          <Note role="alert" tone="bad">
             {problem}
-          </p>
+          </Note>
         ) : null}
         {v.body.trim() ? (
-          <div className="rounded-lg border border-dashed border-border p-3">
-            <p className="text-xs font-medium text-muted">Preview with an example merchant</p>
+          <div className="rounded-lg border border-dashed border-border-strong p-3">
+            <p className="text-[11px] font-semibold tracking-wide text-muted uppercase">
+              Preview with an example merchant
+            </p>
             {subject ? (
-              <p className="mt-1 text-sm font-medium">{resolveMergeFields(subject, sample).text}</p>
+              <p className="mt-1.5 text-sm font-medium">
+                {resolveMergeFields(subject, sample).text}
+              </p>
             ) : null}
             <p className={cn("mt-1 text-sm whitespace-pre-wrap")} data-testid="snippet-preview">
               {preview.text}
             </p>
             {preview.missing.length > 0 ? (
-              <p className="mt-1 text-xs text-muted">
+              <p className="mt-1.5 text-xs text-muted">
                 {preview.missing.map((m) => `{${m}}`).join(", ")} fills in from the merchant or your
                 settings when you use it. If there is nothing to fill it with, the message shows it
                 so you can fix it before sending.

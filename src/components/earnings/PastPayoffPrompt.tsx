@@ -9,6 +9,7 @@ import { factorInput } from "@/lib/earnings/terms";
 import { formatMoney } from "@/lib/money";
 import { useApp } from "../app-context";
 import { useCall, useToast } from "../overlay";
+import { ICON, Icon } from "../settings/primitives";
 import { Button } from "../ui";
 
 const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
@@ -55,33 +56,41 @@ export function PastPayoffPrompt({ rows }: { rows: PastPayoffRow[] }) {
   return (
     <section
       aria-label="Advances past their estimated payoff"
-      className="rounded-xl border border-warn/60 bg-warn-soft p-4"
+      className="min-w-0 rounded-xl border border-warn/40 bg-surface p-0"
     >
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <h2 className="font-semibold text-warn">
-          {plural(rows.length, "advance")} {rows.length === 1 ? "is" : "are"} past{" "}
-          {rows.length === 1 ? "its" : "their"} estimated payoff — move to Paid in full?
+      <div className="flex flex-wrap items-center justify-between gap-3 px-4 pt-3.5 pb-3">
+        <h2 className="flex items-start gap-2 text-[13px] font-semibold">
+          <Icon d={ICON.alert} className="mt-px text-warn" />
+          <span>
+            {plural(rows.length, "advance")} {rows.length === 1 ? "is" : "are"} past{" "}
+            {rows.length === 1 ? "its" : "their"} estimated payoff — move to Paid in full?
+          </span>
         </h2>
         {rows.length > 1 ? (
-          <Button variant="primary" disabled={busy !== null} onClick={() => void moveAll()}>
+          <Button
+            variant="primary"
+            size="sm"
+            disabled={busy !== null}
+            onClick={() => void moveAll()}
+          >
             {busy === "all" ? "Moving…" : `Move all ${rows.length}`}
           </Button>
         ) : null}
       </div>
-      <ul className="mt-2 divide-y divide-warn/20">
+      <ul className="divide-y divide-border border-t border-border">
         {rows.map((r) => (
           <li
             key={r.card.id}
-            className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1.5 py-2"
+            className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1.5 px-4 py-2.5"
           >
-            <div className="min-w-0">
+            <div className="min-w-0 flex-1">
               <Link
                 href={`/clients/${r.card.id}`}
-                className="font-medium text-text hover:text-accent hover:underline"
+                className="block truncate text-sm font-semibold hover:underline"
               >
                 {r.card.business_name}
               </Link>
-              <p className="text-xs text-muted">
+              <p className="truncate text-xs text-muted">
                 {formatMoney(r.advance.amountCents)} at {factorInput(r.advance.factorRate)} ·{" "}
                 {when(r, today)}
               </p>

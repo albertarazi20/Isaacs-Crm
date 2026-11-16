@@ -18,6 +18,7 @@ import {
   meanFactor,
 } from "@/lib/earnings/pricebook";
 import { factorInput } from "@/lib/earnings/terms";
+import { chipClass } from "../settings/primitives";
 import { Card, cn, EmptyState, SectionTitle } from "../ui";
 
 const SOURCES: PriceSource[] = ["funded", "offer", "competitor"];
@@ -43,37 +44,39 @@ function GroupTable({
   const [all, setAll] = useState(false);
   const rows = all ? groups : groups.slice(0, SHOWN);
   return (
-    <div>
-      <h3 className="text-sm font-semibold">{title}</h3>
+    <div className="min-w-0">
+      <h3 className="text-[13px] font-semibold">{title}</h3>
       {groups.length === 0 ? (
         <p className="mt-1 text-sm text-muted">{empty}</p>
       ) : (
-        <div className="overflow-x-auto">
-          <table className="mt-1 w-full text-sm tabular-nums">
-            <thead>
-              <tr className="border-b border-border text-left text-xs text-muted">
-                <th scope="col" className="py-1 pr-2 font-medium">
+        <div className="mt-2 overflow-x-auto rounded-lg border border-border">
+          <table className="w-full text-[13px] tabular-nums">
+            <thead className="bg-surface-2/60 text-left text-[11px] font-semibold tracking-wide text-muted uppercase">
+              <tr>
+                <th scope="col" className="px-3 py-1.5 font-semibold">
                   {title.replace(/^By /, "")}
                 </th>
-                <th scope="col" className="px-2 py-1 text-right font-medium">
+                <th scope="col" className="px-2 py-1.5 text-right font-semibold">
                   Based on
                 </th>
-                <th scope="col" className="px-2 py-1 text-right font-medium">
+                <th scope="col" className="px-2 py-1.5 text-right font-semibold">
                   Average factor
                 </th>
-                <th scope="col" className="py-1 pl-2 text-right font-medium">
+                <th scope="col" className="px-3 py-1.5 text-right font-semibold">
                   Range
                 </th>
               </tr>
             </thead>
-            <tbody>
+            <tbody className="divide-y divide-border">
               {rows.map((g) => (
-                <tr key={g.key} className="border-b border-border/60">
-                  <th scope="row" className="max-w-40 truncate py-1 pr-2 text-left font-medium">
+                <tr key={g.key} className="transition hover:bg-surface-3">
+                  <th scope="row" className="max-w-40 truncate px-3 py-1.5 text-left font-medium">
                     {g.label}
                   </th>
-                  <td className="px-2 py-1 text-right text-muted">{plural(g.n, "price")}</td>
-                  <td className="px-2 py-1 text-right font-semibold">
+                  <td className="px-2 py-1.5 text-right whitespace-nowrap text-muted">
+                    {plural(g.n, "price")}
+                  </td>
+                  <td className="px-2 py-1.5 text-right font-semibold">
                     {g.average === null ? (
                       <span
                         className="font-normal text-muted"
@@ -85,7 +88,7 @@ function GroupTable({
                       factorInput(g.average)
                     )}
                   </td>
-                  <td className="py-1 pl-2 text-right text-muted">
+                  <td className="px-3 py-1.5 text-right whitespace-nowrap text-muted">
                     {g.n < 2 ? "—" : `${factorInput(g.low)}–${factorInput(g.high)}`}
                   </td>
                 </tr>
@@ -97,7 +100,7 @@ function GroupTable({
       {groups.length > SHOWN ? (
         <button
           type="button"
-          className="mt-1 text-xs font-medium text-accent hover:underline"
+          className="mt-1.5 text-xs font-medium text-accent hover:underline"
           onClick={() => setAll((v) => !v)}
         >
           {all ? "Show fewer" : `Show all ${groups.length}`}
@@ -109,8 +112,8 @@ function GroupTable({
 
 function LossGapPanel({ loss, hasOffers }: { loss: LossGap; hasOffers: boolean }) {
   return (
-    <div className="rounded-xl border border-border p-3">
-      <h3 className="text-sm font-semibold">Deals you lost: how far off was your price?</h3>
+    <div className="rounded-lg border border-border bg-surface-3 p-3.5">
+      <h3 className="text-[13px] font-semibold">Deals you lost: how far off was your price?</h3>
       {loss.deals.length === 0 ? (
         <p className="mt-1 text-sm text-muted">
           No lost deal has a competing offer logged yet. When you move a deal to Lost, enter what
@@ -148,11 +151,11 @@ function LossGapPanel({ loss, hasOffers }: { loss: LossGap; hasOffers: boolean }
             {loss.deals.map((d) => (
               <li
                 key={d.clientId}
-                className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5 py-1.5"
+                className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5 py-2"
               >
                 <Link
                   href={`/clients/${d.clientId}`}
-                  className="font-medium hover:text-accent hover:underline"
+                  className="truncate font-medium hover:underline"
                 >
                   {d.businessName}
                 </Link>
@@ -214,7 +217,7 @@ export function PriceBook({
   }
 
   return (
-    <Card className="space-y-4 p-4">
+    <Card className="min-w-0 space-y-4 p-4">
       <SectionTitle>Price book</SectionTitle>
       {observations.length === 0 ? (
         <EmptyState title="No prices to learn from yet">
@@ -224,7 +227,7 @@ export function PriceBook({
       ) : (
         <>
           <div
-            className="flex flex-wrap items-center gap-2"
+            className="flex flex-wrap items-center gap-1.5"
             role="group"
             aria-label="Prices to include"
           >
@@ -235,11 +238,9 @@ export function PriceBook({
                 aria-pressed={on.has(s)}
                 disabled={counts[s] === 0}
                 onClick={() => toggle(s)}
-                className={cn(
-                  "rounded-lg border px-2.5 py-1 text-sm font-medium disabled:opacity-50",
-                  on.has(s) && counts[s] !== 0
-                    ? "border-accent bg-accent-soft text-accent"
-                    : "border-border bg-surface text-muted hover:bg-surface-2",
+                className={chipClass(
+                  on.has(s) && counts[s] !== 0,
+                  "disabled:cursor-not-allowed disabled:opacity-50",
                 )}
               >
                 {SOURCE_LABELS[s]} ({counts[s]})
@@ -260,7 +261,7 @@ export function PriceBook({
               </span>
             )}
           </p>
-          <div className="grid gap-5 lg:grid-cols-3">
+          <div className="grid min-w-0 gap-5 lg:grid-cols-3">
             <GroupTable
               title="By position"
               groups={byPosition}

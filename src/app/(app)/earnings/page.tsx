@@ -1,5 +1,4 @@
 import Image from "next/image";
-import Link from "next/link";
 import { MonthChart } from "@/components/earnings/MonthChart";
 import { MonthTable } from "@/components/earnings/MonthTable";
 import {
@@ -9,7 +8,8 @@ import {
 } from "@/components/earnings/ExpectedLists";
 import { PriceBook } from "@/components/earnings/PriceBook";
 import { Tile } from "@/components/earnings/bits";
-import { buttonClass, Card, EmptyState, SectionTitle } from "@/components/ui";
+import { PageHeader } from "@/components/settings/primitives";
+import { Card, EmptyState, LinkButton, SectionTitle } from "@/components/ui";
 import { requireSession } from "@/lib/auth/server";
 import { userContext } from "@/lib/data/queries";
 import { db } from "@/lib/db";
@@ -43,19 +43,26 @@ export default async function EarningsPage() {
       commission on a funded advance (Update on its Funding card).
     </>
   );
+  const deliPct = Math.min(100, Math.max(0, (summary.thisMonthCents / DELI_MONTH_CENTS) * 100));
 
   return (
     <div className="space-y-6">
+      <PageHeader
+        title="Earnings"
+        context="What you have earned in commission, and what is on its way."
+        actions={<LinkButton href="/renewals">Renewal radar →</LinkButton>}
+      />
+
       <Card className="flex items-center gap-4 p-4">
         <Image
           src="/deli-guys.png"
           alt="Two deli guys holding a loaded sandwich"
           width={474}
           height={842}
-          className="h-32 w-auto shrink-0 rounded-lg object-cover"
+          className="h-20 w-auto shrink-0 rounded-lg object-cover sm:h-24"
         />
         <div className="min-w-0 flex-1">
-          <p className="font-semibold">Deli guys make $4k a month. Goal: beat that.</p>
+          <p className="text-sm font-semibold">Deli guys make $4k a month. Goal: beat that.</p>
           <div
             className="mt-2 h-2 overflow-hidden rounded-full bg-surface-2"
             role="progressbar"
@@ -65,13 +72,13 @@ export default async function EarningsPage() {
             aria-valuenow={Math.min(summary.thisMonthCents, DELI_MONTH_CENTS)}
           >
             <div
-              className="h-full rounded-full bg-accent"
-              style={{
-                width: `${Math.min(100, Math.max(0, (summary.thisMonthCents / DELI_MONTH_CENTS) * 100))}%`,
-              }}
+              className={
+                deliPct >= 100 ? "h-full rounded-full bg-good" : "h-full rounded-full bg-accent"
+              }
+              style={{ width: `${deliPct}%` }}
             />
           </div>
-          <p className="mt-1 text-xs text-muted">
+          <p className="mt-1.5 text-xs text-muted tabular-nums">
             {summary.thisMonthCents >= DELI_MONTH_CENTS
               ? `${formatMoney(summary.thisMonthCents)} this month. Deli guy beaten.`
               : `${formatMoney(summary.thisMonthCents)} of ${formatMoney(DELI_MONTH_CENTS)} this month`}
@@ -79,23 +86,11 @@ export default async function EarningsPage() {
         </div>
       </Card>
 
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">Earnings</h1>
-          <p className="text-sm text-muted">
-            What you have earned in commission, and what is on its way.
-          </p>
-        </div>
-        <Link href="/renewals" className={buttonClass("secondary", "md")}>
-          Renewal radar →
-        </Link>
-      </div>
-
-      <section aria-labelledby="received" className="space-y-2">
+      <section aria-labelledby="received" className="space-y-3">
         <SectionTitle>
           <span id="received">Received</span>
         </SectionTitle>
-        <div className="grid gap-3 sm:grid-cols-3">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
           <Tile
             label="This month"
             value={formatMoney(summary.thisMonthCents)}
@@ -131,11 +126,11 @@ export default async function EarningsPage() {
         ) : null}
       </section>
 
-      <section aria-labelledby="expected" className="space-y-2">
+      <section aria-labelledby="expected" className="space-y-3">
         <SectionTitle>
           <span id="expected">Expected</span>
         </SectionTitle>
-        <div className="grid gap-3 sm:grid-cols-3">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
           <Tile
             label="Funded, not yet received"
             value={formatMoney(v.awaiting.totalCents)}
@@ -172,13 +167,13 @@ export default async function EarningsPage() {
         </div>
       </section>
 
-      <Card className="p-4">
+      <Card className="min-w-0 p-4">
         <SectionTitle
-          aside={<span className="text-sm text-muted">Last 12 months · commission received</span>}
+          aside={<span className="text-xs text-muted">Last 12 months · commission received</span>}
         >
           Month by month
         </SectionTitle>
-        <div className="mt-3 grid gap-6 lg:grid-cols-2">
+        <div className="mt-3 grid min-w-0 gap-6 lg:grid-cols-2">
           <div className="min-w-0">
             {summary.entries === 0 ? (
               <EmptyState title="Nothing to chart yet">
@@ -192,7 +187,7 @@ export default async function EarningsPage() {
         </div>
       </Card>
 
-      <div className="grid gap-4 xl:grid-cols-2">
+      <div className="grid min-w-0 gap-6 xl:grid-cols-2">
         <AwaitingList awaiting={v.awaiting} today={ctx.today} average={average} />
         <PipelineList pipeline={v.pipeline} average={average} />
       </div>

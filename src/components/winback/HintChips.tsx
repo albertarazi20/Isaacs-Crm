@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import type { ISODate } from "@/lib/mca/dates";
 import { noteHints } from "@/lib/mca/notehints";
 import type { StageKey } from "@/lib/mca/stages";
+import { ICON, Icon } from "../settings/primitives";
 import { Badge, cn } from "../ui";
 
 /**
@@ -38,7 +39,12 @@ export function HintChips({
   return (
     <div className="space-y-1.5" role="group" aria-label="Suggested follow-up dates">
       <div className="flex flex-wrap items-center gap-1.5">
-        {hints.hot ? <Badge tone="warn">🔥 Sounds hot</Badge> : null}
+        {hints.hot ? (
+          <Badge tone="warn">
+            <Icon d={ICON.flame} className="size-3.5" />
+            Sounds hot
+          </Badge>
+        ) : null}
         {hints.suggestions.length > 0 ? (
           <span className="text-xs text-muted">{heading}</span>
         ) : null}
@@ -58,14 +64,14 @@ export function HintChips({
                 void onPick(s.dueOn);
               }}
               className={cn(
-                "h-8 rounded-full border px-3 text-sm font-medium transition disabled:opacity-60",
+                "inline-flex h-9 items-center gap-1 rounded-full border px-3 text-[13px] font-medium transition disabled:opacity-60 sm:h-8",
                 picked
-                  ? "border-good bg-good-soft text-good"
-                  : "border-accent/50 bg-accent-soft text-accent hover:bg-accent hover:text-accent-fg",
+                  ? "border-good/40 bg-good-soft text-good"
+                  : "border-accent/30 bg-accent-soft text-accent hover:border-accent/60",
               )}
             >
               {s.label}
-              {picked ? " ✓" : ""}
+              {picked ? <Icon d={ICON.check} className="size-3.5" /> : null}
             </button>
           );
         })}

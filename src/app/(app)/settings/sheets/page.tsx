@@ -1,4 +1,4 @@
-import { SettingsNav } from "@/components/settings/SettingsNav";
+import { SettingsHeader } from "@/components/settings/SettingsNav";
 import { SheetsPanel } from "@/components/settings/SheetsPanel";
 import { requireSession } from "@/lib/auth/server";
 import { CAN } from "@/lib/auth/roles";
@@ -19,9 +19,8 @@ export default async function SheetsSettingsPage() {
     .then((g) => g.canReadSheets)
     .catch(() => false);
   return (
-    <div className="mx-auto max-w-5xl space-y-5">
-      <h1 className="text-2xl font-bold tracking-tight">Settings</h1>
-      <SettingsNav role={session.role} current="/settings/sheets" />
+    <div className="mx-auto max-w-3xl space-y-5">
+      <SettingsHeader role={session.role} current="/settings/sheets" />
       <p className="text-sm text-muted">
         Each rep&apos;s lead sheet syncs into the CRM every day (and on demand). The intake form
         looks leads up by phone from these rows; auto-file puts new rows straight into a bucket with
