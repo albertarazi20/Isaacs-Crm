@@ -1,6 +1,7 @@
 import { formatDate } from "@/lib/format";
 import type { TimelineEvent, TimelineKind } from "@/lib/deals/timeline";
 import { Badge, cn } from "@/components/ui";
+import { eventDomIds } from "@/lib/deals/timelineIds";
 import { ProposalDecision } from "./ProposalDecision";
 
 type Tone = "neutral" | "good" | "warn" | "bad" | "accent" | "info";
@@ -47,13 +48,18 @@ export function ActivityFeed({
   timezone?: string;
 }) {
   if (events.length === 0) return <p className="px-4 py-4 text-sm text-muted">Nothing yet.</p>;
+  // a stable id per row: an answer's citation scrolls to it and lights it (data-cited, set by the ask box)
+  const ids = eventDomIds(events);
   return (
     <ol className="divide-y divide-border">
-      {events.map((e) => (
+      {events.map((e, i) => (
         <li
           key={`${e.ref_type}-${e.ref_id}-${e.at}`}
+          id={ids[i]}
+          tabIndex={-1}
           className={cn(
-            "grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-1 px-4 py-2.5 sm:grid-cols-[5.5rem_minmax(0,1fr)_auto] sm:px-5",
+            "grid scroll-mt-24 grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-1 px-4 py-2.5 transition sm:grid-cols-[5.5rem_minmax(0,1fr)_auto] sm:px-5",
+            "data-[cited=true]:bg-accent-soft data-[cited=true]:ring-2 data-[cited=true]:ring-accent/50 data-[cited=true]:ring-inset",
             e.needs_review && "bg-accent-soft/40",
           )}
         >

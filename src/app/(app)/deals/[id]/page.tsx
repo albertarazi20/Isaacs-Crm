@@ -3,23 +3,37 @@ import { notFound } from "next/navigation";
 import { SubmissionsCard } from "@/components/client/SubmissionsCard";
 import { CopyContact } from "@/components/CopyContact";
 import { ActivityFeed } from "@/components/deals/ActivityFeed";
+import { ApplicationCard } from "@/components/deals/ApplicationCard";
+import { AskDeal } from "@/components/deals/AskDeal";
 import { ConfirmFundingButton } from "@/components/deals/ConfirmFundingButton";
 import { DocumentsPanel } from "@/components/deals/DocumentsPanel";
 import { FundDialog, type FundLender } from "@/components/deals/FundDialog";
+import { ImportFromLender } from "@/components/deals/ImportFromLender";
 import { NoteEditor } from "@/components/deals/NoteEditor";
+import { OfferCompare } from "@/components/deals/OfferCompare";
 import { DealStatusBadge, Icon, SUB_TONE } from "@/components/deals/primitives";
+import { ReshopPanel } from "@/components/deals/ReshopPanel";
+import { StateBadgePill, StateWarnings } from "@/components/deals/StateBadge";
 import { ResubmitToOpsButton } from "@/components/deals/SubmitToOps";
 import { UploadLinkButton } from "@/components/deals/UploadLinkButton";
 import { Badge, Card, SectionTitle, buttonClass, cn } from "@/components/ui";
 import { requireSession } from "@/lib/auth/server";
 import { CAN } from "@/lib/auth/roles";
 import { getClientDetail, userContext } from "@/lib/data/queries";
+import { aiBlockedReason } from "@/lib/deals/aiStatus";
+import { loadApplicationInfo } from "@/lib/deals/application";
+import { dealOfferMath } from "@/lib/deals/compare";
+import { loadStateBadge } from "@/lib/deals/compliance";
 import { milestones, suggestNextStep, type Suggestion } from "@/lib/deals/nextStep";
 import { getDeal } from "@/lib/deals/queries";
+import { reshopCandidates } from "@/lib/deals/reshop";
 import { loadDealSnapshot } from "@/lib/deals/snapshot";
+import { missingStipLabels } from "@/lib/deals/stipLabels";
 import { listDealTimeline } from "@/lib/deals/timeline";
 import { DEAL_STATUS_LABELS } from "@/lib/deals/types";
 import { db } from "@/lib/db";
+import { applyLink } from "@/lib/docs/linkExpiry";
+import { env } from "@/lib/env";
 import { logAccess } from "@/lib/trust/queries";
 import { listLiveDocumentLinks } from "@/lib/docs/links";
 import { clientFreshness, listDocuments } from "@/lib/docs/upload";
@@ -136,17 +150,57 @@ export default async function DealPage({
         clientId: deal.client_id,
         detail: `deal D-${deal.number}`,
       });
-    const snapshot = await loadDealSnapshot(q, id, ctx.today);
+    const loaded = await loadDealSnapshot(q, id, ctx.today);
+    // a stip of kind "other" is shown by the lender's own words (stips.label), here and in the next-step line
+    const snapshot = loaded
+      ? { ...loaded, stips_missing: await missingStipLabels(q, deal.client_id) }
+      : null;
+    const stateBadge = await loadStateBadge(q, deal.state, ctx.today);
+    const wantsAi = tab === "activity" || (tab === "offers" && CAN.editOffers(session.role));
+    const aiBlocked = wantsAi ? await aiBlockedReason(q, Boolean(env().ANTHROPIC_API_KEY)) : null;
+    const reshop =
+      tab === "offers" && deal.outcome === "open" && deal.status === "declined_by_all"
+        ? await reshopCandidates(q, deal.client_id)
+        : null;
+    const application = tab === "documents" ? await loadApplicationInfo(q, deal.client_id) : null;
     const timeline = tab === "activity" ? await listDealTimeline(q, id) : [];
     const documents = tab === "documents" ? await listDocuments(q, deal.client_id) : [];
     const links = tab === "documents" ? await listLiveDocumentLinks(q, deal.client_id) : [];
     const fresh = await clientFreshness(q, deal.client_id, ctx.today);
     const detail = tab === "offers" ? await getClientDetail(q, deal.client_id) : null;
     const funders = await getClientFundersData(q, deal.client_id);
-    return { ctx, deal, snapshot, timeline, documents, links, fresh, detail, funders };
+    return {
+      ctx,
+      deal,
+      snapshot,
+      timeline,
+      documents,
+      links,
+      fresh,
+      detail,
+      funders,
+      stateBadge,
+      aiBlocked,
+      reshop,
+      application,
+    };
   });
   if (!data || !data.snapshot) notFound();
-  const { ctx, deal, snapshot, timeline, documents, links, fresh, detail, funders } = data;
+  const {
+    ctx,
+    deal,
+    snapshot,
+    timeline,
+    documents,
+    links,
+    fresh,
+    detail,
+    funders,
+    stateBadge,
+    aiBlocked,
+    reshop,
+    application,
+  } = data;
   const canSubmitToOps = CAN.workLeads(session.role);
   const next = suggestNextStep(snapshot);
   const chips = milestones(snapshot);
@@ -158,6 +212,11 @@ export default async function DealPage({
       null;
     return { funderId: s.funder_id, name: s.funder_name, status: s.status, offer: live };
   });
+  // the offers on this deal, with the maths done on the server; the lender rows a pasted page may be about
+  const offerMath = dealOfferMath(funders.submissions, funders.funders, deal.id);
+  const dealRows = funders.submissions.filter(
+    (s) => (s as { deal_id?: string | null }).deal_id === deal.id,
+  );
   const canNote = (field: "rep_note" | "manager_note" | "ops_note") =>
     field === "rep_note"
       ? CAN.workLeads(session.role)
@@ -183,6 +242,8 @@ export default async function DealPage({
               </h1>
               <p className="mt-1.5 flex flex-wrap items-center gap-x-1 gap-y-1 text-sm text-muted">
                 <DealStatusBadge status={deal.status} label={DEAL_STATUS_LABELS[deal.status]} />
+                {" · "}
+                <StateBadgePill badge={stateBadge} />
                 {" · "}
                 {deal.contact_name || "—"}
                 {deal.phone ? (
@@ -261,6 +322,7 @@ export default async function DealPage({
             ))}
           </ol>
         </div>
+        <StateWarnings badge={stateBadge} />
         <NextStep s={next} dealId={deal.id} clientId={deal.client_id} />
       </Card>
 
@@ -410,42 +472,79 @@ export default async function DealPage({
       ) : null}
 
       {tab === "documents" ? (
-        <DocumentsPanel
-          clientId={deal.client_id}
-          dealId={deal.id}
-          documents={documents}
-          freshness={fresh}
-          canDelete={manager || deal.user_id === session.userId}
-          today={ctx.today}
-          lenders={funders.submissions.map((s) => ({
-            submissionId: s.id,
-            funderId: s.funder_id,
-            name: s.funder_name,
-            status: s.status,
-          }))}
-          links={links}
-        />
+        <div className="space-y-6">
+          {application ? (
+            <ApplicationCard
+              link={applyLink(env().APP_URL, application.token)}
+              latest={
+                application.latest
+                  ? {
+                      signerName: application.latest.signer_name,
+                      signedAt: application.latest.signed_at,
+                      documentId: application.latest.document_id,
+                    }
+                  : null
+              }
+            />
+          ) : null}
+          <DocumentsPanel
+            clientId={deal.client_id}
+            dealId={deal.id}
+            documents={documents}
+            freshness={fresh}
+            canDelete={manager || deal.user_id === session.userId}
+            today={ctx.today}
+            lenders={funders.submissions.map((s) => ({
+              submissionId: s.id,
+              funderId: s.funder_id,
+              name: s.funder_name,
+              status: s.status,
+            }))}
+            links={links}
+          />
+        </div>
       ) : null}
 
       {tab === "activity" ? (
-        <Card className="p-0">
-          <ActivityFeed
-            events={timeline}
-            today={ctx.today}
-            timezone={ctx.timezone}
-            canDecide={CAN.editOffers(session.role)}
-          />
-        </Card>
+        <div className="space-y-6">
+          <AskDeal dealId={deal.id} blockedReason={aiBlocked} />
+          <Card className="p-0">
+            <ActivityFeed
+              events={timeline}
+              today={ctx.today}
+              timezone={ctx.timezone}
+              canDecide={CAN.editOffers(session.role)}
+            />
+          </Card>
+        </div>
       ) : null}
 
       {tab === "offers" && detail ? (
-        <SubmissionsCard
-          card={detail.card}
-          data={funders}
-          positions={detail.positions}
-          stips={detail.stips}
-          canSubmitToOps={canSubmitToOps}
-        />
+        <div className="space-y-6">
+          {reshop ? (
+            <ReshopPanel
+              clientId={deal.client_id}
+              dealNumber={deal.number}
+              candidates={reshop}
+              canStart={canSubmitToOps}
+            />
+          ) : null}
+          {offerMath.length > 0 ? <OfferCompare offers={offerMath} /> : null}
+          {manager ? (
+            <ImportFromLender
+              dealId={deal.id}
+              lenders={dealRows.map((s) => ({ submissionId: s.id, name: s.funder_name }))}
+              blockedReason={aiBlocked}
+            />
+          ) : null}
+          <SubmissionsCard
+            card={detail.card}
+            data={funders}
+            positions={detail.positions}
+            stips={detail.stips}
+            canSubmitToOps={canSubmitToOps}
+          />
+        </div>
       ) : null}
     </div>
   );

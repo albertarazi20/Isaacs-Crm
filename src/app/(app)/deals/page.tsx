@@ -22,6 +22,7 @@ const CHIPS: { key: DealFilter; label: string }[] = [
   { key: "kicked_back", label: "Kicked back" },
   { key: "expiring", label: "Expiring" },
   { key: "funded", label: "Funded" },
+  { key: "more_funds", label: "Eligible for more funds" },
   { key: "reshop", label: "Eligible to reshop" },
   { key: "declined", label: "Declined" },
   { key: "all", label: "Everything" },
@@ -91,10 +92,15 @@ export default async function DealsPage({
   const filter: DealFilter = f && isDealFilter(f) ? f : "live";
   const session = await requireSession();
   const manager = CAN.seeEveryone(session.role);
-  const { deals, counts } = await db.withUser(session.userId, async (q) => ({
-    deals: await listDeals(q, filter),
-    counts: await dealStatusCounts(q),
-  }));
+  const { deals, counts, moreFunds } = await db.withUser(session.userId, async (q) => {
+    // funded and paid down to the lender's renewal line (S2-16); the chip carries its count
+    const more = await listDeals(q, "more_funds");
+    return {
+      deals: filter === "more_funds" ? more : await listDeals(q, filter),
+      counts: await dealStatusCounts(q),
+      moreFunds: more.length,
+    };
+  });
   const nowMs = requestTimeMs();
   const countFor = (key: DealFilter): number | null => {
     if (key === "live")
@@ -103,6 +109,7 @@ export default async function DealsPage({
         .reduce((n, [, v]) => n + v, 0);
     if (key === "all") return Object.values(counts).reduce((n, v) => n + v, 0);
     if (key === "reshop") return counts["declined_by_all"] ?? null;
+    if (key === "more_funds") return moreFunds;
     return counts[key] ?? null;
   };
 
@@ -133,7 +140,9 @@ export default async function DealsPage({
         <EmptyState title="No deals here">
           {filter === "live"
             ? "Submit a lead to ops from the merchant page and it shows up here."
-            : "Nothing matches this filter."}
+            : filter === "more_funds"
+              ? "A funded merchant shows up here once the advance has paid down to the lender's renewal line."
+              : "Nothing matches this filter."}
         </EmptyState>
       ) : (
         <Card className="min-w-0 overflow-x-auto p-0">
