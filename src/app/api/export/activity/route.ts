@@ -1,5 +1,6 @@
-import { getSession } from "@/lib/auth/server";
+import { CAN, getSession } from "@/lib/auth/server";
 import { db } from "@/lib/db";
+import { recordExport } from "@/lib/system/notify";
 import { activityRows, ACTIVITY_HEADER, toCsv } from "@/lib/export/csv";
 import type { ActivityRow } from "@/lib/data/types";
 
@@ -7,9 +8,20 @@ export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
 /** Every note, call, text and stage move — the backup of what was said. */
-export async function GET() {
+export async function GET(req: Request) {
   const session = await getSession();
   if (!session) return new Response("Sign in first", { status: 401 });
+  // plan §14: exports are manager-only, logged, and the managers are told
+  if (!CAN.exportData(session.role))
+    return new Response("Exports are for managers", { status: 403 });
+  await recordExport(db, {
+    userId: session.userId,
+    email: session.email,
+    kind: "export",
+    detail: "the activity log (CSV)",
+    ip: req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "",
+    userAgent: req.headers.get("user-agent") ?? "",
+  });
   const { merchants, activities } = await db.withUser(session.userId, async (q) => ({
     // Every merchant, trashed ones too: this is the record of what was said, and a note with no name is useless.
     merchants: (
