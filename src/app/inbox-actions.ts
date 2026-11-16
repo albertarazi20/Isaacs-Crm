@@ -11,6 +11,7 @@ import { db } from "@/lib/db";
 import { env } from "@/lib/env";
 import { chaseLender, forwardToLender, submitToLenders } from "@/lib/inbox/submit";
 import { importPastedOffer, type PastedOfferResult } from "@/lib/inbox/paste";
+import { importOfferImage, type OfferImageResult } from "@/lib/inbox/pasteImage";
 import { listProposed } from "@/lib/inbox/process";
 import { sendEmailAsUser } from "@/lib/system/gmail";
 
@@ -185,6 +186,33 @@ export async function forwardDocumentsAction(
     );
     revalidatePath("/", "layout");
     return { ok: true, data: { links: r.links } };
+  } catch (e) {
+    return { ok: false, error: toActionError(e) };
+  }
+}
+
+/** A manager drops a screenshot of a lender's portal page; it is transcribed, read, and lands in the Review tray. */
+export async function importOfferImageAction(
+  form: FormData,
+): Promise<ActionResult<OfferImageResult>> {
+  const session = await requireSession();
+  try {
+    if (!CAN.editOffers(session.role))
+      throw new UserError("Only a manager can import a screenshot");
+    const meta = z.object({ dealId: id, submissionId: id.nullable().default(null) }).parse({
+      dealId: form.get("dealId"),
+      submissionId: form.get("submissionId") || null,
+    });
+    const file = form.get("file");
+    if (!(file instanceof File)) throw new UserError("Attach the screenshot first");
+    const bytes = new Uint8Array(await file.arrayBuffer());
+    const data = await importOfferImage({
+      db,
+      userId: session.userId,
+      input: { ...meta, bytes, mediaType: file.type, filename: file.name },
+    });
+    revalidatePath("/", "layout");
+    return { ok: true, data };
   } catch (e) {
     return { ok: false, error: toActionError(e) };
   }

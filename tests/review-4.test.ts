@@ -386,6 +386,7 @@ describe("C-6: an older backup still restores after a new column with a default"
       // export one person can keep; the shop's full state is the database backup (Supabase daily + pg_dump).
       "access_log",
       "user_alerts", // 0500: the alert feed, system state
+      "applications", // 0530: the signed application record; the PDF itself is in documents
       "ai_runs",
       "app_state_tz",
       "area_code_tz",

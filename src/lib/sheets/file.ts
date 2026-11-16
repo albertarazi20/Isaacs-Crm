@@ -1,3 +1,4 @@
+import { applyLink } from "../docs/linkExpiry";
 import type { Db, DbAccess } from "../db";
 import { toActionError } from "../data/errors";
 import { createClient, stampClientTimezone } from "../data/mutations";
@@ -310,10 +311,11 @@ export async function sendWelcome(
     business_name: string;
     sender_name: string;
     application_link: string;
+    application_token: string;
     signature: string;
     token: string;
   }>(
-    `select t.id as template_id, t.subject, t.body, c.contact_name, c.business_name, u.name as sender_name, u.application_link, u.signature, c.unsubscribe_token as token
+    `select t.id as template_id, t.subject, t.body, c.contact_name, c.business_name, u.name as sender_name, u.application_link, c.application_token, u.signature, c.unsubscribe_token as token
        from bucket_steps s join templates t on t.id = s.template_id
        join clients c on c.id = $1 join app_users u on u.id = c.user_id
       where s.bucket_id = $2 and s.action = 'email' and app.template_may_auto_send(t.id)
@@ -326,7 +328,7 @@ export async function sendWelcome(
     contactName: r.contact_name,
     businessName: r.business_name,
     senderName: r.sender_name,
-    applicationLink: r.application_link,
+    applicationLink: r.application_link || applyLink(appUrl, r.application_token),
     wantedAmountCents: null,
     bestOffer: null,
     uploadLink: `${appUrl}/upload/${r.token}`,

@@ -4,6 +4,7 @@
  * cap, the suppression list, opt-out and the send window all apply), stamps the funding so each goes once, and tells
  * the rep when the merchant becomes eligible. start_renewal (SQL) opens the pre-filled deal from the funding.
  */
+import { applyLink } from "../docs/linkExpiry";
 import type { Db, DbAccess } from "../db";
 import { todayIn } from "../mca/dates";
 import { effectiveSignature, mergeValues, resolveMergeFields } from "../messaging/merge";
@@ -33,6 +34,7 @@ interface DueRow {
   business_name: string;
   sender_name: string;
   application_link: string;
+  application_token: string;
   signature: string;
   token: string;
   open_deal: boolean;
@@ -67,7 +69,7 @@ export async function runRenewals(args: {
           `select f.id, f.user_id, f.client_id, f.funder_name, f.amount_cents, f.renewal_warm_on::text as renewal_warm_on,
                   f.renewal_eligible_on::text as renewal_eligible_on, f.renewal_warm_sent_at, f.renewal_eligible_sent_at,
                   app.client_timezone(c) as timezone, c.contact_name, c.business_name,
-                  u.name as sender_name, u.application_link, u.signature, c.upload_token as token,
+                  u.name as sender_name, u.application_link, c.application_token, u.signature, c.upload_token as token,
                   exists (select 1 from deals d where d.client_id = c.id and d.outcome = 'open') as open_deal
              from fundings f join clients c on c.id = f.client_id join app_users u on u.id = f.user_id
             where f.status = 'active' and f.confirmed_at is not null
@@ -90,7 +92,7 @@ export async function runRenewals(args: {
         contactName: f.contact_name,
         businessName: f.business_name,
         senderName: f.sender_name,
-        applicationLink: f.application_link,
+        applicationLink: f.application_link || applyLink(args.appUrl, f.application_token),
         wantedAmountCents: null,
         bestOffer: null,
         uploadLink: `${args.appUrl}/upload/${f.token}`,

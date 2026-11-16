@@ -1,3 +1,4 @@
+import { applyLink } from "../docs/linkExpiry";
 import type { Db, DbAccess } from "../db";
 import { addDays, todayIn, type ISODate } from "../mca/dates";
 import { effectiveSignature, mergeValues, resolveMergeFields } from "../messaging/merge";
@@ -36,6 +37,7 @@ interface DueRow {
   email: string;
   sender_name: string;
   application_link: string;
+  application_token: string;
   signature: string;
   wanted_amount_cents: number | null;
   upload_token: string;
@@ -125,7 +127,7 @@ export async function runBucketSteps(args: {
     const { rows } = await q.query<DueRow>(
       `select e.id as enrollment_id, e.user_id, e.client_id, e.bucket_id, b.name as bucket_name, e.next_step, e.steps_sent,
               app.client_timezone(c) as timezone, c.contact_name, c.business_name, c.email,
-              u.name as sender_name, u.application_link, u.signature,
+              u.name as sender_name, u.application_link, c.application_token, u.signature,
               (select wanted_amount_cents from client_asks k where k.client_id = c.id order by created_at desc limit 1) as wanted_amount_cents,
               c.upload_token
          from enrollments e
@@ -220,7 +222,7 @@ export async function runBucketSteps(args: {
         contactName: row.contact_name,
         businessName: row.business_name,
         senderName: row.sender_name,
-        applicationLink: row.application_link,
+        applicationLink: row.application_link || applyLink(args.appUrl, row.application_token),
         wantedAmountCents: row.wanted_amount_cents,
         bestOffer: null,
         uploadLink: `${args.appUrl}/upload/${row.upload_token}`,
@@ -302,7 +304,7 @@ export async function queueBlast(
     const row = (
       await q.query<DueRow>(
         `select c.id as client_id, c.user_id, c.contact_name, c.business_name, c.email, c.upload_token,
-                u.name as sender_name, u.application_link, u.signature,
+                u.name as sender_name, u.application_link, c.application_token, u.signature,
                 (select wanted_amount_cents from client_asks k where k.client_id = c.id order by created_at desc limit 1) as wanted_amount_cents,
                 '' as enrollment_id, '' as bucket_id, '' as bucket_name, 0 as next_step, 0 as steps_sent, app.client_timezone(c) as timezone
            from clients c join app_users u on u.id = c.user_id where c.id = $1`,
@@ -317,7 +319,7 @@ export async function queueBlast(
       contactName: row.contact_name,
       businessName: row.business_name,
       senderName: row.sender_name,
-      applicationLink: row.application_link,
+      applicationLink: row.application_link || applyLink(args.appUrl, row.application_token),
       wantedAmountCents: row.wanted_amount_cents,
       bestOffer: null,
       uploadLink: `${args.appUrl}/upload/${row.upload_token}`,
