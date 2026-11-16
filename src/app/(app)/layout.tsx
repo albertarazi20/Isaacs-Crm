@@ -11,6 +11,7 @@ import { MobileTabBar } from "@/components/power/MobileTabBar";
 import { QuickAdd } from "@/components/QuickAdd";
 import { ReminderWatcher } from "@/components/ReminderWatcher";
 import { requireSession } from "@/lib/auth/server";
+import { navFor } from "@/lib/nav";
 import { loadShell } from "@/lib/data/shell";
 import { requestTimeMs } from "@/lib/server-time";
 import { gmailStatus } from "@/lib/system/gmail";
@@ -18,18 +19,7 @@ import { reminderStatus } from "@/lib/system/heartbeat";
 
 export const dynamic = "force-dynamic";
 
-const NAV = [
-  { href: "/", label: "Today" },
-  { href: "/board", label: "Board" },
-  { href: "/clients", label: "Clients" },
-  { href: "/renewals", label: "Renewals" },
-  { href: "/winback", label: "Win-back" },
-  { href: "/funders", label: "Funders" },
-  { href: "/earnings", label: "Earnings" },
-  { href: "/reports", label: "Reports" },
-  { href: "/long-game", label: "Long game" },
-  { href: "/settings", label: "Settings" },
-];
+// the main nav depends on the role: ops see the Submission Board, reps their deals and buckets, managers everything
 
 /** "(12) Selective CRM" in the tab. Set here, on the server, because Next re-applies page metadata after hydration. */
 export async function generateMetadata(): Promise<Metadata> {
@@ -75,12 +65,12 @@ export default async function AppLayout({ children }: { children: React.ReactNod
                 aria-hidden
                 className="grid size-7 place-items-center rounded-lg bg-gradient-to-br from-indigo-500 to-violet-700 text-sm font-extrabold text-white shadow-sm shadow-indigo-500/30"
               >
-                I
+                S
               </span>
               Selective CRM
             </span>
             <nav aria-label="Main" className="hidden flex-1 gap-1 overflow-x-auto sm:flex">
-              {NAV.map((n) => (
+              {navFor(session.role).map((n) => (
                 <NavLink key={n.href} href={n.href} badge={n.href === "/" ? me.due : undefined}>
                   {n.label}
                 </NavLink>
@@ -117,7 +107,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         ) : null}
         {/* pb-24 on a phone keeps the last card clear of the fixed tab bar */}
         <main className="mx-auto max-w-[1600px] px-4 py-5 pb-24 sm:pb-5">{children}</main>
-        <MobileTabBar due={me.due} email={me.user.email} />
+        <MobileTabBar due={me.due} email={me.user.email} role={session.role} />
         <PendingTouchPrompt />
         <HotImport />
       </ToastProvider>

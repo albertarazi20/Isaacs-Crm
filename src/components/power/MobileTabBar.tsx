@@ -5,12 +5,8 @@ import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { LogoutButton } from "../LogoutButton";
 import { cn } from "../ui";
-
-interface Tab {
-  href: string;
-  label: string;
-  icon: ReactNode;
-}
+import type { Role } from "@/lib/auth/roles";
+import { phoneTabsFor } from "@/lib/nav";
 
 const svg = (d: string) => (
   <svg
@@ -27,35 +23,16 @@ const svg = (d: string) => (
   </svg>
 );
 
-const TABS: Tab[] = [
-  { href: "/", label: "Today", icon: svg("M4 5h16v15H4zM4 10h16M9 3v4M15 3v4") },
-  { href: "/board", label: "Board", icon: svg("M4 4h5v16H4zM10 4h5v10h-5zM16 4h4v13h-4z") },
-  {
-    href: "/clients",
-    label: "Clients",
-    icon: svg(
-      "M16 20v-1a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v1M10 11a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7z",
-    ),
-  },
-  {
-    href: "/renewals",
-    label: "Renewals",
-    icon: svg("M20 11a8 8 0 1 0-2.3 5.7M20 4v7h-7"),
-  },
-];
-
-const MORE_LINKS = [
-  { href: "/dial", label: "Power dial" },
-  { href: "/winback", label: "Win-back" },
-  { href: "/funders", label: "Funders" },
-  { href: "/earnings", label: "Earnings" },
-  { href: "/reports", label: "Reports" },
-  { href: "/long-game", label: "Long game" },
-  { href: "/lead-intake", label: "Lead intake" },
-  { href: "/import", label: "Import" },
-  { href: "/trash", label: "Trash" },
-  { href: "/settings", label: "Settings" },
-];
+const ICONS: Record<string, ReactNode> = {
+  "/": svg("M4 5h16v15H4zM4 10h16M9 3v4M15 3v4"),
+  "/lead-intake": svg("M12 5v14M5 12h14"),
+  "/follow-up": svg("M4 6h16M4 12h10M4 18h7M18 15l3 3-3 3"),
+  "/board": svg("M4 4h5v16H4zM10 4h5v10h-5zM16 4h4v13h-4z"),
+  "/deals": svg("M3 7h18v12H3zM3 11h18M8 7V5h8v2"),
+  "/winback": svg("M20 11a8 8 0 1 0-2.3 5.7M20 4v7h-7"),
+  "/funded": svg("M12 3v18M7 8h7a3 3 0 0 1 0 6H8a3 3 0 0 0 0 6h8"),
+};
+const fallbackIcon = svg("M4 6h16M4 12h16M4 18h16");
 
 const tabClass = (active: boolean) =>
   cn(
@@ -67,12 +44,13 @@ const tabClass = (active: boolean) =>
  * Phone navigation (under 640px): Today, Board, Clients, Renewals and a More sheet, fixed to the bottom with
  * the safe-area inset. The top links are hidden at this width. Hidden in power-dial mode, which is full screen.
  */
-export function MobileTabBar({ due, email }: { due: number; email: string }) {
+export function MobileTabBar({ due, email, role }: { due: number; email: string; role: Role }) {
   const path = usePathname();
+  const { tabs, more } = phoneTabsFor(role);
   const [moreOpen, setMoreOpen] = useState(false);
   if (path === "/dial") return null;
   const isActive = (href: string) => (href === "/" ? path === "/" : path.startsWith(href));
-  const moreActive = MORE_LINKS.some((l) => isActive(l.href));
+  const moreActive = more.some((l) => isActive(l.href));
 
   return (
     <>
@@ -81,7 +59,7 @@ export function MobileTabBar({ due, email }: { due: number; email: string }) {
         className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-surface/95 pb-[env(safe-area-inset-bottom)] backdrop-blur sm:hidden"
       >
         <ul className="mx-auto flex max-w-xl">
-          {TABS.map((t) => (
+          {tabs.map((t) => (
             <li key={t.href} className="flex flex-1">
               <Link
                 href={t.href}
@@ -89,7 +67,7 @@ export function MobileTabBar({ due, email }: { due: number; email: string }) {
                 className={tabClass(isActive(t.href))}
               >
                 <span className="relative">
-                  {t.icon}
+                  {ICONS[t.href] ?? fallbackIcon}
                   {t.href === "/" && due > 0 ? (
                     <span
                       className="absolute -top-1.5 left-3.5 min-w-5 rounded-full bg-bad px-1 text-center text-[11px] leading-5 font-bold text-white tabular-nums"
@@ -99,7 +77,7 @@ export function MobileTabBar({ due, email }: { due: number; email: string }) {
                     </span>
                   ) : null}
                 </span>
-                {t.label}
+                {t.short ?? t.label}
               </Link>
             </li>
           ))}
@@ -117,7 +95,7 @@ export function MobileTabBar({ due, email }: { due: number; email: string }) {
           </li>
         </ul>
       </nav>
-      <MoreSheet open={moreOpen} onClose={() => setMoreOpen(false)} email={email} />
+      <MoreSheet open={moreOpen} onClose={() => setMoreOpen(false)} email={email} links={more} />
     </>
   );
 }
@@ -126,10 +104,12 @@ function MoreSheet({
   open,
   onClose,
   email,
+  links,
 }: {
   open: boolean;
   onClose: () => void;
   email: string;
+  links: { href: string; label: string }[];
 }) {
   const ref = useRef<HTMLDialogElement>(null);
   const path = usePathname();
@@ -153,7 +133,7 @@ function MoreSheet({
         <div className="p-2">
           <div className="mx-auto my-1 h-1 w-10 rounded-full bg-border" aria-hidden />
           <ul>
-            {MORE_LINKS.map((l) => (
+            {links.map((l) => (
               <li key={l.href}>
                 <Link
                   href={l.href}
