@@ -22,16 +22,14 @@ export const ALERT_KIND_LABELS: Record<string, string> = {
   stale_deal: "Sitting too long",
   behind_pace: "Pace",
   kickback: "Kicked back",
-  payout_late: "Lender payout late",
-  registration_renewal: "Registration",
-  copy_burst: "Copies",
-  after_hours_copy: "After hours",
-  others_lead_copy: "Not their lead",
-  canary_touched: "Canary",
+  late_payout: "Lender payout late",
+  registration: "Registration",
+  trust: "Trust check",
   application_signed: "Application signed",
   renewal_eligible: "Renewal",
   ask_manager: "Question for you",
   template_paused: "Template paused",
+  bounce_spike: "Bounce spike",
 };
 
 export async function listAlerts(q: Db, limit = 100): Promise<AlertFeedRow[]> {

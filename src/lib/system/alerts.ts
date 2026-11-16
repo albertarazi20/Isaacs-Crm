@@ -129,8 +129,8 @@ export async function generateRegistrationRenewals(q: Db): Promise<number> {
 export async function generateLatePayouts(q: Db): Promise<number> {
   const { rows } = await q.query<{ n: number }>(
     `select coalesce(sum(x.n), 0)::int as n from (
-       select (app.alert(f.user_id, 'late_payout', f.client_id, f.deal_id, t.title, t.body, '/money', 'late_payout:' || f.id))::int
-              + app.alert_managers('late_payout', f.client_id, f.deal_id, t.title, t.body, '/money', 'late_payout:' || f.id) as n
+       select (app.alert(f.user_id, 'late_payout', f.client_id, f.deal_id, t.title, t.body, '/funded', 'late_payout:' || f.id))::int
+              + app.alert_managers('late_payout', f.client_id, f.deal_id, t.title, t.body, '/funded', 'late_payout:' || f.id) as n
          from fundings f join clients c on c.id = f.client_id
          cross join lateral (select
             coalesce(nullif(f.funder_name, ''), 'The lender') || ' is late paying commission on ' || c.business_name as title,

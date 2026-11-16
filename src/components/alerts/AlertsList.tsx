@@ -25,17 +25,15 @@ const TONE: Record<string, "good" | "warn" | "bad" | "accent" | "info" | "neutra
   application_signed: "good",
   renewal_eligible: "good",
   kickback: "bad",
+  trust: "bad",
   stale_deal: "warn",
   behind_pace: "warn",
-  payout_late: "warn",
-  registration_renewal: "warn",
-  copy_burst: "bad",
-  after_hours_copy: "bad",
-  others_lead_copy: "bad",
-  canary_touched: "bad",
+  late_payout: "warn",
+  registration: "warn",
+  template_paused: "warn",
+  bounce_spike: "warn",
   chase_draft: "info",
   ask_manager: "accent",
-  template_paused: "warn",
 };
 
 export function AlertsList({ rows, timezone }: { rows: AlertFeedRow[]; timezone: string }) {
