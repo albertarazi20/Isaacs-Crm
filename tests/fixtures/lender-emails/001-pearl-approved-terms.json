@@ -1,0 +1,23 @@
+{
+  "name": "approval with full terms",
+  "source": "synthetic",
+  "input": {
+    "from": "uw@pearlcapital.com",
+    "subject": "Approval - Mike's Pizza",
+    "text": "Good news. Mike's Pizza is approved for $45,000 at a 1.35 factor, 120 day term, $506.25 daily. Payback $60,750. Need voided check and DL.",
+    "attachmentNames": []
+  },
+  "expected": {
+    "event": "approved",
+    "offer": {
+      "amount_dollars": 45000,
+      "factor_rate": 1.35,
+      "term_days": 120,
+      "payment_dollars": 506.25,
+      "frequency": "daily"
+    },
+    "offers_count": 1,
+    "portal_link_only": false,
+    "stips_requested_includes": ["voided check", "dl"]
+  }
+}

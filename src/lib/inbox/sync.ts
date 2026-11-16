@@ -43,6 +43,31 @@ export function productionMailTokenFor(): TokenFor {
   return (userId) => googleAccessTokenFor(userId, "mail");
 }
 
+export interface MailboxSyncRow {
+  user_id: string;
+  name: string;
+  email: string;
+  google_email: string;
+  can_read_mail: boolean;
+  connection_status: string;
+  last_synced_at: string | null;
+  last_error: string | null;
+  messages_seen: number;
+  /** A Gmail history cursor is on file: the next sync is incremental, not a search. */
+  has_cursor: boolean;
+}
+
+/**
+ * Last synced per mailbox, for the Settings page (S2-18): a person's own mailbox, every mailbox for a manager. The
+ * connection row holds the refresh token, so the read goes through mailbox_sync_status() (0515), which never returns it.
+ */
+export async function mailboxSyncStatus(q: Db): Promise<MailboxSyncRow[]> {
+  const { rows } = await q.query<MailboxSyncRow>(
+    "select user_id, name, email, google_email, can_read_mail, connection_status, last_synced_at::text as last_synced_at, last_error, messages_seen, has_cursor from mailbox_sync_status()",
+  );
+  return rows;
+}
+
 export async function loadCandidates(q: Db): Promise<Candidate[]> {
   const { rows } = await q.query<Candidate>(
     `select s.id as "submissionId", d.id as "dealId", c.id as "clientId", f.id as "funderId",

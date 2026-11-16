@@ -146,7 +146,9 @@ export interface DealCard extends DealRow {
   funded_cents: number | null;
   commission_cents: number | null;
   last_activity_at: string | null;
+  /** A funded deal paid down to the lender's renewal line: the merchant can take more money (S2-16). */
+  eligible_for_more_funds: boolean;
 }
 
 export type DealFilter =
-  "all" | "mine" | "live" | DealStatus | "expiring" | "no_response_24h" | "reshop";
+  "all" | "mine" | "live" | DealStatus | "expiring" | "no_response_24h" | "reshop" | "more_funds";

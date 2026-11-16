@@ -24,7 +24,9 @@ const CARD_SELECT = `
     'approval_expires_on', (select min(s.approval_expires_on) from submissions s where s.deal_id = d.id and s.status in ('approved','revised')),
     'funded_cents', (select f.amount_cents from fundings f where f.deal_id = d.id order by f.funded_on desc limit 1),
     'commission_cents', (select f.commission_cents from fundings f where f.deal_id = d.id order by f.funded_on desc limit 1),
-    'last_activity_at', (select max(a.occurred_at) from activities a where a.client_id = d.client_id)
+    'last_activity_at', (select max(a.occurred_at) from activities a where a.client_id = d.client_id),
+    'eligible_for_more_funds', exists (select 1 from fundings f where f.deal_id = d.id and f.status = 'active'
+                                          and f.renewal_eligible_on is not null and f.renewal_eligible_on <= current_date)
   ) as j
   from deals d
   join clients c on c.id = d.client_id
@@ -55,6 +57,8 @@ const FILTERS: Record<DealFilter, string> = {
   no_response_24h: `and d.outcome = 'open' and exists (select 1 from submissions s where s.deal_id = d.id
              and s.status = 'sent' and s.created_at < now() - interval '24 hours')`,
   reshop: `and d.outcome = 'open' and app.deal_status(d) = 'declined_by_all'`,
+  more_funds: `and d.outcome = 'funded' and exists (select 1 from fundings f where f.deal_id = d.id and f.status = 'active'
+             and f.renewal_eligible_on is not null and f.renewal_eligible_on <= current_date)`,
 };
 
 export function isDealFilter(v: string): v is DealFilter {

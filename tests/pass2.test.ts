@@ -201,6 +201,9 @@ describe("pass 2 regressions", () => {
 
   it("P2-40: the send dialog's path refuses a shotgun unless forced, and then writes the override on the timeline", async () => {
     const client = await insertClient(t.db, rep, "Sunset Nails");
+    // its own phone: the double-submission guard (0512) would otherwise see the helper's placeholder number on
+    // another merchant already sent to the same lender
+    await t.pool.query("update clients set phone = '3055550177' where id = $1", [client]);
     await t.db.withUser(rep, (q) =>
       q.query("select submit_to_ops($1, 'new', 2000000, 'stock')", [client]),
     );

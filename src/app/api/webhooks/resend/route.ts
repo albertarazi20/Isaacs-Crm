@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { svixHeaders, verifySvix } from "@/lib/email/svix";
 import { env } from "@/lib/env";
-import { handleResendEvent, type ResendEvent } from "@/lib/system/replies";
+import { handleResendEvent, resendInboundFetcher, type ResendEvent } from "@/lib/system/replies";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 30;
@@ -24,9 +24,13 @@ export async function POST(req: Request) {
   }
   if (!evt || typeof evt.type !== "string")
     return NextResponse.json({ error: "no type" }, { status: 400 });
-  const { result } = await handleResendEvent(db, h.id as string, {
-    ...evt,
-    data: (evt.data ?? {}) as Record<string, unknown>,
-  });
+  const apiKey = env().RESEND_API_KEY;
+  const { result } = await handleResendEvent(
+    db,
+    h.id as string,
+    { ...evt, data: (evt.data ?? {}) as Record<string, unknown> },
+    // a lender's inbound message without a body in the payload is fetched from Resend by id
+    apiKey ? { fetchInbound: resendInboundFetcher(apiKey) } : {},
+  );
   return NextResponse.json({ result });
 }

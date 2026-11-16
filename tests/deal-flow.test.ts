@@ -277,7 +277,12 @@ describe("timeline, snapshot and auto-chase", () => {
         });
         return { id: `g_${sent.length}`, threadId: m.threadId ?? "new" };
       };
-    expect(await t.db.withSystem((q) => autoChase(q, { sendFor }))).toEqual({
+    // the chase only goes out in business hours (0510 / S2-6): run it as of the next weekday morning, New York
+    const now = new Date();
+    now.setUTCHours(15, 0, 0, 0);
+    if (now < new Date()) now.setUTCDate(now.getUTCDate() + 1);
+    while ([0, 6].includes(now.getUTCDay())) now.setUTCDate(now.getUTCDate() + 1);
+    expect(await t.db.withSystem((q) => autoChase(q, { sendFor, now }))).toMatchObject({
       chased: 1,
       skipped: 0,
     });
@@ -290,7 +295,7 @@ describe("timeline, snapshot and auto-chase", () => {
     });
     expect(sent[0]).toBeDefined();
     // just chased → nothing more today
-    expect(await t.db.withSystem((q) => autoChase(q, { sendFor }))).toEqual({
+    expect(await t.db.withSystem((q) => autoChase(q, { sendFor, now }))).toMatchObject({
       chased: 0,
       skipped: 0,
     });
@@ -302,7 +307,7 @@ describe("timeline, snapshot and auto-chase", () => {
       "update submissions set last_chased_at = now() - interval '10 days' where deal_id = $1",
       [deal],
     );
-    expect(await t.db.withSystem((q) => autoChase(q, { sendFor }))).toEqual({
+    expect(await t.db.withSystem((q) => autoChase(q, { sendFor, now }))).toMatchObject({
       chased: 0,
       skipped: 0,
     });

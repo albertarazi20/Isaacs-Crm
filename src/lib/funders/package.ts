@@ -11,6 +11,10 @@ export interface PackageInput {
   senderName: string;
   /** The funder's contact, if known, for the greeting. */
   funderContact?: string;
+  /** Expiring, watermarked links to the file's documents, minted for this lender (S2-7). */
+  documents?: readonly { label: string; url: string }[];
+  /** How long the links are good for, in words ("7 days"). */
+  linksGoodFor?: string;
 }
 
 export interface SubmissionPackage {
@@ -86,6 +90,13 @@ export function buildSubmissionPackage(i: PackageInput): SubmissionPackage {
     const waiting = otherDocs.filter((s) => !s.received_at).map((s) => STIP_LABELS[s.kind]);
     if (ready.length) lines.push(`Documents attached: ${ready.join(", ")}`);
     if (waiting.length) lines.push(`Still collecting: ${waiting.join(", ")}`);
+  }
+  if (i.documents && i.documents.length > 0) {
+    lines.push("", "Documents:");
+    for (const d of i.documents) lines.push(`  ${d.label}: ${d.url}`);
+    lines.push(
+      `Each link is good for ${i.linksGoodFor ?? "7 days"} and the copies carry your name.`,
+    );
   }
   lines.push("", "Let me know what you need.", "", `Thanks,`, i.senderName.trim() || "");
   return { subject, body: lines.join("\n") };

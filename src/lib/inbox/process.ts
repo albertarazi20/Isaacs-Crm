@@ -6,11 +6,13 @@ import {
   type ReadInput,
   type ReadOutcome,
 } from "../ai/readLenderEmail";
+import { mapStipRequests } from "./stips";
 
 /**
  * Turn stored, matched lender emails into proposed updates. The reader proposes; the rules here decide:
  *   * low stakes (info/stips requested, declined with reason, docs out/in, BV, funding call, killed) apply at once
- *     when the sender passed authentication, the thread matched, confidence is high and every fact is quoted;
+ *     when the sender passed authentication (SPF and DKIM both pass; a missing result is not a pass), the thread
+ *     matched, confidence is high and every fact is quoted;
  *   * anything with money (approved / revised / funded) always waits for a manager;
  *   * anything unsupported or doubtful waits for a manager.
  * Everything is logged in ai_runs with its cost. A kill switch and a daily spend cap live in shop_settings.
@@ -70,8 +72,9 @@ export async function processInbox(args: {
           ai_daily_cap_cents: number;
           ai_auto_apply_low_stakes: boolean;
           spent: string;
+          today: string;
         }>(
-          "select ai_enabled, ai_model, ai_daily_cap_cents, ai_auto_apply_low_stakes, app.ai_spent_today_cents()::text as spent from shop_settings",
+          "select ai_enabled, ai_model, ai_daily_cap_cents, ai_auto_apply_low_stakes, app.ai_spent_today_cents()::text as spent, current_date::text as today from shop_settings",
         )
       ).rows[0],
   );
@@ -165,13 +168,19 @@ export async function processInbox(args: {
             : {}),
           decline_reason: r.decline_reason,
           stips: r.stips_requested,
+          // the lender's words → checklist rows, decided here, never by the reader (apply_proposed_update inserts them)
+          stip_rows:
+            r.event === "stip_requested" || r.event === "info_requested"
+              ? mapStipRequests(r.stips_requested, settings.today)
+              : [],
           offers_count: r.offers_count,
           portal_link_only: r.portal_link_only,
           note: r.summary,
           unsupported: out.unsupported,
           problems: out.problems,
         };
-        const authenticated = e.spf_pass !== false && e.dkim_pass !== false;
+        // no Authentication-Results header is not a pass: an unauthenticated sender only ever proposes
+        const authenticated = e.spf_pass === true && e.dkim_pass === true;
         const certain =
           e.matched_by === "thread" ||
           e.matched_by === "reply_headers" ||

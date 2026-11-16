@@ -10,6 +10,7 @@ import type { ActionResult } from "@/lib/data/types";
 import { db } from "@/lib/db";
 import { env } from "@/lib/env";
 import { chaseLender, forwardToLender, submitToLenders } from "@/lib/inbox/submit";
+import { importPastedOffer, type PastedOfferResult } from "@/lib/inbox/paste";
 import { listProposed } from "@/lib/inbox/process";
 import { sendEmailAsUser } from "@/lib/system/gmail";
 
@@ -40,7 +41,13 @@ export async function submitToLendersAction(
     const r = await db.withUser(session.userId, (q) =>
       submitToLenders(
         q,
-        { ...i, senderName: me?.name || session.email, senderEmail: me?.email ?? session.email },
+        {
+          ...i,
+          senderName: me?.name || session.email,
+          senderEmail: me?.email ?? session.email,
+          senderUserId: session.userId,
+          appUrl: env().APP_URL,
+        },
         (m) => sendEmailAsUser(session.userId, m),
       ),
     );
@@ -108,6 +115,38 @@ export async function decideProposedAction(input: unknown): Promise<ActionResult
     });
     revalidatePath("/", "layout");
     return { ok: true, data: null };
+  } catch (e) {
+    return { ok: false, error: toActionError(e) };
+  }
+}
+
+/** A manager undoes an applied AI update: the lender row goes back to what it was, with a timeline line (S2-9). */
+export async function revertAiUpdateAction(input: unknown): Promise<ActionResult<null>> {
+  const session = await requireSession();
+  try {
+    if (!CAN.editOffers(session.role)) throw new UserError("Only a manager can undo an AI update");
+    const i = z.object({ id }).parse(input);
+    await db.withUser(session.userId, (q) => q.query("select revert_ai_update($1)", [i.id]));
+    revalidatePath("/", "layout");
+    return { ok: true, data: null };
+  } catch (e) {
+    return { ok: false, error: toActionError(e) };
+  }
+}
+
+/** A manager pastes a lender's portal page or email text; the terms land in the Review tray (S2-15). */
+export async function importPastedOfferAction(
+  input: unknown,
+): Promise<ActionResult<PastedOfferResult>> {
+  const session = await requireSession();
+  try {
+    if (!CAN.editOffers(session.role)) throw new UserError("Only a manager can import pasted text");
+    const i = z
+      .object({ dealId: id, submissionId: id.nullable().default(null), text: text(20_000) })
+      .parse(input);
+    const data = await importPastedOffer({ db, userId: session.userId, input: i });
+    revalidatePath("/", "layout");
+    return { ok: true, data };
   } catch (e) {
     return { ok: false, error: toActionError(e) };
   }
