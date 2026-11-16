@@ -19,7 +19,9 @@ describe("stipDisplayLabel", () => {
     expect(stipDisplayLabel("other", null, "")).toBe("Other document");
     expect(stipDisplayLabel("other", null, "   ")).toBe("Other document");
     expect(stipDisplayLabel("tax_return", null, "something typed")).toBe("Tax return");
-    expect(stipDisplayLabel("bank_statement", "2026-10-01", "")).toBe("October 2026 bank statement");
+    expect(stipDisplayLabel("bank_statement", "2026-10-01", "")).toBe(
+      "October 2026 bank statement",
+    );
   });
 });
 
