@@ -21,5 +21,7 @@ export default async function ClientPage({ params }: { params: Promise<{ id: str
     funders: await getClientFundersData(q, id),
   }));
   if (!detail) notFound();
-  return <ClientView detail={detail} serverNow={requestTimeMs()} funders={funders} />;
+  return (
+    <ClientView detail={detail} serverNow={requestTimeMs()} funders={funders} role={session.role} />
+  );
 }

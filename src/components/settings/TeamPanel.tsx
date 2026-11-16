@@ -198,6 +198,7 @@ export function TeamPanel({
                       <span>{m.role}</span>
                     ) : (
                       <select
+                        aria-label={`Role for ${m.name || m.email}`}
                         value={m.role}
                         disabled={busy || !m.active}
                         onChange={(e) => void setMember(m, e.target.value, m.active)}
@@ -243,16 +244,27 @@ export function TeamPanel({
                     ) : null}
                   </td>
                   <td className="px-4 py-2 text-right whitespace-nowrap">
-                    {m.id !== meId && m.active ? (
+                    {m.id !== meId ? (
                       <>
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          disabled={busy}
-                          onClick={() => void setMember(m, m.role, false)}
-                        >
-                          Disable
-                        </Button>
+                        {m.active ? (
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            disabled={busy}
+                            onClick={() => void setMember(m, m.role, false)}
+                          >
+                            Disable
+                          </Button>
+                        ) : (
+                          <Button
+                            size="sm"
+                            disabled={busy}
+                            onClick={() => void setMember(m, m.role, true)}
+                          >
+                            Re-enable
+                          </Button>
+                        )}
+                        {/* a disabled account still has a book to move: Offboard stays (P2-49) */}
                         <Button
                           size="sm"
                           variant="danger"
@@ -262,14 +274,6 @@ export function TeamPanel({
                           Offboard
                         </Button>
                       </>
-                    ) : m.id !== meId && !m.active ? (
-                      <Button
-                        size="sm"
-                        disabled={busy}
-                        onClick={() => void setMember(m, m.role, true)}
-                      >
-                        Re-enable
-                      </Button>
                     ) : null}
                   </td>
                 </tr>

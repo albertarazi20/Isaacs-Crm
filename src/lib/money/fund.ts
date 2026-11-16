@@ -91,8 +91,9 @@ export async function previewFund(
         [i.funderId],
       )
     ).rows[0];
+    // the same words propose_funding refuses with, so the preview says what the button will say
     if (f?.max_upsell_points && points !== null && points > Number(f.max_upsell_points))
-      warnings.push(`${f.name} caps points at ${f.max_upsell_points}`);
+      warnings.push(`${f.name} caps points at ${f.max_upsell_points} — you entered ${points}`);
     if (f?.psf_cap_pct && psf > 0 && (psf * 100) / i.amount > Number(f.psf_cap_pct))
       warnings.push(`${f.name} caps the PSF at ${f.psf_cap_pct}% of the advance`);
   }
@@ -158,7 +159,8 @@ export async function recordCommissionPaid(
   q: Db,
   i: { fundingId: string; cents: number; on?: string; note?: string },
 ): Promise<void> {
-  await q.query("select record_commission_paid($1, $2, $3::date, $4)", [
+  // a null date would land in commission_received_on and trip fundings_commission_received_pair; blank means today
+  await q.query("select record_commission_paid($1, $2, coalesce($3::date, current_date), $4)", [
     i.fundingId,
     i.cents,
     i.on ?? null,

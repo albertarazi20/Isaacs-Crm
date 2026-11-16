@@ -7,7 +7,9 @@ import { userContext } from "@/lib/data/queries";
 import type { ActionResult, UserContext } from "@/lib/data/types";
 import { db, type Db } from "@/lib/db";
 import * as m from "@/lib/funders/mutations";
+import { listDeclineReasons } from "@/lib/funders/queries";
 import * as s from "@/lib/funders/schemas";
+import type { DeclineReasonRow } from "@/lib/funders/types";
 
 async function run<T>(fn: (q: Db, ctx: UserContext) => Promise<T>): Promise<ActionResult<T>> {
   const session = await requireSession();
@@ -42,6 +44,20 @@ export async function deleteFunderAction(input: unknown): Promise<ActionResult<n
 export async function sendToFundersAction(input: unknown): Promise<ActionResult<number>> {
   return run((q) => m.sendToFunders(q, s.sendSchema.parse(input)));
 }
+/**
+ * The `decline_reasons` table for a decline dialog that opens somewhere the server did not hand it the rows
+ * (the board's lender chip). Read-only; nothing is revalidated.
+ */
+export async function listDeclineReasonsAction(): Promise<ActionResult<DeclineReasonRow[]>> {
+  const session = await requireSession();
+  try {
+    const data = await db.withUser(session.userId, (q) => listDeclineReasons(q));
+    return { ok: true, data };
+  } catch (e) {
+    return { ok: false, error: toActionError(e) };
+  }
+}
+
 export async function setSubmissionStatusAction(input: unknown): Promise<ActionResult<null>> {
   return run((q) => nothing(m.setSubmissionStatus(q, s.statusSchema.parse(input))));
 }

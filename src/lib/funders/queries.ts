@@ -1,6 +1,12 @@
 import type { Db } from "../db";
 import { buildScoreboard, type OfferStat, type ScoreRow, type SubmissionStat } from "./scoreboard";
-import type { ClientFundersData, FunderRow, SubmissionRow } from "./types";
+import type {
+  ClientFundersData,
+  DeclineReasonRow,
+  FunderRow,
+  OpenDeal,
+  SubmissionRow,
+} from "./types";
 
 const json = async <T>(q: Db, sql: string, params: unknown[] = []): Promise<T[]> =>
   (await q.query<{ j: T }>(sql, params)).rows.map((r) => r.j);
@@ -34,11 +40,36 @@ export async function listClientSubmissions(q: Db, clientId: string): Promise<Su
   );
 }
 
-/** What the client page needs: the funder list (for the Send dialog) and this merchant's submissions. */
+/** The decline taxonomy (0300), in its own order: the pick-lists group it by category. */
+export async function listDeclineReasons(q: Db): Promise<DeclineReasonRow[]> {
+  return json<DeclineReasonRow>(
+    q,
+    "select to_jsonb(r) as j from decline_reasons r order by r.sort, r.key",
+  );
+}
+
+/** The merchant's open deal, as the Submissions card shows it (D-number, where it is with ops). */
+export async function openDealOf(q: Db, clientId: string): Promise<OpenDeal | null> {
+  const rows = await json<OpenDeal>(
+    q,
+    `select jsonb_build_object('id', d.id, 'number', d.number, 'kind', d.kind, 'ops_status', d.ops_status,
+              'kickback_reason', d.kickback_reason, 'kickback_note', d.kickback_note, 'status', app.deal_status(d)) as j
+       from deals d where d.client_id = $1 and d.outcome = 'open' order by d.created_at desc limit 1`,
+    [clientId],
+  );
+  return rows[0] ?? null;
+}
+
+/**
+ * What the client page needs: the funder list (for the Send dialog), this merchant's submissions, the decline
+ * taxonomy for the decline dialog, and the open deal (so Accept can hand off to FUND and the rep can submit to ops).
+ */
 export async function getClientFundersData(q: Db, clientId: string): Promise<ClientFundersData> {
   const funders = await listFunders(q);
   const submissions = await listClientSubmissions(q, clientId);
-  return { funders, submissions };
+  const declineReasons = await listDeclineReasons(q);
+  const deal = await openDealOf(q, clientId);
+  return { funders, submissions, declineReasons, deal };
 }
 
 /** Per-funder results across every merchant. Plain rows out of SQL; the math is buildScoreboard (pure, tested). */

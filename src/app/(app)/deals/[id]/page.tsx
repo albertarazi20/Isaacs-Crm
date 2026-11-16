@@ -6,6 +6,7 @@ import { ConfirmFundingButton } from "@/components/deals/ConfirmFundingButton";
 import { DocumentsPanel } from "@/components/deals/DocumentsPanel";
 import { FundDialog, type FundLender } from "@/components/deals/FundDialog";
 import { NoteEditor } from "@/components/deals/NoteEditor";
+import { ResubmitToOpsButton } from "@/components/deals/SubmitToOps";
 import { UploadLinkButton } from "@/components/deals/UploadLinkButton";
 import { Card, SectionTitle, cn } from "@/components/ui";
 import { requireSession } from "@/lib/auth/server";
@@ -17,6 +18,7 @@ import { loadDealSnapshot } from "@/lib/deals/snapshot";
 import { listDealTimeline } from "@/lib/deals/timeline";
 import { DEAL_STATUS_LABELS } from "@/lib/deals/types";
 import { db } from "@/lib/db";
+import { listLiveDocumentLinks } from "@/lib/docs/links";
 import { clientFreshness, listDocuments } from "@/lib/docs/upload";
 import { formatDate } from "@/lib/format";
 import { getClientFundersData } from "@/lib/funders/queries";
@@ -108,12 +110,15 @@ export default async function DealPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ tab?: string }>;
+  searchParams: Promise<{ tab?: string; fund?: string }>;
 }) {
   const { id } = await params;
-  const { tab: rawTab } = await searchParams;
+  const { tab: rawTab, fund: rawFund } = await searchParams;
   if (!UUID.test(id)) notFound();
   const tab: Tab = (TABS.find((t) => t.key === rawTab)?.key ?? "overview") as Tab;
+  // ?fund=<lender id> opens FUND on arrival with that lender picked ("Mark funded" on an accepted offer)
+  const fund = typeof rawFund === "string" && rawFund !== "" ? rawFund : null;
+  const hereWithoutFund = tab === "overview" ? `/deals/${id}` : `/deals/${id}?tab=${tab}`;
   const session = await requireSession();
   const manager = CAN.seeEveryone(session.role);
   const data = await db.withUser(session.userId, async (q) => {
@@ -123,13 +128,15 @@ export default async function DealPage({
     const snapshot = await loadDealSnapshot(q, id, ctx.today);
     const timeline = tab === "activity" ? await listDealTimeline(q, id) : [];
     const documents = tab === "documents" ? await listDocuments(q, deal.client_id) : [];
+    const links = tab === "documents" ? await listLiveDocumentLinks(q, deal.client_id) : [];
     const fresh = await clientFreshness(q, deal.client_id, ctx.today);
     const detail = tab === "offers" ? await getClientDetail(q, deal.client_id) : null;
     const funders = await getClientFundersData(q, deal.client_id);
-    return { ctx, deal, snapshot, timeline, documents, fresh, detail, funders };
+    return { ctx, deal, snapshot, timeline, documents, links, fresh, detail, funders };
   });
   if (!data || !data.snapshot) notFound();
-  const { ctx, deal, snapshot, timeline, documents, fresh, detail, funders } = data;
+  const { ctx, deal, snapshot, timeline, documents, links, fresh, detail, funders } = data;
+  const canSubmitToOps = CAN.workLeads(session.role);
   const next = suggestNextStep(snapshot);
   const chips = milestones(snapshot);
   const lendersForFund: FundLender[] = funders.submissions.map((s) => {
@@ -183,7 +190,10 @@ export default async function DealPage({
             {manager ? ` · ${deal.rep_name}` : ""}
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          {deal.ops_status === "kicked_back" && deal.outcome === "open" && canSubmitToOps ? (
+            <ResubmitToOpsButton clientId={deal.client_id} kind={deal.kind} />
+          ) : null}
           {deal.requested_cents ? (
             <span className="text-sm text-muted">
               Asked{" "}
@@ -202,10 +212,14 @@ export default async function DealPage({
             )
           ) : deal.outcome === "open" ? (
             <FundDialog
+              key={fund ?? "closed"}
               clientId={deal.client_id}
               businessName={deal.business_name}
               lenders={lendersForFund}
               canConfirm={CAN.confirmFunding(session.role)}
+              initialOpen={fund !== null}
+              initialFunderId={fund}
+              closeHref={hereWithoutFund}
             />
           ) : deal.funded_cents ? (
             <span className="rounded-lg bg-good-soft px-3 py-1.5 text-sm font-semibold text-good">
@@ -380,9 +394,11 @@ export default async function DealPage({
           today={ctx.today}
           lenders={funders.submissions.map((s) => ({
             submissionId: s.id,
+            funderId: s.funder_id,
             name: s.funder_name,
             status: s.status,
           }))}
+          links={links}
         />
       ) : null}
 
@@ -402,6 +418,7 @@ export default async function DealPage({
           data={funders}
           positions={detail.positions}
           stips={detail.stips}
+          canSubmitToOps={canSubmitToOps}
         />
       ) : null}
     </div>

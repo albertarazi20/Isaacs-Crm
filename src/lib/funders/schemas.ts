@@ -4,7 +4,13 @@ import { findSensitive } from "../data/sensitive";
 import { isRealDate } from "../mca/dates";
 import { parseFactor, parseMoney } from "../money";
 import { parseStateList, splitList } from "./states";
-import { DECLINE_REASONS, OFFER_STATUSES, SUBMISSION_STATUSES } from "./types";
+import {
+  DECLINE_REASONS,
+  MONEY_TERM_DEFAULTS,
+  OFFER_STATUSES,
+  RENEWAL_COMMISSION_BASES,
+  SUBMISSION_STATUSES,
+} from "./types";
 
 // Same rules as src/lib/data/schemas.ts (not exported there, and that file is not ours to edit):
 // single-line fields have no control characters, free text refuses SSNs / card / account numbers.
@@ -114,6 +120,36 @@ const optPoints = z
     return Math.round(n * 100) / 100;
   });
 
+/** A whole number with a floor and a ceiling (the column's check constraint); blank or missing means the column's default. */
+const intOrDefault = (what: string, min: number, max: number, dflt: number) =>
+  z
+    .union([z.string(), z.number(), z.null()])
+    .transform((v, ctx): number => {
+      if (blank(v)) return dflt;
+      const n = Number(v);
+      if (!Number.isInteger(n) || n < min || n > max) {
+        ctx.addIssue({
+          code: "custom",
+          message: `${what} must be a whole number from ${min} to ${max}`,
+        });
+        return z.NEVER;
+      }
+      return n;
+    })
+    .default(dflt);
+
+/** "5", "2.5", "5%" → a percentage from 0 to 100 with two decimals, or null when blank (no cap). */
+const optPct = (what: string) =>
+  z.union([z.string(), z.number(), z.null(), z.undefined()]).transform((v, ctx): number | null => {
+    if (blank(v)) return null;
+    const n = typeof v === "number" ? v : Number(String(v).trim().replace(/%$/, ""));
+    if (!Number.isFinite(n) || n < 0 || n > 100) {
+      ctx.addIssue({ code: "custom", message: `${what} must be a number from 0 to 100` });
+      return z.NEVER;
+    }
+    return Math.round(n * 100) / 100;
+  });
+
 const stateList = z
   .union([z.string(), z.array(z.string())])
   .default("")
@@ -162,6 +198,32 @@ export const funderSchema = z
     excludedIndustries: industryList,
     commissionPoints: optPoints.default(null),
     renewalPaydownPct: optInt("Renewal threshold", 1, 100).default(null),
+    // money terms (0350) — the same ranges as the columns' check constraints
+    maxUpsellPoints: optPct("Max upsell points").default(null),
+    psfCapPct: optPct("PSF cap").default(null),
+    clawbackDays: intOrDefault("Clawback days", 0, 365, MONEY_TERM_DEFAULTS.clawback_days),
+    approvalValidDays: intOrDefault(
+      "Approval validity",
+      1,
+      365,
+      MONEY_TERM_DEFAULTS.approval_valid_days,
+    ),
+    statementFreshDay: intOrDefault(
+      "Statement day",
+      1,
+      28,
+      MONEY_TERM_DEFAULTS.statement_fresh_day,
+    ),
+    commissionPaidAfterDays: intOrDefault(
+      "Commission pay timing",
+      0,
+      120,
+      MONEY_TERM_DEFAULTS.commission_paid_after_days,
+    ),
+    renewalCommissionBasis: z
+      .union([z.enum(RENEWAL_COMMISSION_BASES), z.literal(""), z.null()])
+      .transform((v) => (v ? v : MONEY_TERM_DEFAULTS.renewal_commission_basis))
+      .default(MONEY_TERM_DEFAULTS.renewal_commission_basis),
   })
   .refine((v) => v.minAmount === null || v.maxAmount === null || v.minAmount <= v.maxAmount, {
     message: "The smallest advance can't be bigger than the largest",

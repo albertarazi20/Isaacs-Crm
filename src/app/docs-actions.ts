@@ -9,12 +9,12 @@ import { id } from "@/lib/data/schemas";
 import type { ActionResult } from "@/lib/data/types";
 import { db } from "@/lib/db";
 import { DOC_KINDS } from "@/lib/docs/label";
+import { mintLenderLink, revokeDocumentLink } from "@/lib/docs/links";
 import { documentStore } from "@/lib/docs/storage";
 import {
   clientFreshness,
   deleteDocument,
   listDocuments,
-  mintDownloadLink,
   mintUploadSession,
   relabelDocument,
   wantedFor,
@@ -95,10 +95,13 @@ export async function deleteDocumentAction(input: unknown): Promise<ActionResult
   }
 }
 
-/** An expiring, watermarked download link for a lender (or anyone outside the app). */
+/**
+ * An expiring, watermarked download link for a lender (or anyone outside the app). Pass `lenderId` for a lender
+ * on the list — the watermark and the link's lender come from the record; `lenderName` still works on its own.
+ */
 export async function mintLenderLinkAction(
   input: unknown,
-): Promise<ActionResult<{ url: string; expiresAt: string }>> {
+): Promise<ActionResult<{ url: string; expiresAt: string; lenderName: string }>> {
   const session = await requireSession();
   try {
     const i = z
@@ -115,16 +118,34 @@ export async function mintLenderLinkAction(
       })
       .parse(input);
     const data = await db.withUser(session.userId, async (q) => {
-      const m = await mintDownloadLink(q, {
+      const m = await mintLenderLink(q, {
         documentId: i.documentId,
         createdBy: session.userId,
         lenderId: i.lenderId,
-        watermark: i.lenderName ? `Prepared for ${i.lenderName}` : "Confidential",
+        lenderName: i.lenderName,
         minutes: i.minutes,
       });
-      return { url: `${env().APP_URL}/d/${m.token}`, expiresAt: m.expiresAt };
+      return {
+        url: `${env().APP_URL}/d/${m.token}`,
+        expiresAt: m.expiresAt,
+        lenderName: m.lenderName,
+      };
     });
+    revalidatePath("/", "layout");
     return { ok: true, data };
+  } catch (e) {
+    return { ok: false, error: toActionError(e) };
+  }
+}
+
+/** Kill a lender link now. The next download with it is refused; the document itself stays. */
+export async function revokeLenderLinkAction(input: unknown): Promise<ActionResult<null>> {
+  const session = await requireSession();
+  try {
+    const i = z.object({ linkId: id }).parse(input);
+    await db.withUser(session.userId, (q) => revokeDocumentLink(q, i.linkId));
+    revalidatePath("/", "layout");
+    return { ok: true, data: null };
   } catch (e) {
     return { ok: false, error: toActionError(e) };
   }

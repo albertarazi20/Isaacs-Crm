@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useState } from "react";
 import {
   acceptOfferAction,
@@ -9,18 +10,22 @@ import {
   setOfferStatusAction,
   setSubmissionStatusAction,
 } from "@/app/funders-actions";
-import { offerToFundingPrefill } from "@/components/funders/prefill";
+import { ResubmitToOpsButton, SubmitToOpsButton } from "@/components/deals/SubmitToOps";
 import { QuietConfirm } from "@/components/funders/QuietConfirm";
 import { SendDialog } from "@/components/funders/SendDialog";
 import { DeclineDialog, OfferDialog, StipsDialog } from "@/components/funders/SubmissionDialogs";
 import type { ClientCard, PositionRow, StipRow } from "@/lib/data/types";
+import { DEAL_STATUS_LABELS, type DealStatus } from "@/lib/deals/types";
 import { formatDate } from "@/lib/format";
 import {
+  isPlainAction,
   offerChips,
   offerExtras,
   offerTerms,
+  PLAIN_STATUS_ACTIONS,
   SUBMISSION_ACTIONS,
   waitText,
+  type PlainAction,
   type SubmissionAction,
 } from "@/lib/funders/offers";
 import {
@@ -28,9 +33,11 @@ import {
   OFFER_STATUS_LABELS,
   SUBMISSION_STATUS_LABELS,
   type ClientFundersData,
+  type DeclineReasonRow,
   type FunderRow,
   type FunderOfferRow,
   type OfferStatus,
+  type OpenDeal,
   type SubmissionRow,
   type SubmissionStatus,
 } from "@/lib/funders/types";
@@ -38,7 +45,6 @@ import { buildSubmissionPackage, gmailComposeUrl } from "@/lib/funders/package";
 import { formatMoney } from "@/lib/money";
 import { useApp } from "../app-context";
 import { useToast } from "../overlay";
-import { useStageMove } from "../stage-move/useStageMove";
 import { Badge, Button, buttonClass, cn, EmptyState } from "../ui";
 import { Muted, Panel, useRun } from "./parts";
 
@@ -47,9 +53,15 @@ const STATUS_TONE: Record<SubmissionStatus, Tone> = {
   sent: "accent",
   stips_requested: "warn",
   approved: "good",
+  revised: "good",
   declined: "bad",
   no_response: "neutral",
   withdrawn: "neutral",
+  contracts_out: "accent",
+  contracts_in: "accent",
+  funding_call: "accent",
+  funded: "good",
+  expired: "neutral",
 };
 const OFFER_TONE: Record<OfferStatus, Tone> = {
   open: "accent",
@@ -68,6 +80,20 @@ const ACTION_LABEL: Record<SubmissionAction, string> = {
   reopen: "Back to waiting",
   stips_sent: "Stips sent",
   add_offer: "Add offer",
+  contracts_out: "Contracts out",
+  contracts_in: "Contracts in",
+  funding_call: "Funding call",
+};
+
+/** The toast after a plain status change. */
+const DONE_TEXT: Record<PlainAction, (name: string) => string> = {
+  no_response: (n) => `${n}: no response`,
+  withdrawn: (n) => `Withdrawn from ${n}`,
+  reopen: (n) => `Waiting on ${n} again — chase set`,
+  stips_sent: (n) => `Stips sent to ${n} — chase set`,
+  contracts_out: (n) => `${n}: contracts out to the merchant`,
+  contracts_in: (n) => `${n}: signed contracts are in`,
+  funding_call: (n) => `${n}: funding call — press FUND when the money lands`,
 };
 
 type Dialog =
@@ -77,16 +103,31 @@ type Dialog =
   | { kind: "offer"; sub: SubmissionRow }
   | null;
 
+/** The deal page with the FUND dialog already open on this lender. */
+export const fundHref = (dealId: string, funderId: string): string =>
+  `/deals/${dealId}?tab=offers&fund=${encodeURIComponent(funderId)}`;
+
+/** The label a stored decline reason shows: the table's wording first, the typed list as the fallback. */
+export function declineReasonLabel(
+  key: SubmissionRow["decline_reason"],
+  rows: readonly DeclineReasonRow[],
+): string {
+  if (!key) return "Declined";
+  return rows.find((r) => r.key === key)?.label ?? DECLINE_REASON_LABELS[key] ?? key;
+}
+
 /**
  * Who this merchant went to, what each funder said, and the offers that came back. Everything here
  * is a database action — marking a funder approved, declined or silent changes the rows and the
- * reminders, not just the screen.
+ * reminders, not just the screen. Accepting an offer only accepts it: the money is recorded through
+ * FUND on the deal page (propose → manager confirms), never from here.
  */
 export function SubmissionsCard({
   card,
   data,
   positions = [],
   stips = [],
+  canSubmitToOps = false,
   className,
 }: {
   card: ClientCard;
@@ -94,15 +135,17 @@ export function SubmissionsCard({
   /** For the funder summary: the merchant's other advances and which statements are in. */
   positions?: readonly PositionRow[];
   stips?: readonly StipRow[];
+  /** Reps and managers submit files to ops; ops does not (it is their queue). */
+  canSubmitToOps?: boolean;
   className?: string;
 }) {
   const { today, senderName } = useApp();
   const toast = useToast();
   const run = useRun();
-  const { requestMove, dialogs } = useStageMove();
+  const router = useRouter();
   const [dialog, setDialog] = useState<Dialog>(null);
   const [busy, setBusy] = useState(false);
-  const { funders, submissions } = data;
+  const { funders, submissions, declineReasons, deal } = data;
   const chips = offerChips(submissions);
   const activeFunders = funders.filter((f) => f.active);
 
@@ -124,49 +167,35 @@ export function SubmissionsCard({
         return setDialog({ kind: "decline", sub });
       case "stips_requested":
         return setDialog({ kind: "stips", sub });
-      case "no_response":
-      case "withdrawn":
-      case "reopen":
-      case "stips_sent": {
-        const status: SubmissionStatus =
-          action === "reopen" || action === "stips_sent" ? "sent" : action;
-        const done: Record<typeof action, string> = {
-          no_response: `${sub.funder_name}: no response`,
-          withdrawn: `Withdrawn from ${sub.funder_name}`,
-          reopen: `Waiting on ${sub.funder_name} again — chase set`,
-          stips_sent: `Stips sent to ${sub.funder_name} — chase set`,
-        };
+      default: {
+        if (!isPlainAction(action)) return;
         return guarded(() =>
           run(
-            setSubmissionStatusAction({ submissionId: sub.id, status }),
-            done[action as keyof typeof done],
+            setSubmissionStatusAction({
+              submissionId: sub.id,
+              status: PLAIN_STATUS_ACTIONS[action],
+            }),
+            DONE_TEXT[action](sub.funder_name),
           ),
         );
       }
     }
   }
 
-  /** Funded dialog, pre-filled from the offer. Cancelling it leaves the offer accepted. */
-  function openFunded(sub: SubmissionRow, offer: FunderOfferRow) {
-    const funder = funders.find((f) => f.id === sub.funder_id) ?? null;
-    return requestMove(card, "funded", {
-      fundingPrefill: offerToFundingPrefill(
-        offer,
-        sub.funder_name,
-        funder,
-        card.position_count + 1,
+  /** Accept only accepts. The money lands through FUND, which keeps the lender caps and the manager's confirm. */
+  function accept(sub: SubmissionRow, offer: FunderOfferRow) {
+    return guarded(() =>
+      run(
+        acceptOfferAction({ offerId: offer.id }),
+        `Offer accepted — press FUND when the money lands`,
       ),
-    });
+    );
   }
 
-  function accept(sub: SubmissionRow, offer: FunderOfferRow) {
-    return guarded(async () => {
-      const ok = await run(
-        acceptOfferAction({ offerId: offer.id }),
-        `Accepted ${sub.funder_name}'s offer — fill in the funding details`,
-      );
-      if (ok) await openFunded(sub, offer);
-    });
+  /** "Mark funded" is the FUND dialog: already on this page (the deal page) or one hop away (the merchant page). */
+  function fund(sub: SubmissionRow) {
+    if (!deal) return;
+    router.push(fundHref(deal.id, sub.funder_id));
   }
 
   const summaryFor = (funderContact?: string) =>
@@ -201,12 +230,26 @@ export function SubmissionsCard({
           >
             Copy summary
           </Button>
-          <Button size="sm" variant="primary" onClick={() => setDialog({ kind: "send" })}>
+          <Button
+            size="sm"
+            variant={canSubmitToOps && !deal ? "secondary" : "primary"}
+            onClick={() => setDialog({ kind: "send" })}
+          >
             Send to funders
           </Button>
+          {canSubmitToOps && !deal ? (
+            <SubmitToOpsButton
+              clientId={card.id}
+              businessName={card.business_name}
+              wantedAmountCents={card.wanted_amount_cents}
+              size="sm"
+            />
+          ) : null}
         </div>
       }
     >
+      {deal ? <DealLine deal={deal} canSubmitToOps={canSubmitToOps} clientId={card.id} /> : null}
+
       {chips.length > 0 ? (
         <p className="mb-3 rounded-lg bg-surface-2 p-3 text-sm" aria-label="Offers in">
           <span className="font-medium">Offers in:</span>{" "}
@@ -230,7 +273,9 @@ export function SubmissionsCard({
         <EmptyState title="Not sent to any funder yet">
           {activeFunders.length === 0
             ? "Add the funders you send applications to first, then send this merchant out. Each one is checked against the merchant's fields before you send."
-            : "Send this merchant to funders to start tracking who answers. A reminder to chase each funder is set for the next business day."}
+            : canSubmitToOps && !deal
+              ? "Submit the file to ops and they send it to lenders — or send it yourself. A reminder to chase each funder is set for the next business day."
+              : "Send this merchant to funders to start tracking who answers. A reminder to chase each funder is set for the next business day."}
         </EmptyState>
       ) : (
         <ul className="space-y-3">
@@ -238,6 +283,7 @@ export function SubmissionsCard({
             <li
               key={sub.id}
               data-submission={sub.funder_name}
+              data-status={sub.status}
               className="rounded-lg border border-border p-3"
             >
               <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
@@ -255,7 +301,7 @@ export function SubmissionsCard({
               {sub.status === "declined" ? (
                 <p className="mt-1 text-sm">
                   <span className="font-medium">
-                    {sub.decline_reason ? DECLINE_REASON_LABELS[sub.decline_reason] : "Declined"}
+                    {declineReasonLabel(sub.decline_reason, declineReasons)}
                   </span>
                   {sub.decline_note ? ` — ${sub.decline_note}` : ""}
                 </p>
@@ -272,9 +318,13 @@ export function SubmissionsCard({
                       offer={o}
                       busy={busy}
                       today={today}
-                      showFund={card.funded_on === null || card.funded_on < o.received_on}
+                      showFund={
+                        sub.status !== "funded" &&
+                        (card.funded_on === null || card.funded_on < o.received_on)
+                      }
+                      fundHref={deal ? fundHref(deal.id, sub.funder_id) : null}
                       onAccept={() => void accept(sub, o)}
-                      onFund={() => void openFunded(sub, o)}
+                      onFund={() => fund(sub)}
                       onStatus={(status, done) => void offerStatus(o, status, done)}
                       onRemove={() =>
                         void guarded(() =>
@@ -298,6 +348,11 @@ export function SubmissionsCard({
                     {ACTION_LABEL[a]}
                   </Button>
                 ))}
+                {sub.status === "funded" ? (
+                  <span className="text-xs text-muted">
+                    Funded through FUND — the money and the commission live on the deal page.
+                  </span>
+                ) : null}
                 {sub.status === "sent" && sub.chase_due_on === null ? (
                   <Button
                     size="sm"
@@ -350,7 +405,7 @@ export function SubmissionsCard({
         />
       ) : null}
       {dialog?.kind === "decline" ? (
-        <DeclineDialog sub={dialog.sub} onClose={() => setDialog(null)} />
+        <DeclineDialog sub={dialog.sub} reasons={declineReasons} onClose={() => setDialog(null)} />
       ) : null}
       {dialog?.kind === "stips" ? (
         <StipsDialog sub={dialog.sub} onClose={() => setDialog(null)} />
@@ -358,8 +413,45 @@ export function SubmissionsCard({
       {dialog?.kind === "offer" ? (
         <OfferDialog sub={dialog.sub} card={card} onClose={() => setDialog(null)} />
       ) : null}
-      {dialogs}
     </Panel>
+  );
+}
+
+/** "D-12 · With ops" with the way to the deal page, and Resubmit when ops sent the file back. */
+function DealLine({
+  deal,
+  canSubmitToOps,
+  clientId,
+}: {
+  deal: OpenDeal;
+  canSubmitToOps: boolean;
+  clientId: string;
+}) {
+  const label = DEAL_STATUS_LABELS[deal.status as DealStatus] ?? deal.status.replace(/_/g, " ");
+  const kicked = deal.ops_status === "kicked_back";
+  return (
+    <div
+      className={cn(
+        "mb-3 flex flex-wrap items-center gap-x-3 gap-y-1.5 rounded-lg border px-3 py-2 text-sm",
+        kicked ? "border-warn/40 bg-warn-soft" : "border-border bg-surface-2",
+      )}
+    >
+      <Link href={`/deals/${deal.id}`} className="font-semibold hover:underline">
+        Deal D-{deal.number}
+      </Link>
+      <Badge tone={kicked ? "warn" : "accent"}>{label}</Badge>
+      {kicked && deal.kickback_note ? (
+        <span className="min-w-0 truncate text-muted">{deal.kickback_note}</span>
+      ) : null}
+      <span className="ml-auto flex items-center gap-1.5">
+        {kicked && canSubmitToOps ? (
+          <ResubmitToOpsButton clientId={clientId} kind={deal.kind} size="sm" />
+        ) : null}
+        <Link href={`/deals/${deal.id}`} className={buttonClass("ghost", "sm")}>
+          Open the deal →
+        </Link>
+      </span>
+    </div>
   );
 }
 
@@ -375,6 +467,7 @@ function OfferItem({
   busy,
   today,
   showFund,
+  fundHref,
   onAccept,
   onFund,
   onStatus,
@@ -384,6 +477,8 @@ function OfferItem({
   busy: boolean;
   today: string;
   showFund: boolean;
+  /** Where FUND lives for this offer; null when the merchant has no open deal. */
+  fundHref: string | null;
   onAccept: () => void;
   onFund: () => void;
   onStatus: (status: OfferStatus, done: string) => void;
@@ -415,9 +510,22 @@ function OfferItem({
           </Button>
         ) : null}
         {o.status === "accepted" && showFund ? (
-          <Button size="sm" variant="primary" disabled={busy} onClick={onFund}>
-            Mark funded
-          </Button>
+          fundHref ? (
+            <Button
+              size="sm"
+              variant="primary"
+              className="bg-good text-white shadow-good/30 hover:brightness-110"
+              disabled={busy}
+              title="Opens FUND on the deal page with this lender picked"
+              onClick={onFund}
+            >
+              Mark funded
+            </Button>
+          ) : (
+            <span className="text-xs text-muted">
+              Submit the file to ops to open a deal — FUND lives on the deal page.
+            </span>
+          )
         ) : null}
         {o.status === "open" ? (
           <Button

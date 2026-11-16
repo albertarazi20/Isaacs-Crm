@@ -135,6 +135,7 @@ export function BucketMembers({
           value={filter}
           onChange={(e) => setFilter(e.target.value as Filter)}
           className="h-9 text-sm"
+          aria-label="Show"
         >
           <option value="all">Everyone ({members.length})</option>
           <option value="due">Step due today</option>
@@ -144,7 +145,12 @@ export function BucketMembers({
           <option value="paused">Paused</option>
         </Select>
         {zones.length > 1 ? (
-          <Select value={tz} onChange={(e) => setTz(e.target.value)} className="h-9 text-sm">
+          <Select
+            value={tz}
+            onChange={(e) => setTz(e.target.value)}
+            className="h-9 text-sm"
+            aria-label="Time zone"
+          >
             <option value="">Every time zone</option>
             {zones.map((z) => (
               <option key={z} value={z}>
@@ -237,6 +243,8 @@ export function BucketMembers({
                   <button
                     type="button"
                     className="min-w-0 flex-1 text-left"
+                    aria-label={`Actions for ${m.business_name}`}
+                    aria-expanded={open === m.client_id}
                     onClick={() => setOpen(open === m.client_id ? null : m.client_id)}
                   >
                     <span className="block truncate text-sm">
