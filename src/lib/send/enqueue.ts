@@ -35,6 +35,7 @@ interface Window {
   send_window_start: number;
   send_window_end: number;
   send_on_weekends: boolean;
+  send_on_holidays: boolean;
 }
 
 /**
@@ -67,7 +68,7 @@ export async function enqueueEmail(
   ) {
     const w = (
       await q.query<Window>(
-        "select send_window_start, send_window_end, send_on_weekends from shop_settings",
+        "select send_window_start, send_window_end, send_on_weekends, send_on_holidays from shop_settings",
       )
     ).rows[0];
     notBefore = nextSendTime(now, {
@@ -75,6 +76,7 @@ export async function enqueueEmail(
       startHour: w?.send_window_start ?? 9,
       endHour: w?.send_window_end ?? 11,
       weekends: w?.send_on_weekends ?? false,
+      holidays: w?.send_on_holidays ?? false,
     });
   }
   const expires = input.expiresInHours

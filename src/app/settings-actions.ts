@@ -22,6 +22,8 @@ const shopSchema = z.object({
   sendWindowStart: z.coerce.number().int().min(0).max(23),
   sendWindowEnd: z.coerce.number().int().min(1).max(24),
   sendOnWeekends: z.boolean(),
+  /** US federal holidays (S1-11); a form that does not send it leaves the window closed on them. */
+  sendOnHolidays: z.boolean().default(false),
   perMerchantDaily: z.coerce.number().int().min(1).max(5),
   perMerchantWeekly: z.coerce.number().int().min(1).max(20),
   automationFrom: z.string().trim().max(200).default(""),
@@ -42,7 +44,8 @@ export async function saveShopSettingsAction(input: unknown): Promise<ActionResu
         `update shop_settings set shop_name = $1, postal_address = $2, daily_cap = $3, amber_at = $4, reserved_for_intake = $5,
                 sequences_enabled = $6, send_window_start = $7, send_window_end = $8, send_on_weekends = $9,
                 per_merchant_daily = $10, per_merchant_weekly = $11, automation_from = $12, automation_reply_to_rep = $13,
-                lender_chase_days = $14, lender_chase_mode = $15, lender_chase_max = $16, max_lenders_per_deal = $17`,
+                lender_chase_days = $14, lender_chase_mode = $15, lender_chase_max = $16, max_lenders_per_deal = $17,
+                send_on_holidays = $18`,
         [
           i.shopName,
           i.postalAddress,
@@ -61,6 +64,7 @@ export async function saveShopSettingsAction(input: unknown): Promise<ActionResu
           i.lenderChaseMode,
           i.lenderChaseMax,
           i.maxLendersPerDeal,
+          i.sendOnHolidays,
         ],
       ),
     );

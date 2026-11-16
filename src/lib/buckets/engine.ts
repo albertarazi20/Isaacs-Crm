@@ -147,6 +147,14 @@ export async function runBucketSteps(args: {
     await args.db.withSystem(async (q) => {
       const steps = await stepsFor(q, row.bucket_id);
       const today: ISODate = todayIn(row.timezone, now);
+      if (steps.length === 0) {
+        // a bucket with no steps (Cold, S1-14) holds its members without chasing them: nothing is due, ever
+        await q.query("update enrollments set next_due_on = null where id = $1", [
+          row.enrollment_id,
+        ]);
+        summary.skipped += 1;
+        return;
+      }
       const step = sequences
         ? steps.find((s) => s.step_no === row.next_step)
         : steps.find((s) => s.action === "email");
