@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { SubmissionsCard } from "@/components/client/SubmissionsCard";
+import { CopyContact } from "@/components/CopyContact";
 import { ActivityFeed } from "@/components/deals/ActivityFeed";
 import { ConfirmFundingButton } from "@/components/deals/ConfirmFundingButton";
 import { DocumentsPanel } from "@/components/deals/DocumentsPanel";
@@ -18,6 +19,7 @@ import { loadDealSnapshot } from "@/lib/deals/snapshot";
 import { listDealTimeline } from "@/lib/deals/timeline";
 import { DEAL_STATUS_LABELS } from "@/lib/deals/types";
 import { db } from "@/lib/db";
+import { logAccess } from "@/lib/trust/queries";
 import { listLiveDocumentLinks } from "@/lib/docs/links";
 import { clientFreshness, listDocuments } from "@/lib/docs/upload";
 import { formatDate } from "@/lib/format";
@@ -125,6 +127,14 @@ export default async function DealPage({
     const ctx = await userContext(q);
     const deal = await getDeal(q, id);
     if (!deal) return null;
+    // a manager or ops opening a rep's merchant is a contact view the trust panel counts (P2-51)
+    if (deal.user_id !== session.userId)
+      await logAccess(q, {
+        userId: session.userId,
+        action: "view_contact",
+        clientId: deal.client_id,
+        detail: `deal D-${deal.number}`,
+      });
     const snapshot = await loadDealSnapshot(q, id, ctx.today);
     const timeline = tab === "activity" ? await listDealTimeline(q, id) : [];
     const documents = tab === "documents" ? await listDocuments(q, deal.client_id) : [];
@@ -177,6 +187,7 @@ export default async function DealPage({
                 <a href={`tel:${deal.phone}`} className="hover:underline">
                   {deal.phone}
                 </a>
+                <CopyContact clientId={deal.client_id} value={deal.phone} kind="phone" />
               </>
             ) : null}
             {deal.email ? (
@@ -185,6 +196,7 @@ export default async function DealPage({
                 <a href={`mailto:${deal.email}`} className="hover:underline">
                   {deal.email}
                 </a>
+                <CopyContact clientId={deal.client_id} value={deal.email} kind="email" />
               </>
             ) : null}
             {manager ? ` · ${deal.rep_name}` : ""}
@@ -407,6 +419,7 @@ export default async function DealPage({
           <ActivityFeed
             events={timeline}
             today={ctx.today}
+            timezone={ctx.timezone}
             canDecide={CAN.editOffers(session.role)}
           />
         </Card>

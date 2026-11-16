@@ -11,6 +11,7 @@ import {
 import type { DuplicateMatch } from "@/lib/data/queries";
 import type { ClientDetail } from "@/lib/data/types";
 import { formatDate, relativeDay } from "@/lib/format";
+import { logAccessAction } from "@/app/trust-actions";
 import { formatUS, normalizeUS } from "@/lib/mca/phone";
 import {
   CORE_STAGES,
@@ -69,13 +70,27 @@ export function StickyBar({ card }: { card: ClientDetail["card"] }) {
   );
 }
 
-function CopyValue({ value, shown, label }: { value: string; shown: string; label: string }) {
+/** The value is the button: click copies it and writes the access-log line the trust panel counts (P2-51). */
+function CopyValue({
+  value,
+  shown,
+  label,
+  clientId,
+}: {
+  value: string;
+  shown: string;
+  label: "phone" | "email";
+  clientId: string;
+}) {
   const copy = useCopy();
   return (
     <button
       type="button"
       title="Click to copy"
-      onClick={() => void copy(value, label)}
+      onClick={() => {
+        void copy(value, label);
+        void logAccessAction({ action: label === "phone" ? "copy_phone" : "copy_email", clientId });
+      }}
       className="max-w-full truncate rounded text-left text-sm font-medium underline decoration-dotted underline-offset-4 hover:text-accent max-sm:py-3"
     >
       {shown}
@@ -128,14 +143,19 @@ export function ClientDetails({ detail, className }: { detail: ClientDetail; cla
           </Stat>
           <Stat label="Phone">
             {card.phone ? (
-              <CopyValue value={card.phone} shown={formatUS(card.phone)} label="phone" />
+              <CopyValue
+                value={card.phone}
+                shown={formatUS(card.phone)}
+                label="phone"
+                clientId={card.id}
+              />
             ) : (
               addLink("phone")
             )}
           </Stat>
           <Stat label="Email" className="col-span-2 sm:col-span-1">
             {card.email ? (
-              <CopyValue value={card.email} shown={card.email} label="email" />
+              <CopyValue value={card.email} shown={card.email} label="email" clientId={card.id} />
             ) : (
               addLink("email")
             )}

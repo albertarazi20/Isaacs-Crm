@@ -335,7 +335,7 @@ function MoneyBlock({ m }: { m: MoneyOnTable }) {
 
 function RepTable({ rows, month }: { rows: RepScore[]; month: string }) {
   return (
-    <Card className="overflow-x-auto p-0">
+    <Card className="min-w-0 overflow-x-auto p-0">
       <div className="px-4 pt-4">
         <SectionTitle aside={<span className="text-xs text-muted">{month}</span>}>
           Team
@@ -390,7 +390,7 @@ function RepTable({ rows, month }: { rows: RepScore[]; month: string }) {
 
 function LenderTable({ rows }: { rows: LenderScore[] }) {
   return (
-    <Card className="overflow-x-auto p-0">
+    <Card className="min-w-0 overflow-x-auto p-0">
       <div className="px-4 pt-4">
         <SectionTitle
           aside={

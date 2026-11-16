@@ -21,10 +21,10 @@ import {
   LINK_EXPIRY_MINUTES,
   type DocumentLinkRow,
   type LinkExpiry,
-} from "@/lib/docs/links";
+} from "@/lib/docs/linkExpiry";
 import type { DocumentRow } from "@/lib/docs/upload";
 import { formatDate } from "@/lib/format";
-import { UploadLinkButton } from "./UploadLinkButton";
+import { ResetUploadLinkButton, UploadLinkButton } from "./UploadLinkButton";
 
 const ACCEPT = ".pdf,.jpg,.jpeg,.png,.heic,.heif,.webp,.csv,.xlsx,.docx";
 
@@ -378,6 +378,7 @@ export function DocumentsPanel({
             </span>
           ) : null}
           <UploadLinkButton clientId={clientId} dealId={dealId} />
+          <ResetUploadLinkButton clientId={clientId} />
           <Button
             size="sm"
             variant="primary"

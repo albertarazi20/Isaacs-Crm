@@ -83,6 +83,37 @@ export async function deleteFunder(q: Db, id: string): Promise<void> {
 }
 
 export async function sendToFunders(q: Db, input: SendInput): Promise<number> {
+  // The shotgun check (P2-40): how many lenders hold this file once these go out. Past the shop limit is a
+  // refusal unless the sender says so on purpose, and then it is written on the timeline.
+  const deal = (
+    await q.query<{ id: string }>(
+      "select id from deals where client_id = $1 and outcome = 'open' order by created_at desc limit 1",
+      [input.clientId],
+    )
+  ).rows[0];
+  if (deal) {
+    const limit =
+      (await q.query<{ n: number }>("select max_lenders_per_deal as n from shop_settings")).rows[0]
+        ?.n ?? 6;
+    const already =
+      (
+        await q.query<{ ids: string[] }>(
+          "select coalesce(array_agg(distinct funder_id), '{}') as ids from submissions where deal_id = $1",
+          [deal.id],
+        )
+      ).rows[0]?.ids ?? [];
+    const total = new Set([...already, ...input.funderIds]).size;
+    if (total > limit) {
+      if (!input.force)
+        throw new UserError(
+          `This file would be with ${total} lenders; the shop limit is ${limit}. Every lender who sees it is a backdoor risk — pick fewer, or send anyway on purpose.`,
+        );
+      await q.query(
+        "insert into activities (user_id, client_id, kind, body) select user_id, id, 'system', $2 from clients where id = $1",
+        [input.clientId, `Shotgun override: ${total} lenders (shop limit ${limit})`],
+      );
+    }
+  }
   const res = await q.query("select id from create_submissions($1, $2::uuid[], $3::date, $4)", [
     input.clientId,
     input.funderIds,

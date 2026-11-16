@@ -137,6 +137,7 @@ export function SendDialog({
         funderIds: [...picked],
         sentOn,
         note,
+        force: shotgun,
       }),
       `Sent to ${names.join(", ")} — you'll be reminded to chase`,
     );

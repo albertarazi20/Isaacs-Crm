@@ -19,6 +19,7 @@ import {
   relabelDocument,
   wantedFor,
   type DocumentRow,
+  rotateUploadToken,
 } from "@/lib/docs/upload";
 import type { Freshness } from "@/lib/docs/freshness";
 import { env } from "@/lib/env";
@@ -144,6 +145,19 @@ export async function revokeLenderLinkAction(input: unknown): Promise<ActionResu
   try {
     const i = z.object({ linkId: id }).parse(input);
     await db.withUser(session.userId, (q) => revokeDocumentLink(q, i.linkId));
+    revalidatePath("/", "layout");
+    return { ok: true, data: null };
+  } catch (e) {
+    return { ok: false, error: toActionError(e) };
+  }
+}
+
+/** A new permanent upload link for the merchant (P2-29): the one in past emails stops working. */
+export async function rotateUploadTokenAction(input: unknown): Promise<ActionResult<null>> {
+  const session = await requireSession();
+  try {
+    const { clientId } = z.object({ clientId: z.string().uuid() }).parse(input);
+    await db.withUser(session.userId, (q) => rotateUploadToken(q, clientId));
     revalidatePath("/", "layout");
     return { ok: true, data: null };
   } catch (e) {

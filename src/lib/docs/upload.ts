@@ -236,6 +236,23 @@ export async function openUploadPage(
   });
 }
 
+/**
+ * A new permanent link for the merchant (P2-29): the token in every past email stops resolving, and the sessions the
+ * old link opened die with it. The next email carries the new one.
+ */
+export async function rotateUploadToken(q: Db, clientId: string): Promise<void> {
+  const r = await q.query("update clients set upload_token = default where id = $1", [clientId]);
+  if (r.rowCount === 0) throw new UserError("That merchant isn't in your view");
+  await q.query(
+    "update upload_sessions set expires_at = now() where client_id = $1 and created_by is null and expires_at > now()",
+    [clientId],
+  );
+  await q.query(
+    "insert into activities (user_id, client_id, kind, body) select user_id, id, 'system', 'Upload link reset — the old link no longer works' from clients where id = $1",
+    [clientId],
+  );
+}
+
 /** True when the token names a live upload session (the route checks this before reading a body); never mints. */
 export async function uploadSessionLive(db: DbAccess, token: string): Promise<boolean> {
   if (!/^[A-Za-z0-9]{20,80}$/.test(token)) return false;

@@ -11,12 +11,13 @@ import {
 } from "@/app/buckets-actions";
 import { useApp } from "@/components/app-context";
 import { UploadLinkButton } from "@/components/deals/UploadLinkButton";
-import { useRun } from "@/components/client/parts";
+import { useRun, FormDialog } from "@/components/client/parts";
 import { useToast } from "@/components/overlay";
 import { Button, Card, EmptyState, Select, cn } from "@/components/ui";
 import type { BucketMember, BucketRow, TemplateRow } from "@/lib/buckets/queries";
 import { formatDate, timeAgo } from "@/lib/format";
 import { formatMoneyCompact } from "@/lib/money";
+import { mergeValues, resolveMergeFields } from "@/lib/messaging/merge";
 
 type Filter = "all" | "due" | "replied" | "quiet" | "no_email" | "paused";
 
@@ -32,7 +33,7 @@ export function BucketMembers({
   buckets: BucketRow[];
   templates: TemplateRow[];
 }) {
-  const { today, nowMs } = useApp();
+  const { today, nowMs, senderName } = useApp();
   const router = useRouter();
   const run = useRun();
   const toast = useToast();
@@ -43,6 +44,7 @@ export function BucketMembers({
   const [moveTo, setMoveTo] = useState("");
   const [busy, setBusy] = useState(false);
   const [open, setOpen] = useState<string | null>(null);
+  const [confirmBlast, setConfirmBlast] = useState(false);
 
   const zones = useMemo(() => [...new Set(members.map((m) => m.tz_label))].sort(), [members]);
   const shown = useMemo(
@@ -98,15 +100,35 @@ export function BucketMembers({
     }
   }
 
+  // The blast confirm shows the template merged for the first checked merchant (P2-14), so what goes out is
+  // seen before it goes. Links are only known at send time, so they show as placeholders here.
+  const blastTemplate = confirmBlast ? templates.find((x) => x.id === templateId) : undefined;
+  const blastFirst = confirmBlast ? shown.find((m) => ids.includes(m.client_id)) : undefined;
+  const blastPreview =
+    blastTemplate && blastFirst
+      ? (() => {
+          const values = mergeValues({
+            contactName: blastFirst.contact_name,
+            businessName: blastFirst.business_name,
+            senderName,
+            applicationLink: "[application link]",
+            wantedAmountCents: blastFirst.wanted_amount_cents,
+            bestOffer: null,
+            uploadLink: "[upload link]",
+          });
+          return {
+            subject: resolveMergeFields(blastTemplate.subject, values),
+            body: resolveMergeFields(blastTemplate.body, values),
+          };
+        })()
+      : null;
+  const blastBlank = blastPreview
+    ? [...new Set([...blastPreview.subject.missing, ...blastPreview.body.missing])]
+    : [];
+
   async function blast() {
     if (!templateId || ids.length === 0) return;
-    const t = templates.find((x) => x.id === templateId);
-    if (
-      !window.confirm(
-        `Send “${t?.name}” to ${ids.length} merchant${ids.length === 1 ? "" : "s"}? It goes out in each merchant's local window, under the daily cap.`,
-      )
-    )
-      return;
+    setConfirmBlast(false);
     setBusy(true);
     const r = await blastAction({ templateId, clientIds: ids });
     setBusy(false);
@@ -180,7 +202,7 @@ export function BucketMembers({
           variant="primary"
           size="sm"
           disabled={busy || !templateId || ids.length === 0}
-          onClick={blast}
+          onClick={() => setConfirmBlast(true)}
         >
           Blast {ids.length || ""}
         </Button>
@@ -247,7 +269,7 @@ export function BucketMembers({
                     aria-expanded={open === m.client_id}
                     onClick={() => setOpen(open === m.client_id ? null : m.client_id)}
                   >
-                    <span className="block truncate text-sm">
+                    <span className="block text-sm wrap-anywhere">
                       <span className="font-semibold">{m.business_name}</span>
                       <span className="text-muted">
                         {" · "}
@@ -329,6 +351,31 @@ export function BucketMembers({
           </ul>
         </Card>
       )}
+      {blastTemplate && blastFirst && blastPreview ? (
+        <FormDialog
+          title={`Blast “${blastTemplate.name}” to ${ids.length} merchant${ids.length === 1 ? "" : "s"}`}
+          onClose={() => setConfirmBlast(false)}
+          onSubmit={() => void blast()}
+          busy={busy}
+          submitLabel={`Send to ${ids.length}`}
+          wide
+        >
+          <p className="text-sm text-muted">
+            Each one goes out in the merchant&apos;s local window, under the daily cap. Links fill
+            in when it sends. This is how it reads for {blastFirst.business_name}:
+          </p>
+          <div className="rounded-lg border border-border bg-surface-2 p-3 text-sm">
+            <p className="font-semibold">{blastPreview.subject.text || "(no subject)"}</p>
+            <p className="mt-2 whitespace-pre-wrap">{blastPreview.body.text}</p>
+          </div>
+          {blastBlank.length > 0 ? (
+            <p className="text-sm text-warn">
+              Blank for this merchant: {blastBlank.join(", ")}. A merchant with a blank field is
+              skipped and paused, never sent half-filled.
+            </p>
+          ) : null}
+        </FormDialog>
+      ) : null}
     </div>
   );
 }

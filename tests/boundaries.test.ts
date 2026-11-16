@@ -40,6 +40,80 @@ describe("architecture boundaries", () => {
       .map(rel);
     expect(offenders).toEqual([]);
   });
+  it("client components never value-import a module that reaches Node, pg or next/headers (the server side)", () => {
+    // Turbopack refuses `node:fs/promises` in a browser chunk and the whole route dies with a 500 (pass 2: the
+    // Documents panel imported two constants from lib/docs/links.ts, which imports the upload module). A "use server"
+    // file is a boundary and is fine to import; everything else a client file imports must be browser-safe, transitively.
+    const byPath = new Map(files.map((f) => [f, readFileSync(f, "utf8")] as const));
+    const directive = (src: string, d: string) =>
+      new RegExp(`^\\s*["']${d}["'];`, "m").test(src.slice(0, 200));
+    const resolve = (from: string, spec: string): string | null => {
+      const base = spec.startsWith("@/")
+        ? join(SRC, spec.slice(2))
+        : spec.startsWith(".")
+          ? join(from, "..", spec)
+          : null;
+      if (!base) return null;
+      for (const c of [base + ".ts", base + ".tsx", join(base, "index.ts")])
+        if (byPath.has(c)) return c;
+      return null;
+    };
+    const valueImports = (src: string): string[] => {
+      const out: string[] = [];
+      for (const m of src.matchAll(/^import\s+(type\s+)?([^;]*?)\s+from\s+["']([^"']+)["']/gm)) {
+        if (m[1]) continue; // import type … from
+        const names = m[2] ?? "";
+        // `import { type A, type B } from` is types only
+        const inner = /^\{([^}]*)\}$/.exec(names.trim());
+        if (
+          inner &&
+          inner[1]!.split(",").every((s) => s.trim() === "" || s.trim().startsWith("type "))
+        )
+          continue;
+        out.push(m[3]!);
+      }
+      return out;
+    };
+    const SERVER = /^(node:|pg$|next\/headers$|next\/cache$|server-only$)/;
+    const memo = new Map<string, string | null>();
+    // the first server-only reason reachable from a module, or null when it is browser-safe
+    const serverReason = (f: string, trail: string[] = []): string | null => {
+      if (memo.has(f)) return memo.get(f)!;
+      memo.set(f, null); // cycles are browser-safe until proven otherwise
+      const src = byPath.get(f)!;
+      let reason: string | null = null;
+      if (!directive(src, "use server") && !directive(src, "use client")) {
+        for (const spec of valueImports(src)) {
+          if (SERVER.test(spec)) {
+            reason = `${rel(f)} imports ${spec}`;
+            break;
+          }
+          const target = resolve(f, spec);
+          if (!target || directive(byPath.get(target)!, "use server")) continue;
+          const r = serverReason(target, [...trail, rel(f)]);
+          if (r) {
+            reason = `${rel(f)} → ${r}`;
+            break;
+          }
+        }
+      }
+      memo.set(f, reason);
+      return reason;
+    };
+    const offenders: string[] = [];
+    for (const f of files) {
+      const src = byPath.get(f)!;
+      if (!directive(src, "use client")) continue;
+      for (const spec of valueImports(src)) {
+        if (SERVER.test(spec)) offenders.push(`${rel(f)} imports ${spec}`);
+        const target = resolve(f, spec);
+        if (!target || directive(byPath.get(target)!, "use server")) continue;
+        const r = serverReason(target);
+        if (r) offenders.push(`${rel(f)} → ${r}`);
+      }
+    }
+    expect(offenders).toEqual([]);
+  });
   it("no SQL is built from input: interpolated template literals in .query() are an allow-list of fixed fragments", () => {
     // Row-level security keys on a setting the app role can set, so one injected statement could read another user's
     // rows (review-3A A-17). Today every `${}` inside a query is a constant (a column list, a fixed function name,

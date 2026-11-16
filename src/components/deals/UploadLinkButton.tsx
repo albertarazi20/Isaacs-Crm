@@ -1,8 +1,9 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { mintUploadLinkAction } from "@/app/docs-actions";
-import { copyText } from "@/components/client/parts";
+import { mintUploadLinkAction, rotateUploadTokenAction } from "@/app/docs-actions";
+import { copyText, useRun } from "@/components/client/parts";
 import { useToast } from "@/components/overlay";
 import { Button } from "@/components/ui";
 
@@ -38,6 +39,42 @@ export function UploadLinkButton({
       }}
     >
       {busy ? "…" : "Copy upload link"}
+    </Button>
+  );
+}
+
+/**
+ * Kills the merchant's permanent upload link (the one every email carries) and issues a new one (P2-29).
+ * Two clicks, so a stray tap does nothing.
+ */
+export function ResetUploadLinkButton({ clientId }: { clientId: string }) {
+  const run = useRun();
+  const router = useRouter();
+  const [armed, setArmed] = useState(false);
+  const [busy, setBusy] = useState(false);
+  return (
+    <Button
+      size="sm"
+      variant="ghost"
+      disabled={busy}
+      title="The link in past emails stops working; the next email carries the new one"
+      onClick={async () => {
+        if (!armed) {
+          setArmed(true);
+          setTimeout(() => setArmed(false), 4000);
+          return;
+        }
+        setArmed(false);
+        setBusy(true);
+        const ok = await run(
+          rotateUploadTokenAction({ clientId }),
+          "Upload link reset — the old one no longer works",
+        );
+        setBusy(false);
+        if (ok) router.refresh();
+      }}
+    >
+      {armed ? "Click again to reset" : "Reset upload link"}
     </Button>
   );
 }

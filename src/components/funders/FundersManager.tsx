@@ -176,7 +176,7 @@ function FunderCard({
 
   return (
     <Card className="space-y-3 p-4">
-      <div className="flex items-start justify-between gap-3">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between sm:gap-3">
         <div className="min-w-0">
           <h2 className="flex flex-wrap items-center gap-2 text-base font-semibold">
             <span className="truncate">{funder.name}</span>
@@ -186,7 +186,7 @@ function FunderCard({
             <p className="mt-0.5 truncate text-sm text-muted">{contact.join(" · ")}</p>
           ) : null}
         </div>
-        <div className="flex shrink-0 flex-wrap justify-end gap-1">
+        <div className="flex shrink-0 flex-wrap gap-1 sm:justify-end">
           <Button size="sm" onClick={onEdit}>
             Edit
           </Button>

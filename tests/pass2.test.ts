@@ -3,6 +3,8 @@
  * through row security, not as the database owner.
  */
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { openUploadPage, rotateUploadToken } from "@/lib/docs/upload";
+import { sendToFunders } from "@/lib/funders/mutations";
 import { hashToken } from "@/lib/leads/token";
 import { enqueueEmail } from "@/lib/send/enqueue";
 import { drainOutbox, type Deliverer } from "@/lib/send/worker";
@@ -195,5 +197,66 @@ describe("pass 2 regressions", () => {
     ).rows[0];
     expect(row).toEqual({ status: "queued", last_error: "no_postal_address" });
     expect(sent).toEqual(["Welcome"]);
+  });
+
+  it("P2-40: the send dialog's path refuses a shotgun unless forced, and then writes the override on the timeline", async () => {
+    const client = await insertClient(t.db, rep, "Sunset Nails");
+    await t.db.withUser(rep, (q) =>
+      q.query("select submit_to_ops($1, 'new', 2000000, 'stock')", [client]),
+    );
+    const more = await t.pool.query<{ id: string }>(
+      "insert into funders (user_id, name, submission_email) values ($1, 'Fox Funding', 'subs@fox.test'), ($1, 'Kalamata', 'subs@kal.test') returning id",
+      [manager],
+    );
+    const three = [funder, ...more.rows.map((r) => r.id)];
+    await t.pool.query("update shop_settings set max_lenders_per_deal = 2");
+    await expect(
+      t.db.withUser(rep, (q) =>
+        sendToFunders(q, { clientId: client, funderIds: three, note: "", force: false }),
+      ),
+    ).rejects.toThrow(/shop limit is 2/);
+    const none = await t.pool.query<{ n: number }>(
+      "select count(*)::int as n from submissions where client_id = $1",
+      [client],
+    );
+    expect(none.rows[0]?.n).toBe(0);
+    const n = await t.db.withUser(rep, (q) =>
+      sendToFunders(q, { clientId: client, funderIds: three, note: "", force: true }),
+    );
+    expect(n).toBe(3);
+    const override = await t.pool.query<{ n: number }>(
+      "select count(*)::int as n from activities where client_id = $1 and body like 'Shotgun override: 3 lenders%'",
+      [client],
+    );
+    expect(override.rows[0]?.n).toBe(1);
+    await t.pool.query("update shop_settings set max_lenders_per_deal = 6");
+  });
+
+  it("P2-29: resetting the merchant's permanent upload link kills the old link and the sessions it opened", async () => {
+    const client = await insertClient(t.db, rep, "Oak Barbers");
+    const tokenOf = async () =>
+      (
+        await t.pool.query<{ u: string }>("select upload_token as u from clients where id = $1", [
+          client,
+        ])
+      ).rows[0]!.u;
+    const before = await tokenOf();
+    const opened = await openUploadPage(t.db, before, t.today);
+    expect(opened).not.toBeNull();
+    await t.db.withUser(rep, (q) => rotateUploadToken(q, client));
+    const after = await tokenOf();
+    expect(after).not.toBe(before);
+    expect(await openUploadPage(t.db, before, t.today)).toBeNull();
+    expect(await openUploadPage(t.db, opened!.token, t.today)).toBeNull();
+    expect((await openUploadPage(t.db, after, t.today))?.token).toBeDefined();
+    const note = await t.pool.query<{ n: number }>(
+      "select count(*)::int as n from activities where client_id = $1 and body like 'Upload link reset%'",
+      [client],
+    );
+    expect(note.rows[0]?.n).toBe(1);
+    // someone else's merchant is not theirs to reset
+    await expect(t.db.withUser(ops, (q) => rotateUploadToken(q, client))).rejects.toThrow(
+      /isn't in your view/,
+    );
   });
 });

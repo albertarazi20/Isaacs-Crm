@@ -242,6 +242,8 @@ export const sendSchema = z.object({
     .max(50, "Send to 50 funders or fewer at a time"),
   sentOn: isoDate.optional(),
   note: text(500).default(""),
+  /** Past the shop's lender limit on purpose: logged as a shotgun override. */
+  force: z.boolean().default(false),
 });
 export type SendInput = z.output<typeof sendSchema>;
 
