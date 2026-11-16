@@ -248,7 +248,7 @@ function FunnelBlock({ counts, month }: { counts: Parameters<typeof funnel>[0]; 
   const leak = biggestLeak(steps);
   const max = Math.max(1, ...steps.map((s) => s.count));
   return (
-    <Card>
+    <Card className="p-4">
       <SectionTitle aside={<span className="text-xs text-muted">{month}</span>}>
         Funnel
       </SectionTitle>
@@ -283,7 +283,7 @@ function FunnelBlock({ counts, month }: { counts: Parameters<typeof funnel>[0]; 
 
 function MoneyBlock({ m }: { m: MoneyOnTable }) {
   return (
-    <Card>
+    <Card className="p-4">
       <SectionTitle
         aside={
           <span className="text-sm font-semibold tabular-nums">
@@ -448,7 +448,7 @@ function LenderTable({ rows }: { rows: LenderScore[] }) {
 function Meters({ meters }: { meters: EmailMeter[] }) {
   if (meters.length === 0) return null;
   return (
-    <Card>
+    <Card className="p-4">
       <SectionTitle
         aside={
           <Link href="/settings/email" className="text-xs text-accent hover:underline">
@@ -650,7 +650,7 @@ export default async function DashboardPage({
       </div>
 
       {extra ? (
-        <div className="grid grid-cols-[minmax(0,1fr)] gap-6 xl:grid-cols-2">
+        <div className="grid grid-cols-[minmax(0,1fr)] gap-6 xl:grid-cols-[minmax(0,5fr)_minmax(0,3fr)]">
           <RepTable rows={extra[0]} month={monthName} />
           <div className="min-w-0 space-y-6">
             <LenderTable rows={extra[1]} />
