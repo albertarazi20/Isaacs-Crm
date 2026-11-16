@@ -140,22 +140,20 @@ table th {
   font-variant-numeric: tabular-nums;
 }
 
-/* Only one of the two logo variants shows: the light-background one, or the dark-background one. */
-.only-dark {
-  display: none;
-}
+/* Only one of the two logo variants shows: the wrong one for the mode is hidden; the layout classes decide the rest. */
+html[data-theme="light"] .only-dark,
+html:not([data-theme]) .only-dark,
 html[data-theme="dark"] .only-light {
-  display: none;
-}
-html[data-theme="dark"] .only-dark {
-  display: inline-block;
+  display: none !important;
 }
 @media (prefers-color-scheme: dark) {
   html[data-theme="system"] .only-light {
-    display: none;
+    display: none !important;
   }
+}
+@media (prefers-color-scheme: light) {
   html[data-theme="system"] .only-dark {
-    display: inline-block;
+    display: none !important;
   }
 }
 
