@@ -185,7 +185,7 @@ export function ApplicationForm({
         <Field label="What is the money for?">
           <Textarea name="use_of_funds" className="min-h-20" />
         </Field>
-        <Field label="Any advances or loans open today?" hint="Lender and balance, or 'none'">
+        <Field label="Any advances or financing open today?" hint="Who, and the balance, or 'none'">
           <Input name="existing_advances" />
         </Field>
       </fieldset>
