@@ -1,6 +1,6 @@
 "use client";
 
-import { useId, useState } from "react";
+import { useId, useState, type ReactNode } from "react";
 import { saveShopSettingsAction } from "@/app/settings-actions";
 import { useFormState, useRun } from "@/components/client/parts";
 import { Button, Field, Input, Select } from "@/components/ui";
@@ -8,7 +8,14 @@ import type { ShopSettingsRow } from "@/lib/settings/queries";
 import { SettingsCard } from "./primitives";
 import { Toggle } from "./Toggle";
 
-export function ShopSettingsForm({ s }: { s: ShopSettingsRow }) {
+export function ShopSettingsForm({
+  s,
+  afterShop,
+}: {
+  s: ShopSettingsRow;
+  /** A card that belongs right under "The shop" (the DNS check reads the sender typed there). */
+  afterShop?: ReactNode;
+}) {
   const run = useRun();
   const formId = useId();
   const [busy, setBusy] = useState(false);
@@ -22,6 +29,7 @@ export function ShopSettingsForm({ s }: { s: ShopSettingsRow }) {
     sendWindowStart: String(s.send_window_start),
     sendWindowEnd: String(s.send_window_end),
     sendOnWeekends: s.send_on_weekends,
+    sendOnHolidays: s.send_on_holidays,
     perMerchantDaily: String(s.per_merchant_daily),
     perMerchantWeekly: String(s.per_merchant_weekly),
     automationFrom: s.automation_from,
@@ -30,6 +38,9 @@ export function ShopSettingsForm({ s }: { s: ShopSettingsRow }) {
     lenderChaseMode: s.lender_chase_mode,
     lenderChaseMax: String(s.lender_chase_max),
     maxLendersPerDeal: String(s.max_lenders_per_deal),
+    approvalValidDays: String(s.approval_valid_days),
+    resubmitBlockDays: String(s.resubmit_block_days),
+    dealsInboxAddress: s.deals_inbox_address,
   }));
   const save = (
     <Button type="submit" form={formId} variant="primary" disabled={busy}>
@@ -69,8 +80,19 @@ export function ShopSettingsForm({ s }: { s: ShopSettingsRow }) {
               onChange={(x) => set("automationReplyToRep", x)}
             />
           </div>
+          <Field
+            label="Deals inbox (lenders reply here)"
+            hint="Empty means lenders reply to the rep who sent the file"
+          >
+            <Input
+              {...bind("dealsInboxAddress")}
+              type="email"
+              placeholder="deals@mail.selectivecap.com"
+            />
+          </Field>
         </div>
       </SettingsCard>
+      {afterShop}
       <SettingsCard
         title="The cap"
         description="Per mailbox, rolling 24 hours. Google Workspace allows 2,000; 1,500 keeps a margin. Lead-intake emails use the reserved slice and never wait."
@@ -108,6 +130,12 @@ export function ShopSettingsForm({ s }: { s: ShopSettingsRow }) {
               onChange={(x) => set("sendOnWeekends", x)}
             />
             <Toggle
+              label="Send on US holidays"
+              hint="Off = federal holidays are skipped, like a weekend"
+              checked={v.sendOnHolidays}
+              onChange={(x) => set("sendOnHolidays", x)}
+            />
+            <Toggle
               label="Sequences slow down"
               hint="Off = the same template every day until they act"
               checked={v.sequencesEnabled}
@@ -127,11 +155,24 @@ export function ShopSettingsForm({ s }: { s: ShopSettingsRow }) {
           <Field label="Auto-chase">
             <Select {...bind("lenderChaseMode")}>
               <option value="send">Send from the rep&apos;s Gmail</option>
+              <option value="draft">Write the chase for a person to send</option>
               <option value="off">Off</option>
             </Select>
           </Field>
           <Field label="Shotgun limit (lenders per file)">
             <Input {...bind("maxLendersPerDeal")} inputMode="numeric" />
+          </Field>
+          <Field
+            label="Approval stays good for (days)"
+            hint="Used when a lender names no number of its own"
+          >
+            <Input {...bind("approvalValidDays")} inputMode="numeric" />
+          </Field>
+          <Field
+            label="Block a double submission for (days)"
+            hint="Same merchant, same lender. 0 turns the block off"
+          >
+            <Input {...bind("resubmitBlockDays")} inputMode="numeric" />
           </Field>
         </div>
       </SettingsCard>
