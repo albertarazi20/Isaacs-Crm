@@ -1,4 +1,48 @@
-# Deploying Isaac
+# Deploying Selective CRM on Netlify (your own account)
+
+This is the current route for this repo (`albertarazi20/isaac-work`, Supabase project `aztoxzcmnvqaypjuuuwj`). The
+older sections below were written for Ronny's Isaac deployment and stay for reference. Never touch Ronny's site or his
+Supabase project.
+
+## What runs where
+
+- The app: Netlify builds it from GitHub with its zero-config Next.js adapter (`next build`; Node 22 from
+  `netlify.toml`). Nothing to install or pin.
+- The five scheduled jobs: Netlify scheduled functions in `netlify/functions/cron-*.mts` call the app's own
+  `/api/cron/*` routes with the bearer secret (outbox and inbox every 5 minutes, sheets every 10, nightly and
+  reminders hourly, all in UTC). They fire only on the published production deploy, so nothing else to schedule.
+- The database: the Supabase project, already migrated through 0531.
+
+## Steps
+
+1. **Create the site and link the repo.** The site can be created by Claude in your Netlify account; you link the
+   repo once in the dashboard: Project configuration → Build & deploy → Continuous deployment → Link repository →
+   GitHub (authorize the Netlify app for `isaac-work`) → branch `main`. Keep the detected build settings.
+2. **Set the environment variables** (Project configuration → Environment variables; scope **Builds and Functions**;
+   mark the secrets as secret). Values change only at the next build, so redeploy after editing.
+
+   | Name                                                     | Value                                                                                                           |
+   | -------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
+   | `APP_URL`                                                | the site's address, `https://<name>.netlify.app`, no trailing slash                                             |
+   | `SESSION_SECRET`, `TOKEN_ENC_KEY`, `CRON_SECRET`         | random strings (Claude can set these)                                                                           |
+   | `DATABASE_URL`                                           | Supabase → Connect → **Transaction pooler** (port 6543) with the database password, ending `?sslmode=no-verify` |
+   | `ALLOWED_EMAILS`                                         | the sign-in addresses, comma separated; the first one is who the passcode signs in as                           |
+   | `ACCESS_PASSCODE`                                        | 12+ characters you choose; lets you sign in before Google is set up                                             |
+   | `SUPABASE_URL`, `SUPABASE_SERVICE_KEY`, `DOCS_BUCKET`    | `https://aztoxzcmnvqaypjuuuwj.supabase.co`, the service key from Supabase → Settings → API, and `documents`     |
+   | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`               | from the Google Cloud OAuth client (redirect URI `<APP_URL>/api/auth/callback`)                                 |
+   | `RESEND_API_KEY`, `RESEND_FROM`, `RESEND_WEBHOOK_SECRET` | from Resend, once the domain's DNS records pass                                                                 |
+   | `ANTHROPIC_API_KEY`                                      | from the Anthropic console                                                                                      |
+
+   Leave `DEV_LOGIN` unset: dev login is impossible in production anyway.
+
+3. **Deploy** (Deploys → Trigger deploy). Sign in with the passcode, then check Settings → Email & lenders (the DNS
+   check) and the Functions tab (the five `cron-*` functions and their last runs).
+4. A custom domain, when you want one: Domain management → Add a domain, then update `APP_URL`, the Google redirect
+   URI and the Resend webhook, and redeploy.
+
+---
+
+# Deploying Isaac (the original notes)
 
 > **isaac-work note (2026-11-15):** this file describes Ronny's original Isaac deployment (Supabase `vngxqywqqdmucvcdjfec`, Netlify `mca123`). This repo uses Supabase project `aztoxzcmnvqaypjuuuwj`. Never run anything against the Isaac project or site. See `CLAUDE.md`.
 

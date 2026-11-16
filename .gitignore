@@ -22,3 +22,6 @@ isaac-notes-*.csv
 
 # document bytes in local development (production uses object storage)
 .data/
+
+# Netlify link state (written by netlify link / init; never committed)
+.netlify
