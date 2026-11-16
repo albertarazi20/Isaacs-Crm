@@ -56,7 +56,13 @@ export async function openBrowser(email, viewport = { width: 1440, height: 900 }
   });
   const context = await browser.newContext({ viewport, ...extra });
   const page = await context.newPage();
-  page.on("pageerror", (e) => check("no uncaught page errors", false, e.message));
+  page.on("pageerror", (e) => {
+    // React 19.2's development-only performance tracks throw this from the browser whenever a server page calls
+    // notFound() (the merchant page does it on main too). It is not in a production build and says nothing about
+    // the app, so it is the one message this check does not count; every other page error still fails it.
+    if (/Failed to execute 'measure' on 'Performance'.*negative time stamp/.test(e.message)) return;
+    check("no uncaught page errors", false, e.message);
+  });
   await page.goto(`${BASE}/api/dev-login?email=${encodeURIComponent(email)}`);
   return { browser, context, page };
 }
