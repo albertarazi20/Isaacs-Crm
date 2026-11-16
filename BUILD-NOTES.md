@@ -135,3 +135,35 @@ typecheck + lint + the unit suite green (tests/language.test.ts excepted — the
 
 Supabase (`aztoxzcmnvqaypjuuuwj`) carries every migration the dev database does (52 at this line); the security
 advisor shows only the intentional notes.
+
+## Pass 2 — after the fixes (2026-11-16, ~03:30 ET)
+
+All 53 findings are fixed; `docs/ISSUES.md` "Pass 2 — fix status" says where each landed. The two agent branches
+(`fix/sheets-intake` 057a4cd, `fix/lender-ui` 5ccdf42) are merged into main; the worktrees are gone.
+
+- Gates: typecheck, lint, format all clean. `pnpm build` (the CI build) passes.
+- Unit suite: 93 of 94 files, 1,743 of 1,745 tests. The two failures are `tests/language.test.ts` (the owner's
+  lender/payment vocabulary call). New this pass: `tests/pass2.test.ts` (ops loop as the ops role, the
+  confirmed-funding guard, token revocation, the postal guard, the shotgun refusal and override, the upload-link
+  reset), the sheets-intake and lender-UI suites from the agents, and a boundaries test that refuses any
+  "use client" file whose imports reach Node, pg or next/headers.
+- Browser suites (`pnpm e2e`, 26 files): 506 of 533 checks. The 27 misses are all `board.e2e.mjs` (23) and
+  `mobile-ui.e2e.mjs` (4): the kanban drag flows written for the 23-stage model, waiting on the owner's
+  keep-or-drop call. `crm-settings`, `crm-dashboard` and `funders` were rewritten for this pass (form-scoped Role
+  lookup; the goal button copy; lender names are unique shop-wide and accepting an offer no longer funds, so the
+  run tags its lenders, parks the shop's others, and takes "Mark funded" to FUND on the deal page). `power.e2e`
+  missed one check once under load and now polls for the words instead of a fixed wait; 73/73 on its own.
+- Verified in the real app on top of the suites: the board's "Send to lenders" opens the lender picker, the
+  shotgun warning shows past the shop limit and the send marks the deal sent with chase timers; the blast confirm
+  shows the merged template; copy controls and manager/ops merchant views land in `access_log`; "Reset upload
+  link" kills the old permanent link (it now reads "This link isn't valid any more") and the new one opens the
+  upload form; every main page fits a 390px phone for every role.
+- Found on the way: a client component imported two constants from `src/lib/docs/links.ts`, which imports the
+  upload module and so `node:fs/promises`; Turbopack refused the browser chunk and the deal route 500'd. The
+  constants live in `src/lib/docs/linkExpiry.ts` now and the boundaries test keeps it that way. After a Turbopack
+  panic the dev server stays wedged until restarted.
+
+Still the owner's: the vocabulary decision (language test), kanban keep/drop, the JSON backup scope, the shotgun
+and chase defaults, and every OWNER-TODO credential before go-live (Google OAuth app, Resend + DNS + webhook
+secret, Anthropic key, Supabase Storage bucket `documents` + service key, hosting + cron schedules, the shop's
+postal address). Texting and calling stay parked.

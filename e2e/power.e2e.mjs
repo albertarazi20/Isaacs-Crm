@@ -210,16 +210,14 @@ export default async function powerFlow({ email }) {
     .first();
   await stakeBtn.click();
   const stakeArticle = stakeBtn.locator("xpath=ancestor::article[1]");
-  await stakeArticle
-    .getByRole("note")
-    .waitFor({ timeout: 4000 })
-    .catch(() => undefined);
-  check(
-    "tapping '$ at stake' explains the score in words",
-    /at stake \(.+\)\. .+ counts x [\d.]+\. .+\. That makes priority [\d,]+\./.test(
-      await stakeArticle.innerText(),
-    ),
-  );
+  // the note renders on the next paint; under load that took longer than 4s once, so poll for the words themselves
+  const STAKE_WORDS = /at stake \(.+\)\. .+ counts x [\d.]+\. .+\. That makes priority [\d,]+\./;
+  let stakeText = await stakeArticle.innerText();
+  for (let i = 0; i < 20 && !STAKE_WORDS.test(stakeText); i++) {
+    await page.waitForTimeout(400);
+    stakeText = await stakeArticle.innerText();
+  }
+  check("tapping '$ at stake' explains the score in words", STAKE_WORDS.test(stakeText));
 
   // Without localStorage the page still works and the toggle still flips for the session.
   {
