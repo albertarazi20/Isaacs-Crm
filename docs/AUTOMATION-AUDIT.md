@@ -181,6 +181,8 @@ stream writes to: the rep's and manager's alert feed, drained into email by stre
 | S1-14 | One monthly nudger for Cold merchants: the Cold bucket keeps no email steps; the win-back cold pool owns it                                                                                                                                                                                | exactly one email a month                               |
 | S1-15 | Claim checker on every template and automated send: "approved" or "pre-approved" need a real offer on the deal; "guaranteed", "no upfront fees", "loan" and factor-rate quotes to California merchants are flagged; a template that fails cannot be approved and the worker holds the send | pure checks; template refusal; outbox hold              |
 
+**Result (2026-11-16):** merged into main at 680a24e (`feat/stream-1-send`, 7 commits, migrations 0501–0509, `tests/stream1-*.test.ts` ×7). S1-1…S1-15 all landed; S1-1 and S1-6 run from the inbox cron route (597a62d). Supabase has 0501–0509 except 0508's seeded-step delete, left for the owner (BUILD-NOTES).
+
 ### Stream 2 — the board, the deal, the AI engine
 
 | ID    | Build                                                                                                                                                                                                                                                                                                                                                  | Proves                                           |
@@ -204,6 +206,8 @@ stream writes to: the rep's and manager's alert feed, drained into email by stre
 | S2-17 | The reader's eval harness: a labelled corpus under `tests/fixtures/lender-emails/` (seeded with the synthetic cases) and `scripts/eval-reader.mjs` reporting accuracy per event; the owner adds real emails                                                                                                                                            | script runs                                      |
 | S2-18 | Last-synced per mailbox as a query for the Settings page                                                                                                                                                                                                                                                                                               | query                                            |
 
+**Result (2026-11-16):** merged at d0610b2 (`feat/stream-2-deals`, 2 commits, migrations 0510–0515, `tests/stream2-*.test.ts` ×3 plus `tests/fixtures/lender-emails/`). S2-1…S2-18 landed (S2-12, the backdoor score, came from stream 3 in 0525); S2-2 runs from the nightly cron route (597a62d). Supabase has 0510–0515 (0512 through a rename of the old signature, left for the owner to drop; BUILD-NOTES).
+
 ### Stream 3 — money, win-back, dashboard, compliance, trust
 
 | ID    | Build                                                                                                                                                                                                                                                                                                                                     | Proves                               |
@@ -220,6 +224,8 @@ stream writes to: the rep's and manager's alert feed, drained into email by stre
 | S3-10 | Export routes tested: a rep gets 403, a manager's export writes the access log and emails managers                                                                                                                                                                                                                                        | DB + sends                           |
 | S3-11 | Win-back finished: why-not-funded pick-list; Claude first line per merchant (auto or review mode); rescue nudges on days 20, 25 and 29 while the approval is live; link-opened as the hot-list signal; recovered-money per pool and template; tests for pools 2–5, the reply and opt-out stops, Cold to win-back, curable decline to pool | members, outbox, scores              |
 | S3-12 | Speed numbers (lead to sub, sub to first offer, approval to funded) and the kickback rate per rep                                                                                                                                                                                                                                         | metrics                              |
+
+**Result (2026-11-16):** merged at 9f58fb0 (`feat/stream-3-money`, 1 commit, migrations 0520–0525, `tests/stream3-*.test.ts` ×9). S3-1…S3-12 landed, and S2-12 with them. S3-2 and S3-1 run from the hourly reminders route, S3-4, S3-8 and the rescue nudges from the nightly route (9dedece). Supabase has 0520–0527.
 
 ## Not built in this pass, and why
 

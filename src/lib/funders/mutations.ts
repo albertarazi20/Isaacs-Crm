@@ -114,11 +114,13 @@ export async function sendToFunders(q: Db, input: SendInput): Promise<number> {
       );
     }
   }
-  const res = await q.query("select id from create_submissions($1, $2::uuid[], $3::date, $4)", [
+  // "send anyway" covers the double-submission window too (0512): both refusals name why, both overrides are logged
+  const res = await q.query("select id from create_submissions($1, $2::uuid[], $3::date, $4, $5)", [
     input.clientId,
     input.funderIds,
     input.sentOn ?? null,
     input.note,
+    input.force ?? false,
   ]);
   return res.rowCount ?? 0;
 }

@@ -19,12 +19,17 @@ describe("architecture boundaries", () => {
     // lender downloads). They run for the shop, not for a signed-in user, so they are the owner connection on purpose.
     const JOBS = new Set([
       "lib/buckets/engine.ts", // nightly sequence steps and blasts
+      "lib/docs/retention.ts", // stream 3: the nightly purge of documents on dead deals
       "lib/docs/upload.ts", // merchant uploads, lender downloads, the scan
       "lib/inbox/process.ts", // the lender-email reader
       "lib/inbox/sync.ts", // Gmail history sync
+      "lib/money/close.ts", // stream 3: the month-end close and statements
+      "lib/money/renewals.ts", // stream 3: the renewal warm-up and eligibility emails
       "lib/money/winback.ts", // winback pools
       "lib/send/deliver.ts", // the Gmail / Resend sender
+      "lib/send/external.ts", // stream 1: Sent mail outside the CRM, counted toward the cap
       "lib/send/worker.ts", // the outbox drain
+      "lib/messaging/replyTags.ts", // stream 1: the merchant reply classifier
       "lib/sheets/file.ts", // filing sheet rows as leads
       "lib/sheets/sync.ts", // the daily Google Sheets loop
     ]);
@@ -123,11 +128,12 @@ describe("architecture boundaries", () => {
       "lib/messaging/queries.ts": 2, // ${offerSql}
       "lib/data/mutations.ts": 2, // ${sets} from the CLIENT_COLUMNS map; ${fn} from a fixed list
       "lib/data/queries.ts": 1, // ${NAME_KEY_SQL("business_name")}
-      "lib/buckets/queries.ts": 1, // ${TZ_LABEL}: a constant CASE expression (time-zone label), no input in it
-      // ${PENDING_ROW_COLUMNS}: the fixed column list a sheet row is read with before it is filed as a merchant
-      "lib/sheets/file.ts": 1,
-      "lib/leads/form.ts": 1,
-      "app/sheets-actions.ts": 1,
+      // ${TZ_LABEL}: a constant CASE expression (time-zone label); stream 1 adds ${SENDS_SQL} / ${TOTALS_SQL}, the
+      // fixed fragments the template and bucket scores are counted with (the window is a bound parameter)
+      "lib/buckets/queries.ts": 3,
+      // ${PENDING_ROW_COLUMNS}: the fixed column list a sheet row is read with before it is filed as a merchant —
+      // the daily loop's read, and loadPendingRow (stream 1), which the form and the actions call
+      "lib/sheets/file.ts": 2,
     };
     const counts: Record<string, number> = {};
     for (const f of files) {

@@ -4,6 +4,8 @@ import { db } from "@/lib/db";
 import { sendViaResend } from "@/lib/email/resend";
 import { isAllowedEmail } from "@/lib/auth/google";
 import { devLoginEnabled, env } from "@/lib/env";
+import { runMonthEndClose } from "@/lib/money/close";
+import { runUserAlerts } from "@/lib/system/alerts";
 import { recordHeartbeat } from "@/lib/system/heartbeat";
 import { runCallReminders, runReminders } from "@/lib/system/reminders";
 import { runWeeklyScorecards } from "@/lib/system/weekly";
@@ -39,18 +41,28 @@ async function handle(req: Request): Promise<NextResponse> {
   const digest = await runReminders({ db, now, appUrl: e.APP_URL, send, allowed });
   const calls = await runCallReminders({ db, now, appUrl: e.APP_URL, send, allowed });
   const weekly = await runWeeklyScorecards({ db, now, appUrl: e.APP_URL, send, allowed });
+  // the alert feed, generated then bundled into one email per person at most once an hour
+  const alerts = await runUserAlerts({ db, now, appUrl: e.APP_URL, send, allowed });
+  // the previous month closes on the first run at or after 12:00 UTC on the 1st; every later run finds it done
+  const close = await runMonthEndClose({ db, now, send, allowed });
   // A run in which any email failed to send (a wrong RESEND_FROM, a dead key) is not a healthy run: leave the
   // heartbeat alone so the banner fires, and answer 502 so the external scheduler alerts too. The failed sends
   // rolled their claims back, so the next hourly run retries them.
-  if (digest.failed > 0 || calls.failed > 0 || weekly.failed > 0) {
+  if (
+    digest.failed > 0 ||
+    calls.failed > 0 ||
+    weekly.failed > 0 ||
+    alerts.failed > 0 ||
+    close.failed > 0
+  ) {
     return NextResponse.json(
-      { ...digest, calls, weekly, error: "some reminder emails failed to send" },
+      { ...digest, calls, weekly, alerts, close, error: "some reminder emails failed to send" },
       { status: 502 },
     );
   }
   // Dead-man's switch: written after every run that sent cleanly, even when nothing needed sending.
   await recordHeartbeat(undefined, { now });
-  return NextResponse.json({ ...digest, calls, weekly });
+  return NextResponse.json({ ...digest, calls, weekly, alerts, close });
 }
 
 export const GET = handle;

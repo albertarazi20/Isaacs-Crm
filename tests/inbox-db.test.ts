@@ -114,6 +114,7 @@ describe("sending to lenders from the CRM", () => {
           funderIds: [pearl],
           senderName: "Boss",
           senderEmail: "boss@selectivecap.com",
+          appUrl: "https://crm.test",
         },
         sender,
       ),

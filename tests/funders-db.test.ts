@@ -32,6 +32,12 @@ async function funder(name: string, extra: Record<string, unknown> = {}): Promis
 async function merchant(name: string, stage = "application_in"): Promise<string> {
   seq += 1;
   const id = await insertClient(t.db, a, `${name} ${seq}`);
+  // each merchant is its own owner: the helper's one placeholder phone would make them all the same person to
+  // the double-submission guard (0512), which matches by phone or email across every rep
+  await t.pool.query("update clients set phone = $2 where id = $1", [
+    id,
+    `555${String(1000000 + seq).slice(-7)}`,
+  ]);
   if (stage !== "name_in") {
     await asA((q) =>
       q.query("select * from move_client($1, $2, $3::jsonb)", [
@@ -221,8 +227,14 @@ describe("create_submissions", () => {
       [id],
     );
     expect(n.rows[0].n).toBe(1);
-    // another day is a re-submission, which is allowed
+    // another day inside the shop's window is a double submission (0512): refused, naming the lender and the date
+    await expect(send(id, [pearl], addDays(t.today, -3))).rejects.toThrow(
+      new RegExp(`already went to Dup Pearl ${seq} on \\w{3} \\d{1,2}.*waits 30 days`),
+    );
+    // past the window it is a re-submission, which is allowed
+    await t.pool.query("update shop_settings set resubmit_block_days = 2");
     await send(id, [pearl], addDays(t.today, -3));
+    await t.pool.query("update shop_settings set resubmit_block_days = 30");
     const after = await t.pool.query(
       "select count(*)::int as n from submissions where client_id = $1",
       [id],

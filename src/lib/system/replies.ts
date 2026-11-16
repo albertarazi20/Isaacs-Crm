@@ -4,7 +4,9 @@
  * rules live in one place; this file is the glue and the alerts.
  */
 import type { Db, DbAccess } from "../db";
-import { authResults } from "../inbox/match";
+import { htmlToText, parseAddress, splitMessageIds } from "../inbox/gmailRead";
+import { authResults, dealTokenIn, domainOf, matchEmail } from "../inbox/match";
+import { loadCandidates } from "../inbox/sync";
 import { isStopMessage } from "../messaging/stop";
 import type { DigestSender } from "./reminders";
 
@@ -101,6 +103,122 @@ export interface ResendEvent {
 
 const str = (v: unknown): string => (typeof v === "string" ? v : "");
 
+/** The body of an inbound message, fetched from the provider when the webhook payload carried none. */
+export type InboundFetcher = (emailId: string) => Promise<{ text?: string; html?: string } | null>;
+
+/**
+ * Resend's receiving API: the stored inbound message by id. Used only when the webhook payload has no text or
+ * html. A miss (404, a network error) is null and the message is stored with the snippet it came with.
+ */
+export function resendInboundFetcher(
+  apiKey: string,
+  fetchImpl: typeof fetch = fetch,
+): InboundFetcher {
+  return async (emailId) => {
+    try {
+      const res = await fetchImpl(
+        `https://api.resend.com/emails/receiving/${encodeURIComponent(emailId)}`,
+        { headers: { authorization: `Bearer ${apiKey}` }, signal: AbortSignal.timeout(10_000) },
+      );
+      if (!res.ok) return null;
+      const body = (await res.json().catch(() => null)) as {
+        text?: unknown;
+        html?: unknown;
+      } | null;
+      return body ? { text: str(body.text), html: str(body.html) } : null;
+    } catch {
+      return null;
+    }
+  };
+}
+
+/** The names of the attachments on an inbound payload, whichever shape the provider used. */
+function attachmentNames(d: Record<string, unknown>): string[] {
+  const a = d["attachments"];
+  if (!Array.isArray(a)) return [];
+  return a
+    .map((x) =>
+      str((x as Record<string, unknown>)["filename"] ?? (x as Record<string, unknown>)["name"]),
+    )
+    .filter(Boolean)
+    .slice(0, 20);
+}
+
+/**
+ * Route B (S2-5): mail from anyone who is not a merchant lands on the shop's deals inbox. A lender's answer is stored
+ * like Gmail mail — matched to its deal by the same ladder (reply headers → [D-n] token → lender domain + business
+ * name) — and processInbox reads it. A stranger (no match, no lender domain, no deal token) is kept only in
+ * webhook_events. Returns the result word for the event row.
+ */
+async function storeLenderMail(
+  q: Db,
+  eventId: string,
+  evt: ResendEvent,
+  fetchInbound: InboundFetcher | undefined,
+): Promise<string> {
+  const d = evt.data ?? {};
+  const emailId = str(d["email_id"]) || str(d["id"]);
+  const from = parseAddress(str(d["from"]));
+  const subject = str(d["subject"]);
+  const html = str(d["html"]);
+  let text = str(d["text"]);
+  if (!text && !html && fetchInbound && emailId) {
+    const got = await fetchInbound(emailId);
+    if (got?.text) text = got.text;
+    else if (got?.html) text = htmlToText(got.html);
+  }
+  if (!text && html) text = htmlToText(html);
+  if (!text) text = str(d["snippet"]);
+  const references = splitMessageIds(headerOf(d, "references") || str(d["references"]));
+  const inReplyTo = headerOf(d, "in-reply-to") || str(d["in_reply_to"]) || null;
+  const candidates = await loadCandidates(q);
+  const match = matchEmail(
+    { threadId: null, inReplyTo, references, fromAddress: from.address, subject, text },
+    candidates,
+  );
+  const lenderDomain = candidates.some(
+    (c) => c.funderDomain && c.funderDomain === domainOf(from.address),
+  );
+  if (!match && !lenderDomain && dealTokenIn(subject) === null) return "received:unknown_sender";
+  const auth = authResults(headerOf(d, "authentication-results") || null);
+  const to = d["to"];
+  const toAddresses = (Array.isArray(to) ? to.map(str) : [str(to)])
+    .map((x) => parseAddress(x).address)
+    .filter(Boolean);
+  const receivedAt =
+    evt.created_at && !Number.isNaN(Date.parse(evt.created_at)) ? evt.created_at : null;
+  const stored = await q.query(
+    `insert into inbound_emails (mailbox_user_id, channel, gmail_id, message_id, in_reply_to, references_ids, from_address, from_name,
+                                 to_addresses, subject, snippet, text_body, attachment_names, received_at, spf_pass, dkim_pass,
+                                 deal_id, submission_id, client_id, funder_id, matched_by, kind)
+     values (null, 'resend', $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, coalesce($12::timestamptz, now()), $13, $14, $15, $16, $17, $18, $19, 'lender')
+     on conflict do nothing`,
+    [
+      `resend:${emailId || eventId}`,
+      headerOf(d, "message-id") || str(d["message_id"]) || null,
+      inReplyTo,
+      references,
+      from.address,
+      from.name,
+      toAddresses,
+      subject,
+      text.slice(0, 240),
+      text.slice(0, 200_000),
+      attachmentNames(d),
+      receivedAt,
+      auth.spf,
+      auth.dkim,
+      match?.candidate.dealId ?? null,
+      match?.candidate.submissionId ?? null,
+      match?.candidate.clientId ?? null,
+      match?.candidate.funderId ?? null,
+      match ? match.by : "none",
+    ],
+  );
+  if (stored.rowCount === 0) return "received:lender:duplicate";
+  return match ? `received:lender:${match.by}` : "received:lender:unmatched";
+}
+
 /**
  * One Resend event. Stored first (idempotent on the provider's event id), then applied. Unknown types are kept and
  * marked ignored, so a new event type shows up in the table before anyone writes code for it.
@@ -109,6 +227,7 @@ export async function handleResendEvent(
   db: DbAccess,
   eventId: string,
   evt: ResendEvent,
+  opts: { fetchInbound?: InboundFetcher } = {},
 ): Promise<{ result: string }> {
   return db.withSystem(async (q) => {
     const stored = await q.query(
@@ -150,7 +269,8 @@ export async function handleResendEvent(
           break;
         }
         case "email.received": {
-          // inbound on the automation domain: a merchant answering a sequence email
+          // inbound on the automation domain: a merchant answering a sequence email, or a lender answering a
+          // submission on the shop's deals inbox (Route B)
           const from = str(d["from"]);
           const subject = str(d["subject"]);
           const text = str(d["text"]) || str(d["snippet"]);
@@ -161,7 +281,7 @@ export async function handleResendEvent(
           );
           const clientId = rows[0]?.id;
           if (!clientId) {
-            result = "received:unknown_sender";
+            result = await storeLenderMail(q, eventId, evt, opts.fetchInbound);
             break;
           }
           if (!(await inboundVerified(q, d as Record<string, unknown>, clientId))) {

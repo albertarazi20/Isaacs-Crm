@@ -1,7 +1,13 @@
 import type { z } from "zod";
 import type { Db } from "../db";
 import { UserError } from "../data/mutations";
-import type { closeDealSchema, dealNoteSchema, kickBackSchema, submitToOpsSchema } from "./schemas";
+import type {
+  askManagerSchema,
+  closeDealSchema,
+  dealNoteSchema,
+  kickBackSchema,
+  submitToOpsSchema,
+} from "./schemas";
 import type { DealRow } from "./types";
 
 type Row = Omit<DealRow, "status">;
@@ -58,4 +64,13 @@ export async function setDealNote(q: Db, input: z.output<typeof dealNoteSchema>)
   }[input.field];
   const res = await q.query(sql, [input.dealId, input.text]);
   if (res.rowCount === 0) throw new UserError("That deal no longer exists");
+}
+
+/** Ask a manager (S2-14): every manager gets an alert with the question and the deal's context. Returns how many. */
+export async function askManager(q: Db, input: z.output<typeof askManagerSchema>): Promise<number> {
+  const { rows } = await q.query<{ n: number }>("select ask_manager($1, $2) as n", [
+    input.dealId,
+    input.question,
+  ]);
+  return rows[0]?.n ?? 0;
 }

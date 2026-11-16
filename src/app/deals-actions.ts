@@ -12,6 +12,7 @@ import type { ClientFundersData } from "@/lib/funders/types";
 import { z } from "zod";
 import { UserError } from "@/lib/data/mutations";
 import * as m from "@/lib/deals/mutations";
+import { reshopCandidates, startReshop, type ReshopCandidate } from "@/lib/deals/reshop";
 import * as s from "@/lib/deals/schemas";
 import type { Role } from "@/lib/auth/roles";
 
@@ -91,4 +92,33 @@ export async function setDealNoteAction(input: unknown): Promise<ActionResult<nu
     const parsed = s.dealNoteSchema.parse(input);
     return (await m.setDealNote(q, parsed), null);
   }, allowed);
+}
+
+/** Ask a manager: one click writes every manager's alert with the question and the deal's context (S2-14). */
+export async function askManagerAction(
+  input: unknown,
+): Promise<ActionResult<{ managers: number }>> {
+  return run(async (q) => ({ managers: await m.askManager(q, s.askManagerSchema.parse(input)) }));
+}
+
+/** The lenders a declined-by-all deal could go to next: rules fit, and they have not seen this merchant (S2-10). */
+export async function reshopCandidatesAction(
+  input: unknown,
+): Promise<ActionResult<ReshopCandidate[]>> {
+  const session = await requireSession();
+  try {
+    const { clientId } = s.reshopSchema.parse(input);
+    const data = await db.withUser(session.userId, (q) => reshopCandidates(q, clientId));
+    return { ok: true, data };
+  } catch (e) {
+    return { ok: false, error: toActionError(e) };
+  }
+}
+
+/** One-click reshop: close the declined deal, open a new one pre-filled, ask for the newest statement. */
+export async function startReshopAction(input: unknown): Promise<ActionResult<{ id: string }>> {
+  return run(
+    async (q) => ({ id: (await startReshop(q, s.reshopSchema.parse(input).clientId)).id }),
+    CAN.workLeads,
+  );
 }

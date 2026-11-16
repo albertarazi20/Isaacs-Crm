@@ -130,3 +130,91 @@ export async function listBucketSteps(q: Db, bucketId: string): Promise<BucketSt
   );
   return rows;
 }
+
+/**
+ * Scores (plan §5.13, S1-7): what each template and each bucket actually does. Counted from the outbox rows that
+ * went out in the window; a reply, a document or an unsubscribe within 14 days of a send is credited to it.
+ * Rates are fractions (0.1 = 10%). Row security scopes the rows: a rep scores their own sends, a manager the shop's.
+ */
+export interface ScoreRow {
+  sent: number;
+  replies: number;
+  docs_in: number;
+  /** Average days from the send to the merchant's first document, over the sends that got one. */
+  avg_days_to_docs: number | null;
+  bounces: number;
+  unsubscribes: number;
+  reply_rate: number;
+  docs_rate: number;
+  bounce_rate: number;
+  unsubscribe_rate: number;
+}
+export interface TemplateScore extends ScoreRow {
+  template_id: string;
+  name: string;
+  auto_paused_at: string | null;
+  auto_pause_reason: string;
+}
+export interface BucketScore extends ScoreRow {
+  bucket_id: string;
+  name: string;
+  /** Live enrolments right now. */
+  members: number;
+}
+
+const ATTRIBUTION = "interval '14 days'";
+const SENDS_SQL = `
+  select o.id, o.template_id, o.source, o.client_id, o.sent_at, o.delivery_status,
+         exists (select 1 from inbound_emails i where i.client_id = o.client_id and i.kind = 'merchant'
+                    and i.received_at > o.sent_at and i.received_at < o.sent_at + ${ATTRIBUTION}) as replied,
+         (select min(d.created_at) from documents d where d.client_id = o.client_id and d.deleted_at is null
+            and d.created_at > o.sent_at and d.created_at < o.sent_at + ${ATTRIBUTION}) as first_doc_at,
+         exists (select 1 from suppressions sp where sp.client_id = o.client_id
+                    and sp.reason in ('unsubscribe', 'stop_reply', 'complaint')
+                    and sp.created_at > o.sent_at and sp.created_at < o.sent_at + ${ATTRIBUTION}) as unsubscribed
+    from outbox o
+   where o.status = 'sent' and o.lane in ('sequence', 'blast') and o.sent_at > now() - make_interval(days => $1)`;
+const TOTALS_SQL = `
+  count(s.id)::int as sent,
+  count(*) filter (where s.replied)::int as replies,
+  count(*) filter (where s.first_doc_at is not null)::int as docs_in,
+  round((avg(extract(epoch from (s.first_doc_at - s.sent_at)) / 86400))::numeric, 1)::float as avg_days_to_docs,
+  count(*) filter (where s.delivery_status = 'bounced')::int as bounces,
+  count(*) filter (where s.unsubscribed)::int as unsubscribes`;
+
+const withRates = <T extends ScoreRow>(r: T): T => {
+  const rate = (n: number) => (r.sent > 0 ? Math.round((n / r.sent) * 1000) / 1000 : 0);
+  return {
+    ...r,
+    reply_rate: rate(r.replies),
+    docs_rate: rate(r.docs_in),
+    bounce_rate: rate(r.bounces),
+    unsubscribe_rate: rate(r.unsubscribes),
+  };
+};
+
+export async function templateScores(q: Db, days = 90): Promise<TemplateScore[]> {
+  const { rows } = await q.query<TemplateScore>(
+    `with s as (${SENDS_SQL})
+     select t.id as template_id, t.name, t.auto_paused_at, t.auto_pause_reason, ${TOTALS_SQL}
+       from templates t left join s on s.template_id = t.id
+      where not t.archived and t.channel = 'email'
+      group by t.id order by sent desc, t.name`,
+    [days],
+  );
+  return rows.map(withRates);
+}
+
+export async function bucketScores(q: Db, days = 90): Promise<BucketScore[]> {
+  const { rows } = await q.query<BucketScore>(
+    `with s as (${SENDS_SQL})
+     select b.id as bucket_id, b.name,
+            (select count(*)::int from enrollments e where e.bucket_id = b.id and e.stopped_at is null) as members,
+            ${TOTALS_SQL}
+       from buckets b left join s on s.source like 'bucket:' || b.id::text || ':%'
+      where b.active
+      group by b.id order by b.sort, b.name`,
+    [days],
+  );
+  return rows.map(withRates);
+}

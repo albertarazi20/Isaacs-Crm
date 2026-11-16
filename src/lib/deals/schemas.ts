@@ -36,3 +36,10 @@ export const dealNoteSchema = z.object({
   field: z.enum(["rep_note", "manager_note", "ops_note", "blocker"]),
   text: line(5000),
 });
+
+export const askManagerSchema = z.object({
+  dealId: id,
+  question: line(2000).refine((s) => s.trim() !== "", { message: "Say what you want to ask" }),
+});
+
+export const reshopSchema = z.object({ clientId: id });

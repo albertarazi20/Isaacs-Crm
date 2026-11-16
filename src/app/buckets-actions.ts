@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { CAN, requireSession } from "@/lib/auth/server";
 import { queueBlast } from "@/lib/buckets/engine";
+import { setTemplateApproved } from "@/lib/buckets/templates";
 import { toActionError } from "@/lib/data/errors";
 import { UserError } from "@/lib/data/mutations";
 import { id } from "@/lib/data/schemas";
@@ -106,12 +107,11 @@ export async function pauseEnrollmentAction(input: unknown): Promise<ActionResul
   const session = await requireSession();
   try {
     const i = z.object({ clientIds: ids, paused: z.boolean() }).parse(input);
-    await db.withUser(session.userId, (q) =>
-      q.query(
-        "update enrollments set paused = $2 where client_id = any($1::uuid[]) and stopped_at is null",
-        [i.clientIds, i.paused],
-      ),
-    );
+    // the SQL function holds or releases the queued steps with the flag, so a pause reaches the outbox (S1-2)
+    await db.withUser(session.userId, async (q) => {
+      for (const c of i.clientIds)
+        await q.query("select set_enrollment_paused($1, $2)", [c, i.paused]);
+    });
     revalidatePath("/follow-up");
     return { ok: true, data: null };
   } catch (e) {
@@ -181,12 +181,8 @@ export async function approveTemplateAction(input: unknown): Promise<ActionResul
   try {
     if (!CAN.manageTeam(session.role)) throw new UserError("Only a manager approves templates");
     const i = z.object({ templateId: id, approved: z.boolean() }).parse(input);
-    await db.withUser(session.userId, (q) =>
-      q.query(
-        "update templates set approved = $2, approved_by = case when $2 then app.current_user_id() end, approved_at = case when $2 then now() end where id = $1",
-        [i.templateId, i.approved],
-      ),
-    );
+    // the claim checker runs here: a template that fails it stays unapproved, with the reasons (S1-15)
+    await db.withUser(session.userId, (q) => setTemplateApproved(q, i.templateId, i.approved));
     revalidatePath("/", "layout");
     return { ok: true, data: null };
   } catch (e) {

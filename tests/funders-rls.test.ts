@@ -206,6 +206,9 @@ describe("lenders (shared), submissions and offers (per rep): row-level security
     await expect(
       asB((q) => q.query("select * from create_submissions($1, $2::uuid[])", [clientA, [pearl]])),
     ).rejects.toThrow(/client not found/);
+    // B's merchant is a different owner from A's (the helper gives every merchant one placeholder phone, and the
+    // double-submission guard (0512) matches owners by phone across reps)
+    await t.pool.query("update clients set phone = '3055550102' where id = $1", [clientB]);
     const mine = await asB(
       async (q) =>
         (await q.query("select * from create_submissions($1, $2::uuid[])", [clientB, [libertas]]))

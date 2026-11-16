@@ -217,13 +217,14 @@ describe("merging two cards for one merchant", () => {
     const drop = await merchant("Sub Drop");
     const f1 = await funder("F1");
     const f2 = await funder("F2");
+    // the two cards are one merchant on purpose, so the double-submission guard (0512) would refuse the second
+    // send to the same lender: send it on purpose, which is what a person would do before merging
     const sendTo = (client: string, funders: string[]) =>
       asA((q) =>
-        q.query<{ id: string }>("select * from create_submissions($1, $2::uuid[], $3::date, '')", [
-          client,
-          funders,
-          d(-1),
-        ]),
+        q.query<{ id: string }>(
+          "select * from create_submissions($1, $2::uuid[], $3::date, '', true)",
+          [client, funders, d(-1)],
+        ),
       );
     await sendTo(keep, [f1]);
     const dropSubs = (await sendTo(drop, [f1, f2])).rows; // f1 duplicates the kept card's; f2 is new

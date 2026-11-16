@@ -184,11 +184,19 @@ export interface RepScore {
   overdue: number;
   /** Median hours from a lead landing to the rep's first call, this month. Null without calls. */
   speed_to_lead_hours: number | null;
+  /** Speed numbers (plan §3.6; audit S3-12), medians in days over this month's deals. Null without data. */
+  lead_to_sub_days: number | null;
+  sub_to_offer_days: number | null;
+  approval_to_funded_days: number | null;
+  /** Files ops kicked back, of the files submitted to ops this month. */
+  kickbacks: number;
+  submitted_to_ops: number;
+  kickback_rate_pct: number | null;
 }
 
 export async function repScorecard(q: Db, month: string, today: ISODate): Promise<RepScore[]> {
   const m = assertMonth(month);
-  return json<RepScore>(
+  const rows = await json<Omit<RepScore, "kickback_rate_pct">>(
     q,
     `select to_jsonb(x) as j from (
        select u.id as user_id, u.name, u.email, u.role,
@@ -204,7 +212,22 @@ export async function repScorecard(q: Db, month: string, today: ISODate): Promis
          (select round(percentile_cont(0.5) within group (order by extract(epoch from (a.first_call - c.created_at)) / 3600)::numeric, 1)
             from clients c
             join lateral (select min(a.occurred_at) as first_call from activities a where a.client_id = c.id and a.kind = 'call') a on true
-           where c.user_id = u.id and to_char(c.created_at, 'YYYY-MM') = $1 and a.first_call is not null) as speed_to_lead_hours
+           where c.user_id = u.id and to_char(c.created_at, 'YYYY-MM') = $1 and a.first_call is not null) as speed_to_lead_hours,
+         -- lead landed → file sent to lenders, for deals sent this month
+         (select round(percentile_cont(0.5) within group (order by extract(epoch from (d.sent_at - c.created_at)) / 86400)::numeric, 1)
+            from deals d join clients c on c.id = d.client_id
+           where d.user_id = u.id and d.sent_at is not null and to_char(d.sent_at, 'YYYY-MM') = $1) as lead_to_sub_days,
+         -- sent to lenders → the first offer in, for deals whose first offer came this month
+         (select round(percentile_cont(0.5) within group (order by (o.first_offer - d.sent_at::date))::numeric, 1)
+            from deals d join lateral (select min(o.received_on) as first_offer from offers o where o.deal_id = d.id) o on true
+           where d.user_id = u.id and d.sent_at is not null and o.first_offer is not null and to_char(o.first_offer, 'YYYY-MM') = $1) as sub_to_offer_days,
+         -- first approval → funded, for fundings confirmed this month
+         (select round(percentile_cont(0.5) within group (order by (f.funded_on - a.approved_on))::numeric, 1)
+            from fundings f join lateral (select min(coalesce(s.responded_at, s.status_changed_at))::date as approved_on from submissions s
+                                            where s.deal_id = f.deal_id and s.status in ('approved', 'revised', 'contracts_out', 'contracts_in', 'funding_call', 'funded')) a on true
+           where f.user_id = u.id and f.confirmed_at is not null and to_char(f.funded_on, 'YYYY-MM') = $1 and a.approved_on is not null) as approval_to_funded_days,
+         (select count(*)::int from deals d where d.user_id = u.id and to_char(d.queued_at, 'YYYY-MM') = $1 and d.kickback_count > 0) as kickbacks,
+         (select count(*)::int from deals d where d.user_id = u.id and to_char(d.queued_at, 'YYYY-MM') = $1) as submitted_to_ops
          from app_users u
         where u.active and u.role in ('rep', 'manager')
           and (app.can_see_all() or u.id = app.current_user_id())
@@ -212,6 +235,15 @@ export async function repScorecard(q: Db, month: string, today: ISODate): Promis
      ) x`,
     [m, today],
   );
+  return rows.map((r) => ({
+    ...r,
+    lead_to_sub_days: r.lead_to_sub_days === null ? null : Number(r.lead_to_sub_days),
+    sub_to_offer_days: r.sub_to_offer_days === null ? null : Number(r.sub_to_offer_days),
+    approval_to_funded_days:
+      r.approval_to_funded_days === null ? null : Number(r.approval_to_funded_days),
+    kickback_rate_pct:
+      r.submitted_to_ops > 0 ? Math.round((100 * r.kickbacks) / r.submitted_to_ops) : null,
+  }));
 }
 
 // ---------- lender scorecard ----------

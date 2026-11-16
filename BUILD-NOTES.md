@@ -167,3 +167,86 @@ Still the owner's: the vocabulary decision (language test), kanban keep/drop, th
 and chase defaults, and every OWNER-TODO credential before go-live (Google OAuth app, Resend + DNS + webhook
 secret, Anthropic key, Supabase Storage bucket `documents` + service key, hosting + cron schedules, the shop's
 postal address). Texting and calling stay parked.
+
+## Automations pass (2026-11-16, afternoon): streams 1 and 2 merged, wired, applied
+
+Three worktrees built the streams in `docs/AUTOMATION-AUDIT.md` in parallel; this section is the merge onto main.
+Stream 3 is appended below when it lands.
+
+- **Stream 1** (`feat/stream-1-send`, 7 commits to a1d2f7a, migrations 0501–0509) merged at 680a24e, no conflicts.
+  Pause and Delete reach the outbox (`trash_client`, `set_enrollment_paused`), the cross-rep duplicate block
+  (`lead_owner`), the DNS gate, Sent mail from outside the CRM counted toward the cap (`send_ledger.source =
+'external'`, `mailbox_sent_sync`), merchant replies tagged by Claude (`reply_tags`, `apply_reply_tag`), template
+  and bucket scores with the bounce-spike auto-pause and the rep's bounce task, the holiday switch, one Cold nudger,
+  the AI-run log helper, paste-a-lead-line, bulk intake, the claim checker, the Resend branch test. Tests:
+  `tests/stream1-*.test.ts` (7 files).
+- **Stream 2** (`feat/stream-2-deals`, 2 commits to ca54c2f, migrations 0510–0515) merged at d0610b2, no conflicts.
+  The deal clocks (`expire_approvals`, `request_new_month_statements`), AI updates that write stips rows, the
+  approval-landed alert, a funded email proposing the funding, undo (`revert_ai_update`), the double-submission guard
+  (`create_submissions` gained `p_force`; the 4-argument signature is gone), Route B inbound channel, reshop, the
+  notes gate, ask-a-manager, mailbox sync status, the reader's eval harness (`scripts/eval-reader.mjs`,
+  `tests/fixtures/lender-emails/`). Tests: `tests/stream2-*.test.ts` (3 files). S2-12 (backdoor score per lender) is not in this stream: stream 3 built it (0525 `backdoor_reports`, `src/lib/trust/queries.ts`).
+- **One test fallout, not a merge problem**: `tests/send-engine.test.ts` pinned its drain clock at 19:30Z / 20:00Z
+  but queued rows on the wall clock, so it passed with stream 1 at 14:28 ET and failed with stream 2 at 14:31 ET.
+  The enqueue clock is pinned now (44ccb65). The `create_submissions` signature change broke no caller (typecheck,
+  attachments, pass2, funders-rls all green).
+- **Cron wiring** (597a62d). `inbox`: after `syncInbox`, `recordExternalSends` (same token closure), then
+  `tagMerchantReplies` behind `ANTHROPIC_API_KEY` like `processInbox`; the JSON gains `external` and `replyTags`,
+  and a failed Sent-mail read answers 207 like a failed sync. `nightly`: `runDealClocks` after
+  `roll_funding_clocks`; the JSON gains `deals`. Heartbeats stay last.
+- **Smoke on the dev server** (`curl -H "Authorization: Bearer $CRON_SECRET" localhost:3000/api/cron/<route>`):
+  nightly 200 `{buckets, winback, clocks, deals: {expired: 0, statementsRequested: 0}}`; inbox 200 with
+  `external: {mailboxes: 0}` and `replyTags` skipped (no key locally); outbox 200; sheets 207 ("Google is not
+  configured", expected here); reminders 503 (no RESEND here, expected). The first smoke answered 500 because the
+  dev database (`isaac_dev` on :5433) was still at 0490; `pnpm db:migrate` took it to 0516.
+- **Gates on main**: typecheck, lint (0 warnings), format:check green; `pnpm -s vitest run` 103 files, 1742 tests,
+  all green, 94 s. A run that overlapped the dev-database migration and the smoke on the same Postgres hit three
+  timeouts (two `afterAll` drops, the two-database restore test); the clean re-run was green.
+- **Supabase `aztoxzcmnvqaypjuuuwj`**: it was at 0490, not 0500 as the briefing said, so 0500 went first. 0500–0516
+  applied through the MCP `execute_sql`, one file per call, each in a transaction with its `schema_migrations` row
+  (`schema_migrations` has 69 rows; local has 69 files). Two statements the MCP gate refuses without a person to
+  confirm are **left for the owner** (run them in the SQL editor):
+  - 0508's delete of the three seeded "Cold — monthly nudge" steps did not run (the function and trigger did, and
+    the row is in). Until it runs, Cold merchants on Supabase get the bucket's steps as well as the pool's:
+    `delete from bucket_steps s using buckets b where s.bucket_id = b.id and b.key = 'cold' and s.action = 'email' and s.template_id in (select id from templates where owner_id is null and name = 'Cold — monthly nudge');`
+  - 0512's `drop function create_submissions(uuid, uuid[], date, text)` became a rename to
+    `create_submissions_retired_0512` with execute revoked from public and `isaac_app`, so the five-argument function
+    resolves unambiguously. Drop the leftover:
+    `drop function public.create_submissions_retired_0512(uuid, uuid[], date, text);`
+- **Advisors after the apply.** New on this pass and fixed: the foreign keys 0500–0515 added had no covering index →
+  0516 (e8f5280, applied). Pre-existing and left alone: 67 older unindexed foreign keys and 61 unused indexes (INFO),
+  94 "multiple permissive policies" (the owner / team / ops policy triple, by design), five system tables with RLS
+  and no policy (deny-all on purpose: `gmail_connections`, `job_runs`, `reminders_sent`, `schema_migrations`,
+  `webhook_events`), and three 0001-era helpers without a fixed `search_path` (`app.current_user_id`,
+  `app.can_see_all`, `app.current_role`).
+
+### Stream 3 landed (2026-11-16, ~15:10 ET)
+
+- **Stream 3** (`feat/stream-3-money`, 1 commit, 8e43335, migrations 0520–0525) merged at 9f58fb0, no conflicts
+  (`tests/boundaries.test.ts` JOBS and `tests/review-4.test.ts` EXCLUDED merged both sides by themselves). Alerts
+  by email (`user_alerts` generators and the hourly drain), month-end close (`close_month`, statements, locked
+  lines, `correct_funding`), the plan in full (renewal split, manager override line, tiers), lender payout dates,
+  the renewal engine (`start_renewal`, warm-up and eligible templates), compliance (`app.registration_missing`),
+  dead-deal document retention, trust alerts, the backdoor score (S2-12), win-back finished (reasons, Claude's
+  opener in auto or review mode, rescue nudges on days 20/25/29, `source_id` so a finished membership never
+  re-enrols), dashboard speed numbers. Tests: `tests/stream3-*.test.ts` (9 files, 3 skipped cases are the
+  Resend-only export sends).
+- **Cron wiring** (9dedece). `reminders` (hourly): `runUserAlerts` and `runMonthEndClose` after the weekly
+  scorecards, with the same `send` / `allowed`; a failed send in either answers 502 like the digest. `nightly`:
+  `runWinback` gets `drafter: claudeOpenerDrafter` when `ANTHROPIC_API_KEY` is set; after the deal clocks,
+  `runRenewals`, `runRescueNudges`, `purgeDeadDocuments` with `documentStore(env)`. JSON gains `alerts`, `close`,
+  `renewals`, `rescue`, `retention`. Smoke: nightly 200 with every key; reminders 503 locally (no RESEND).
+- **Cross-stream fallout, fixed on main (aa08353):** stream 3's win-back and trust tests failed on main because every
+  test merchant carried the helper's one phone number and stream 2's double-submission guard (0512: same phone or
+  email = the same owner) refused the second file to Pearl. Each test merchant now has its own phone — the fixture
+  models distinct merchants, as it meant to. No guard was loosened.
+- **Follow-ups the streams reported, settled:** the send-engine clock (44ccb65, above); `app.plan_for` now falls
+  back to the person's newest plan (own first) for a funding dated before every plan's `effective_from` (0526,
+  `tests/plan-for.test.ts`, proved by the manager's override line posting on such a funding); the win-back re-enrol
+  loop — stream 3's `source_id` guard and stream 1's Cold trigger (0508) both stand, and two added cases walk the
+  approved and Cold sequences to the end, roll twice more and count one membership.
+- **Gates on main at 2ab296d:** typecheck, lint (0 warnings), format:check green; `pnpm -s vitest run` 113 files,
+  1804 tests, all green; `pnpm -s build` green.
+- **Supabase:** 0520–0527 applied the same way (schema_migrations has 77 rows; local has 77 files). Nothing new
+  from the security advisor; the performance advisor's new unindexed foreign keys became 0527 (2ab296d, applied).
+  The two statements left for the owner's hand are unchanged (0508's delete, the retired 0512 signature's drop).

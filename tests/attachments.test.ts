@@ -157,7 +157,12 @@ describe("filing and the shotgun check", () => {
       sent.push(m.to);
       return { id: `g${sent.length}`, threadId: `t${sent.length}` };
     };
-    const base = { clientId: pizza, senderName: "Josh", senderEmail: "rep@x.com" };
+    const base = {
+      clientId: pizza,
+      senderName: "Josh",
+      senderEmail: "rep@x.com",
+      appUrl: "https://crm.test",
+    };
     await expect(
       t.db.withUser(rep, (q) => submitToLenders(q, { ...base, funderIds: ids }, send)),
     ).rejects.toThrow(/7 lenders; the shop limit is 6/);

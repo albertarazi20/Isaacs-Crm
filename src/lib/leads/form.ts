@@ -4,7 +4,8 @@ import { createClient, stampClientTimezone, UserError } from "../data/mutations"
 import { findDuplicates, userContext, type DuplicateMatch } from "../data/queries";
 import { id, optMoney } from "../data/schemas";
 import { stageDef } from "../mca/stages";
-import { fileOneRow, PENDING_ROW_COLUMNS, sendWelcome, type PendingRow } from "../sheets/file";
+import { fileOneRow, loadPendingRow, sendWelcome } from "../sheets/file";
+import { refuseAnotherReps } from "./owner";
 
 /**
  * The Lead Intake page's submit, apart from the session: a merchant row, the bucket, and the bucket's first
@@ -71,12 +72,7 @@ export async function intakeLead(
   const contact = `${i.firstName} ${i.lastName}`.trim();
 
   if (i.sheetRowId) {
-    const { rows } = await q.query<PendingRow>(
-      `select app.current_user_id() as owner_id, ${PENDING_ROW_COLUMNS}
-         from sheet_rows r join sheet_sources s on s.id = r.source_id where r.id = $1`,
-      [i.sheetRowId],
-    );
-    const row = rows[0];
+    const row = await loadPendingRow(q, i.sheetRowId);
     if (!row) throw new UserError("That sheet row is gone");
     // what was typed wins; the sheet's own words fill whatever was left blank
     const business =
@@ -130,6 +126,8 @@ export async function intakeLead(
       existing: whereItSits(existing[0]),
     };
   }
+  // another rep's merchant is invisible to the check above: ask across the shop and refuse in words (S1-3)
+  await refuseAnotherReps(q, { phone: i.phone, email: i.email }, now);
   const card = await createClient(
     q,
     {
@@ -150,6 +148,12 @@ export async function intakeLead(
     [card.id, i.phone2, i.email2, i.lookingFor],
   );
   await stampClientTimezone(q, card.id);
+  // a new lead is a call to make now, not tomorrow: the same timer the lead connections give (S1-10)
+  await q.query("select * from set_follow_up($1, $2, $3)", [
+    card.id,
+    ctx.today,
+    "New lead — call now",
+  ]);
   let welcomeSent = false;
   if (i.bucketId) {
     await q.query("select enroll_in_bucket($1, $2, 'moved')", [card.id, i.bucketId]);

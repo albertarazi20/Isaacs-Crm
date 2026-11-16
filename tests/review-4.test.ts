@@ -135,13 +135,13 @@ describe("C-1: removing the accepted offer (or its submission) works and brings 
     const drop = await merchant("Merge drop");
     const f1 = await funder("MF1");
     const f2 = await funder("MF2");
+    // one merchant on two cards: the second send to the same lender is on purpose (double-submission guard, 0512)
     const sendTo = (client: string, fs: string[]) =>
       asA((q) =>
-        q.query<{ id: string }>("select * from create_submissions($1, $2::uuid[], $3::date, '')", [
-          client,
-          fs,
-          d(-1),
-        ]),
+        q.query<{ id: string }>(
+          "select * from create_submissions($1, $2::uuid[], $3::date, '', true)",
+          [client, fs, d(-1)],
+        ),
       );
     await sendTo(keep, [f1]);
     const dropSubs = (await sendTo(drop, [f1, f2])).rows;
@@ -402,9 +402,11 @@ describe("C-6: an older backup still restores after a new column with a default"
       "goals",
       "inbound_emails",
       "mail_sync_state",
+      "mailbox_sent_sync", // stream 1: the Sent-mail watermark per mailbox
       "mailboxes",
       "outbox",
       "proposed_updates",
+      "reply_tags", // stream 1: which merchant replies the classifier has tagged, and how
       "send_ledger",
       "sheet_rows",
       "sheet_sources",
@@ -418,6 +420,12 @@ describe("C-6: an older backup still restores after a new column with a default"
       "webhook_events",
       "winback_members",
       "winback_pools",
+      "commission_closes", // stream 3
+      "commission_statements", // stream 3
+      "fundings_corrections", // stream 3
+      "winback_reasons", // stream 3
+      "rescue_nudges", // stream 3
+      "backdoor_reports", // stream 3
     ];
     const uncovered = rows
       .map((r) => r.table_name)
