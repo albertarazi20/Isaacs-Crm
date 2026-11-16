@@ -34,9 +34,12 @@ export default async function FollowUpPage({
     const members = selected ? await listBucketMembers(q, selected.id) : [];
     const steps = selected ? await listBucketSteps(q, selected.id) : [];
     const templates = await listTemplates(q);
-    return { buckets, selected, members, steps, templates };
+    const postal =
+      (await q.query<{ postal_address: string }>("select postal_address from shop_settings"))
+        .rows[0]?.postal_address ?? "";
+    return { buckets, selected, members, steps, templates, postal };
   });
-  const { buckets, selected, members, steps, templates } = data;
+  const { buckets, selected, members, steps, templates, postal } = data;
   const shared = buckets.filter((x) => x.owner_id === null);
   const mine = buckets.filter((x) => x.owner_id !== null);
 
@@ -57,6 +60,26 @@ export default async function FollowUpPage({
           Sequences & templates →
         </Link>
       </div>
+      {postal.trim() === "" ? (
+        <p
+          role="status"
+          className="rounded-lg border border-warn/40 bg-warn-soft px-3 py-2 text-sm text-warn"
+        >
+          Sequences and blasts are on hold until the shop&apos;s postal address is set
+          {manager ? (
+            <>
+              {" "}
+              in{" "}
+              <Link href="/settings/email" className="font-semibold underline">
+                Settings → Email
+              </Link>
+            </>
+          ) : (
+            " (a manager does that in Settings → Email)"
+          )}
+          . Welcome emails and replies still go out.
+        </p>
+      ) : null}
       <div className="grid gap-5 lg:grid-cols-[240px_minmax(0,1fr)]">
         <aside className="space-y-4">
           <nav aria-label="Buckets" className="space-y-1">

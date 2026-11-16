@@ -17,13 +17,13 @@ const KIND: Record<TimelineKind, { label: string; tone: string }> = {
   system: { label: "System", tone: "bg-surface-2 text-muted" },
 };
 
-function when(iso: string, today: string): string {
+function when(iso: string, today: string, timezone: string): string {
   const d = iso.slice(0, 10);
   const t = new Date(iso);
   const hm = t.toLocaleTimeString("en-US", {
     hour: "numeric",
     minute: "2-digit",
-    timeZone: "America/New_York",
+    timeZone: timezone,
   });
   return d === today ? hm : `${formatDate(d, today)} ${hm}`;
 }
@@ -33,10 +33,13 @@ export function ActivityFeed({
   events,
   today,
   canDecide,
+  timezone = "America/New_York",
 }: {
   events: TimelineEvent[];
   today: string;
   canDecide: boolean;
+  /** The viewer's zone for the hour (P2-19); the date part already follows the session zone. */
+  timezone?: string;
 }) {
   if (events.length === 0) return <p className="text-sm text-muted">Nothing yet.</p>;
   return (
@@ -60,7 +63,7 @@ export function ActivityFeed({
               <span className="block text-xs text-muted whitespace-pre-wrap">{e.detail}</span>
             ) : null}
             <span className="block text-[11px] text-muted">
-              {e.actor} · {when(e.at, today)}
+              {e.actor} · {when(e.at, today, timezone)}
             </span>
           </span>
           {e.needs_review && e.ref_type === "proposed_update" && canDecide ? (
