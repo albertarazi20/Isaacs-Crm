@@ -25,7 +25,7 @@ const optMoney = z
   .optional()
   .transform((v) => (v === null || v === undefined || v === "" ? null : parseMoney(v)));
 
-export const intakeSchema = z.object({
+const intakeSchema = z.object({
   firstName: line(80).default(""),
   lastName: line(80).default(""),
   businessName: line(200).default(""),

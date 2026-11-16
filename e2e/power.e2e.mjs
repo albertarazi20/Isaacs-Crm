@@ -824,7 +824,7 @@ export default async function powerFlow({ email }) {
       (await wide.page.getByRole("navigation", { name: "Main" }).isVisible()),
   );
   const boardTitle = await (async () => {
-    await wide.page.goto(`${BASE}/board`, { waitUntil: "networkidle" });
+    await wide.page.goto(`${BASE}/pipeline`, { waitUntil: "networkidle" });
     return wide.page.title();
   })();
   const dueNow = await one(

@@ -208,7 +208,7 @@ const shot = (page, name) =>
 
 async function gotoBoard(page, view = "pipeline") {
   const t0 = Date.now();
-  await page.goto(`${BASE}/board?view=${view}`, { waitUntil: "domcontentloaded" });
+  await page.goto(`${BASE}/pipeline?view=${view}`, { waitUntil: "domcontentloaded" });
   await page.locator("article").first().waitFor({ timeout: 15000 });
   await page.waitForFunction(
     () => {
@@ -1471,7 +1471,7 @@ export default async function boardFlow({ email }) {
   });
 
   await section("persistence: which view does he land on?", async () => {
-    await page.goto(`${BASE}/board`, { waitUntil: "domcontentloaded" });
+    await page.goto(`${BASE}/pipeline`, { waitUntil: "domcontentloaded" });
     await page.locator("article").first().waitFor();
     await page
       .getByRole("navigation", { name: "Board view" })
@@ -1523,7 +1523,7 @@ export default async function boardFlow({ email }) {
     });
     const errs = [];
     b.page.on("console", (m) => m.type() === "error" && errs.push(m.text().slice(0, 140)));
-    await b.page.goto(`${BASE}/board`, { waitUntil: "domcontentloaded" });
+    await b.page.goto(`${BASE}/pipeline`, { waitUntil: "domcontentloaded" });
     const rendered = await b.page
       .locator("article")
       .first()

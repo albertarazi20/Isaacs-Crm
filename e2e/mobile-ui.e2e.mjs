@@ -70,7 +70,7 @@ export default async function mobileUi({ email }) {
   if (on("I-20")) {
     const m = await openBrowser(email, PHONE, TOUCH);
     const p = m.page;
-    await p.goto(`${BASE}/board?view=pipeline`, { waitUntil: "domcontentloaded" });
+    await p.goto(`${BASE}/pipeline?view=pipeline`, { waitUntil: "domcontentloaded" });
     await p.locator("article").first().waitFor({ timeout: 15000 });
     const tabs = p.getByRole("navigation", { name: "Jump to a stage group" });
     check("the tab row is on the phone Board", await tabs.isVisible());
@@ -163,7 +163,7 @@ export default async function mobileUi({ email }) {
     await m.browser.close();
 
     const d = await openBrowser(email, { width: 1440, height: 900 });
-    await d.page.goto(`${BASE}/board?view=pipeline`, { waitUntil: "domcontentloaded" });
+    await d.page.goto(`${BASE}/pipeline?view=pipeline`, { waitUntil: "domcontentloaded" });
     await d.page.locator("article").first().waitFor({ timeout: 15000 });
     check(
       "the tab row is hidden on a desktop screen",
@@ -177,7 +177,7 @@ export default async function mobileUi({ email }) {
   if (on("I-9")) {
     const m = await openBrowser(email, PHONE, TOUCH);
     const p = m.page;
-    await p.goto(`${BASE}/board`, { waitUntil: "domcontentloaded" });
+    await p.goto(`${BASE}/pipeline`, { waitUntil: "domcontentloaded" });
     await p.locator("article").first().waitFor({ timeout: 15000 });
     check(
       "a first visit opens Pipeline",
@@ -208,7 +208,7 @@ export default async function mobileUi({ email }) {
       .tap();
     await p.waitForURL(/view=pipeline/);
     await p.waitForFunction(() => document.cookie.includes("isaac_board_view=pipeline"));
-    await p.goto(`${BASE}/board`, { waitUntil: "domcontentloaded" });
+    await p.goto(`${BASE}/pipeline`, { waitUntil: "domcontentloaded" });
     await p.locator("article").first().waitFor({ timeout: 15000 });
     check(
       "choosing Pipeline again is remembered too",
@@ -217,9 +217,9 @@ export default async function mobileUi({ email }) {
         .locator("[aria-current=page]")
         .innerText()) === "Pipeline",
     );
-    await p.goto(`${BASE}/board?view=followups`, { waitUntil: "domcontentloaded" });
+    await p.goto(`${BASE}/pipeline?view=followups`, { waitUntil: "domcontentloaded" });
     await p.locator("article").first().waitFor({ timeout: 15000 });
-    await p.goto(`${BASE}/board?view=pipeline`, { waitUntil: "domcontentloaded" });
+    await p.goto(`${BASE}/pipeline?view=pipeline`, { waitUntil: "domcontentloaded" });
     await p.locator("article").first().waitFor({ timeout: 15000 });
     check(
       "an explicit ?view= always wins over what was remembered",
@@ -507,7 +507,7 @@ export default async function mobileUi({ email }) {
     await dlg.getByRole("button", { name: "Cancel" }).tap();
 
     // The same merchant's card on the Board, on a phone.
-    await p.goto(`${BASE}/board?view=pipeline`, { waitUntil: "domcontentloaded" });
+    await p.goto(`${BASE}/pipeline?view=pipeline`, { waitUntil: "domcontentloaded" });
     await p.locator("article").first().waitFor({ timeout: 15000 });
     const art = p.locator('article[aria-label^="Rivera Auto Repair,"]');
     await art.scrollIntoViewIfNeeded();

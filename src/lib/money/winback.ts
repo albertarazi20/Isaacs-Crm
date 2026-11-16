@@ -260,9 +260,9 @@ export async function listWinback(q: Db): Promise<
             (select max(e.received_at) from inbound_emails e where e.client_id = m.client_id and e.kind = 'merchant')::text as last_reply_at,
             (select max(o.amount_cents) from offers o where o.client_id = m.client_id) as best_offer_cents
        from winback_members m join winback_pools p on p.key = m.pool join clients c on c.id = m.client_id
-      where m.status in ('waiting', 'active', 'replied')
+      where m.status in ('waiting', 'active', 'replied', 'stopped')
         and not exists (select 1 from trashed_clients tc where tc.client_id = c.id)
-      order by p.sort, m.workable_on`,
+      order by p.sort, case m.status when 'replied' then 0 when 'active' then 1 when 'waiting' then 2 else 3 end, m.workable_on`,
   );
   return rows;
 }

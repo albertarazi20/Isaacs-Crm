@@ -39,7 +39,7 @@ export default async function trashFlow({ email }) {
 
   await page.goto(`${BASE}/clients`, { waitUntil: "networkidle" });
   check("gone from the Clients list", (await page.getByText("Rivera Auto Repair").count()) === 0);
-  await page.goto(`${BASE}/board`, { waitUntil: "networkidle" });
+  await page.goto(`${BASE}/pipeline`, { waitUntil: "networkidle" });
   check("gone from the Board", (await page.getByText("Rivera Auto Repair").count()) === 0);
   await page.goto(`${BASE}/`, { waitUntil: "networkidle" });
   check("gone from Today", (await page.getByText("Rivera Auto Repair").count()) === 0);

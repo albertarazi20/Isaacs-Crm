@@ -38,7 +38,7 @@ export function SequenceEditor({
   const update = (i: number, patch: Partial<Step>) =>
     setRows((cur) => cur.map((r, j) => (j === i ? { ...r, ...patch } : r)));
   return (
-    <div className="space-y-2">
+    <div className="space-y-2" data-sequence={bucket.name}>
       {rows.length === 0 ? (
         <p className="text-xs text-muted">No steps — nothing goes out on its own.</p>
       ) : null}
