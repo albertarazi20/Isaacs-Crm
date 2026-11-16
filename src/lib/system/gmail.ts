@@ -1,7 +1,7 @@
 import { db } from "../db";
 import { encryptSecret } from "../crypto";
 import { env } from "../env";
-import { GmailReconnectError, sendViaGmail } from "../email/gmail";
+import { GmailReconnectError, sendViaGmail, type OutgoingMessage } from "../email/gmail";
 
 export interface GmailStatus {
   connected: boolean;
@@ -67,10 +67,7 @@ export async function disconnectGmail(userId: string): Promise<void> {
 }
 
 /** Sends as the user via the Gmail API. A dead grant flips the connection to needs_reconnect. */
-export async function sendEmailAsUser(
-  userId: string,
-  message: { to: string; subject: string; text: string },
-) {
+export async function sendEmailAsUser(userId: string, message: OutgoingMessage) {
   const e = env();
   if (!e.GOOGLE_CLIENT_ID || !e.GOOGLE_CLIENT_SECRET) throw new Error("Google is not configured");
   const row = await db.withSystem(async (q) => {

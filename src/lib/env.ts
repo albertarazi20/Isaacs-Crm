@@ -22,6 +22,9 @@ const schema = z.object({
   // Sign-in without Google: one shared passcode, signs in as the first ALLOWED_EMAILS address.
   ACCESS_PASSCODE: optional(z.string().min(12, "ACCESS_PASSCODE must be at least 12 characters")),
   DEV_LOGIN: optional(z.string()),
+  ANTHROPIC_API_KEY: optional(z.string()),
+  RESEND_WEBHOOK_SECRET: optional(z.string()),
+  TELNYX_API_KEY: optional(z.string()),
 });
 
 export type Env = z.infer<typeof schema>;

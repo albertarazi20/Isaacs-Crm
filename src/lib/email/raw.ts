@@ -4,6 +4,11 @@ export interface RawEmail {
   subject: string;
   text: string;
   replyTo?: string;
+  /** Our own Message-ID, so a lender's reply can be matched by In-Reply-To even when Gmail re-threads. */
+  messageId?: string;
+  /** Threading headers when this is a reply (a chase on the same thread). */
+  inReplyTo?: string;
+  references?: readonly string[];
 }
 
 function assertHeaderSafe(name: string, value: string): void {
@@ -43,6 +48,9 @@ export function buildRawEmail(m: RawEmail): string {
     to: m.to,
     subject: m.subject,
     replyTo: m.replyTo ?? "",
+    messageId: m.messageId ?? "",
+    inReplyTo: m.inReplyTo ?? "",
+    references: (m.references ?? []).join(" "),
   })) {
     assertHeaderSafe(k, v);
   }
@@ -54,6 +62,9 @@ export function buildRawEmail(m: RawEmail): string {
     `From: ${m.from}`,
     `To: ${m.to}`,
     ...(m.replyTo ? [`Reply-To: ${m.replyTo}`] : []),
+    ...(m.messageId ? [`Message-ID: ${m.messageId}`] : []),
+    ...(m.inReplyTo ? [`In-Reply-To: ${m.inReplyTo}`] : []),
+    ...(m.references && m.references.length ? [`References: ${m.references.join(" ")}`] : []),
     `Subject: ${encodeSubject(m.subject)}`,
     "MIME-Version: 1.0",
     'Content-Type: text/plain; charset="UTF-8"',

@@ -57,10 +57,21 @@ export async function accessTokenFor(
   return body.access_token;
 }
 
+export interface OutgoingMessage {
+  to: string;
+  subject: string;
+  text: string;
+  messageId?: string;
+  inReplyTo?: string;
+  references?: readonly string[];
+  /** Gmail thread to append to (a chase on the same thread). */
+  threadId?: string;
+}
+
 export async function sendViaGmail(
   creds: GmailCreds,
   cfg: GmailConfig,
-  message: { to: string; subject: string; text: string },
+  message: OutgoingMessage,
   fetchImpl: Fetch = fetch,
 ): Promise<{ id: string; threadId: string }> {
   const token = await accessTokenFor(creds, cfg, fetchImpl);
@@ -69,12 +80,15 @@ export async function sendViaGmail(
     to: message.to,
     subject: message.subject,
     text: message.text,
+    messageId: message.messageId,
+    inReplyTo: message.inReplyTo,
+    references: message.references,
   });
   const res = await fetchImpl("https://gmail.googleapis.com/gmail/v1/users/me/messages/send", {
     method: "POST",
     headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
     signal: AbortSignal.timeout(10_000),
-    body: JSON.stringify({ raw }),
+    body: JSON.stringify(message.threadId ? { raw, threadId: message.threadId } : { raw }),
   });
   if (!res.ok) {
     const err = (await res.json().catch(() => ({}))) as {
