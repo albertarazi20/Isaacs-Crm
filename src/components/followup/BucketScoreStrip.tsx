@@ -43,8 +43,8 @@ export function BucketScoreStrip({
     );
   return (
     <Card className="p-3 sm:px-4">
-      <div className="mb-2 flex items-baseline justify-between gap-3">
-        <h3 className="text-[13px] font-semibold">Bucket score</h3>
+      <div className="mb-2 flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5">
+        <h3 className="text-[13px] font-semibold whitespace-nowrap">Bucket score</h3>
         <span className="text-xs text-muted">
           Last {days} days · replies and documents within 14 days of a send
         </span>

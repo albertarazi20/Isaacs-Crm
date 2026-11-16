@@ -239,7 +239,7 @@ function ScheduleCall({ clientId }: { clientId: string }) {
             aria-pressed={c === channel}
             onClick={() => setChannel(c)}
             className={cn(
-              "h-9 rounded-md px-3 text-[13px] font-medium transition sm:h-7",
+              "h-10 rounded-md px-3 text-[13px] font-medium transition sm:h-7",
               c === channel ? "bg-text text-bg" : "text-muted hover:bg-surface-2 hover:text-text",
             )}
           >

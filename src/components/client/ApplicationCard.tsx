@@ -58,13 +58,15 @@ export function ApplicationCard({
     <Panel title="Application" className={className}>
       <div className="space-y-3">
         {signed ? (
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-lg border border-good/30 bg-good-soft px-3 py-2">
-            <Badge tone="good">Application signed</Badge>
-            <p className="min-w-0 flex-1 text-sm wrap-anywhere">
-              {formatDate(dateInTz(signed.signed_at, timezone), today)} · signed by{" "}
-              <span className="font-medium">{signed.signer_name}</span>
-            </p>
-            <span className="flex flex-wrap gap-1.5">
+          <div className="space-y-2 rounded-lg border border-good/30 bg-good-soft px-3 py-2.5">
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+              <Badge tone="good">Application signed</Badge>
+              <p className="min-w-0 text-sm wrap-anywhere">
+                {formatDate(dateInTz(signed.signed_at, timezone), today)} · signed by{" "}
+                <span className="font-medium">{signed.signer_name}</span>
+              </p>
+            </div>
+            <div className="flex flex-wrap items-center gap-1.5">
               {signed.document_id ? (
                 <a
                   href={`/api/docs/${signed.document_id}`}
@@ -86,7 +88,7 @@ export function ApplicationCard({
                   In Documents →
                 </Link>
               ) : null}
-            </span>
+            </div>
           </div>
         ) : (
           <p className="flex items-center gap-2 text-sm text-muted">
