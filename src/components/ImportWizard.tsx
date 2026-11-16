@@ -217,29 +217,28 @@ export function ImportWizard() {
             label="Where is this list from?"
             hint="Applied to rows with no source column. Reports use it to show which lead sources pay."
           >
-            <Input
-              className="sm:max-w-sm"
-              placeholder="e.g. Lead vendor, Oct 2026"
-              maxLength={100}
-              value={defaultSource}
-              onChange={(e) => setDefaultSource(e.target.value)}
-            />
+            <div className="sm:max-w-sm">
+              <Input
+                placeholder="e.g. Lead vendor, Oct 2026"
+                maxLength={100}
+                value={defaultSource}
+                onChange={(e) => setDefaultSource(e.target.value)}
+              />
+            </div>
           </Field>
           <Field
             label="Rows with no follow-up date get one spread over the next…"
             hint="So you start with a manageable list, not 400 calls due tomorrow."
           >
-            <Select
-              className="sm:w-48"
-              value={spreadDays}
-              onChange={(e) => setSpreadDays(Number(e.target.value))}
-            >
-              {[5, 10, 20, 30, 60].map((d) => (
-                <option key={d} value={d}>
-                  {d} days
-                </option>
-              ))}
-            </Select>
+            <div className="sm:w-48">
+              <Select value={spreadDays} onChange={(e) => setSpreadDays(Number(e.target.value))}>
+                {[5, 10, 20, 30, 60].map((d) => (
+                  <option key={d} value={d}>
+                    {d} days
+                  </option>
+                ))}
+              </Select>
+            </div>
           </Field>
         </Card>
       ) : null}

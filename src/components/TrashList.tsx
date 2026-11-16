@@ -39,9 +39,10 @@ export function TrashList({ items }: { items: TrashedClient[] }) {
         {items.map((c) => (
           <li
             key={c.id}
-            className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 px-4 py-2 transition hover:bg-surface-3"
+            // A phone puts the buttons under the name; a desktop keeps the row to one line.
+            className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 px-4 py-2.5 transition hover:bg-surface-3 sm:py-2"
           >
-            <div className="min-w-0 flex-1">
+            <div className="w-full min-w-0 sm:w-auto sm:flex-1">
               <p className="truncate text-sm font-medium">{c.business_name}</p>
               <p className="truncate text-xs text-muted">
                 {[c.contact_name, formatUS(c.phone), stageDef(c.stage).label]
