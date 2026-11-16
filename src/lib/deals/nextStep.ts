@@ -47,7 +47,13 @@ export interface DealSnapshot {
   stips_missing: string[];
   /** The statement month lenders will ask for that is not on file, if any. */
   statement_wanted: string | null;
-  funding: { funded_on: ISODate; renewal_eligible_on: ISODate | null; ledger_state: string } | null;
+  funding: {
+    id?: string;
+    funded_on: ISODate;
+    renewal_eligible_on: ISODate | null;
+    ledger_state: string;
+    confirmed?: boolean;
+  } | null;
   /** The reader's latest suggestion, if an email came in since the deal last moved. */
   ai_next_step: string | null;
   /** Shop rule: chase a quiet lender after this many days. */

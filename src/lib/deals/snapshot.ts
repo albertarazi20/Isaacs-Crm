@@ -30,6 +30,8 @@ export async function loadDealSnapshot(
     funded_on: string | null;
     renewal_eligible_on: string | null;
     ledger_state: string | null;
+    funding_id: string | null;
+    funding_confirmed: boolean | null;
   }>(
     `select d.client_id, app.deal_status(d) as status, c.contact_name, c.business_name, d.created_at::date::text as created_on,
             to_char(d.queued_at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') as queued_at,
@@ -38,7 +40,8 @@ export async function loadDealSnapshot(
             (select lender_chase_days from shop_settings) as chase_after_days,
             (select p.next_step from proposed_updates p where p.deal_id = d.id and p.next_step <> '' and p.created_at > d.updated_at
               order by p.created_at desc limit 1) as ai_next_step,
-            f.funded_on::text as funded_on, f.renewal_eligible_on::text as renewal_eligible_on, f.ledger_state
+            f.funded_on::text as funded_on, f.renewal_eligible_on::text as renewal_eligible_on, f.ledger_state,
+            f.id as funding_id, f.confirmed_at is not null as funding_confirmed
        from deals d join clients c on c.id = d.client_id
        left join lateral (select * from fundings f where f.deal_id = d.id order by f.created_at desc limit 1) f on true
       where d.id = $1`,
@@ -108,9 +111,11 @@ export async function loadDealSnapshot(
       fresh.status === "stale" && fresh.monthsBehind > 0 ? monthName(fresh.expected) : null,
     funding: d.funded_on
       ? {
+          id: d.funding_id ?? undefined,
           funded_on: d.funded_on,
           renewal_eligible_on: d.renewal_eligible_on,
           ledger_state: d.ledger_state ?? "expected",
+          confirmed: d.funding_confirmed ?? false,
         }
       : null,
     ai_next_step: d.ai_next_step,
