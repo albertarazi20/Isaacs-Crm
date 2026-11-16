@@ -43,16 +43,17 @@ export default async function FollowUpPage({
   const shared = buckets.filter((x) => x.owner_id === null);
   const mine = buckets.filter((x) => x.owner_id !== null);
 
+  // A pill in a scrolling row on a phone; a row of the left rail from lg up.
   const bucketLink = (x: (typeof buckets)[number]) => (
     <Link
       key={x.id}
       href={`/follow-up?b=${x.id}`}
       aria-current={selected?.id === x.id ? "page" : undefined}
       className={cn(
-        "flex min-h-10 items-center justify-between gap-2 rounded-lg px-2.5 text-sm transition sm:min-h-8 sm:text-[13px]",
+        "flex h-10 shrink-0 items-center gap-2 rounded-full border px-3 text-sm whitespace-nowrap transition lg:h-8 lg:w-full lg:justify-between lg:rounded-lg lg:border-transparent lg:px-2.5 lg:text-[13px]",
         selected?.id === x.id
-          ? "bg-accent-soft font-semibold text-accent"
-          : "text-text-2 hover:bg-surface-2 hover:text-text",
+          ? "border-accent/40 bg-accent-soft font-semibold text-accent"
+          : "border-border bg-surface text-text-2 hover:border-border-strong hover:bg-surface-3 hover:text-text lg:bg-transparent lg:hover:bg-surface-2",
       )}
     >
       <span className="truncate">{x.name}</span>
@@ -98,25 +99,27 @@ export default async function FollowUpPage({
           . Welcome emails and replies still go out.
         </p>
       ) : null}
-      <div className="grid grid-cols-[minmax(0,1fr)] gap-5 lg:grid-cols-[240px_minmax(0,1fr)]">
-        <aside className="min-w-0 space-y-4">
-          <nav aria-label="Buckets" className="space-y-1">
-            <p className="px-2.5 pb-1 text-[11px] font-semibold tracking-wide text-muted uppercase">
-              Shop
+      {/* Phone: bucket chips, then the bucket, then the new-bucket form. Wide: the rail holds chips and form, the bucket sits beside it. */}
+      <div className="grid grid-cols-[minmax(0,1fr)] gap-5 lg:grid-cols-[240px_minmax(0,1fr)] lg:grid-rows-[auto_1fr] lg:items-start">
+        <nav
+          aria-label="Buckets"
+          className="-mx-4 flex min-w-0 gap-1.5 overflow-x-auto px-4 pb-1 lg:col-start-1 lg:row-start-1 lg:mx-0 lg:flex-col lg:gap-1 lg:overflow-visible lg:px-0 lg:pb-0"
+        >
+          <p className="hidden px-2.5 pb-1 text-[11px] font-semibold tracking-wide text-muted uppercase lg:block">
+            Shop
+          </p>
+          {shared.map(bucketLink)}
+          {mine.length > 0 ? (
+            <p className="hidden px-2.5 pt-3 pb-1 text-[11px] font-semibold tracking-wide text-muted uppercase lg:block">
+              Mine
             </p>
-            {shared.map(bucketLink)}
-            {mine.length > 0 ? (
-              <p className="px-2.5 pt-3 pb-1 text-[11px] font-semibold tracking-wide text-muted uppercase">
-                Mine
-              </p>
-            ) : null}
-            {mine.map(bucketLink)}
-          </nav>
-          <Card className="p-3">
-            <NewBucket canShare={manager} />
-          </Card>
-        </aside>
-        <section className="min-w-0 space-y-4">
+          ) : null}
+          {mine.map(bucketLink)}
+        </nav>
+        <Card className="order-last p-3 lg:order-none lg:col-start-1 lg:row-start-2">
+          <NewBucket canShare={manager} />
+        </Card>
+        <section className="min-w-0 space-y-4 lg:col-start-2 lg:row-span-2 lg:row-start-1">
           {selected ? (
             <>
               <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-1">
