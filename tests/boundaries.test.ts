@@ -19,9 +19,12 @@ describe("architecture boundaries", () => {
     // lender downloads). They run for the shop, not for a signed-in user, so they are the owner connection on purpose.
     const JOBS = new Set([
       "lib/buckets/engine.ts", // nightly sequence steps and blasts
+      "lib/docs/retention.ts", // stream 3: the nightly purge of documents on dead deals
       "lib/docs/upload.ts", // merchant uploads, lender downloads, the scan
       "lib/inbox/process.ts", // the lender-email reader
       "lib/inbox/sync.ts", // Gmail history sync
+      "lib/money/close.ts", // stream 3: the month-end close and statements
+      "lib/money/renewals.ts", // stream 3: the renewal warm-up and eligibility emails
       "lib/money/winback.ts", // winback pools
       "lib/send/deliver.ts", // the Gmail / Resend sender
       "lib/send/external.ts", // stream 1: Sent mail outside the CRM, counted toward the cap

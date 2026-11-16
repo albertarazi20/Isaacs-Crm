@@ -273,3 +273,65 @@ export async function createCanary(
   ]);
   return rows[0]!.id;
 }
+
+// ---------- backdoor reports and the per-lender score (plan §6.13; audit S2-12) ----------
+
+/**
+ * "The merchant got a backdoor call": the exposure of that moment is kept, once per merchant per day, and every lender
+ * the file had been sent to carries the report. Managers only (the table's policy).
+ */
+export async function recordBackdoorReport(
+  q: Db,
+  a: { clientId: string; reportedBy: string; exposure: Exposure; note?: string },
+): Promise<void> {
+  await q.query(
+    `insert into backdoor_reports (client_id, reported_by, note, exposure, lender_ids)
+     values ($1, $2, $3, $4::jsonb, $5::uuid[])
+     on conflict (client_id, reported_on) do update
+       set exposure = excluded.exposure, lender_ids = excluded.lender_ids,
+           note = case when excluded.note <> '' then excluded.note else backdoor_reports.note end`,
+    [
+      a.clientId,
+      a.reportedBy,
+      (a.note ?? "").slice(0, 500),
+      JSON.stringify(a.exposure),
+      [...new Set(a.exposure.lenders.map((l) => l.funder_id))],
+    ],
+  );
+}
+
+export interface BackdoorScore {
+  funder_id: string;
+  name: string;
+  /** Distinct merchants whose file went to this lender. */
+  files_sent: number;
+  /** Backdoor reports on merchants this lender had. */
+  reports: number;
+  /** Reports per hundred files sent; null until a file was sent. */
+  score: number | null;
+}
+
+/** Every lender with its backdoor score, worst first. The number to read before adding a lender to a shotgun. */
+export async function backdoorScores(q: Db): Promise<BackdoorScore[]> {
+  const { rows } = await q.query<Omit<BackdoorScore, "score">>(
+    `select fu.id as funder_id, fu.name,
+            (select count(distinct s.client_id)::int from submissions s where s.funder_id = fu.id) as files_sent,
+            (select count(*)::int from backdoor_reports r where fu.id = any(r.lender_ids)) as reports
+       from funders fu where fu.active order by fu.name`,
+  );
+  return rows
+    .map((r) => ({
+      ...r,
+      score: r.files_sent > 0 ? Math.round((1000 * r.reports) / r.files_sent) / 10 : null,
+    }))
+    .sort(
+      (a, b) =>
+        (b.score ?? -1) - (a.score ?? -1) || b.reports - a.reports || a.name.localeCompare(b.name),
+    );
+}
+
+/** The person accepts the anti-backdoor policy; returns when (the first time stays). */
+export async function acceptPolicy(q: Db): Promise<string> {
+  const { rows } = await q.query<{ at: string }>("select accept_policy()::text as at");
+  return rows[0]?.at ?? "";
+}

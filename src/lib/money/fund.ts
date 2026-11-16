@@ -1,5 +1,6 @@
 import { z } from "zod";
 import type { Db } from "../db";
+import { UserError } from "../data/mutations";
 import { id, line, money } from "../data/schemas";
 import { defaultTimers } from "../mca/stages";
 import type { FundingTerms } from "../mca/funding";
@@ -245,4 +246,77 @@ export async function monthTotals(q: Db, months = 12): Promise<MonthTotals[]> {
     [String(months)],
   );
   return rows;
+}
+
+// ---------- corrections (S3-5) ----------
+
+export const correctionSchema = z.object({
+  fundingId: id,
+  reason: line(300).refine((s) => s.trim() !== "", "Say why the funding is being corrected"),
+  changes: z
+    .object({
+      amount: optMoney,
+      sellRate: optFactor,
+      buyRate: optFactor,
+      points: optPoints,
+      psf: optMoney,
+      commission: optMoney,
+      funderName: line(200).optional(),
+      payment: optMoney,
+      frequency: z.enum(["daily", "weekly", "biweekly", "monthly"]).optional(),
+      termDays: z.coerce.number().int().positive().nullable().optional(),
+    })
+    .strict(),
+});
+export type CorrectionInput = z.output<typeof correctionSchema>;
+
+/** What the database receives: only the keys that were typed, in its own names. */
+export function correctionChanges(c: CorrectionInput["changes"]): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  if (c.amount !== null && c.amount !== undefined) out["amount_cents"] = c.amount;
+  if (c.sellRate !== null && c.sellRate !== undefined) out["sell_rate"] = c.sellRate;
+  if (c.buyRate !== null && c.buyRate !== undefined) out["buy_rate"] = c.buyRate;
+  if (c.points !== null && c.points !== undefined) out["points"] = c.points;
+  if (c.psf !== null && c.psf !== undefined) out["psf_cents"] = c.psf;
+  if (c.commission !== null && c.commission !== undefined) out["commission_cents"] = c.commission;
+  if (c.funderName !== undefined && c.funderName !== "") out["funder_name"] = c.funderName;
+  if (c.payment !== null && c.payment !== undefined) out["payment_cents"] = c.payment;
+  if (c.frequency !== undefined) out["frequency"] = c.frequency;
+  if (c.termDays !== undefined) out["term_days"] = c.termDays;
+  return out;
+}
+
+/**
+ * A manager corrects a confirmed funding: the terms change, the original values are kept in fundings_corrections,
+ * and the money difference posts as a dated 'correction' ledger line in the current period (never an edit of a
+ * closed month's line).
+ */
+export async function correctFunding(q: Db, i: CorrectionInput): Promise<void> {
+  const changes = correctionChanges(i.changes);
+  if (Object.keys(changes).length === 0) throw new UserError("Nothing to correct");
+  await q.query("select correct_funding($1, $2::jsonb, $3)", [
+    i.fundingId,
+    JSON.stringify(changes),
+    i.reason.trim(),
+  ]);
+}
+
+export interface Correction {
+  id: string;
+  funding_id: string;
+  corrected_by_name: string | null;
+  reason: string;
+  old_values: Record<string, unknown>;
+  new_values: Record<string, unknown>;
+  created_at: string;
+}
+
+export async function listCorrections(q: Db, fundingId: string): Promise<Correction[]> {
+  const { rows } = await q.query<{ j: Correction }>(
+    `select to_jsonb(x) || jsonb_build_object('corrected_by_name', u.name) as j
+       from fundings_corrections x left join app_users u on u.id = x.corrected_by
+      where x.funding_id = $1 order by x.created_at desc`,
+    [fundingId],
+  );
+  return rows.map((r) => r.j);
 }
