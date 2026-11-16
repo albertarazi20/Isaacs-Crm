@@ -69,12 +69,13 @@ const count = async (userId: string, table: string, where = "true") =>
   );
 
 describe("funders, submissions and offers: row-level security", () => {
-  it("shows each user only their own rows", async () => {
-    expect(await count(a, "funders")).toBe(2);
+  it("shows each user only their own rows (the lender list itself is shared across the shop)", async () => {
+    // Lenders are one list for the whole shop since 0300: both users read all three. Submissions and offers stay per user.
+    expect(await count(a, "funders")).toBe(3);
     expect(await count(a, "submissions")).toBe(2);
     expect(await count(a, "offers")).toBe(1);
     expect(await count(a, "timers", "kind = 'chase' and done_at is null")).toBe(1);
-    expect(await count(b, "funders")).toBe(1);
+    expect(await count(b, "funders")).toBe(3);
     expect(await count(b, "submissions")).toBe(0);
     expect(await count(b, "offers")).toBe(0);
     expect(await count(b, "timers", "kind = 'chase' and done_at is null")).toBe(0);

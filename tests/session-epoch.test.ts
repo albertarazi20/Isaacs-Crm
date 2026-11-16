@@ -8,21 +8,25 @@ const SECRET = "s".repeat(40);
 
 describe("session epoch claim", () => {
   it("round-trips through the token", async () => {
-    const token = await signSession({ userId: "u1", email: "a@x.com", epoch: 3 }, SECRET);
+    const token = await signSession(
+      { userId: "u1", email: "a@x.com", epoch: 3, role: "rep" },
+      SECRET,
+    );
     expect(await verifySession(token, SECRET)).toEqual({
       userId: "u1",
       email: "a@x.com",
       epoch: 3,
+      role: "rep",
     });
   });
   it("a token with no epoch counts as epoch 0", async () => {
-    const token = await signSession({ userId: "u1", email: "a@x.com" }, SECRET);
+    const token = await signSession({ userId: "u1", email: "a@x.com", role: "rep" }, SECRET);
     expect((await verifySession(token, SECRET))?.epoch).toBe(0);
   });
 });
 
 describe("epochMatches", () => {
-  const claims = { userId: "u1", email: "a@x.com", epoch: 2 };
+  const claims = { userId: "u1", email: "a@x.com", epoch: 2, role: "rep" as const };
   it("accepts the current epoch", async () => {
     expect(await epochMatches(claims, async () => 2)).toBe(true);
   });
@@ -33,8 +37,12 @@ describe("epochMatches", () => {
     expect(await epochMatches(claims, async () => null)).toBe(false);
   });
   it("treats a missing claim as 0", async () => {
-    expect(await epochMatches({ userId: "u1", email: "a@x.com" }, async () => 0)).toBe(true);
-    expect(await epochMatches({ userId: "u1", email: "a@x.com" }, async () => 1)).toBe(false);
+    expect(await epochMatches({ userId: "u1", email: "a@x.com", role: "rep" }, async () => 0)).toBe(
+      true,
+    );
+    expect(await epochMatches({ userId: "u1", email: "a@x.com", role: "rep" }, async () => 1)).toBe(
+      false,
+    );
   });
 });
 
@@ -77,10 +85,16 @@ describe("session_epoch in the database", () => {
     const current = rows[0]?.session_epoch ?? -1;
     expect(current).toBe(1);
     expect(
-      await epochMatches({ userId: user, email: "isaac@x.com", epoch: 0 }, async () => current),
+      await epochMatches(
+        { userId: user, email: "isaac@x.com", epoch: 0, role: "rep" },
+        async () => current,
+      ),
     ).toBe(false);
     expect(
-      await epochMatches({ userId: user, email: "isaac@x.com", epoch: 1 }, async () => current),
+      await epochMatches(
+        { userId: user, email: "isaac@x.com", epoch: 1, role: "rep" },
+        async () => current,
+      ),
     ).toBe(true);
   });
 });
@@ -94,7 +108,7 @@ describe("resolveSession — every rule that makes a cookie count", () => {
     ...over,
   });
   const token = (epoch?: number) =>
-    signSession({ userId: "u1", email: "isaac@x.com", epoch }, SECRET2);
+    signSession({ userId: "u1", email: "isaac@x.com", epoch, role: "rep" }, SECRET2);
 
   it("accepts a good cookie", async () => {
     expect(await resolveSession(await token(0), deps())).toMatchObject({ userId: "u1", epoch: 0 });

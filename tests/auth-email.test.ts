@@ -38,19 +38,20 @@ describe("secret encryption", () => {
 
 describe("session token", () => {
   it("round-trips the user", async () => {
-    const token = await signSession({ userId: "u1", email: "a@x.com" }, SECRET);
+    const token = await signSession({ userId: "u1", email: "a@x.com", role: "rep" }, SECRET);
     expect(await verifySession(token, SECRET)).toEqual({
       userId: "u1",
       email: "a@x.com",
       epoch: 0,
+      role: "rep",
     });
   });
   it("rejects a wrong secret, a tampered token, an expired token and no token", async () => {
-    const token = await signSession({ userId: "u1", email: "a@x.com" }, SECRET);
+    const token = await signSession({ userId: "u1", email: "a@x.com", role: "rep" }, SECRET);
     expect(await verifySession(token, "t".repeat(40))).toBeNull();
     expect(await verifySession(`${token.slice(0, -3)}abc`, SECRET)).toBeNull();
     const old = await signSession(
-      { userId: "u1", email: "a@x.com" },
+      { userId: "u1", email: "a@x.com", role: "rep" },
       SECRET,
       new Date(Date.now() - 40 * 86_400_000),
     );

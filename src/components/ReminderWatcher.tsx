@@ -46,10 +46,14 @@ export function ReminderWatcher() {
 
   useEffect(() => {
     let live = true;
+    const inflight = new AbortController();
     async function poll() {
       try {
         setCanAsk("Notification" in window && Notification.permission === "default");
-        const res = await fetch("/api/reminders/due", { cache: "no-store" });
+        const res = await fetch("/api/reminders/due", {
+          cache: "no-store",
+          signal: inflight.signal,
+        });
         if (!res.ok || !live) return;
         const body = (await res.json()) as { due: Due[] };
         const seen = readSeen();
@@ -76,6 +80,7 @@ export function ReminderWatcher() {
     window.addEventListener("focus", onFocus);
     return () => {
       live = false;
+      inflight.abort();
       window.clearInterval(timer);
       window.removeEventListener("focus", onFocus);
     };

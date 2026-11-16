@@ -1,10 +1,10 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { cache } from "react";
-import { devLoginEnabled, env } from "../env";
+import { env } from "../env";
 import { currentSessionEpoch } from "../system/users";
 import { resolveSession } from "./resolve";
-import { isAllowedEmail } from "./google";
+import { CAN, type Role } from "./roles";
 import { SESSION_COOKIE, SESSION_DAYS, signSession, type SessionClaims } from "./session";
 
 /** Cached per request: the layout, the page and any action all ask, and the epoch check is a database read. */
@@ -12,9 +12,9 @@ export const getSession = cache(async (): Promise<SessionClaims | null> => {
   const store = await cookies();
   return resolveSession(store.get(SESSION_COOKIE)?.value, {
     secret: env().SESSION_SECRET,
-    // Removing someone from ALLOWED_EMAILS must end their session now, not in 14 days. (Dev login has no allowlist.)
-    allowed: (email) => devLoginEnabled() || isAllowedEmail(email, env().ALLOWED_EMAILS),
-    // "Log out everywhere" (and a deleted user) must end the session now too.
+    // Accounts are the allowlist now: a disabled or deleted account has no epoch, so its sessions end at once.
+    allowed: () => true,
+    // "Log out everywhere" (and a disabled or deleted user) must end the session now too.
     currentEpoch: currentSessionEpoch,
   });
 });
@@ -24,6 +24,15 @@ export async function requireSession(): Promise<SessionClaims> {
   if (!session) redirect("/login");
   return session;
 }
+
+/** A page or action only some roles may use. Sends everyone else home rather than erroring. */
+export async function requireRole(check: (r: Role) => boolean): Promise<SessionClaims> {
+  const session = await requireSession();
+  if (!check(session.role)) redirect("/");
+  return session;
+}
+
+export { CAN };
 
 export const cookieOptions = (maxAgeSeconds: number) => ({
   httpOnly: true,

@@ -2,7 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { passcodeMatches } from "@/lib/auth/passcode";
 import { sessionCookie } from "@/lib/auth/server";
 import { env, firstAllowedEmail, passcodeConfigured } from "@/lib/env";
-import { upsertLoginUser } from "@/lib/system/users";
+import { bootstrapFirstManager, loginUser } from "@/lib/system/users";
 
 export const dynamic = "force-dynamic";
 
@@ -26,10 +26,17 @@ export async function POST(req: NextRequest) {
     await new Promise((r) => setTimeout(r, 1000));
     return NextResponse.redirect(`${e.APP_URL}/login?error=bad_passcode`, 303);
   }
-  const user = await upsertLoginUser(email, email.split("@")[0] ?? "");
+  const name = email.split("@")[0] ?? "";
+  const user = (await loginUser(email, name)) ?? (await bootstrapFirstManager(email, name));
+  if (!user) return NextResponse.redirect(`${e.APP_URL}/login?error=not_allowed`, 303);
   const res = NextResponse.redirect(`${e.APP_URL}/`, 303);
   res.cookies.set(
-    await sessionCookie({ userId: user.id, email: user.email, epoch: user.session_epoch }),
+    await sessionCookie({
+      userId: user.id,
+      email: user.email,
+      epoch: user.session_epoch,
+      role: user.role,
+    }),
   );
   return res;
 }

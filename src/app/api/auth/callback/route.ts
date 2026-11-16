@@ -10,7 +10,7 @@ import {
 import { getSession, sessionCookie } from "@/lib/auth/server";
 import { env } from "@/lib/env";
 import { saveGmailConnection } from "@/lib/system/gmail";
-import { upsertLoginUser } from "@/lib/system/users";
+import { bootstrapFirstManager, loginUser } from "@/lib/system/users";
 
 export const dynamic = "force-dynamic";
 
@@ -57,12 +57,23 @@ export async function GET(req: NextRequest) {
       return res;
     }
 
-    if (!who.emailVerified || !isAllowedEmail(who.email, e.ALLOWED_EMAILS))
-      return fail("not_allowed");
-    const user = await upsertLoginUser(who.email, who.name);
+    if (!who.emailVerified) return fail("not_allowed");
+    // Accounts are created by a manager in Settings → Team. The only exception is a fresh install: the first
+    // person to sign in (restricted to ALLOWED_EMAILS when that is set) becomes the first manager.
+    const user =
+      (await loginUser(who.email, who.name)) ??
+      (!e.ALLOWED_EMAILS || isAllowedEmail(who.email, e.ALLOWED_EMAILS)
+        ? await bootstrapFirstManager(who.email, who.name)
+        : null);
+    if (!user) return fail("not_allowed");
     const res = NextResponse.redirect(`${base}/`);
     res.cookies.set(
-      await sessionCookie({ userId: user.id, email: user.email, epoch: user.session_epoch }),
+      await sessionCookie({
+        userId: user.id,
+        email: user.email,
+        epoch: user.session_epoch,
+        role: user.role,
+      }),
     );
     res.cookies.delete(OAUTH_COOKIE);
     return res;

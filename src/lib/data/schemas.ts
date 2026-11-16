@@ -10,12 +10,12 @@ const isoDate = z
   .regex(/^\d{4}-\d{2}-\d{2}$/, "Use a YYYY-MM-DD date")
   .refine(isRealDate, "That isn't a real calendar date");
 const localDateTime = z.string().regex(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/, "Pick a date and time");
-const id = z.string().uuid();
+export const id = z.string().uuid();
 /** Multi-line text (notes, bodies). Refuses SSNs and card/account numbers — see sensitive.ts. */
 const tooLong = (max: number) =>
   `That's too long — the limit is ${max.toLocaleString("en-US")} characters`;
 
-const text = (max = 2000) =>
+export const text = (max = 2000) =>
   z
     .string()
     .trim()
@@ -26,7 +26,7 @@ const text = (max = 2000) =>
     });
 
 /** Single-line field: no line breaks or control characters (they would become email header injection). */
-const line = (max = 200) =>
+export const line = (max = 200) =>
   z
     .string()
     .trim()
@@ -46,7 +46,7 @@ const emailField = line(200).refine(
 );
 const frequency = z.enum(["daily", "weekly", "biweekly", "monthly"]);
 
-const money = z.union([z.string(), z.number()]).transform((v, ctx) => {
+export const money = z.union([z.string(), z.number()]).transform((v, ctx) => {
   const cents = parseMoney(v);
   if (cents === null) {
     ctx.addIssue({ code: "custom", message: "Enter an amount like 50k or $75,000" });
