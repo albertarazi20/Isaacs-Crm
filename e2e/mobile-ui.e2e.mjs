@@ -24,15 +24,6 @@ const ONLY = process.env.E2E_ONLY ?? "";
 const on = (name) => !ONLY || ONLY.split("|").some((o) => name.includes(o));
 const PHONE = { width: 390, height: 844 };
 /** Waits for a smooth scroll to stop (the same scrollLeft twice, 120ms apart). */
-async function settled(el) {
-  let last = -1;
-  await until(async () => {
-    const now = await el.evaluate((b) => b.scrollLeft);
-    const same = now === last;
-    last = now;
-    return same;
-  }, 4000);
-}
 /** A phone shrinks a too-wide page to fit (innerWidth grows past 390), so compare against 390 itself, not innerWidth. */
 const pageFits = (p) =>
   p
