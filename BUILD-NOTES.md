@@ -116,3 +116,22 @@ made it true (a past day is refused by the picker's own validation, the database
 Still red, by the owner's decision rather than a bug: `board.e2e` 53/77 and `mobile-ui.e2e` 2/5 (the kanban drag
 flows, see "Browser suite after the role fix" above). Unit suite: 90/91 files — `tests/language.test.ts` waits on
 the lender-vs-funder / payment-vs-remittance vocabulary call (OWNER-TODO).
+
+## Pass 2 — formal test plan, manual run, fixes (2026-11-16, overnight)
+
+Plan: `docs/TEST-PLAN-SELECTIVE.md`. Findings: `docs/ISSUES.md` "Pass 2" (P2-1 … P2-53; 8 blockers), collected before any
+fix, with the two fresh-context reviews (security, correctness) folded in. Fixes land in batches, each with
+typecheck + lint + the unit suite green (tests/language.test.ts excepted — the owner's vocabulary call):
+
+- Batch 1 (`0aa49aa`): migrations 0480/0490 (ops write policies, confirmed-funding guard, deal marked sent on send,
+  epoch bump, token revocation, audit policies, suppression helper), inbound-mail authentication, active-account
+  filters, role checks outside `try`, upload-route limits, page gate, postal-address guard, smaller items.
+  Regression tests: `tests/pass2.test.ts` (ops loop as the ops role, the guard, tokens, the postal guard).
+- Dashboard (`0800a15`): ops queue tiles; rep names on the manager's do-now list.
+- In flight on branches `fix/sheets-intake` (P2-8/9/10/15/16/17/21) and `fix/lender-ui` (P2-6/22/34/38/43/44/45/47/
+  49/50/52): fresh-context agents in their own worktrees, merged here after their suites pass.
+- After the merge: P2-1, P2-7, P2-14, P2-19 (page wiring), P2-29 (rotate action), P2-32, P2-39/40, P2-51; then the
+  plan is re-run and `pnpm e2e` with it.
+
+Supabase (`aztoxzcmnvqaypjuuuwj`) carries every migration the dev database does (52 at this line); the security
+advisor shows only the intentional notes.
