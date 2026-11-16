@@ -202,12 +202,8 @@ export const funderSchema = z
     maxUpsellPoints: optPct("Max upsell points").default(null),
     psfCapPct: optPct("PSF cap").default(null),
     clawbackDays: intOrDefault("Clawback days", 0, 365, MONEY_TERM_DEFAULTS.clawback_days),
-    approvalValidDays: intOrDefault(
-      "Approval validity",
-      1,
-      365,
-      MONEY_TERM_DEFAULTS.approval_valid_days,
-    ),
+    // blank = null: this lender follows the shop's default approval validity (0510)
+    approvalValidDays: optInt("Approval validity", 1, 365).default(null),
     statementFreshDay: intOrDefault(
       "Statement day",
       1,

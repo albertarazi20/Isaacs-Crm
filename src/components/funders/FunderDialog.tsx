@@ -201,12 +201,11 @@ export function FunderDialog({
             placeholder={String(MONEY_TERM_DEFAULTS.clawback_days)}
           />
         </Field>
-        <Field label="Approval good for (days)" hint="The approval-expiry clock on the board">
-          <Input
-            {...bind("approvalValidDays")}
-            inputMode="numeric"
-            placeholder={String(MONEY_TERM_DEFAULTS.approval_valid_days)}
-          />
+        <Field
+          label="Approval good for (days)"
+          hint="The approval-expiry clock on the board. Blank follows the shop's setting"
+        >
+          <Input {...bind("approvalValidDays")} inputMode="numeric" placeholder="shop default" />
         </Field>
         <Field
           label="Statements fresh from the (day of month)"
