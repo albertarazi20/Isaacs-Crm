@@ -57,7 +57,7 @@ export function QuickAdd() {
   const [open, setOpen] = useState(false);
   return (
     <>
-      <Button variant="primary" onClick={() => setOpen(true)}>
+      <Button variant="secondary" onClick={() => setOpen(true)}>
         + Add client
       </Button>
       {open ? <QuickAddDialog onClose={() => setOpen(false)} /> : null}

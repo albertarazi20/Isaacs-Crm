@@ -95,7 +95,12 @@ function Kpi({
   return (
     <div className="rounded-xl border border-border bg-surface px-4 py-3.5">
       <p className="text-[11px] font-semibold tracking-wide text-muted uppercase">{label}</p>
-      <p className={cn("mt-1 text-[26px] leading-8 font-bold tracking-tight tabular-nums", color)}>
+      <p
+        className={cn(
+          "mt-1 text-[26px] leading-8 font-semibold tracking-tight tabular-nums",
+          color,
+        )}
+      >
         {value}
       </p>
       {sub ? <p className="mt-0.5 truncate text-xs text-muted">{sub}</p> : null}
@@ -137,9 +142,9 @@ function PaceBar({
   return (
     <div className="rounded-xl border border-border bg-surface px-4 py-3.5">
       <div className="flex items-baseline justify-between gap-3">
-        <p className="text-sm font-semibold">{label}</p>
+        <p className="text-sm font-medium">{label}</p>
         <p className="text-sm tabular-nums">
-          <span className="font-bold">{formatMoneyCompact(p.fundedCents)}</span>
+          <span className="font-semibold">{formatMoneyCompact(p.fundedCents)}</span>
           {p.goalCents > 0 ? (
             <span className="text-muted"> of {formatMoneyCompact(p.goalCents)}</span>
           ) : null}
@@ -196,7 +201,7 @@ function NowList({
           <li key={`${n.kind}-${n.client_id}-${n.deal_id ?? ""}-${i}`}>
             <Link
               href={n.href}
-              className="flex items-start gap-3 px-4 py-3 transition hover:bg-surface-2"
+              className="flex items-start gap-3 px-4 py-2.5 transition hover:bg-surface-3"
             >
               <span
                 className={cn(
@@ -281,7 +286,7 @@ function MoneyBlock({ m }: { m: MoneyOnTable }) {
     <Card>
       <SectionTitle
         aside={
-          <span className="text-sm font-bold tabular-nums">
+          <span className="text-sm font-semibold tabular-nums">
             {formatMoneyCompact(m.approved_unfunded_cents + m.renewals_ready_cents)}
           </span>
         }
@@ -341,23 +346,23 @@ function RepTable({ rows, month }: { rows: RepScore[]; month: string }) {
           Team
         </SectionTitle>
       </div>
-      <table className="mt-2 w-full text-sm">
-        <thead className="text-left text-xs text-muted">
+      <table className="mt-3 w-full text-[13px]">
+        <thead className="bg-surface-2/60 text-left text-[11px] font-semibold tracking-wide text-muted uppercase">
           <tr>
-            <th className="px-4 py-2 font-medium">Rep</th>
-            <th className="px-2 py-2 text-right font-medium">Leads</th>
-            <th className="px-2 py-2 text-right font-medium">Submitted</th>
-            <th className="px-2 py-2 text-right font-medium">Approved</th>
-            <th className="px-2 py-2 text-right font-medium">Funded</th>
-            <th className="px-2 py-2 text-right font-medium">Volume</th>
-            <th className="px-2 py-2 text-right font-medium">Commission</th>
-            <th className="px-2 py-2 text-right font-medium">Overdue</th>
-            <th className="px-4 py-2 text-right font-medium">Speed to lead</th>
+            <th className="px-4 py-2 font-semibold">Rep</th>
+            <th className="px-2 py-2 text-right font-semibold">Leads</th>
+            <th className="px-2 py-2 text-right font-semibold">Submitted</th>
+            <th className="px-2 py-2 text-right font-semibold">Approved</th>
+            <th className="px-2 py-2 text-right font-semibold">Funded</th>
+            <th className="px-2 py-2 text-right font-semibold">Volume</th>
+            <th className="px-2 py-2 text-right font-semibold">Commission</th>
+            <th className="px-2 py-2 text-right font-semibold">Overdue</th>
+            <th className="px-4 py-2 text-right font-semibold">Speed to lead</th>
           </tr>
         </thead>
         <tbody className="divide-y divide-border">
           {rows.map((r) => (
-            <tr key={r.user_id}>
+            <tr key={r.user_id} className="transition hover:bg-surface-3">
               <td className="px-4 py-2 font-medium">
                 {r.name || r.email}
                 {r.role !== "rep" ? (
@@ -405,20 +410,20 @@ function LenderTable({ rows }: { rows: LenderScore[] }) {
       {rows.length === 0 ? (
         <p className="px-4 pb-4 pt-2 text-sm text-muted">Nothing sent yet.</p>
       ) : (
-        <table className="mt-2 w-full text-sm">
-          <thead className="text-left text-xs text-muted">
+        <table className="mt-3 w-full text-[13px]">
+          <thead className="bg-surface-2/60 text-left text-[11px] font-semibold tracking-wide text-muted uppercase">
             <tr>
-              <th className="px-4 py-2 font-medium">Lender</th>
-              <th className="px-2 py-2 text-right font-medium">Sent</th>
-              <th className="px-2 py-2 text-right font-medium">Approved</th>
-              <th className="px-2 py-2 text-right font-medium">Rate</th>
-              <th className="px-2 py-2 text-right font-medium">Avg factor</th>
-              <th className="px-4 py-2 text-right font-medium">Answers in</th>
+              <th className="px-4 py-2 font-semibold">Lender</th>
+              <th className="px-2 py-2 text-right font-semibold">Sent</th>
+              <th className="px-2 py-2 text-right font-semibold">Approved</th>
+              <th className="px-2 py-2 text-right font-semibold">Rate</th>
+              <th className="px-2 py-2 text-right font-semibold">Avg factor</th>
+              <th className="px-4 py-2 text-right font-semibold">Answers in</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-border">
             {rows.slice(0, 8).map((r) => (
-              <tr key={r.funderId}>
+              <tr key={r.funderId} className="transition hover:bg-surface-3">
                 <td className="px-4 py-2 font-medium">{r.name}</td>
                 <td className="px-2 py-2 text-right tabular-nums">{r.submissions}</td>
                 <td className="px-2 py-2 text-right tabular-nums">{r.approvals}</td>
@@ -548,7 +553,7 @@ export default async function DashboardPage({
       ) : null}
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Dashboard</h1>
+          <h1 className="text-xl font-semibold tracking-tight sm:text-2xl">Dashboard</h1>
           <p className="text-sm text-muted">
             {WEEKDAYS[parseISODate(ctx.today).getUTCDay()]}, {formatDate(ctx.today)} · {monthName}
           </p>

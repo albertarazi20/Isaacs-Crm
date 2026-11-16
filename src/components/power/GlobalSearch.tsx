@@ -116,11 +116,11 @@ export function GlobalSearch() {
         onClick={show}
         aria-label="Find a client"
         aria-keyshortcuts="Control+K Meta+K"
-        className="inline-flex h-10 items-center gap-2 rounded-lg px-2.5 text-sm text-muted transition hover:bg-surface-2 hover:text-text lg:w-56 lg:border lg:border-border lg:bg-surface lg:px-3"
+        className="inline-flex h-10 items-center gap-2 rounded-lg px-2.5 text-[13px] text-muted transition hover:bg-surface-2 hover:text-text sm:h-9 lg:w-60 lg:border lg:border-border lg:bg-surface-2/60 lg:px-3 lg:hover:border-border-strong lg:hover:bg-surface"
       >
         <SearchIcon />
         <span className="hidden flex-1 text-left lg:inline">Find a client…</span>
-        <kbd className="hidden rounded border border-border px-1.5 text-xs lg:inline">
+        <kbd className="hidden rounded border border-border bg-surface px-1.5 font-sans text-[11px] text-muted lg:inline">
           {isMac ? "⌘K" : "Ctrl K"}
         </kbd>
       </button>

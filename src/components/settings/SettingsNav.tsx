@@ -22,10 +22,10 @@ export function SettingsNav({ role, current }: { role: Role; current: string }) 
           href={i.href}
           aria-current={i.href === current ? "page" : undefined}
           className={cn(
-            "rounded-full border px-3 py-1 text-sm",
+            "inline-flex h-8 items-center rounded-full border px-3 text-[13px] font-medium transition",
             i.href === current
-              ? "border-accent bg-accent-soft text-accent"
-              : "border-border text-muted hover:text-text",
+              ? "border-accent/30 bg-accent-soft text-accent"
+              : "border-border bg-surface text-muted hover:border-border-strong hover:text-text",
           )}
         >
           {i.label}

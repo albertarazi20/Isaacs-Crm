@@ -42,21 +42,33 @@ export function Dialog({
         if (e.target === ref.current) onClose();
       }}
       className={cn(
-        "m-auto w-[calc(100%-2rem)] rounded-2xl border border-border bg-surface p-0 text-text shadow-2xl backdrop:bg-black/50",
-        wide ? "max-w-2xl" : "max-w-md",
+        // centred on a desktop; a bottom sheet with a grab handle on a phone
+        "m-auto w-[calc(100%-2rem)] rounded-2xl border border-border bg-surface p-0 text-text shadow-pop backdrop:bg-black/40 backdrop:backdrop-blur-[2px] max-sm:m-0 max-sm:mt-auto max-sm:w-full max-sm:max-w-none max-sm:rounded-b-none max-sm:pb-[env(safe-area-inset-bottom)]",
+        wide ? "max-w-2xl" : "max-w-lg",
       )}
     >
       {open ? (
         <div className="flex max-h-[85vh] flex-col">
-          <header className="flex items-center justify-between border-b border-border px-5 py-3">
+          <div className="mx-auto mt-2 h-1 w-10 rounded-full bg-border sm:hidden" aria-hidden />
+          <header className="flex items-center justify-between gap-3 border-b border-border px-5 py-3.5">
             <h2 className="text-base font-semibold">{title}</h2>
             <button
               type="button"
               aria-label="Close"
               onClick={onClose}
-              className="inline-flex size-10 items-center justify-center rounded-md text-muted hover:bg-surface-2 sm:size-8"
+              className="inline-flex size-10 items-center justify-center rounded-md text-muted transition hover:bg-surface-2 hover:text-text sm:size-8"
             >
-              ✕
+              <svg
+                aria-hidden
+                viewBox="0 0 24 24"
+                className="size-4"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.75"
+                strokeLinecap="round"
+              >
+                <path d="M6 6l12 12M18 6L6 18" />
+              </svg>
             </button>
           </header>
           <div className="overflow-y-auto px-5 py-4">{children}</div>
@@ -102,10 +114,12 @@ export function ToastProvider({ children }: { children: ReactNode }) {
             key={t.id}
             role={t.tone === "error" ? "alert" : "status"}
             className={cn(
-              "pointer-events-auto flex max-w-md items-center gap-3 rounded-xl border px-4 py-2.5 text-sm shadow-lg",
+              "pointer-events-auto flex max-w-md items-center gap-3 rounded-xl border px-4 py-2.5 text-sm shadow-pop",
               t.tone === "error"
-                ? "border-bad bg-bad-soft text-bad"
-                : "border-border bg-surface text-text",
+                ? "border-bad/30 bg-bad-soft text-bad"
+                : t.tone === "success"
+                  ? "border-good/30 bg-good-soft text-good"
+                  : "border-border bg-surface text-text",
             )}
           >
             <span>{t.message}</span>
