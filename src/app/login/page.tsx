@@ -1,3 +1,4 @@
+import Image from "next/image";
 import { redirect } from "next/navigation";
 import { getSession } from "@/lib/auth/server";
 import { devLoginEnabled, googleConfigured, passcodeConfigured } from "@/lib/env";
@@ -24,18 +25,28 @@ export default async function LoginPage({
   const { error } = await searchParams;
   if (!error && (await getSession())) redirect("/");
   return (
-    <main className="grid min-h-screen place-items-center bg-[radial-gradient(60%_50%_at_50%_0%,color-mix(in_srgb,var(--accent)_14%,transparent),transparent)] px-6">
-      <div className="w-full max-w-sm space-y-5 rounded-2xl border border-border bg-surface p-7 shadow-xl shadow-black/5">
+    <main className="grid min-h-dvh place-items-center bg-[radial-gradient(70%_45%_at_50%_0%,color-mix(in_srgb,var(--accent)_12%,transparent),transparent)] px-6">
+      <div className="w-full max-w-sm space-y-6 rounded-2xl border border-border bg-surface p-7 shadow-pop">
         <div>
-          <span
-            aria-hidden
-            className="mb-4 grid size-11 place-items-center rounded-xl bg-gradient-to-br from-indigo-500 to-violet-700 text-xl font-extrabold text-white shadow-md shadow-indigo-500/30"
-          >
-            S
-          </span>
-          <h1 className="text-2xl font-bold tracking-tight">Selective CRM</h1>
+          <Image
+            src="/brand/SC-logomark-light-web.png"
+            alt=""
+            width={40}
+            height={46}
+            priority
+            className="only-light mb-5"
+          />
+          <Image
+            src="/brand/SC-logomark-dark-web.png"
+            alt=""
+            width={40}
+            height={46}
+            priority
+            className="only-dark mb-5"
+          />
+          <h1 className="text-xl font-semibold tracking-tight">Selective CRM</h1>
           <p className="mt-1 text-sm text-muted">
-            Leads, lenders, funded deals and commissions — one place for the whole shop.
+            Leads, lenders, funded deals and commissions, one place for the whole shop.
           </p>
         </div>
         {error ? (
@@ -57,7 +68,7 @@ export default async function LoginPage({
               autoComplete="current-password"
               placeholder="Passcode"
               aria-label="Passcode"
-              className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-text"
+              className="h-10 w-full rounded-lg border border-border bg-surface px-3 text-sm text-text focus:border-accent focus:ring-2 focus:ring-ring focus:outline-none"
             />
             <button type="submit" className={buttonClass("primary", "md", "w-full")}>
               Sign in
@@ -69,6 +80,7 @@ export default async function LoginPage({
             Dev login (local only)
           </a>
         ) : null}
+        <p className="text-center text-[11px] text-muted">Selective Capital · internal</p>
       </div>
     </main>
   );

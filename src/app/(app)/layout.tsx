@@ -1,7 +1,9 @@
 import type { Metadata } from "next";
+import { cookies } from "next/headers";
+import Image from "next/image";
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { AppProvider } from "@/components/app-context";
-import { LogoutButton } from "@/components/LogoutButton";
 import { NavLink } from "@/components/NavLink";
 import { ToastProvider } from "@/components/overlay";
 import { PendingTouchPrompt } from "@/components/ContactActions";
@@ -10,12 +12,14 @@ import { GlobalSearch } from "@/components/power/GlobalSearch";
 import { MobileTabBar } from "@/components/power/MobileTabBar";
 import { QuickAdd } from "@/components/QuickAdd";
 import { ReminderWatcher } from "@/components/ReminderWatcher";
+import { UserMenu } from "@/components/UserMenu";
 import { requireSession } from "@/lib/auth/server";
 import { navFor } from "@/lib/nav";
 import { loadShell } from "@/lib/data/shell";
 import { requestTimeMs } from "@/lib/server-time";
 import { gmailStatus } from "@/lib/system/gmail";
 import { reminderStatus } from "@/lib/system/heartbeat";
+import { parseTheme, THEME_COOKIE } from "@/lib/theme";
 
 export const dynamic = "force-dynamic";
 
@@ -32,14 +36,16 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const session = await requireSession();
   const me = await loadShell(session.userId);
   if (!me.user) redirect("/login?error=session_expired");
-  const [gmail, reminders] = await Promise.all([
+  const [gmail, reminders, store] = await Promise.all([
     gmailStatus(session.userId),
     // The banner is a safety net: if the heartbeat can't be read, the page still renders.
     reminderStatus(session.userId, { now: new Date(requestTimeMs()) }).catch((e: unknown) => {
       console.error("reminder heartbeat unreadable:", e);
       return null;
     }),
+    cookies(),
   ]);
+  const theme = parseTheme(store.get(THEME_COOKIE)?.value);
 
   return (
     <AppProvider
@@ -58,19 +64,48 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         <ReminderWatcher />
         <header
           data-app-header
-          className="sticky top-0 z-30 border-b border-border bg-surface/90 backdrop-blur"
+          className="sticky top-0 z-30 border-b border-border bg-surface/80 backdrop-blur-md"
         >
-          <div className="mx-auto flex max-w-[1600px] items-center gap-3 px-4 py-2">
-            <span className="flex items-center gap-2 pr-2 text-base font-bold tracking-tight">
-              <span
-                aria-hidden
-                className="grid size-7 place-items-center rounded-lg bg-gradient-to-br from-indigo-500 to-violet-700 text-sm font-extrabold text-white shadow-sm shadow-indigo-500/30"
-              >
-                S
-              </span>
-              Selective CRM
-            </span>
-            <nav aria-label="Main" className="hidden flex-1 gap-1 overflow-x-auto sm:flex">
+          <div className="mx-auto flex h-13 max-w-[1600px] items-center gap-2 px-4 sm:gap-3 sm:px-6">
+            <Link
+              href="/"
+              aria-label="Selective CRM home"
+              className="flex shrink-0 items-center pr-1 sm:pr-2"
+            >
+              <Image
+                src="/brand/SC-logomark-light-web.png"
+                alt=""
+                width={24}
+                height={28}
+                priority
+                className="only-light sm:hidden"
+              />
+              <Image
+                src="/brand/SC-logomark-dark-web.png"
+                alt=""
+                width={24}
+                height={28}
+                priority
+                className="only-dark sm:hidden"
+              />
+              <Image
+                src="/brand/SC-horizontal-light-web.png"
+                alt="Selective Capital"
+                width={136}
+                height={22}
+                priority
+                className="only-light hidden sm:block"
+              />
+              <Image
+                src="/brand/SC-horizontal-dark-web.png"
+                alt="Selective Capital"
+                width={136}
+                height={22}
+                priority
+                className="only-dark hidden sm:block"
+              />
+            </Link>
+            <nav aria-label="Main" className="hidden flex-1 gap-0.5 overflow-x-auto sm:flex">
               {navFor(session.role).map((n) => (
                 <NavLink key={n.href} href={n.href} badge={n.href === "/" ? me.due : undefined}>
                   {n.label}
@@ -81,14 +116,19 @@ export default async function AppLayout({ children }: { children: React.ReactNod
             <GlobalSearch />
             <QuickAdd />
             <div className="hidden sm:block">
-              <LogoutButton email={me.user.email} />
+              <UserMenu
+                name={me.user.name}
+                email={me.user.email}
+                role={session.role}
+                theme={theme}
+              />
             </div>
           </div>
         </header>
         {reminders?.stale ? (
           <div
             role="status"
-            className="border-b border-bad/40 bg-bad-soft px-4 py-2 text-center text-sm font-medium text-bad"
+            className="border-b border-bad/30 bg-bad-soft px-4 py-2 text-center text-sm font-medium text-bad"
           >
             {reminders.missing.length > 0
               ? `Reminder emails can't go out — the server is missing ${reminders.missing.join(", ")}.`
@@ -98,7 +138,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           </div>
         ) : null}
         {gmail.needsReconnect ? (
-          <div className="bg-warn-soft px-4 py-2 text-center text-sm text-warn">
+          <div className="border-b border-warn/30 bg-warn-soft px-4 py-2 text-center text-sm text-warn">
             Gmail needs to be reconnected —{" "}
             <a className="font-semibold underline" href="/api/auth/google?purpose=gmail">
               reconnect now
@@ -107,7 +147,9 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           </div>
         ) : null}
         {/* pb-24 on a phone keeps the last card clear of the fixed tab bar */}
-        <main className="mx-auto max-w-[1600px] px-4 py-5 pb-24 sm:pb-5">{children}</main>
+        <main className="mx-auto max-w-[1600px] px-4 py-5 pb-24 sm:px-6 sm:py-6 sm:pb-8">
+          {children}
+        </main>
         <MobileTabBar due={me.due} email={me.user.email} role={session.role} />
         <PendingTouchPrompt />
         <HotImport />

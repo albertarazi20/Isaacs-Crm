@@ -23,21 +23,25 @@ export const GROUP_COLOR: Record<StageGroup, string> = {
 type Variant = "primary" | "secondary" | "ghost" | "danger";
 type Size = "sm" | "md";
 
+/*
+ * One primary action per screen carries the brand gradient; everything else is a quiet bordered or ghost
+ * button. Pressed states dim rather than move, so nothing around a button jumps.
+ */
 const VARIANT: Record<Variant, string> = {
   primary:
-    "bg-accent text-accent-fg shadow-sm shadow-accent/25 hover:brightness-110 active:brightness-95",
+    "bg-[image:var(--brand-gradient)] text-white shadow-[inset_0_1px_0_rgb(255_255_255/0.35),0_1px_2px_rgb(10_10_16/0.25)] hover:brightness-[1.06] active:brightness-95",
   secondary:
-    "border border-border bg-surface text-text shadow-sm hover:border-accent/40 hover:bg-surface-2",
-  ghost: "text-muted hover:bg-surface-2 hover:text-text",
-  danger: "bg-bad-soft text-bad hover:opacity-80",
+    "border border-border bg-surface text-text shadow-card hover:border-border-strong hover:bg-surface-3 active:bg-surface-2",
+  ghost: "text-text-2 hover:bg-surface-2 hover:text-text active:bg-surface-2",
+  danger: "border border-bad/25 bg-bad-soft text-bad hover:border-bad/50 active:brightness-95",
 };
-// "sm" is the dense desktop size; under the sm: breakpoint a thumb needs 40px (I-12).
+// "sm" is the dense desktop size; under the sm: breakpoint a thumb needs 40px.
 const SIZE: Record<Size, string> = {
-  sm: "h-10 px-3 text-sm sm:h-8 sm:px-2.5",
-  md: "h-10 px-4 text-sm",
+  sm: "h-10 px-3 text-sm sm:h-8 sm:px-2.5 sm:text-[13px]",
+  md: "h-10 px-4 text-sm sm:h-9",
 };
 const BASE =
-  "inline-flex items-center justify-center gap-1.5 rounded-lg font-semibold transition disabled:cursor-not-allowed disabled:opacity-50";
+  "inline-flex items-center justify-center gap-1.5 rounded-lg font-medium whitespace-nowrap transition select-none disabled:cursor-not-allowed disabled:opacity-50";
 
 export function buttonClass(
   variant: Variant = "secondary",
@@ -78,16 +82,16 @@ export function LinkButton({
 }
 
 const FIELD =
-  "w-full rounded-lg border border-border bg-surface px-3 text-sm text-text placeholder:text-muted/70 focus:border-accent";
+  "w-full rounded-lg border border-border bg-surface px-3 text-sm text-text transition placeholder:text-muted/70 hover:border-border-strong focus:border-accent focus:ring-2 focus:ring-ring focus:outline-none disabled:bg-surface-2 disabled:text-muted";
 
 export function Input({ className, ...rest }: InputHTMLAttributes<HTMLInputElement>) {
-  return <input className={cn(FIELD, "h-10", className)} {...rest} />;
+  return <input className={cn(FIELD, "h-10 sm:h-9", className)} {...rest} />;
 }
 export function Textarea({ className, ...rest }: TextareaHTMLAttributes<HTMLTextAreaElement>) {
   return <textarea className={cn(FIELD, "min-h-24 py-2", className)} {...rest} />;
 }
 export function Select({ className, ...rest }: SelectHTMLAttributes<HTMLSelectElement>) {
-  return <select className={cn(FIELD, "h-10", className)} {...rest} />;
+  return <select className={cn(FIELD, "h-10 sm:h-9", className)} {...rest} />;
 }
 
 export function Field({
@@ -103,20 +107,21 @@ export function Field({
 }) {
   return (
     <label className={cn("block space-y-1", className)}>
-      <span className="text-xs font-medium text-muted">{label}</span>
+      <span className="text-[12px] font-medium text-text-2">{label}</span>
       {children}
       {hint ? <span className="block text-xs text-muted">{hint}</span> : null}
     </label>
   );
 }
 
-type Tone = "neutral" | "good" | "warn" | "bad" | "accent";
+type Tone = "neutral" | "good" | "warn" | "bad" | "accent" | "info";
 const TONE: Record<Tone, string> = {
-  neutral: "bg-surface-2 text-muted",
+  neutral: "bg-surface-2 text-text-2",
   good: "bg-good-soft text-good",
   warn: "bg-warn-soft text-warn",
   bad: "bg-bad-soft text-bad",
   accent: "bg-accent-soft text-accent",
+  info: "bg-info-soft text-info",
 };
 
 export function Badge({
@@ -131,7 +136,7 @@ export function Badge({
   return (
     <span
       className={cn(
-        "inline-flex items-center rounded-md px-1.5 py-0.5 text-xs font-semibold",
+        "inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] font-semibold whitespace-nowrap",
         TONE[tone],
         className,
       )}
@@ -152,7 +157,7 @@ export function Card({ children, className }: { children: ReactNode; className?:
 export function SectionTitle({ children, aside }: { children: ReactNode; aside?: ReactNode }) {
   return (
     <div className="flex items-center justify-between gap-3">
-      <h2 className="text-sm font-semibold tracking-wide text-muted uppercase">{children}</h2>
+      <h2 className="text-[13px] font-semibold text-text">{children}</h2>
       {aside}
     </div>
   );
@@ -160,9 +165,9 @@ export function SectionTitle({ children, aside }: { children: ReactNode; aside?:
 
 export function EmptyState({ title, children }: { title: string; children?: ReactNode }) {
   return (
-    <div className="rounded-xl border border-dashed border-border p-8 text-center">
-      <p className="font-medium">{title}</p>
-      {children ? <p className="mt-1 text-sm text-muted">{children}</p> : null}
+    <div className="rounded-xl border border-dashed border-border-strong px-6 py-10 text-center">
+      <p className="text-sm font-medium">{title}</p>
+      {children ? <p className="mx-auto mt-1 max-w-md text-sm text-muted">{children}</p> : null}
     </div>
   );
 }
