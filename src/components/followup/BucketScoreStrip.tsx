@@ -13,7 +13,12 @@ function Stat({ label, value, sub }: { label: string; value: string; sub?: strin
       <dt className="text-[11px] font-semibold tracking-wide text-muted uppercase">{label}</dt>
       <dd className="text-base font-semibold tabular-nums">
         {value}
-        {sub ? <span className="ml-1.5 text-xs font-normal text-muted">{sub}</span> : null}
+        {sub ? (
+          <>
+            {" "}
+            <span className="ml-0.5 text-xs font-normal text-muted">{sub}</span>
+          </>
+        ) : null}
       </dd>
     </div>
   );
