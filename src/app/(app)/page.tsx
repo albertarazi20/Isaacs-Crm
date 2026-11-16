@@ -625,8 +625,8 @@ export default async function DashboardPage({
         </>
       )}
 
-      <div className="grid gap-6 xl:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
-        <section className="space-y-3">
+      <div className="grid grid-cols-[minmax(0,1fr)] gap-6 xl:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
+        <section className="min-w-0 space-y-3">
           <SectionTitle
             aside={
               <span className="text-xs text-muted">
@@ -638,16 +638,16 @@ export default async function DashboardPage({
           </SectionTitle>
           <NowList items={now.slice(0, 12)} total={now.length} owners={owners} />
         </section>
-        <aside className="space-y-6">
+        <aside className="min-w-0 space-y-6">
           <MoneyBlock m={money} />
           <FunnelBlock counts={counts} month={monthName} />
         </aside>
       </div>
 
       {extra ? (
-        <div className="grid gap-6 xl:grid-cols-2">
+        <div className="grid grid-cols-[minmax(0,1fr)] gap-6 xl:grid-cols-2">
           <RepTable rows={extra[0]} month={monthName} />
-          <div className="space-y-6">
+          <div className="min-w-0 space-y-6">
             <LenderTable rows={extra[1]} />
             <Meters meters={extra[2]} />
           </div>

@@ -568,3 +568,49 @@ Record payment with the date empty → "One of those values isn't allowed — ch
 `record_commission_paid` moves `ledger_state` from at_risk to paid; the Funded tiles count only `at_risk`, so a
 commission that is paid but still inside the lender's clawback window (until Dec 16 here) reads as not at risk. Count
 paid-inside-window in "At risk" (or show it as "paid · at risk until Dec 16").
+
+## Pass 2 — fix status (2026-11-16, ~02:30 ET)
+
+Every one of the 53 is fixed. Unit suite after the fixes: 93 of 94 files green (`tests/language.test.ts` waits on the
+owner's lender/payment vocabulary decision). The browser suites were re-run after this table was written (see
+`BUILD-NOTES.md`, "Pass 2 — after the fixes").
+
+| #                        | Status | Where it was fixed                                                                                                   |
+| ------------------------ | ------ | -------------------------------------------------------------------------------------------------------------------- |
+| P2-1                     | Fixed  | Goal card says "Set a goal" (the tooltip names the book)                                                             |
+| P2-2, P2-4, P2-20        | Fixed  | Dashboard: ops get the queue tiles, managers and ops see whose merchant each "Do this now" line is; unique keys      |
+| P2-3                     | Fixed  | `requirePage` on every page: a page outside the role's nav redirects to `/?denied=` with a notice                   |
+| P2-5                     | Fixed  | Login page carries the Selective brand and tagline                                                                   |
+| P2-6, P2-45, P2-46       | Fixed  | Lender card has the money-terms block (caps, PSF, approval days); preview says which cap refused; PSF wording        |
+| P2-7                     | Fixed  | Follow Up lead lines wrap, the lender card stacks its buttons below `sm:`, dashboard tables scroll inside their card |
+| P2-8, P2-10, P2-17, P2-21| Fixed  | Sheet rows file as leads (looking-for text, cents not re-parsed, timezone stamped); a bad amount is a refusal        |
+| P2-9                     | Fixed  | Duplicate notice names the owner and the bucket, and links to the merchant                                           |
+| P2-11                    | Fixed  | Browser suites sweep their templates                                                                                 |
+| P2-12, P2-22             | Fixed  | Accessible names on the row menu button and every unlabeled control                                                  |
+| P2-13                    | Fixed  | Automated mail waits (deferred, `no_postal_address`) until the shop's postal address is set; Follow Up says so       |
+| P2-14                    | Fixed  | Blast confirm is a dialog with the template merged for the first checked merchant and the blank fields named          |
+| P2-15, P2-16, P2-32      | Fixed  | Sheets connect/update schemas and SQL; a sheet must be visible under RLS before it is synced                          |
+| P2-18                    | Fixed  | `requireRole` outside `try` in every action file                                                                      |
+| P2-19                    | Fixed  | Activity feed takes the viewer's zone; the deal page passes it                                                        |
+| P2-23                    | Fixed  | Strict UUID check on `/board` filters                                                                                |
+| P2-24                    | Fixed  | Edit on a shared template only for managers                                                                          |
+| P2-25, P2-26             | Fixed  | Disabling or offboarding revokes lead tokens; every digest, reminder, weekly and lead alert skips inactive accounts   |
+| P2-27                    | Fixed  | 0480 `guard_confirmed_funding`: a confirmed funding's money is a manager's to change                                  |
+| P2-28                    | Fixed  | Inbound mail drives merchant state only when SPF and DKIM pass or it replies to something we sent                    |
+| P2-29, P2-35             | Fixed  | Upload page reuses an open session; the route checks token and sizes before reading; "Reset upload link" rotates it  |
+| P2-30                    | Fixed  | 0480 `add_team_member` bumps `session_epoch` on a role change                                                         |
+| P2-31                    | Fixed  | Blasts obey `template_may_auto_send`                                                                                  |
+| P2-33                    | Fixed  | `manager_note` / `ops_note` gated by role                                                                             |
+| P2-34, P2-50             | Fixed  | Lender links are minted by lender id from a dialog, listed live, and revocable (no revoke audit row: needs a migration)|
+| P2-36, P2-37             | Fixed  | 0480/0490: audit rows need the right viewer; suppressions readable by managers only, written through `app.suppress`   |
+| P2-38                    | Fixed  | "Submit to ops" on the merchant page, "Resubmit" on a kicked-back deal                                                 |
+| P2-39, P2-40, P2-42      | Fixed  | Board sends through the lender picker; the send marks the deal sent; shotgun warning in the dialog and on the server  |
+| P2-41                    | Fixed  | 0480: ops can write timers and offers on ops deals; the ops loop is unit-tested as the ops role                       |
+| P2-43                    | Fixed  | Decline picker reads `decline_reasons` (grouped, with the curable-after text)                                          |
+| P2-44                    | Fixed  | "Mark funded" opens FUND on the deal page with that lender picked (needs an open deal)                                 |
+| P2-47                    | Fixed  | Every submission status has actions and labels; the pages no longer crash on the new ones                              |
+| P2-48                    | Fixed  | Activity tab says each lender event once                                                                               |
+| P2-49                    | Fixed  | Offboard stays available on a disabled row                                                                             |
+| P2-51                    | Fixed  | Copy controls log `copy_phone` / `copy_email`; a manager or ops opening a rep's merchant logs `view_contact`           |
+| P2-52                    | Fixed  | Blank "Paid on" means today (`coalesce` in `recordCommissionPaid`)                                                     |
+| P2-53                    | Fixed  | "At risk" counts paid commissions still inside the clawback window                                                      |
