@@ -83,7 +83,7 @@ export function Commission({
     return (
       <span
         className="text-muted"
-        title="Enter a commission on an advance (Update on the client's Funding card) and Isaac can estimate the rest"
+        title="Enter a commission on an advance (Update on the client's Funding card) and the CRM estimates the rest"
       >
         {none}
       </span>

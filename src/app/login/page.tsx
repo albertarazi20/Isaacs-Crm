@@ -6,7 +6,7 @@ import { buttonClass } from "@/components/ui";
 export const dynamic = "force-dynamic";
 
 const MESSAGES: Record<string, string> = {
-  not_allowed: "That Google account isn't allowed in. Use the account Isaac was set up with.",
+  not_allowed: "That Google account isn't allowed in. Use your selectivecap.com account.",
   access_denied: "Google sign-in was cancelled.",
   google_error: "Google sign-in failed. Try again.",
   bad_state: "That sign-in link expired. Try again.",
@@ -33,7 +33,7 @@ export default async function LoginPage({
           >
             I
           </span>
-          <h1 className="text-2xl font-bold tracking-tight">Isaac</h1>
+          <h1 className="text-2xl font-bold tracking-tight">Selective CRM</h1>
           <p className="mt-1 text-sm text-muted">
             Follow-ups, funded deals and renewals — one place.
           </p>

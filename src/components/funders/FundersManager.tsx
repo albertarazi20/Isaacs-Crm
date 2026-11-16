@@ -208,7 +208,7 @@ export function FundersManager({
       {funders.length === 0 ? (
         <EmptyState title="Start by adding the funders you send applications to">
           Put in what each one writes — the highest position, minimum revenue, states and industries
-          they skip. Then open any merchant and press Send to funders: Isaac checks every funder
+          they skip. Then open any merchant and press Send to funders: the CRM checks every funder
           against that merchant first, sets a reminder to chase the ones that go quiet, and keeps
           score of who approves, who declines and why.
         </EmptyState>

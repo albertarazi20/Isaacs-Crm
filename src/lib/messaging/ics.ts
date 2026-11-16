@@ -162,7 +162,7 @@ export function buildCallIcs(ev: CallEvent): string {
   const lines = [
     "BEGIN:VCALENDAR",
     "VERSION:2.0",
-    "PRODID:-//Isaac//Follow-up CRM//EN",
+    "PRODID:-//Selective Capital//Selective CRM//EN",
     "CALSCALE:GREGORIAN",
     "METHOD:PUBLISH",
     "BEGIN:VEVENT",

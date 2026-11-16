@@ -2,9 +2,9 @@ import type { MetadataRoute } from "next";
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: "Isaac — follow-up CRM",
-    short_name: "Isaac",
-    description: "Follow up with every merchant, on time, forever.",
+    name: "Selective CRM",
+    short_name: "Selective",
+    description: "Selective Capital's deal desk: leads, follow-up, submissions, funding.",
     start_url: "/",
     display: "standalone",
     background_color: "#ffffff",

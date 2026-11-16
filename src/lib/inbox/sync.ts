@@ -1,9 +1,13 @@
 import type { Db, DbAccess } from "../db";
+import { documentStore } from "../docs/storage";
+import { fileEmailAttachment } from "../docs/upload";
+import { todayIn } from "../mca/dates";
 import { isStopMessage } from "../messaging/stop";
 import { accessTokenFor } from "../email/gmail";
 import { env } from "../env";
 import { authResults, matchEmail, type Candidate } from "./match";
 import {
+  getAttachment,
   getMessage,
   listHistory,
   listMessages,
@@ -26,6 +30,8 @@ export interface InboxSyncSummary {
   failed: { userId: string; error: string }[];
   /** Merchants who wrote back this run, for the rep alert. */
   merchantReplies: string[];
+  /** Attachments filed into Documents. */
+  filed: number;
 }
 
 type TokenFor = (userId: string) => Promise<string>;
@@ -91,6 +97,7 @@ export async function syncInbox(args: {
     matched: 0,
     failed: [],
     merchantReplies: [],
+    filed: 0,
   };
   const mailboxes = await args.db.withSystem(
     async (q) =>
@@ -214,6 +221,31 @@ export async function syncInbox(args: {
             summary.merchantReplies.push(merchant);
           }
         });
+        // attachments on a matched email are documents: statements a merchant forwards, contracts a lender sends
+        const owner = match?.candidate.clientId ?? merchant;
+        if (owner && m.attachments.length > 0) {
+          const store = documentStore(env());
+          for (const a of m.attachments.slice(0, 10)) {
+            if (a.size > 25 * 1024 * 1024) continue;
+            try {
+              const bytes = await getAttachment(token, m.id, a.attachmentId, args.fetchImpl);
+              const filed = await fileEmailAttachment(args.db, store, {
+                clientId: owner,
+                dealId: match?.candidate.dealId ?? null,
+                filename: a.filename,
+                contentType: a.mimeType,
+                bytes,
+                today: todayIn("America/New_York", args.now),
+              });
+              if (filed && !filed.duplicate) summary.filed += 1;
+            } catch (err) {
+              summary.failed.push({
+                userId: mb.user_id,
+                error: `attachment ${a.filename}: ${err instanceof Error ? err.message : String(err)}`,
+              });
+            }
+          }
+        }
         summary.stored += 1;
         if (match) summary.matched += 1;
       }

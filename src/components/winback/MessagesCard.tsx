@@ -95,7 +95,7 @@ export function MessagesCard({
             rows={4}
             value={form.signature}
             maxLength={SIGNATURE_MAX}
-            placeholder={"Isaac Cohen\nCommercial funding · (305) 555-0100"}
+            placeholder={"Josh\nSelective Capital · (305) 555-0100"}
             onChange={(e) => setForm({ ...form, signature: e.target.value })}
           />
         </Field>
@@ -268,7 +268,7 @@ function SnippetEditor({
   const [v, setV] = useState(draft);
   const [busy, setBusy] = useState(false);
 
-  const sample = { ...SAMPLE, sender: senderName.split(/\s+/)[0] ?? "Isaac" };
+  const sample = { ...SAMPLE, sender: senderName.split(/\s+/)[0] ?? "Josh" };
   const { subject, body: bodyOnly } =
     v.kind === "email" ? splitSubject(v.body) : { subject: null, body: v.body };
   const preview = resolveMergeFields(bodyOnly, sample);

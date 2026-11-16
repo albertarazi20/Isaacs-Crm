@@ -31,11 +31,11 @@ const NAV = [
   { href: "/settings", label: "Settings" },
 ];
 
-/** "(12) Isaac" in the tab. Set here, on the server, because Next re-applies page metadata after hydration. */
+/** "(12) Selective CRM" in the tab. Set here, on the server, because Next re-applies page metadata after hydration. */
 export async function generateMetadata(): Promise<Metadata> {
   const session = await requireSession();
   const { due } = await loadShell(session.userId);
-  return { title: due > 0 ? `(${due}) Isaac — follow-up CRM` : "Isaac — follow-up CRM" };
+  return { title: due > 0 ? `(${due}) Selective CRM` : "Selective CRM" };
 }
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
@@ -56,7 +56,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       value={{
         today: me.ctx.today,
         timezone: me.ctx.timezone,
-        senderName: me.user.name || me.user.email.split("@")[0] || "Isaac",
+        senderName: me.user.name || me.user.email.split("@")[0] || "Selective Capital",
         gmailConnected: gmail.connected,
         gmailNeedsReconnect: gmail.needsReconnect,
         hotIds: me.hotIds,
@@ -77,7 +77,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
               >
                 I
               </span>
-              Isaac
+              Selective CRM
             </span>
             <nav aria-label="Main" className="hidden flex-1 gap-1 overflow-x-auto sm:flex">
               {NAV.map((n) => (

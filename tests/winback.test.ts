@@ -358,7 +358,7 @@ describe("reason-aware texts", () => {
     );
     expect(winbackText({ ...base, contactName: "" })).toMatch(/^Hey, it's Isaac\./);
     expect(winbackText({ ...base, senderName: "isaac" })).toContain("it's Isaac.");
-    expect(winbackText({ ...base, senderName: "" })).toContain("it's Isaac.");
+    expect(winbackText({ ...base, senderName: "" })).toContain("it's Selective Capital.");
   });
   it("never uses words a funding shop would be dismissed for, and stays text-sized", () => {
     for (const stage of STAGE_KEYS) {

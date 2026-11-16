@@ -14,7 +14,7 @@ const RESTORE_ORDER = [
 export function checkBackup(file: unknown): Backup {
   const b = file as Partial<Backup> | null;
   if (!b || typeof b !== "object" || b.app !== "isaac" || typeof b.tables !== "object" || !b.tables)
-    throw new RestoreError("That file is not an Isaac backup");
+    throw new RestoreError("That file is not a Selective CRM backup");
   if (b.version !== BACKUP_VERSION)
     throw new RestoreError(
       `That backup is version ${String(b.version)}; this app reads version ${BACKUP_VERSION}`,

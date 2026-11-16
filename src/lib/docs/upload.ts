@@ -376,6 +376,36 @@ export async function acceptUpload(
   });
 }
 
+/**
+ * An attachment on an email the inbox matched to a merchant: statements a merchant forwards, contracts a lender sends.
+ * System connection (the sync has no user); the row belongs to the merchant's rep; it waits for the scan like any
+ * outside file. Files that are not documents (signatures, logos, tiny images) are skipped, not errors.
+ */
+export async function fileEmailAttachment(
+  db: DbAccess,
+  store: BlobStore,
+  a: FileIn & { clientId: string; dealId?: string | null; today: ISODate },
+): Promise<Accepted | null> {
+  if (a.bytes.length < 2048 && /^image\//.test(a.contentType)) return null; // an email signature logo
+  if (!sniff(a.bytes, a.contentType, a.filename).ok) return null;
+  return db.withSystem(async (q) => {
+    const { rows } = await q.query<{ user_id: string }>(
+      "select user_id from clients where id = $1",
+      [a.clientId],
+    );
+    const userId = rows[0]?.user_id;
+    if (!userId) return null;
+    return writeDocument(q, store, {
+      ...a,
+      userId,
+      dealId: a.dealId ?? null,
+      source: "email",
+      uploadedBy: null,
+      scan: "pending",
+    });
+  });
+}
+
 /** A rep's or ops' upload (drag and drop), or an attachment the inbox filed. Runs as the user under RLS. */
 export async function addDocument(
   q: Db,

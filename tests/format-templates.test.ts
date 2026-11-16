@@ -66,7 +66,7 @@ describe("message templates", () => {
     expect(textTemplate({ ...a, senderName: "Isaac Cohen" })).toContain("it's Isaac.");
     expect(emailBody({ ...a, senderName: "Isaac Cohen" })).toMatch(/Thanks,\nIsaac Cohen$/);
     expect(emailBody({ ...a, senderName: "isaac cohen" })).toMatch(/Thanks,\nIsaac Cohen$/);
-    expect(textTemplate({ ...a, senderName: "" })).toContain("it's Isaac");
+    expect(textTemplate({ ...a, senderName: "" })).toContain("it's Selective Capital");
   });
   it("keeps the honorific instead of greeting someone 'Dr.'", () => {
     expect(textTemplate({ ...base, contactName: "Dr. Alan Weiss", stage: "interested" })).toMatch(

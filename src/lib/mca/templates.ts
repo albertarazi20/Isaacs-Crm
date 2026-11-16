@@ -77,7 +77,7 @@ const LINES: Record<Tone, (hi: string, biz: string, me: string) => string> = {
 /** A starting message. Isaac edits it; the point is never starting from a blank box. */
 export function textTemplate(a: TemplateArgs): string {
   const name = greetingName(a.contactName);
-  const me = tidy(firstName(a.senderName)) || "Isaac";
+  const me = tidy(firstName(a.senderName)) || "Selective Capital";
   return LINES[TONE[a.stage]](name ? `Hey ${name}, ` : "Hey, ", a.businessName, me);
 }
 
@@ -97,7 +97,7 @@ export function emailSubject(a: TemplateArgs): string {
 
 export function emailBody(a: TemplateArgs, opts: { signOff?: boolean } = {}): string {
   const name = greetingName(a.contactName);
-  const me = tidy(firstName(a.senderName)) || "Isaac";
+  const me = tidy(firstName(a.senderName)) || "Selective Capital";
   const line = LINES[TONE[a.stage]](name ? `Hi ${name},\n\n` : "Hi,\n\n", a.businessName, me);
   // The email dialog adds the signature itself, so it asks for the body without the "Thanks, Name" ending.
   if (opts.signOff === false) return line;
@@ -153,7 +153,7 @@ export function offerProgress(offer: WinbackOffer, today: string): number | null
  */
 export function winbackText(a: WinbackArgs): string {
   const name = greetingName(a.contactName);
-  const me = tidy(firstName(a.senderName)) || "Isaac";
+  const me = tidy(firstName(a.senderName)) || "Selective Capital";
   const hi = name ? `Hey ${name}, ` : "Hey, ";
   const opener = `${hi}it's ${me}. `;
   const biz = a.businessName;

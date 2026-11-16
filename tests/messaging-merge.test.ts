@@ -122,9 +122,9 @@ describe("mergeValues", () => {
   it("leaves first_name blank (so it is flagged) when there is no contact name", () => {
     expect(mergeValues({ ...ctx, contactName: "" }).first_name).toBe("");
   });
-  it("signs with a tidy first name, defaulting to Isaac", () => {
+  it("signs with a tidy first name, defaulting to the shop", () => {
     expect(mergeValues({ ...ctx, senderName: "isaac cohen" }).sender).toBe("Isaac");
-    expect(mergeValues({ ...ctx, senderName: "" }).sender).toBe("Isaac");
+    expect(mergeValues({ ...ctx, senderName: "" }).sender).toBe("Selective Capital");
   });
   it("formats the ask and says nothing when there isn't one", () => {
     expect(mergeValues(ctx).amount_wanted).toBe("$60,000");
@@ -217,7 +217,7 @@ describe("email subject and signature", () => {
       "Isaac Cohen\nFunding · 555-0100",
     );
     expect(effectiveSignature("", "isaac cohen")).toBe("Thanks,\nIsaac Cohen");
-    expect(effectiveSignature("   ", "")).toBe("Thanks,\nIsaac");
+    expect(effectiveSignature("   ", "")).toBe("Thanks,\nSelective Capital");
   });
   it("puts the signature on the end once", () => {
     expect(appendSignature("Hi Mike,\n\nQuick note.\n\n", "Isaac\n555-0100")).toBe(

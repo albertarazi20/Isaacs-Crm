@@ -11,12 +11,20 @@ export interface GmailMessageMeta {
   threadId: string;
 }
 
+export interface GmailAttachment {
+  filename: string;
+  mimeType: string;
+  attachmentId: string;
+  size: number;
+}
+
 export interface GmailMessage extends GmailMessageMeta {
   historyId: string;
   internalDate: number;
   headers: Record<string, string>;
   text: string;
   attachmentNames: string[];
+  attachments: GmailAttachment[];
   snippet: string;
 }
 
@@ -112,9 +120,19 @@ function decode(data: string | undefined): string {
 }
 
 /** Plain text of a message: text/plain parts first; else HTML stripped to text. */
-function extractText(part: Part, out: { plain: string[]; html: string[]; files: string[] }): void {
-  if (part.filename && part.filename.trim() !== "" && part.body?.attachmentId)
+function extractText(
+  part: Part,
+  out: { plain: string[]; html: string[]; files: string[]; attachments: GmailAttachment[] },
+): void {
+  if (part.filename && part.filename.trim() !== "" && part.body?.attachmentId) {
     out.files.push(part.filename);
+    out.attachments.push({
+      filename: part.filename,
+      mimeType: (part.mimeType ?? "application/octet-stream").toLowerCase(),
+      attachmentId: part.body.attachmentId,
+      size: part.body.size ?? 0,
+    });
+  }
   const mt = (part.mimeType ?? "").toLowerCase();
   if (mt === "text/plain" && part.body?.data) out.plain.push(decode(part.body.data));
   else if (mt === "text/html" && part.body?.data) out.html.push(decode(part.body.data));
@@ -154,7 +172,12 @@ export async function getMessage(
   }>(token, `/messages/${encodeURIComponent(id)}?format=full`, fetchImpl);
   const headers: Record<string, string> = {};
   for (const h of m.payload.headers ?? []) headers[h.name.toLowerCase()] = h.value;
-  const out = { plain: [] as string[], html: [] as string[], files: [] as string[] };
+  const out = {
+    plain: [] as string[],
+    html: [] as string[],
+    files: [] as string[],
+    attachments: [] as GmailAttachment[],
+  };
   extractText(m.payload, out);
   const text = out.plain.length ? out.plain.join("\n") : htmlToText(out.html.join("\n"));
   return {
@@ -165,8 +188,25 @@ export async function getMessage(
     headers,
     text: text.slice(0, 60_000),
     attachmentNames: out.files,
+    attachments: out.attachments,
     snippet: m.snippet ?? "",
   };
+}
+
+/** The bytes of one attachment. Gmail returns base64url; sizes over 25 MB are refused before the call. */
+export async function getAttachment(
+  token: string,
+  messageId: string,
+  attachmentId: string,
+  fetchImpl: Fetch = fetch,
+): Promise<Uint8Array> {
+  const a = await call<{ data?: string; size?: number }>(
+    token,
+    `/messages/${encodeURIComponent(messageId)}/attachments/${encodeURIComponent(attachmentId)}`,
+    fetchImpl,
+  );
+  if (!a.data) return new Uint8Array(0);
+  return new Uint8Array(Buffer.from(a.data.replace(/-/g, "+").replace(/_/g, "/"), "base64"));
 }
 
 /** Message-IDs out of a References header. */

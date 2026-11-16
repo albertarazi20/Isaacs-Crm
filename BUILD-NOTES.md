@@ -22,3 +22,38 @@ Owner's instruction 2026-11-15: build everything first, fix bugs at the end. Thi
 (`productionMailTokenFor`, `productionTokenFor`, the worker's Gmail lookup). Fix at the end of the build: move those
 reads into `src/lib/system/gmail.ts` helpers and import them. Not an allow-list rule — do not weaken the test.
 The system-connection rule was handled properly: the job modules are registered by name in the test with a reason each.
+
+## Status at the end of the automation pass (2026-11-15, late)
+Built and unit-tested, pages still to come (owner: pages last):
+- Roles (rep / ops / manager), deals + ops loop, send engine (lanes, caps, windows, footer, one-click unsubscribe headers),
+  buckets + sequences + blasts, Google Sheets daily loop + phone lookup, lender inbox (Gmail sync → match → Claude
+  reader → proposed updates tray), money (FUND propose/confirm, commission ledger, plans, clawbacks, renewal clocks,
+  winback pools, state rules), dashboard metrics (scoreboard, goal pace, funnel, money on the table, now-list,
+  scorecards, email meter), documents (private storage, merchant upload links, auto-label, freshness, watermarks,
+  expiring lender links, scan gate), replies/bounces/complaints/unsubscribe (Resend webhooks, STOP detection, rep
+  alerts), deal flow (next-step rules, milestones, timeline, auto-chase from the rep's mailbox), anti-backdooring
+  (access log, manager-only logged exports, canaries, trust panel, leak tracer, offboarding), team functions.
+- Parked by the owner: texting and calling (Telnyx, click-to-call, "text me the link").
+- Not yet wired: inbox attachment filing into Documents (needs Gmail attachment download in inbox sync); Resend inbound
+  body fetch (the webhook carries from/subject; body retrieval depends on the Resend inbound setup); shotgun warning
+  (lender count limit per deal); ops "forward stips to lender" one-click.
+
+## Full unit suite after the automation pass (2026-11-15 ~22:40 ET): 72 files passed, 18 failed (36 tests)
+Buckets, all parked for the end-of-build bug pass (owner: keep building):
+1. **Date skew after 7pm ET** (JS "today" in EST vs DB current_date in UTC): streak, review-fixes, review-fixes-2,
+   review-3a, leads-db, contact, funders-db timer tests. Re-run in the morning before touching any of them.
+2. **funders-rls**: the lender list became shop-wide in 0300 (one list for everyone) — the per-user assertions describe
+   the old model. Rewrite the test to the new rule: everyone reads every lender; submissions/offers stay per merchant.
+3. **funders-db**: stips_requested now also re-buckets the merchant (0320) → a second follow-up timer; record_offer and
+   create_submissions expectations predate deals (0300). Update the expectations to the deal model.
+4. **send-engine** (3): pass alone, fail in the full run — shared `now` / cap clock across files. Isolate.
+5. **inbox-match** test 4 funder_name ladder — known, see earlier note.
+6. **boundaries**: token-table reads outside lib/system — see the note above (move into lib/system/gmail.ts).
+7. **language.test**: the house word list forbids "lender" and "payment"; the owner's plan says "lender" throughout
+   and the new strings follow him. Decide the vocabulary with the owner, then fix the list or the strings — not both.
+8. **backup.test (C-6)**: the new tables (deals, documents, goals, access_log, webhook_events, upload_sessions, …) are
+   neither in the backup nor on the exclusion list. Decide per table: user data → backup (in restore order), system
+   → exclusion. "an empty account still backs up" fails for the same reason.
+9. **messaging-snippets-db**: app_users writable-column list changed (0290/0310 grants). Update the expected list.
+10. **messaging-merge / format-templates / winback greets**: the sender fallback is now "Selective Capital", not "Isaac".
+    Fixed the expectations in this commit where they only named the fallback.

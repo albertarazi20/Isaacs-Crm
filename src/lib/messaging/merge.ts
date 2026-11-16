@@ -142,7 +142,7 @@ export function mergeValues(c: MergeContext): Record<MergeField, string> {
   return {
     first_name: greetingName(c.contactName),
     business: c.businessName.trim(),
-    sender: tidy(firstName(c.senderName)) || "Isaac",
+    sender: tidy(firstName(c.senderName)) || "Selective Capital",
     application_link: c.applicationLink.trim(),
     amount_wanted: c.wantedAmountCents ? formatMoney(c.wantedAmountCents) : "",
     funder_best_offer: c.bestOffer ? describeOffer(c.bestOffer) : "",
@@ -162,7 +162,7 @@ export function splitSubject(body: string): { subject: string | null; body: stri
 export function effectiveSignature(signature: string, senderFullName: string): string {
   const sig = signature.trim();
   if (sig) return sig;
-  return `Thanks,\n${tidy(senderFullName.trim()) || "Isaac"}`;
+  return `Thanks,\n${tidy(senderFullName.trim()) || "Selective Capital"}`;
 }
 
 /** Body + signature, once. If the signature is already at the end (pasted in), it isn't doubled. */

@@ -1,5 +1,6 @@
 import { randomBytes } from "node:crypto";
 import type { Db } from "../db";
+import { UserError } from "../data/mutations";
 import { buildSubmissionPackage } from "../funders/package";
 import { getCard } from "../data/queries";
 import type { PositionRow, StipRow } from "../data/types";
@@ -19,6 +20,8 @@ export interface SubmitInput {
   senderEmail: string;
   /** Extra lines the manager typed into the email. */
   extraLines?: string;
+  /** Send past the shop's lender limit on purpose (logged). */
+  force?: boolean;
 }
 
 export interface SubmitResult {
@@ -46,6 +49,32 @@ export async function submitToLenders(
     )
   ).rows[0];
   if (!deal) throw new Error("This merchant has no open deal — submit it to ops first");
+  // the shotgun check: how many lenders will have seen this file once these go out
+  const limit =
+    (await q.query<{ n: number }>("select max_lenders_per_deal as n from shop_settings")).rows[0]
+      ?.n ?? 6;
+  const already =
+    (
+      await q.query<{ ids: string[] }>(
+        "select coalesce(array_agg(distinct funder_id), '{}') as ids from submissions where deal_id = $1",
+        [deal.id],
+      )
+    ).rows[0]?.ids ?? [];
+  const total = new Set([...already, ...input.funderIds]).size;
+  if (total > limit && !input.force) {
+    throw new UserError(
+      `This file would be with ${total} lenders; the shop limit is ${limit}. Every lender who sees it is a backdoor risk — pick fewer, or send anyway on purpose.`,
+    );
+  }
+  if (total > limit) {
+    await q.query(
+      "insert into activities (user_id, client_id, kind, body) select user_id, id, 'system', $2 from clients where id = $1",
+      [
+        input.clientId,
+        `Shotgun override by ${input.senderName}: ${total} lenders (shop limit ${limit})`,
+      ],
+    );
+  }
   const created = await q.query<{ id: string; funder_id: string }>(
     "select id, funder_id from create_submissions($1, $2::uuid[], null, $3)",
     [input.clientId, input.funderIds, input.note ?? ""],

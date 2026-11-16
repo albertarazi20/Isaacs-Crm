@@ -7,11 +7,11 @@ import { listCards } from "@/lib/data/queries";
 import { loadShell } from "@/lib/data/shell";
 import { db } from "@/lib/db";
 
-/** "(12) Board — Isaac": the due count rides in the tab title like every other page. */
+/** "(12) Board — Selective CRM": the due count rides in the tab title like every other page. */
 export async function generateMetadata(): Promise<Metadata> {
   const session = await requireSession();
   const { due } = await loadShell(session.userId);
-  return { title: due > 0 ? `(${due}) Board — Isaac` : "Board — Isaac" };
+  return { title: due > 0 ? `(${due}) Board — Selective CRM` : "Board — Selective CRM" };
 }
 
 export default async function BoardPage({
