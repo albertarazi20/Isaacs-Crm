@@ -67,26 +67,3 @@ export function IconButton({
     </button>
   );
 }
-
-/** The one-line page header: title, context under it, actions right. */
-export function PageHeader({
-  title,
-  context,
-  actions,
-  className,
-}: {
-  title: ReactNode;
-  context?: ReactNode;
-  actions?: ReactNode;
-  className?: string;
-}) {
-  return (
-    <div className={cn("flex flex-wrap items-end justify-between gap-3", className)}>
-      <div className="min-w-0">
-        <h1 className="text-xl font-semibold tracking-tight sm:text-2xl">{title}</h1>
-        {context ? <p className="mt-0.5 text-sm text-muted">{context}</p> : null}
-      </div>
-      {actions ? <div className="flex flex-wrap items-center gap-2">{actions}</div> : null}
-    </div>
-  );
-}

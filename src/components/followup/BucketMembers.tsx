@@ -21,6 +21,9 @@ import { mergeValues, resolveMergeFields } from "@/lib/messaging/merge";
 
 type Filter = "all" | "due" | "replied" | "quiet" | "no_email" | "paused";
 
+/** A select's wrapper in the toolbar: fills the row on a phone, shrinks to its longest option on a desktop. */
+const SELECT_WRAP = "min-w-0 flex-1 sm:flex-none";
+
 /** The lead lines of one bucket: check, blast, move, pause, remove — and the row's own popup. */
 export function BucketMembers({
   bucket,
@@ -155,52 +158,59 @@ export function BucketMembers({
           />
           <span className="tabular-nums">{ids.length ? `${ids.length} checked` : "Check all"}</span>
         </label>
-        <Select
-          value={filter}
-          onChange={(e) => setFilter(e.target.value as Filter)}
-          className="w-auto text-[13px]"
-          aria-label="Show"
-        >
-          <option value="all">Everyone ({members.length})</option>
-          <option value="due">Step due today</option>
-          <option value="replied">Replied, unanswered</option>
-          <option value="quiet">No touch in 7 days</option>
-          <option value="no_email">No usable email</option>
-          <option value="paused">Paused</option>
-        </Select>
-        {zones.length > 1 ? (
+        {/* Each select sits in a wrapper that shrinks to the longest option, so the row reads as a toolbar. */}
+        <div className={SELECT_WRAP}>
           <Select
-            value={tz}
-            onChange={(e) => setTz(e.target.value)}
-            className="w-auto text-[13px]"
-            aria-label="Time zone"
+            value={filter}
+            onChange={(e) => setFilter(e.target.value as Filter)}
+            className="text-[13px]"
+            aria-label="Show"
           >
-            <option value="">Every time zone</option>
-            {zones.map((z) => (
-              <option key={z} value={z}>
-                {z}
-              </option>
-            ))}
+            <option value="all">Everyone ({members.length})</option>
+            <option value="due">Step due today</option>
+            <option value="replied">Replied, unanswered</option>
+            <option value="quiet">No touch in 7 days</option>
+            <option value="no_email">No usable email</option>
+            <option value="paused">Paused</option>
           </Select>
-        ) : null}
-        <span className="hidden flex-1 sm:block" />
-        <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
-          <Select
-            value={templateId}
-            onChange={(e) => setTemplateId(e.target.value)}
-            className="min-w-0 flex-1 text-[13px] sm:w-auto sm:flex-none"
-            aria-label="Blast template"
-          >
-            <option value="">Blast template…</option>
-            {templates
-              .filter((t) => !t.archived)
-              .map((t) => (
-                <option key={t.id} value={t.id} disabled={!t.approved}>
-                  {t.name}
-                  {t.approved ? "" : " (needs approval)"}
+        </div>
+        {zones.length > 1 ? (
+          <div className={SELECT_WRAP}>
+            <Select
+              value={tz}
+              onChange={(e) => setTz(e.target.value)}
+              className="text-[13px]"
+              aria-label="Time zone"
+            >
+              <option value="">Every time zone</option>
+              {zones.map((z) => (
+                <option key={z} value={z}>
+                  {z}
                 </option>
               ))}
-          </Select>
+            </Select>
+          </div>
+        ) : null}
+        <span className="hidden flex-1 sm:block" />
+        <div className="flex w-full items-center gap-2 sm:w-auto">
+          <div className={SELECT_WRAP}>
+            <Select
+              value={templateId}
+              onChange={(e) => setTemplateId(e.target.value)}
+              className="text-[13px]"
+              aria-label="Blast template"
+            >
+              <option value="">Blast template…</option>
+              {templates
+                .filter((t) => !t.archived)
+                .map((t) => (
+                  <option key={t.id} value={t.id} disabled={!t.approved}>
+                    {t.name}
+                    {t.approved ? "" : " (needs approval)"}
+                  </option>
+                ))}
+            </Select>
+          </div>
           <Button
             variant="primary"
             size="sm"
@@ -210,22 +220,24 @@ export function BucketMembers({
             Blast {ids.length || ""}
           </Button>
         </div>
-        <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
-          <Select
-            value={moveTo}
-            onChange={(e) => setMoveTo(e.target.value)}
-            className="min-w-0 flex-1 text-[13px] sm:w-auto sm:flex-none"
-            aria-label="Move to bucket"
-          >
-            <option value="">Move to…</option>
-            {buckets
-              .filter((b) => b.id !== bucket.id)
-              .map((b) => (
-                <option key={b.id} value={b.id}>
-                  {b.name}
-                </option>
-              ))}
-          </Select>
+        <div className="flex w-full items-center gap-2 sm:w-auto">
+          <div className={SELECT_WRAP}>
+            <Select
+              value={moveTo}
+              onChange={(e) => setMoveTo(e.target.value)}
+              className="text-[13px]"
+              aria-label="Move to bucket"
+            >
+              <option value="">Move to…</option>
+              {buckets
+                .filter((b) => b.id !== bucket.id)
+                .map((b) => (
+                  <option key={b.id} value={b.id}>
+                    {b.name}
+                  </option>
+                ))}
+            </Select>
+          </div>
           <Button
             size="sm"
             disabled={busy || !moveTo || ids.length === 0}

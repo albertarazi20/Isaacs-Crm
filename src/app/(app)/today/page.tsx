@@ -32,7 +32,7 @@ function Kpi({
           : "text-text";
   return (
     <div className="rounded-xl border border-border bg-surface px-4 py-3.5">
-      <p className="truncate text-[11px] font-semibold tracking-wide text-muted uppercase">
+      <p className="text-[11px] leading-4 font-semibold tracking-wide text-muted uppercase">
         {label}
       </p>
       <p
