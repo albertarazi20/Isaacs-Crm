@@ -61,9 +61,79 @@ export function isDealFilter(v: string): v is DealFilter {
   return Object.hasOwn(FILTERS, v);
 }
 
-export async function listDeals(q: Db, filter: DealFilter = "live"): Promise<DealCard[]> {
+export interface DealListOpts {
+  /** Only this rep's deals (a manager's or ops' filter). */
+  repId?: string | null;
+  /** Only deals with a lender row for this funder. */
+  funderId?: string | null;
+}
+
+export async function listDeals(
+  q: Db,
+  filter: DealFilter = "live",
+  opts: DealListOpts = {},
+): Promise<DealCard[]> {
   const where = FILTERS[filter];
-  return json<DealCard>(q, `${CARD_SELECT} ${where} order by d.updated_at desc`);
+  // the two optional narrowings are parameters, never text
+  return json<DealCard>(
+    q,
+    `${CARD_SELECT} ${where}
+       and ($1::uuid is null or d.user_id = $1::uuid)
+       and ($2::uuid is null or exists (select 1 from submissions s where s.deal_id = d.id and s.funder_id = $2::uuid))
+     order by d.updated_at desc`,
+    [opts.repId ?? null, opts.funderId ?? null],
+  );
+}
+
+export interface BoardSubmission {
+  id: string;
+  deal_id: string;
+  client_id: string;
+  funder_id: string;
+  funder_name: string;
+  sent_on: string;
+  status: string;
+  decline_reason: string | null;
+  decline_note: string;
+  note: string;
+  status_changed_at: string;
+  responded_on: string | null;
+  chase_count: number;
+  last_chased_on: string | null;
+  approval_expires_on: string | null;
+  source: string;
+}
+
+/** Every lender row on the listed deals, one query, for the board's per-lender chips. */
+export async function listBoardSubmissions(
+  q: Db,
+  dealIds: readonly string[],
+): Promise<BoardSubmission[]> {
+  if (dealIds.length === 0) return [];
+  return json<BoardSubmission>(
+    q,
+    `select to_jsonb(x) as j from (
+       select s.id, s.deal_id, s.client_id, s.funder_id, fu.name as funder_name, s.sent_on::text as sent_on, s.status,
+              s.decline_reason, s.decline_note, s.note, s.status_changed_at, s.responded_at::date::text as responded_on,
+              s.chase_count, s.last_chased_at::date::text as last_chased_on, s.approval_expires_on::text as approval_expires_on, s.source
+         from submissions s join funders fu on fu.id = s.funder_id
+        where s.deal_id = any($1::uuid[]) order by s.sent_on, s.created_at
+     ) x`,
+    [dealIds],
+  );
+}
+
+/** The people and lenders the board can filter by. */
+export async function boardFilters(
+  q: Db,
+): Promise<{ reps: { id: string; name: string }[]; lenders: { id: string; name: string }[] }> {
+  const reps = await q.query<{ id: string; name: string }>(
+    "select id, coalesce(nullif(name, ''), email) as name from app_users where active and role in ('rep', 'manager') order by name",
+  );
+  const lenders = await q.query<{ id: string; name: string }>(
+    "select id, name from funders where active order by name",
+  );
+  return { reps: reps.rows, lenders: lenders.rows };
 }
 
 export async function getDeal(q: Db, dealId: string): Promise<DealCard | null> {
