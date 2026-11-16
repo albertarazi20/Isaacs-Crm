@@ -135,13 +135,13 @@ describe("C-1: removing the accepted offer (or its submission) works and brings 
     const drop = await merchant("Merge drop");
     const f1 = await funder("MF1");
     const f2 = await funder("MF2");
+    // one merchant on two cards: the second send to the same lender is on purpose (double-submission guard, 0512)
     const sendTo = (client: string, fs: string[]) =>
       asA((q) =>
-        q.query<{ id: string }>("select * from create_submissions($1, $2::uuid[], $3::date, '')", [
-          client,
-          fs,
-          d(-1),
-        ]),
+        q.query<{ id: string }>(
+          "select * from create_submissions($1, $2::uuid[], $3::date, '', true)",
+          [client, fs, d(-1)],
+        ),
       );
     await sendTo(keep, [f1]);
     const dropSubs = (await sendTo(drop, [f1, f2])).rows;

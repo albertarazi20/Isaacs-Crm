@@ -66,6 +66,76 @@ export function paybackOf(o: Pick<FunderOfferRow, "amount_cents" | "factor_rate"
   return paybackCents(o.amount_cents, o.factor_rate);
 }
 
+/** Offer compare maths (S2-11), one row per offer, computed server-side so every page agrees. */
+export interface OfferMath {
+  offerId: string;
+  funderName: string;
+  amountCents: number;
+  factorRate: number;
+  paybackCents: number;
+  /** Payback minus the advance: what the money costs the merchant. */
+  costCents: number;
+  paymentCents: number | null;
+  frequency: Frequency | null;
+  /** How many remittances it takes: payback ÷ payment, else from the term; null when neither is known. */
+  paymentCount: number | null;
+  feesCents: number;
+  /** The advance minus the lender's fees: what reaches the merchant's account. */
+  netToMerchantCents: number;
+  commissionPoints: number | null;
+  /** Our commission at the lender's points on the advance; null when the lender's points are unknown. */
+  commissionCents: number | null;
+  /** The lowest factor rate, when there is something to compare it with. */
+  best: boolean;
+}
+
+export type OfferForMath = Pick<
+  FunderOfferRow,
+  "id" | "amount_cents" | "factor_rate" | "payment_cents" | "frequency" | "term_days" | "fees_cents"
+> & { funder_name: string; commission_points: number | null };
+
+const PER_TERM: Record<Frequency, (termDays: number) => number> = {
+  daily: (d) => Math.round((d * 5) / 7),
+  weekly: (d) => Math.round(d / 7),
+  biweekly: (d) => Math.round(d / 14),
+  monthly: (d) => Math.round(d / 30.4),
+};
+
+export function compareOffers(offers: readonly OfferForMath[]): OfferMath[] {
+  const top = bestOffer(offers);
+  return offers
+    .map((o) => {
+      const payback = paybackOf(o);
+      const fees = o.fees_cents ?? 0;
+      const count =
+        o.payment_cents !== null && o.payment_cents > 0
+          ? Math.ceil(payback / o.payment_cents)
+          : o.term_days !== null && o.frequency !== null
+            ? Math.max(1, PER_TERM[o.frequency](o.term_days))
+            : null;
+      return {
+        offerId: o.id,
+        funderName: o.funder_name,
+        amountCents: o.amount_cents,
+        factorRate: o.factor_rate,
+        paybackCents: payback,
+        costCents: payback - o.amount_cents,
+        paymentCents: o.payment_cents,
+        frequency: o.frequency,
+        paymentCount: count,
+        feesCents: fees,
+        netToMerchantCents: o.amount_cents - fees,
+        commissionPoints: o.commission_points,
+        commissionCents:
+          o.commission_points !== null
+            ? Math.round((o.amount_cents * o.commission_points) / 100)
+            : null,
+        best: offers.length > 1 && top !== null && o.id === top.id,
+      };
+    })
+    .sort((a, b) => a.factorRate - b.factorRate || b.amountCents - a.amountCents);
+}
+
 export type SubmissionAction =
   | "approved"
   | "declined"

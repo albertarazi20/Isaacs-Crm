@@ -1,0 +1,15 @@
+{
+  "name": "stips request on the thread",
+  "source": "synthetic",
+  "input": {
+    "from": "uw@pearlcapital.com",
+    "subject": "Re: [D-1] Pizza Palace",
+    "text": "Thanks for the file. Before we can move forward please provide a voided check and the October bank statement, all pages.",
+    "attachmentNames": []
+  },
+  "expected": {
+    "event": "stip_requested",
+    "portal_link_only": false,
+    "stips_requested_includes": ["voided check", "october"]
+  }
+}
