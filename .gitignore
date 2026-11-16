@@ -19,3 +19,6 @@ isaac-backup-*.json
 isaac-clients-*.csv
 isaac-activity-*.csv
 isaac-notes-*.csv
+
+# document bytes in local development (production uses object storage)
+.data/

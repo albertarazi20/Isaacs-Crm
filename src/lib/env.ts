@@ -25,6 +25,11 @@ const schema = z.object({
   ANTHROPIC_API_KEY: optional(z.string()),
   RESEND_WEBHOOK_SECRET: optional(z.string()),
   TELNYX_API_KEY: optional(z.string()),
+  // Document bytes: Supabase Storage (private bucket, service key) in production; a local folder in development.
+  SUPABASE_URL: optional(z.string().url()),
+  SUPABASE_SERVICE_KEY: optional(z.string()),
+  DOCS_BUCKET: optional(z.string()),
+  DOCS_DIR: optional(z.string()),
 });
 
 export type Env = z.infer<typeof schema>;

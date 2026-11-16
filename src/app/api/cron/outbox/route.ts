@@ -1,6 +1,8 @@
 import { timingSafeEqual } from "node:crypto";
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
+import { documentStore } from "@/lib/docs/storage";
+import { scanPending } from "@/lib/docs/upload";
 import { env } from "@/lib/env";
 import { productionDeliverer } from "@/lib/send/deliver";
 import { drainOutbox } from "@/lib/send/worker";
@@ -27,8 +29,10 @@ async function handle(req: Request): Promise<NextResponse> {
     appUrl: e.APP_URL,
     max: 150,
   });
+  // merchant uploads wait here until checked; nothing opens before that
+  const scan = await scanPending(db, documentStore(e));
   await recordHeartbeat("outbox");
-  return NextResponse.json(summary, { status: summary.failed > 0 ? 502 : 200 });
+  return NextResponse.json({ ...summary, scan }, { status: summary.failed > 0 ? 502 : 200 });
 }
 
 export const GET = handle;

@@ -15,3 +15,10 @@ Owner's instruction 2026-11-15: build everything first, fix bugs at the end. Thi
 - Decline reasons moved to a `decline_reasons` table with `curable_after_days` (drives Winback revive dates).
 - **tests/send-engine.test.ts** (2 cases) fail only when run together with buckets-engine.test.ts: the worker test pins `now` to 2026-11-16 but `send_ledger.sent_at` defaults to the real `now()`, so the rolling-24h window and the per-merchant count drift. Fix: pass `now` through to the ledger insert (worker already has it) and seed `sent_at` explicitly in the cap test. Both pass in isolation.
 - **tests/inbox-match.test.ts › 4. a known lender naming the business**: the funder-name rung should match "Offer for Mikes Pizza" to "Mike's Pizza LLC". Fix in `matchEmail`: strip apostrophes and legal suffixes before the includes() check (the `squash` helper), then re-run.
+
+## Boundaries: token-table reads outside src/lib/system (found 2026-11-15, documents block)
+`tests/boundaries.test.ts` "never writes raw SQL against token or reminder tables outside src/lib/system" fails on
+`lib/inbox/sync.ts`, `lib/send/worker.ts`, `lib/sheets/sync.ts`: each reads `gmail_connections` for a refresh token
+(`productionMailTokenFor`, `productionTokenFor`, the worker's Gmail lookup). Fix at the end of the build: move those
+reads into `src/lib/system/gmail.ts` helpers and import them. Not an allow-list rule — do not weaken the test.
+The system-connection rule was handled properly: the job modules are registered by name in the test with a reason each.

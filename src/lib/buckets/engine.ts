@@ -92,7 +92,7 @@ export async function runBucketSteps(args: {
               app.client_timezone(c) as timezone, c.contact_name, c.business_name, c.email,
               u.name as sender_name, u.application_link, u.signature,
               (select wanted_amount_cents from client_asks k where k.client_id = c.id order by created_at desc limit 1) as wanted_amount_cents,
-              c.unsubscribe_token as upload_token
+              c.upload_token
          from enrollments e
          join clients c on c.id = e.client_id
          join buckets b on b.id = e.bucket_id
@@ -257,7 +257,7 @@ export async function queueBlast(
   for (const clientId of args.clientIds) {
     const row = (
       await q.query<DueRow>(
-        `select c.id as client_id, c.user_id, c.contact_name, c.business_name, c.email, c.unsubscribe_token as upload_token,
+        `select c.id as client_id, c.user_id, c.contact_name, c.business_name, c.email, c.upload_token,
                 u.name as sender_name, u.application_link, u.signature,
                 (select wanted_amount_cents from client_asks k where k.client_id = c.id order by created_at desc limit 1) as wanted_amount_cents,
                 '' as enrollment_id, '' as bucket_id, '' as bucket_name, 0 as next_step, 0 as steps_sent, app.client_timezone(c) as timezone

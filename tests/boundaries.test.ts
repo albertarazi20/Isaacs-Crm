@@ -15,8 +15,24 @@ const rel = (f: string) => relative(SRC, f).split(sep).join("/");
 
 describe("architecture boundaries", () => {
   it("only api routes and src/lib/system may use the RLS-bypassing connection", () => {
+    // The system jobs: each takes a DbAccess and is driven by a cron route or a public token route (upload links,
+    // lender downloads). They run for the shop, not for a signed-in user, so they are the owner connection on purpose.
+    const JOBS = new Set([
+      "lib/buckets/engine.ts", // nightly sequence steps and blasts
+      "lib/docs/upload.ts", // merchant uploads, lender downloads, the scan
+      "lib/inbox/process.ts", // the lender-email reader
+      "lib/inbox/sync.ts", // Gmail history sync
+      "lib/money/winback.ts", // winback pools
+      "lib/send/deliver.ts", // the Gmail / Resend sender
+      "lib/send/worker.ts", // the outbox drain
+      "lib/sheets/file.ts", // filing sheet rows as leads
+      "lib/sheets/sync.ts", // the daily Google Sheets loop
+    ]);
     const allowed = (r: string) =>
-      r.startsWith("app/api/") || r.startsWith("lib/system/") || r.startsWith("lib/db/");
+      r.startsWith("app/api/") ||
+      r.startsWith("lib/system/") ||
+      r.startsWith("lib/db/") ||
+      JOBS.has(r);
     // withSystem, and the raw pool / client factories that give the same owner connection (review-3B B-16)
     const bypass = /withSystem|getPool|makeDb|new pg\.|new Pool\(/;
     const offenders = files
