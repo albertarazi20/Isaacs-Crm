@@ -194,15 +194,21 @@ describe("the outbox, from a real database", () => {
     expect(acts.rows[0]?.n).toBe(2);
   });
   it("one automated email per merchant per day: a second sequence step is deferred, not sent", async () => {
+    // The drain clock is pinned, so the row is queued on the same clock. Queued on the wall clock it stopped being
+    // due once the day passed 19:30Z and the drain claimed nothing (this file first failed at that hour).
     const r = await t.db.withUser(rep, (q) =>
-      enqueueEmail(q, {
-        clientId,
-        lane: "sequence",
-        source: "bucket:x:step:2",
-        subject: "Still need",
-        text: "Hi",
-        when: "now",
-      }),
+      enqueueEmail(
+        q,
+        {
+          clientId,
+          lane: "sequence",
+          source: "bucket:x:step:2",
+          subject: "Still need",
+          text: "Hi",
+          when: "now",
+        },
+        new Date("2026-11-16T19:20:00Z"),
+      ),
     );
     if (!r.queued) throw new Error("not queued");
     const s = await drainOutbox({
@@ -221,28 +227,25 @@ describe("the outbox, from a real database", () => {
     );
     for (let i = 0; i < 48; i += 1)
       await t.pool.query(
-        "insert into send_ledger (mailbox_id, lane, sent_at) values ($1, 'sequence', now())",
+        "insert into send_ledger (mailbox_id, lane, sent_at) values ($1, 'sequence', '2026-11-16T19:45:00Z')",
         [mb.rows[0]?.id],
       );
     const other = await client("Other Co", "other@x.com");
+    // every clock in this test is the pinned one (see the per-merchant test above)
+    const queuedAt = new Date("2026-11-16T19:50:00Z");
     const bulk = await t.db.withUser(rep, (q) =>
-      enqueueEmail(q, {
-        clientId: other,
-        lane: "blast",
-        source: "blast:1",
-        subject: "B",
-        text: "t",
-        when: "now",
-      }),
+      enqueueEmail(
+        q,
+        { clientId: other, lane: "blast", source: "blast:1", subject: "B", text: "t", when: "now" },
+        queuedAt,
+      ),
     );
     const intake = await t.db.withUser(rep, (q) =>
-      enqueueEmail(q, {
-        clientId: other,
-        lane: "intake",
-        source: "intake",
-        subject: "I",
-        text: "t",
-      }),
+      enqueueEmail(
+        q,
+        { clientId: other, lane: "intake", source: "intake", subject: "I", text: "t" },
+        queuedAt,
+      ),
     );
     if (!bulk.queued || !intake.queued) throw new Error("not queued");
     const s = await drainOutbox({
