@@ -662,16 +662,16 @@ export default async function clientFlow({ email }) {
     await p.getByRole("button", { name: /^Set (call|text|email) reminder$/ }).click();
     const msg = await alertText(page);
     // the day picker refuses past days itself (min = today); when a past value gets through anyway the server says so
-    const stillDisabled = await p
-      .getByRole("button", { name: /reminder$|date first$/ })
-      .first()
-      .isDisabled()
-      .catch(() => false);
+    const nativeRefusal = await p
+      .getByLabel(/^Day/)
+      .evaluate((el) => el.validationMessage)
+      .catch(() => "");
+    const unchanged = (await clientById(c.id)).call_at === null;
     check(
-      "booking a call three days ago is refused (the picker will not take a past day, or the server says so about a CALL)",
-      stillDisabled ||
+      "booking a call three days ago is refused (the day picker's own validation, or the server in plain words about a CALL)",
+      (nativeRefusal.length > 0 && unchanged) ||
         (msg.length > 0 && /call|past|earlier/i.test(msg) && !/follow-up date/i.test(msg)),
-      msg || "button disabled",
+      msg || nativeRefusal,
     );
     check("DB: …and nothing was booked", (await clientById(c.id)).call_at === null);
     await shot(page, "client-booked-call");
