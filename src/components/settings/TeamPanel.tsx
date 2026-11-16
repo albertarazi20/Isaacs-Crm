@@ -9,7 +9,7 @@ import { FormDialog, useFormState, useRun } from "@/components/client/parts";
 import { useToast } from "@/components/overlay";
 import { Badge, Button, Field, Input, Select, cn } from "@/components/ui";
 import { ROLES } from "@/lib/auth/roles";
-import { timeAgo } from "@/lib/format";
+import { formatDate, timeAgo } from "@/lib/format";
 import type { AccessLine, OffboardReport, TeamMember, TrustRow } from "@/lib/trust/queries";
 import { SettingsCard, SHEET } from "./primitives";
 
@@ -157,7 +157,7 @@ export function TeamPanel({
   /** When each person accepted the anti-backdoor policy (user id → timestamp; null = not yet). */
   policy?: Record<string, string | null>;
 }) {
-  const { nowMs } = useApp();
+  const { nowMs, today } = useApp();
   const run = useRun();
   const router = useRouter();
   const toast = useToast();
@@ -236,7 +236,7 @@ export function TeamPanel({
                       <span className="text-muted">—</span>
                     ) : policy[m.id] ? (
                       <Badge tone="good" className="tabular-nums">
-                        accepted {policy[m.id]?.slice(0, 10)}
+                        accepted {formatDate(policy[m.id]!.slice(0, 10), today)}
                       </Badge>
                     ) : (
                       <Badge tone="warn">not yet</Badge>

@@ -19,9 +19,12 @@ function Rows({ rows }: { rows: BackdoorScore[] }) {
         <tr key={r.funder_id} className={SHEET.tr} data-lender-score={r.funder_id}>
           <td className={cn(SHEET.td, "max-w-56")}>
             <span className="block truncate font-medium">{r.name}</span>
+            <span className="block text-xs text-muted sm:hidden">
+              {r.files_sent} files sent · {r.reports} report{r.reports === 1 ? "" : "s"}
+            </span>
           </td>
-          <td className={SHEET.tdNum}>{r.files_sent}</td>
-          <td className={SHEET.tdNum}>{r.reports}</td>
+          <td className={cn(SHEET.tdNum, "max-sm:hidden")}>{r.files_sent}</td>
+          <td className={cn(SHEET.tdNum, "max-sm:hidden")}>{r.reports}</td>
           <td className={SHEET.tdNum}>
             {r.score === null ? (
               <span className="text-muted">no files</span>
@@ -48,8 +51,8 @@ export function BackdoorScoresCard({ rows }: { rows: BackdoorScore[] }) {
     <thead className={SHEET.thead}>
       <tr>
         <th className={SHEET.th}>Lender</th>
-        <th className={SHEET.thNum}>Files sent</th>
-        <th className={SHEET.thNum}>Reports</th>
+        <th className={cn(SHEET.thNum, "max-sm:hidden")}>Files sent</th>
+        <th className={cn(SHEET.thNum, "max-sm:hidden")}>Reports</th>
         <th className={SHEET.thNum}>Backdoor score</th>
       </tr>
     </thead>

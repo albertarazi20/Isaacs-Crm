@@ -4,6 +4,13 @@
 // Everything it seeds is removed again, and the shop_settings columns it touches are put back.
 import { BASE, check, openBrowser, setRole, withDb } from "./lib.mjs";
 
+// "2026-11-14" the way formatDate writes it: "Nov 14", and "Nov 14, 2025" when the year is not this one
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+const shortDate = (iso) => {
+  const [y, m, d] = iso.split("-").map(Number);
+  const day = `${MONTHS[m - 1]} ${d}`;
+  return y === new Date().getFullYear() ? day : `${day}, ${y}`;
+};
 const q = (sql, params) => withDb((db) => db.query(sql, params).then((r) => r.rows));
 const one = (sql, params) => q(sql, params).then((r) => r[0]);
 const SHOP_COLS = [
@@ -435,7 +442,7 @@ export default async function wireSettings({ email }) {
     check(
       "and once the database has a time it shows that date",
       (await page.locator(`[data-policy="${mate.id}"]`).innerText()).includes(
-        `accepted ${acceptedAt.d}`,
+        `accepted ${shortDate(acceptedAt.d)}`,
       ),
       await page.locator(`[data-policy="${mate.id}"]`).innerText(),
     );

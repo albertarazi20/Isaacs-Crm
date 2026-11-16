@@ -23,7 +23,7 @@ export default async function TeamSettingsPage() {
     }),
   );
   return (
-    <div className="mx-auto max-w-5xl space-y-5">
+    <div className="mx-auto max-w-6xl space-y-5">
       <SettingsHeader role={session.role} current="/settings/team" />
       <p className="text-sm text-muted">
         Reps are all the same; ops run the Submission Board; managers do everything and can add

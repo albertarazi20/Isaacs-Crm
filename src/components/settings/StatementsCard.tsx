@@ -31,10 +31,10 @@ export function StatementsCard({ months }: { months: ClosedMonth[] }) {
           <thead className={SHEET.thead}>
             <tr>
               <th className={SHEET.th}>Month / person</th>
-              <th className={SHEET.thNum}>Lines</th>
+              <th className={cn(SHEET.thNum, "max-sm:hidden")}>Lines</th>
               <th className={SHEET.thNum}>Gross</th>
               <th className={SHEET.thNum}>Rep</th>
-              <th className={SHEET.thNum}>House</th>
+              <th className={cn(SHEET.thNum, "max-sm:hidden")}>House</th>
               <th className={SHEET.th}>
                 <span className="sr-only">Printable view</span>
               </th>
@@ -49,10 +49,12 @@ export function StatementsCard({ months }: { months: ClosedMonth[] }) {
                     closed {m.closed_at.slice(0, 10)}
                   </span>
                 </td>
-                <td className={cn(SHEET.tdNum, "font-semibold")}>{m.line_count}</td>
+                <td className={cn(SHEET.tdNum, "font-semibold max-sm:hidden")}>{m.line_count}</td>
                 <td className={cn(SHEET.tdNum, "font-semibold")}>{money(m.gross_cents)}</td>
                 <td className={cn(SHEET.tdNum, "font-semibold")}>{money(m.rep_cents)}</td>
-                <td className={cn(SHEET.tdNum, "font-semibold")}>{money(m.house_cents)}</td>
+                <td className={cn(SHEET.tdNum, "font-semibold max-sm:hidden")}>
+                  {money(m.house_cents)}
+                </td>
                 <td className={SHEET.td} />
               </tr>
               {m.statements.map((s) => (
@@ -61,10 +63,10 @@ export function StatementsCard({ months }: { months: ClosedMonth[] }) {
                     {s.name}
                     {s.emailed_at ? <span className="ml-2 text-xs text-muted">emailed</span> : null}
                   </td>
-                  <td className={SHEET.tdNum}>{s.line_count}</td>
+                  <td className={cn(SHEET.tdNum, "max-sm:hidden")}>{s.line_count}</td>
                   <td className={SHEET.tdNum}>{money(s.gross_cents)}</td>
                   <td className={SHEET.tdNum}>{money(s.rep_cents)}</td>
-                  <td className={SHEET.tdNum}>{money(s.house_cents)}</td>
+                  <td className={cn(SHEET.tdNum, "max-sm:hidden")}>{money(s.house_cents)}</td>
                   <td className={cn(SHEET.td, "text-right whitespace-nowrap")}>
                     <a
                       href={`/settings/plan/statements/${s.id}`}

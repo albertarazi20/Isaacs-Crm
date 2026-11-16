@@ -157,10 +157,10 @@ export function StatesEditor({ lines }: { lines: StateLine[] }) {
           <thead className={SHEET.thead}>
             <tr>
               <th className={SHEET.th}>State</th>
-              <th className={SHEET.th}>The rules say</th>
+              <th className={cn(SHEET.th, "max-sm:hidden")}>The rules say</th>
               <th className={SHEET.th}>Shop registration</th>
-              <th className={SHEET.th}>Renews</th>
-              <th className={SHEET.th}>
+              <th className={cn(SHEET.th, "max-sm:hidden")}>Renews</th>
+              <th className={cn(SHEET.th, "max-sm:hidden")}>
                 <span className="sr-only">Edit</span>
               </th>
             </tr>
@@ -168,13 +168,25 @@ export function StatesEditor({ lines }: { lines: StateLine[] }) {
           <tbody className={SHEET.tbody}>
             {lines.map((l) => {
               const renew = renewalTone(l.renews_on, today);
+              const action = (
+                <Button
+                  size="sm"
+                  aria-label={`${l.status === null ? "Add" : "Edit"} ${l.state} registration`}
+                  onClick={() => setEditing(l)}
+                >
+                  {l.status === null ? "Add" : "Edit"}
+                </Button>
+              );
               return (
                 <tr key={l.state} className={SHEET.tr} data-state-row={l.state}>
-                  <td className={cn(SHEET.td, "whitespace-nowrap")}>
+                  <td className={cn(SHEET.td, "sm:whitespace-nowrap")}>
                     <span className="font-semibold">{l.state}</span>{" "}
                     <span className="text-xs text-muted">{l.name}</span>
+                    <span className="mt-1 block sm:hidden">
+                      <RulesBadges s={l} />
+                    </span>
                   </td>
-                  <td className={cn(SHEET.td, "min-w-48")}>
+                  <td className={cn(SHEET.td, "min-w-48 max-sm:hidden")}>
                     <RulesBadges s={l} />
                   </td>
                   <td className={SHEET.td}>
@@ -190,27 +202,25 @@ export function StatesEditor({ lines }: { lines: StateLine[] }) {
                         ) : null}
                       </span>
                     )}
+                    {l.renews_on ? (
+                      <span className="mt-1 flex flex-wrap items-center gap-1.5 text-xs tabular-nums sm:hidden">
+                        {l.renews_on}
+                        <Badge tone={renew.tone}>{renew.text}</Badge>
+                      </span>
+                    ) : null}
+                    <span className="mt-2 block sm:hidden">{action}</span>
                   </td>
-                  <td className={cn(SHEET.td, "whitespace-nowrap tabular-nums")}>
+                  <td className={cn(SHEET.td, "whitespace-nowrap tabular-nums max-sm:hidden")}>
                     {l.renews_on ? (
                       <>
-                        {l.renews_on}{" "}
-                        <Badge tone={renew.tone === "neutral" ? "neutral" : renew.tone}>
-                          {renew.text}
-                        </Badge>
+                        {l.renews_on} <Badge tone={renew.tone}>{renew.text}</Badge>
                       </>
                     ) : (
                       <span className="text-muted">—</span>
                     )}
                   </td>
-                  <td className={cn(SHEET.td, "text-right whitespace-nowrap")}>
-                    <Button
-                      size="sm"
-                      aria-label={`${l.status === null ? "Add" : "Edit"} ${l.state} registration`}
-                      onClick={() => setEditing(l)}
-                    >
-                      {l.status === null ? "Add" : "Edit"}
-                    </Button>
+                  <td className={cn(SHEET.td, "text-right whitespace-nowrap max-sm:hidden")}>
+                    {action}
                   </td>
                 </tr>
               );
