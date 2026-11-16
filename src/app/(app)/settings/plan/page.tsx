@@ -1,19 +1,24 @@
 import { PlanForm } from "@/components/settings/PlanForm";
 import { SettingsCard, SHEET } from "@/components/settings/primitives";
+import { RetentionForm } from "@/components/settings/RetentionForm";
+import { StatementsCard } from "@/components/settings/StatementsCard";
 import { SettingsHeader } from "@/components/settings/SettingsNav";
 import { Badge, cn } from "@/components/ui";
 import { requireRole } from "@/lib/auth/server";
 import { CAN } from "@/lib/auth/roles";
 import { db } from "@/lib/db";
 import { formatMoneyCompact } from "@/lib/money";
-import { listCommissionPlans } from "@/lib/settings/queries";
+import { getShopSettings, listCommissionPlans } from "@/lib/settings/queries";
+import { listClosedMonths } from "@/lib/settings/statements";
 
 export const dynamic = "force-dynamic";
 
 export default async function PlanSettingsPage() {
   const session = await requireRole(CAN.manageTeam);
-  const { plans, reps } = await db.withUser(session.userId, async (q) => ({
+  const { plans, reps, months, retentionDays } = await db.withUser(session.userId, async (q) => ({
     plans: await listCommissionPlans(q),
+    months: await listClosedMonths(q),
+    retentionDays: (await getShopSettings(q)).document_retention_days,
     reps: (
       await q.query<{ id: string; name: string }>(
         "select id, coalesce(nullif(name, ''), email) as name from app_users where active and role in ('rep', 'manager') order by name",
@@ -77,6 +82,8 @@ export default async function PlanSettingsPage() {
         </table>
       </SettingsCard>
       <PlanForm reps={reps} base={shopCurrent} />
+      <StatementsCard months={months} />
+      <RetentionForm days={retentionDays} />
     </div>
   );
 }

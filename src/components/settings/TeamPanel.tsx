@@ -7,7 +7,7 @@ import { accessHistoryAction, offboardUserAction } from "@/app/trust-actions";
 import { useApp } from "@/components/app-context";
 import { FormDialog, useFormState, useRun } from "@/components/client/parts";
 import { useToast } from "@/components/overlay";
-import { Button, Field, Input, Select, cn } from "@/components/ui";
+import { Badge, Button, Field, Input, Select, cn } from "@/components/ui";
 import { ROLES } from "@/lib/auth/roles";
 import { timeAgo } from "@/lib/format";
 import type { AccessLine, OffboardReport, TeamMember, TrustRow } from "@/lib/trust/queries";
@@ -149,10 +149,13 @@ export function TeamPanel({
   members,
   trust,
   meId,
+  policy = {},
 }: {
   members: TeamMember[];
   trust: TrustRow[];
   meId: string;
+  /** When each person accepted the anti-backdoor policy (user id → timestamp; null = not yet). */
+  policy?: Record<string, string | null>;
 }) {
   const { nowMs } = useApp();
   const run = useRun();
@@ -183,6 +186,7 @@ export function TeamPanel({
               <th className={SHEET.thNum}>Open deals</th>
               <th className={SHEET.th}>Gmail</th>
               <th className={SHEET.th}>Last login</th>
+              <th className={SHEET.th}>Policy</th>
               <th className={SHEET.th}>Trust (30d)</th>
               <th className={SHEET.th}></th>
             </tr>
@@ -226,6 +230,17 @@ export function TeamPanel({
                   </td>
                   <td className={cn(SHEET.td, "text-xs whitespace-nowrap text-muted")}>
                     {m.last_login_at ? timeAgo(m.last_login_at, new Date(nowMs)) : "never"}
+                  </td>
+                  <td className={SHEET.td} data-policy={m.id}>
+                    {!m.active ? (
+                      <span className="text-muted">—</span>
+                    ) : policy[m.id] ? (
+                      <Badge tone="good" className="tabular-nums">
+                        accepted {policy[m.id]?.slice(0, 10)}
+                      </Badge>
+                    ) : (
+                      <Badge tone="warn">not yet</Badge>
+                    )}
                   </td>
                   <td className={SHEET.td}>
                     {t ? (
