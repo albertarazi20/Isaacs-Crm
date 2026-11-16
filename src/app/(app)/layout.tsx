@@ -36,6 +36,8 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const session = await requireSession();
   const me = await loadShell(session.userId);
   if (!me.user) redirect("/login?error=session_expired");
+  // the first-login gate (plan §14.7): nothing opens until the policy is accepted once
+  if (!me.user.policy_accepted_at) redirect("/policy");
   const [gmail, reminders, store] = await Promise.all([
     gmailStatus(session.userId),
     // The banner is a safety net: if the heartbeat can't be read, the page still renders.
@@ -114,6 +116,29 @@ export default async function AppLayout({ children }: { children: React.ReactNod
             </nav>
             <div className="flex-1 sm:hidden" />
             <GlobalSearch />
+            <Link
+              href="/alerts"
+              aria-label={me.unreadAlerts > 0 ? `Alerts, ${me.unreadAlerts} unread` : "Alerts"}
+              className="relative hidden size-9 shrink-0 items-center justify-center rounded-lg text-muted transition hover:bg-surface-2 hover:text-text sm:inline-flex"
+            >
+              <svg
+                aria-hidden
+                viewBox="0 0 24 24"
+                className="size-[18px]"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.75"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <path d="M6 16V11a6 6 0 1 1 12 0v5l1.5 2h-15zM10 20a2 2 0 0 0 4 0" />
+              </svg>
+              {me.unreadAlerts > 0 ? (
+                <span className="absolute -top-0.5 -right-0.5 min-w-4 rounded-full bg-bad px-1 text-center text-[10px] leading-4 font-semibold text-white tabular-nums">
+                  {me.unreadAlerts > 99 ? "99+" : me.unreadAlerts}
+                </span>
+              ) : null}
+            </Link>
             <QuickAdd />
             <div className="hidden sm:block">
               <UserMenu

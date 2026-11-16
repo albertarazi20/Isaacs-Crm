@@ -38,6 +38,7 @@ export function phoneTabsFor(role: Role): { tabs: NavItem[]; more: NavItem[] } {
   const primary = items.filter((n) => n.href !== "/settings").slice(0, 4);
   const more = [
     ...items.filter((n) => !primary.includes(n)),
+    { href: "/alerts", label: "Alerts" },
     { href: "/today", label: "Today's calls" },
     { href: "/dial", label: "Power dial" },
     { href: "/clients", label: "All merchants" },
