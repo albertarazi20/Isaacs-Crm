@@ -10,13 +10,17 @@ import type { ActionResult } from "@/lib/data/types";
 import { db } from "@/lib/db";
 import {
   ACCESS_ACTIONS,
+  acceptPolicy,
   accessHistory,
+  backdoorScores,
   createCanary,
   exposureReport,
   logAccess,
   offboardUser,
+  recordBackdoorReport,
   trustPanel,
   type AccessLine,
+  type BackdoorScore,
   type Exposure,
   type OffboardReport,
   type TrustRow,
@@ -65,12 +69,44 @@ export async function trustPanelAction(input: unknown): Promise<ActionResult<Tru
   }
 }
 
+/**
+ * "The merchant got a backdoor call": the exposure report, kept as a backdoor report with that snapshot (once per
+ * merchant per day) so every lender who had the file carries it in its score.
+ */
 export async function exposureReportAction(input: unknown): Promise<ActionResult<Exposure>> {
   const session = await requireRole(CAN.manageTeam);
   try {
-    const { clientId } = z.object({ clientId: id }).parse(input);
-    const data = await db.withUser(session.userId, (q) => exposureReport(q, clientId));
+    const { clientId, note } = z
+      .object({ clientId: id, note: z.string().trim().max(500).default("") })
+      .parse(input);
+    const data = await db.withUser(session.userId, async (q) => {
+      const exposure = await exposureReport(q, clientId);
+      await recordBackdoorReport(q, { clientId, reportedBy: session.userId, exposure, note });
+      return exposure;
+    });
     return { ok: true, data };
+  } catch (e) {
+    return { ok: false, error: toActionError(e) };
+  }
+}
+
+export async function backdoorScoresAction(): Promise<ActionResult<BackdoorScore[]>> {
+  const session = await requireRole(CAN.manageTeam);
+  try {
+    const data = await db.withUser(session.userId, (q) => backdoorScores(q));
+    return { ok: true, data };
+  } catch (e) {
+    return { ok: false, error: toActionError(e) };
+  }
+}
+
+/** Plan §14.7: the person accepts the anti-backdoor policy. The first-login gate page calls this. */
+export async function acceptPolicyAction(): Promise<ActionResult<{ acceptedAt: string }>> {
+  const session = await requireSession();
+  try {
+    const acceptedAt = await db.withUser(session.userId, (q) => acceptPolicy(q));
+    revalidatePath("/", "layout");
+    return { ok: true, data: { acceptedAt } };
   } catch (e) {
     return { ok: false, error: toActionError(e) };
   }

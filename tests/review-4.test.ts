@@ -418,6 +418,12 @@ describe("C-6: an older backup still restores after a new column with a default"
       "webhook_events",
       "winback_members",
       "winback_pools",
+      "commission_closes", // stream 3
+      "commission_statements", // stream 3
+      "fundings_corrections", // stream 3
+      "winback_reasons", // stream 3
+      "rescue_nudges", // stream 3
+      "backdoor_reports", // stream 3
     ];
     const uncovered = rows
       .map((r) => r.table_name)
