@@ -55,8 +55,8 @@ export const money = z.union([z.string(), z.number()]).transform((v, ctx) => {
   return cents;
 });
 
-/** Blank means "not provided". */
-const optMoney = z
+/** Blank means "not provided"; junk is refused with a message, never dropped on the floor. */
+export const optMoney = z
   .union([z.string(), z.number(), z.null(), z.undefined()])
   .transform((v, ctx): number | null => {
     if (v === null || v === undefined || (typeof v === "string" && v.trim() === "")) return null;

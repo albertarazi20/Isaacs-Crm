@@ -105,6 +105,29 @@ export async function createClient(
   return mustCard(q, id);
 }
 
+/**
+ * Stamp the merchant's time zone the way `app.client_timezone()` derives it — the state first, then the phone's
+ * area code — and say which, so a rep can see where it came from and override it. A zone set by hand is kept;
+ * a merchant with neither a known state nor a known area code stays unstamped (reads fall back to the rep's zone).
+ */
+export async function stampClientTimezone(q: Db, clientId: string): Promise<void> {
+  await q.query(
+    `with z as (
+       select c.id,
+              (select tz from app_state_tz where state = upper(btrim(c.state))) as state_tz,
+              (select tz from area_code_tz
+                where code = substr(p.d, case when length(p.d) = 11 then 2 else 1 end, 3)) as area_tz
+         from clients c, lateral (select regexp_replace(c.phone, '\\D', '', 'g') as d) p
+        where c.id = $1 and c.timezone is null)
+     update clients c
+        set timezone = coalesce(z.state_tz, z.area_tz),
+            timezone_source = case when z.state_tz is not null then 'state'
+                                   when z.area_tz is not null then 'area_code' end
+       from z where z.id = c.id`,
+    [clientId],
+  );
+}
+
 export async function moveClient(q: Db, input: MoveInput, ctx: UserContext): Promise<ClientCard> {
   const { clientId, stage } = input;
   if (input.followUpOn) checkDate(input.followUpOn, ctx.today);

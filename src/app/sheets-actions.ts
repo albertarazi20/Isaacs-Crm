@@ -5,23 +5,18 @@ import { z } from "zod";
 import { CAN, requireSession } from "@/lib/auth/server";
 import { toActionError } from "@/lib/data/errors";
 import { UserError } from "@/lib/data/mutations";
-import { id, line } from "@/lib/data/schemas";
+import { id } from "@/lib/data/schemas";
 import type { ActionResult } from "@/lib/data/types";
 import { db } from "@/lib/db";
-import { listTabs } from "@/lib/sheets/api";
-import { fileOneRow } from "@/lib/sheets/file";
-import { gidFrom, LEAD_FIELDS, spreadsheetIdFrom } from "@/lib/sheets/mapping";
+import { fileOneRow, PENDING_ROW_COLUMNS, type PendingRow } from "@/lib/sheets/file";
+import {
+  connectSheet,
+  connectSheetSchema,
+  updateSheetSchema,
+  updateSheetSource,
+} from "@/lib/sheets/sources";
 import { productionTokenFor, syncSheets } from "@/lib/sheets/sync";
 import { env } from "@/lib/env";
-
-const connectSchema = z.object({
-  name: line(80).min(1, "Name this sheet"),
-  url: z.string().trim().min(1, "Paste the sheet link"),
-  tab: line(100).default(""),
-  targetBucketId: id.nullable().default(null),
-  autoFile: z.boolean().default(false),
-  shared: z.boolean().default(false),
-});
 
 /** Connect a sheet: the link is checked against Google right away, so a bad share shows up now, not at 3am. */
 export async function connectSheetAction(
@@ -29,68 +24,28 @@ export async function connectSheetAction(
 ): Promise<ActionResult<{ id: string; tabs: string[] }>> {
   const session = await requireSession();
   try {
-    const i = connectSchema.parse(input);
-    const spreadsheetId = spreadsheetIdFrom(i.url);
-    if (!spreadsheetId) throw new UserError("That doesn't look like a Google Sheets link");
+    const i = connectSheetSchema.parse(input);
     if (i.shared && !CAN.manageTeam(session.role))
       throw new UserError("Only a manager can share a sheet with everyone");
-    const token = await productionTokenFor()(session.userId);
-    const meta = await listTabs(token, spreadsheetId);
-    const gid = gidFrom(i.url);
-    const tab = i.tab || meta.tabs.find((t) => t.gid === gid)?.title || meta.tabs[0]?.title || "";
-    const created = await db.withUser(session.userId, async (q) => {
-      const { rows } = await q.query<{ id: string }>(
-        `insert into sheet_sources (owner_id, name, spreadsheet_id, sheet_title, target_bucket_id, auto_file, reader_user_id)
-         values ($1, $2, $3, $4, $5, $6, $7) returning id`,
-        [
-          i.shared ? null : session.userId,
-          i.name,
-          spreadsheetId,
-          tab,
-          i.targetBucketId,
-          i.autoFile,
-          session.userId,
-        ],
-      );
-      return rows[0]?.id;
+    const data = await connectSheet({
+      db,
+      userId: session.userId,
+      input: i,
+      tokenFor: productionTokenFor(),
     });
-    if (!created) throw new Error("sheet_sources insert returned no row");
-    await syncSheets({ db, tokenFor: productionTokenFor(), sourceId: created });
     revalidatePath("/settings");
-    return { ok: true, data: { id: created, tabs: meta.tabs.map((t) => t.title) } };
+    return { ok: true, data };
   } catch (e) {
     return { ok: false, error: toActionError(e) };
   }
 }
 
-const mappingSchema = z.object({
-  id,
-  mapping: z.record(z.enum(LEAD_FIELDS), z.number().int().min(0).max(200)),
-  targetBucketId: id.nullable().optional(),
-  autoFile: z.boolean().optional(),
-  active: z.boolean().optional(),
-});
-
+/** Settings on a connected sheet; a field that is not sent is left as it is (a toggle never wipes the mapping). */
 export async function updateSheetAction(input: unknown): Promise<ActionResult<null>> {
   const session = await requireSession();
   try {
-    const i = mappingSchema.parse(input);
-    await db.withUser(session.userId, (q) =>
-      q.query(
-        `update sheet_sources set mapping = $2,
-                target_bucket_id = coalesce($3, target_bucket_id),
-                auto_file = coalesce($4, auto_file),
-                active = coalesce($5, active)
-          where id = $1`,
-        [
-          i.id,
-          JSON.stringify(i.mapping),
-          i.targetBucketId ?? null,
-          i.autoFile ?? null,
-          i.active ?? null,
-        ],
-      ),
-    );
+    const i = updateSheetSchema.parse(input);
+    await db.withUser(session.userId, (q) => updateSheetSource(q, i));
     if (i.active !== false)
       await syncSheets({ db, tokenFor: productionTokenFor(), sourceId: i.id });
     revalidatePath("/settings");
@@ -170,19 +125,18 @@ export async function fileSheetRowAction(
   const session = await requireSession();
   try {
     const i = z.object({ rowId: id, bucketId: id.nullable() }).parse(input);
-    const result = await db.withUser(session.userId, async (q) => {
-      const { rows } = await q.query(
-        `select r.id, r.source_id, $2::uuid as owner_id, s.target_bucket_id, s.name as source_name, r.business_name, r.contact_name,
-                r.email, r.phone, r.phone2, r.industry, r.state, r.monthly_revenue_cents, r.wanted, r.notes
+    const outcome = await db.withUser(session.userId, async (q) => {
+      const { rows } = await q.query<PendingRow>(
+        `select app.current_user_id() as owner_id, ${PENDING_ROW_COLUMNS}
            from sheet_rows r join sheet_sources s on s.id = r.source_id where r.id = $1`,
-        [i.rowId, session.userId],
+        [i.rowId],
       );
       const row = rows[0];
       if (!row) throw new UserError("That sheet row is gone");
       return fileOneRow(q, row, env().APP_URL, new Date(), i.bucketId);
     });
     revalidatePath("/", "layout");
-    return { ok: true, data: { result } };
+    return { ok: true, data: { result: outcome.result } };
   } catch (e) {
     return { ok: false, error: toActionError(e) };
   }

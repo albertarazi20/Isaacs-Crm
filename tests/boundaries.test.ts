@@ -50,6 +50,10 @@ describe("architecture boundaries", () => {
       "lib/data/mutations.ts": 2, // ${sets} from the CLIENT_COLUMNS map; ${fn} from a fixed list
       "lib/data/queries.ts": 1, // ${NAME_KEY_SQL("business_name")}
       "lib/buckets/queries.ts": 1, // ${TZ_LABEL}: a constant CASE expression (time-zone label), no input in it
+      // ${PENDING_ROW_COLUMNS}: the fixed column list a sheet row is read with before it is filed as a merchant
+      "lib/sheets/file.ts": 1,
+      "lib/leads/form.ts": 1,
+      "app/sheets-actions.ts": 1,
     };
     const counts: Record<string, number> = {};
     for (const f of files) {
