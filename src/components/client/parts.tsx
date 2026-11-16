@@ -202,8 +202,8 @@ export function Stat({
 }) {
   return (
     <div className={cn("min-w-0", className)}>
-      <dt className="text-xs text-muted">{label}</dt>
-      <dd className="truncate text-sm font-medium">{children}</dd>
+      <dt className="text-[11px] font-medium text-muted">{label}</dt>
+      <dd className="truncate text-sm font-medium tabular-nums">{children}</dd>
     </div>
   );
 }

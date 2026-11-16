@@ -50,7 +50,7 @@ export function OffersCard({
       ) : (
         <>
           {insight ? (
-            <p className="rounded-lg bg-surface-2 p-3 text-sm">
+            <p className="rounded-lg border border-border bg-surface-2 p-3 text-sm">
               Average factor across {insight.counted} {insight.counted === 1 ? "offer" : "offers"}:{" "}
               <strong>{formatFactor(insight.average)}</strong>
               {insight.low !== insight.high
@@ -65,7 +65,7 @@ export function OffersCard({
             {offers.map((o) => (
               <li key={o.id} className="rounded-lg border border-border p-3">
                 <div className="flex items-start justify-between gap-2">
-                  <p className="min-w-0 font-medium">
+                  <p className="min-w-0 text-sm font-medium">
                     {o.funder_name}
                     {o.won ? (
                       <Badge tone="warn" className="ml-2">

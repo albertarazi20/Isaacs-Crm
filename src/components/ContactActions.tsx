@@ -31,9 +31,10 @@ import {
 } from "@/lib/mca/contact";
 import type { StageKey } from "@/lib/mca/stages";
 import { useApp } from "./app-context";
+import { Icon } from "./client/icons";
 import { Dialog, useCall, useToast } from "./overlay";
 import { TimerPicker } from "./TimerPicker";
-import { Button, buttonClass, cn, Field, Input, Textarea } from "./ui";
+import { Badge, Button, buttonClass, cn, Field, Input, Textarea } from "./ui";
 import { HintChips } from "./winback/HintChips";
 import { SnippetPicker, type PickedSnippet } from "./winback/SnippetPicker";
 import { useMessagingContext } from "./winback/useMessagingContext";
@@ -181,7 +182,8 @@ export function ContactActions({
         disabled={!e164 || !callOk.ok}
         title={callWhy ?? undefined}
       >
-        📞 Call
+        <Icon name="phone" className="text-muted" />
+        Call
       </Button>
       <Button
         size={size}
@@ -192,7 +194,8 @@ export function ContactActions({
         disabled={!e164 || !textOk.ok}
         title={textWhy ?? undefined}
       >
-        💬 Text
+        <Icon name="message" className="text-muted" />
+        Text
       </Button>
       <Button
         size={size}
@@ -202,13 +205,10 @@ export function ContactActions({
         disabled={!emailOk.ok}
         title={emailOk.ok ? undefined : emailOk.reason}
       >
-        ✉️ Email
+        <Icon name="mail" className="text-muted" />
+        Email
       </Button>
-      {status !== "ok" ? (
-        <span className="rounded-md bg-bad-soft px-1.5 py-0.5 text-xs font-semibold whitespace-nowrap text-bad">
-          {CONTACT_STATUS_LABELS[status]}
-        </span>
-      ) : null}
+      {status !== "ok" ? <Badge tone="bad">{CONTACT_STATUS_LABELS[status]}</Badge> : null}
       {showWhy ? (
         <p
           id={whyId}
@@ -339,7 +339,7 @@ function TextDialogBody({
         ) : null}
         <div className="space-y-1">
           <div className="flex items-center justify-between gap-2">
-            <label htmlFor="text-message" className="text-xs font-medium text-muted">
+            <label htmlFor="text-message" className="text-[12px] font-medium text-text-2">
               Message
             </label>
             <SnippetPicker
@@ -568,7 +568,7 @@ function EmailDialogBody({
           </Field>
           <div className="space-y-1">
             <div className="flex items-center justify-between gap-2">
-              <label htmlFor="email-message" className="text-xs font-medium text-muted">
+              <label htmlFor="email-message" className="text-[12px] font-medium text-text-2">
                 Message
               </label>
               <SnippetPicker
@@ -593,8 +593,8 @@ function EmailDialogBody({
               </p>
             ) : null}
           </div>
-          <div className="rounded-lg border border-dashed border-border p-3">
-            <p className="text-xs font-medium text-muted">
+          <div className="rounded-lg border border-dashed border-border-strong p-3">
+            <p className="text-[12px] font-medium text-text-2">
               Signature (added to the end automatically)
             </p>
             <p className="mt-1 text-sm whitespace-pre-wrap" data-testid="email-signature">
@@ -717,10 +717,10 @@ export function PendingTouchPrompt() {
                 aria-pressed={outcome === o}
                 onClick={() => choose(o)}
                 className={cn(
-                  "h-11 rounded-lg border text-sm font-medium transition",
+                  "h-11 rounded-lg border text-sm font-medium transition sm:h-10",
                   outcome === o
-                    ? "border-accent bg-accent text-accent-fg"
-                    : "border-border bg-surface hover:bg-surface-2",
+                    ? "border-accent/40 bg-accent-soft text-accent"
+                    : "border-border bg-surface text-text-2 hover:border-border-strong hover:bg-surface-3 hover:text-text",
                 )}
               >
                 {outcomeLabel(pending?.kind ?? "call", o)}

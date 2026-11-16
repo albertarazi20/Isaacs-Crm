@@ -37,18 +37,24 @@ export function AskCard({
       {current ? (
         <dl className="space-y-3">
           <div>
-            <dt className="text-xs text-muted">How much he wants now</dt>
-            <dd className="text-lg font-semibold">{formatMoney(current.wanted_amount_cents)}</dd>
+            <dt className="text-[11px] font-medium text-muted">How much he wants now</dt>
+            <dd className="text-lg font-semibold tracking-tight tabular-nums">
+              {formatMoney(current.wanted_amount_cents)}
+            </dd>
           </div>
           <div>
-            <dt className="text-xs text-muted">The offer he wants (terms)</dt>
+            <dt className="text-[11px] font-medium text-muted">The offer he wants (terms)</dt>
             <dd className="text-sm whitespace-pre-wrap">
               {current.wanted_terms || <span className="text-muted">Not recorded</span>}
             </dd>
           </div>
           <div>
-            <dt className="text-xs text-muted">What I think funders would approve</dt>
-            <dd className="text-lg font-semibold">{formatMoney(current.est_approval_cents)}</dd>
+            <dt className="text-[11px] font-medium text-muted">
+              What I think funders would approve
+            </dt>
+            <dd className="text-lg font-semibold tracking-tight tabular-nums">
+              {formatMoney(current.est_approval_cents)}
+            </dd>
             {current.est_approval_note ? (
               <dd className="mt-0.5 text-sm whitespace-pre-wrap">{current.est_approval_note}</dd>
             ) : null}
@@ -67,7 +73,7 @@ export function AskCard({
           </summary>
           <ul className="mt-2 space-y-2">
             {earlier.map((a) => (
-              <li key={a.id} className="rounded-lg bg-surface-2 p-2.5 text-sm">
+              <li key={a.id} className="rounded-lg border border-border bg-surface-2 p-2.5 text-sm">
                 <p className="text-xs text-muted">
                   {formatDate(dateInTz(a.created_at, timezone), today)}
                 </p>

@@ -77,8 +77,8 @@ export function FundingCard({
       }
     >
       {latest.status === "defaulted" ? (
-        <div className="mb-4 rounded-lg border border-bad bg-bad-soft p-3 text-bad">
-          <p className="font-semibold">
+        <div className="mb-4 rounded-lg border border-bad/30 bg-bad-soft p-3 text-bad">
+          <p className="text-sm font-semibold">
             Defaulted{latest.defaulted_on ? ` on ${formatDate(latest.defaulted_on, today)}` : ""}
           </p>
           {latest.promise_to_pay_at ? (
@@ -95,7 +95,7 @@ export function FundingCard({
           )}
         </div>
       ) : latest.promise_to_pay_at ? (
-        <p className="mb-4 rounded-lg bg-warn-soft p-3 text-sm text-warn">
+        <p className="mb-4 rounded-lg border border-warn/30 bg-warn-soft p-3 text-sm text-warn">
           Promise to pay
           {latest.promise_amount_cents !== null
             ? ` ${formatMoney(latest.promise_amount_cents)}`
@@ -106,15 +106,21 @@ export function FundingCard({
 
       <div className="grid grid-cols-2 gap-3">
         <div>
-          <p className="text-xs text-muted">Paid to date</p>
-          <p className="text-xl font-bold">{formatMoney(snap.paidCents)}</p>
+          <p className="text-[11px] font-semibold tracking-wide text-muted uppercase">
+            Paid to date
+          </p>
+          <p className="mt-1 text-[22px] leading-7 font-semibold tracking-tight tabular-nums">
+            {formatMoney(snap.paidCents)}
+          </p>
           <p className="text-xs text-muted">
             {snap.overridden ? "(entered by you)" : "(estimated from remittances elapsed)"}
           </p>
         </div>
         <div>
-          <p className="text-xs text-muted">Balance</p>
-          <p className="text-xl font-bold">{formatMoney(snap.balanceCents)}</p>
+          <p className="text-[11px] font-semibold tracking-wide text-muted uppercase">Balance</p>
+          <p className="mt-1 text-[22px] leading-7 font-semibold tracking-tight tabular-nums">
+            {formatMoney(snap.balanceCents)}
+          </p>
         </div>
       </div>
 
@@ -125,7 +131,7 @@ export function FundingCard({
           aria-valuemin={0}
           aria-valuemax={100}
           aria-valuenow={Math.round(snap.pct)}
-          className="relative h-3 rounded-full bg-surface-2"
+          className="relative h-2 rounded-full bg-surface-2"
         >
           <div
             className="h-full rounded-full bg-good"
@@ -134,10 +140,10 @@ export function FundingCard({
           <div
             aria-hidden
             title={`${RENEWAL_PAYDOWN_PCT}% — renewal window`}
-            className="absolute -top-1 -bottom-1 left-1/2 w-0.5 -translate-x-1/2 rounded bg-text"
+            className="absolute -top-1 -bottom-1 left-1/2 w-px -translate-x-1/2 bg-text/60"
           />
         </div>
-        <div className="mt-1 flex items-center justify-between text-xs text-muted">
+        <div className="mt-1 flex items-center justify-between text-xs text-muted tabular-nums">
           <span>{snap.pct}% paid down</span>
           <span>{RENEWAL_PAYDOWN_PCT}%</span>
           <span>{formatMoney(snap.paybackCents)} payback</span>
@@ -206,7 +212,7 @@ export function FundingCard({
           </summary>
           <ul className="mt-2 space-y-2">
             {past.map((f) => (
-              <li key={f.id} className="rounded-lg bg-surface-2 p-2.5 text-sm">
+              <li key={f.id} className="rounded-lg border border-border bg-surface-2 p-2.5 text-sm">
                 <p className="flex flex-wrap items-center gap-2">
                   <strong>{formatMoney(f.amount_cents)}</strong> at {formatFactor(f.factor_rate)}
                   <Badge tone={STATUS_TONE[f.status]}>{FUNDING_STATUS_LABELS[f.status]}</Badge>
@@ -263,7 +269,7 @@ function Row({
   const Tag = group ? "div" : "label";
   return (
     <Tag className={cn("block space-y-1", className)}>
-      <span className="block text-xs font-medium text-muted">{label}</span>
+      <span className="block text-[12px] font-medium text-text-2">{label}</span>
       {children}
       {error ? (
         <span role="alert" className="block text-xs text-bad">
@@ -278,9 +284,7 @@ function Row({
 
 function Heading({ children }: { children: ReactNode }) {
   return (
-    <h3 className="border-t border-border pt-3 text-xs font-semibold tracking-wide text-muted uppercase">
-      {children}
-    </h3>
+    <h3 className="border-t border-border pt-3 text-[13px] font-semibold text-text">{children}</h3>
   );
 }
 
@@ -387,7 +391,7 @@ function FundingDialog({
           </div>
         </>
       ) : (
-        <p className="rounded-lg bg-surface-2 p-3 text-sm text-muted">
+        <p className="rounded-lg border border-border bg-surface-2 p-3 text-sm text-muted">
           An older advance. Saving changes this record only — no reminders move.
         </p>
       )}
@@ -430,7 +434,7 @@ function FundingDialog({
       </div>
 
       <div
-        className="z-10 rounded-lg border border-border bg-surface-2 p-3 text-sm sm:sticky sm:bottom-0 sm:shadow-md"
+        className="z-10 rounded-lg border border-border bg-surface-2 p-3 text-sm sm:sticky sm:bottom-0 sm:shadow-lift"
         aria-live="polite"
       >
         {preview ? (
@@ -484,7 +488,7 @@ function FundingDialog({
             <div
               role="group"
               aria-label="Enter commission as"
-              className="inline-flex shrink-0 overflow-hidden rounded-lg border border-border"
+              className="inline-flex shrink-0 gap-0.5 rounded-lg border border-border bg-surface p-0.5"
             >
               {(["dollars", "points"] as const).map((m) => (
                 <button
@@ -493,10 +497,10 @@ function FundingDialog({
                   aria-pressed={v.commissionMode === m}
                   onClick={() => pickMode(m)}
                   className={cn(
-                    "px-2.5 text-sm font-medium",
+                    "rounded-md px-2.5 text-[13px] font-medium transition",
                     v.commissionMode === m
-                      ? "bg-accent text-accent-fg"
-                      : "bg-surface text-muted hover:bg-surface-2",
+                      ? "bg-text text-bg"
+                      : "text-muted hover:bg-surface-2 hover:text-text",
                   )}
                 >
                   {m === "dollars" ? "$" : "Points"}

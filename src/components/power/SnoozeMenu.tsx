@@ -27,6 +27,10 @@ export const SNOOZES: { label: string; to: (today: ISODate) => ISODate }[] = [
 ];
 
 type Target = Pick<ClientCard, "id" | "business_name" | "stage">;
+
+/** One line of the snooze menu: a 40px row on a phone, 32px on a desktop. */
+const MENU_ITEM =
+  "flex min-h-10 items-center rounded-lg px-2 text-left text-sm transition hover:bg-surface-2 disabled:opacity-50 sm:min-h-8 sm:text-[13px]";
 interface Pending {
   label: string;
   dueOn: ISODate;
@@ -108,7 +112,11 @@ export function ChannelPick({
   onChange: (c: ReminderChannel) => void;
 }) {
   return (
-    <div className="flex gap-1 px-1" role="group" aria-label="Remind me to">
+    <div
+      className="flex gap-0.5 rounded-lg border border-border bg-surface p-0.5"
+      role="group"
+      aria-label="Remind me to"
+    >
       {REMINDER_CHANNELS.map((c) => (
         <button
           key={c}
@@ -116,8 +124,8 @@ export function ChannelPick({
           aria-pressed={c === channel}
           onClick={() => onChange(c)}
           className={cn(
-            "flex-1 rounded-md px-2 py-1 text-xs font-semibold transition",
-            c === channel ? "bg-accent text-white" : "bg-surface-2 text-muted hover:text-text",
+            "h-9 flex-1 rounded-md px-2 text-xs font-semibold transition sm:h-7",
+            c === channel ? "bg-text text-bg" : "text-muted hover:bg-surface-2 hover:text-text",
           )}
         >
           {CHANNEL_LABEL[c]}
@@ -139,7 +147,7 @@ export function PickTime({
   const [date, setDate] = useState<ISODate>(today);
   const [time, setTime] = useState("");
   return (
-    <div className="space-y-1.5 px-2 pb-1">
+    <div className="space-y-1.5 px-1 pb-1">
       <Input
         type="date"
         aria-label="Reminder day"
@@ -152,7 +160,13 @@ export function PickTime({
         }}
       />
       <TimeSelect value={time} onChange={setTime} date={date} />
-      <Button variant="primary" disabled={busy || !time} onClick={() => onPick(date, time)}>
+      <Button
+        variant="primary"
+        size="sm"
+        className="w-full"
+        disabled={busy || !time}
+        onClick={() => onPick(date, time)}
+      >
         Set reminder
       </Button>
     </div>
@@ -179,7 +193,7 @@ function ReasonForm({
     onSubmit(reason.trim());
   };
   return (
-    <form onSubmit={submit} aria-label="Why snooze this deal" className="space-y-2 p-2">
+    <form onSubmit={submit} aria-label="Why snooze this deal" className="space-y-2 p-3">
       <p className="text-sm">
         <span className="font-semibold">{stageDef(card.stage).label}</span> is a live deal, and{" "}
         {pending.label} puts it off until {formatDate(pending.dueOn, today)} (
@@ -220,13 +234,13 @@ export function SnoozeMenu({ card }: { card: Target }) {
       }}
       className="relative"
     >
-      <summary className="inline-flex h-8 cursor-pointer list-none items-center rounded-lg px-2.5 text-sm font-medium text-muted hover:bg-surface-2 hover:text-text">
+      <summary className="inline-flex h-10 cursor-pointer list-none items-center rounded-lg px-2.5 text-[13px] font-medium whitespace-nowrap text-muted transition select-none hover:bg-surface-2 hover:text-text sm:h-8 [&::-webkit-details-marker]:hidden">
         Snooze ▾
       </summary>
       <div
         className={cn(
-          "absolute right-0 z-20 mt-1 rounded-xl border border-border bg-surface p-1 shadow-xl",
-          pending ? "w-72" : "grid max-h-[70vh] w-44 gap-0.5 overflow-y-auto",
+          "absolute right-0 z-20 mt-1 rounded-xl border border-border bg-surface p-1 shadow-pop",
+          pending ? "w-72" : "grid max-h-[70vh] w-48 gap-0.5 overflow-y-auto",
         )}
       >
         {pending ? (
@@ -239,35 +253,24 @@ export function SnoozeMenu({ card }: { card: Target }) {
           />
         ) : (
           <>
-            <p className="px-3 pt-1 text-xs font-semibold tracking-wide text-muted uppercase">
-              Remind me in
-            </p>
+            <p className="px-2 pt-1.5 pb-1 text-[11px] font-semibold text-muted">Remind me in</p>
             <ChannelPick channel={channel} onChange={setChannel} />
             {CALLBACK_HOURS.map((h) => (
               <button
                 key={h}
                 type="button"
                 disabled={busy}
-                className="rounded-lg px-3 py-1.5 text-left text-sm hover:bg-surface-2 disabled:opacity-50"
+                className={MENU_ITEM}
                 onClick={() => void callBack(h)}
               >
                 {callbackLabel(h)}
               </button>
             ))}
-            <p className="px-3 pt-2 text-xs font-semibold tracking-wide text-muted uppercase">
-              Or at a time
-            </p>
+            <p className="px-2 pt-2 pb-1 text-[11px] font-semibold text-muted">Or at a time</p>
             <PickTime busy={busy} onPick={(d, t) => void callAt(d, t)} />
-            <p className="px-3 pt-2 text-xs font-semibold tracking-wide text-muted uppercase">
-              Snooze until
-            </p>
+            <p className="px-2 pt-2 pb-1 text-[11px] font-semibold text-muted">Snooze until</p>
             {SNOOZES.map((s) => (
-              <button
-                key={s.label}
-                type="button"
-                className="rounded-lg px-3 py-1.5 text-left text-sm hover:bg-surface-2"
-                onClick={() => choose(s)}
-              >
+              <button key={s.label} type="button" className={MENU_ITEM} onClick={() => choose(s)}>
                 {s.label}
               </button>
             ))}
@@ -284,7 +287,7 @@ export function SnoozeButtons({ card, count = 5 }: { card: Target; count?: numbe
     useSnooze(card, () => undefined);
   if (pending) {
     return (
-      <div className="rounded-xl border border-border bg-surface-2">
+      <div className="rounded-xl border border-border bg-surface">
         <ReasonForm
           card={card}
           pending={pending}
@@ -306,12 +309,12 @@ export function SnoozeButtons({ card, count = 5 }: { card: Target; count?: numbe
           type="button"
           disabled={busy}
           onClick={() => void callBack(h)}
-          className="h-12 min-w-24 flex-1 rounded-xl border border-accent/40 bg-accent-soft px-3 text-sm font-semibold text-accent transition hover:brightness-95 disabled:opacity-50"
+          className="h-12 min-w-24 flex-1 rounded-lg border border-accent/30 bg-accent-soft px-3 text-sm font-semibold text-accent transition hover:brightness-95 disabled:opacity-50"
         >
           In {callbackLabel(h)}
         </button>
       ))}
-      <div className="w-full rounded-xl border border-border bg-surface p-2">
+      <div className="w-full rounded-lg border border-border bg-surface p-2">
         <PickTime busy={busy} onPick={(d, t) => void callAt(d, t)} />
       </div>
       {SNOOZES.slice(0, count).map((s) => (
@@ -320,7 +323,7 @@ export function SnoozeButtons({ card, count = 5 }: { card: Target; count?: numbe
           type="button"
           disabled={busy}
           onClick={() => choose(s)}
-          className="h-12 min-w-24 flex-1 rounded-xl border border-border bg-surface px-3 text-sm font-medium transition hover:bg-surface-2 disabled:opacity-50"
+          className="h-12 min-w-24 flex-1 rounded-lg border border-border bg-surface px-3 text-sm font-medium transition hover:border-border-strong hover:bg-surface-3 disabled:opacity-50"
         >
           {s.label}
         </button>

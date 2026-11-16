@@ -15,9 +15,10 @@ import { CLIENT_HEADER, clientRows, toCsv } from "@/lib/export/csv";
 import { relativeDay, timeAgo } from "@/lib/format";
 import { formatUS } from "@/lib/mca/phone";
 import { reminderText } from "@/lib/mca/reminder";
-import { CORE_STAGES, STAGE_GROUPS, type StageKey } from "@/lib/mca/stages";
+import { CORE_STAGES, STAGE_GROUPS, stageDef, type StageKey } from "@/lib/mca/stages";
 import { formatMoneyCompact } from "@/lib/money";
 import { useApp } from "./app-context";
+import { Chip } from "./client/primitives";
 import { ReminderTag } from "@/components/ReminderTag";
 import { ClientCards } from "./ClientCards";
 import { StageBadge } from "./StageBadge";
@@ -37,6 +38,9 @@ function downloadCsv(cards: readonly ClientCard[]): void {
   a.click();
   URL.revokeObjectURL(url);
 }
+
+const TH = "px-3 py-2 font-semibold first:pl-4 last:pr-4";
+const TD = "px-3 py-2 first:pl-4 last:pr-4";
 
 export function ClientsTable({ cards }: { cards: ClientCard[] }) {
   const { today, nowMs, timezone } = useApp();
@@ -60,6 +64,15 @@ export function ClientsTable({ cards }: { cards: ClientCard[] }) {
     };
     return [...list].sort(by[sort]);
   }, [cards, f, nowMs, sort]);
+  // How many sit in each group, for the chips.
+  const groupCounts = useMemo(() => {
+    const counts: Record<string, number> = { all: cards.length };
+    for (const c of cards) {
+      const g = stageDef(c.stage).group;
+      counts[g] = (counts[g] ?? 0) + 1;
+    }
+    return counts;
+  }, [cards]);
 
   return (
     <div className="space-y-3">
@@ -73,7 +86,7 @@ export function ClientsTable({ cards }: { cards: ClientCard[] }) {
           onChange={(e) => set("term", e.target.value)}
         />
         <Select
-          className="order-2 min-w-0 flex-1 sm:order-none sm:w-48 sm:flex-none"
+          className="order-2 min-w-0 flex-1 sm:order-none sm:w-44 sm:flex-none"
           aria-label="Sort by"
           value={sort}
           onChange={(e) => setSort(e.target.value as SortKey)}
@@ -85,25 +98,19 @@ export function ClientsTable({ cards }: { cards: ClientCard[] }) {
         </Select>
         {/* On a phone the groups are one swipeable row under the search, not three wrapped lines. */}
         <div
-          className="order-4 flex w-full gap-1.5 overflow-x-auto sm:order-none sm:w-auto sm:flex-wrap sm:overflow-visible"
+          className="order-4 -mx-4 flex w-[calc(100%+2rem)] gap-1.5 overflow-x-auto px-4 sm:order-none sm:mx-0 sm:w-auto sm:flex-wrap sm:px-0 sm:overflow-visible"
           role="group"
           aria-label="Filter by group"
         >
           {[{ key: "all" as const, label: "All" }, ...STAGE_GROUPS].map((g) => (
-            <button
+            <Chip
               key={g.key}
-              type="button"
-              aria-pressed={f.group === g.key}
+              active={f.group === g.key}
+              count={groupCounts[g.key] ?? 0}
               onClick={() => set("group", g.key)}
-              className={cn(
-                "h-10 shrink-0 rounded-lg border px-2.5 text-sm font-medium whitespace-nowrap sm:h-8",
-                f.group === g.key
-                  ? "border-accent bg-accent text-accent-fg"
-                  : "border-border bg-surface hover:bg-surface-2",
-              )}
             >
               {g.label}
-            </button>
+            </Chip>
           ))}
         </div>
         <Button
@@ -114,7 +121,7 @@ export function ClientsTable({ cards }: { cards: ClientCard[] }) {
         >
           More filters{narrowing > 0 ? ` (${narrowing})` : ""}
         </Button>
-        <span className="order-5 ml-auto text-sm text-muted sm:order-none">
+        <span className="order-5 ml-auto text-xs text-muted tabular-nums sm:order-none">
           {rows.length} of {cards.length}
         </span>
       </div>
@@ -203,7 +210,7 @@ export function ClientsTable({ cards }: { cards: ClientCard[] }) {
         </div>
       ) : null}
 
-      {/* A phone gets cards (name, stage, when to call); the table is for wider screens. */}
+      {/* A phone gets rows with the name, stage and when to call; the table is for wider screens. */}
       {rows.length > 0 ? <ClientCards rows={rows} /> : null}
 
       {rows.length === 0 ? (
@@ -214,26 +221,23 @@ export function ClientsTable({ cards }: { cards: ClientCard[] }) {
         </EmptyState>
       ) : (
         <div className="overflow-x-auto rounded-xl border border-border bg-surface max-sm:hidden">
-          <table className="w-full min-w-[760px] text-left text-sm">
-            <thead className="border-b border-border text-xs font-medium text-muted uppercase">
+          <table className="w-full min-w-[760px] text-left text-[13px]">
+            <thead className="bg-surface-2/60 text-[11px] font-semibold tracking-wide text-muted uppercase">
               <tr>
-                <th className="px-3 py-2">Business</th>
-                <th className="px-3 py-2">Merchant</th>
-                <th className="px-3 py-2">Stage</th>
-                <th className="px-3 py-2 text-right">Wants</th>
-                <th className="px-3 py-2">Next follow-up</th>
-                <th className="px-3 py-2">Last contact</th>
+                <th className={TH}>Business</th>
+                <th className={TH}>Merchant</th>
+                <th className={TH}>Stage</th>
+                <th className={cn(TH, "text-right")}>Wants</th>
+                <th className={TH}>Next follow-up</th>
+                <th className={TH}>Last contact</th>
               </tr>
             </thead>
-            <tbody>
+            <tbody className="divide-y divide-border">
               {rows.map((c) => {
                 const overdue = c.next_due_on !== null && c.next_due_on < today;
                 return (
-                  <tr
-                    key={c.id}
-                    className="border-b border-border last:border-0 hover:bg-surface-2/60"
-                  >
-                    <td className="px-3 py-2">
+                  <tr key={c.id} className="transition hover:bg-surface-3">
+                    <td className={TD}>
                       <Link
                         href={`/clients/${c.id}`}
                         className="font-semibold hover:text-accent hover:underline"
@@ -241,17 +245,21 @@ export function ClientsTable({ cards }: { cards: ClientCard[] }) {
                         {c.business_name}
                       </Link>
                     </td>
-                    <td className="px-3 py-2 text-muted">
+                    <td className={cn(TD, "text-text-2")}>
                       {c.contact_name}
-                      {c.phone ? <span className="block text-xs">{formatUS(c.phone)}</span> : null}
+                      {c.phone ? (
+                        <span className="block text-xs text-muted tabular-nums">
+                          {formatUS(c.phone)}
+                        </span>
+                      ) : null}
                     </td>
-                    <td className="px-3 py-2">
+                    <td className={TD}>
                       <StageBadge stage={c.stage} />
                     </td>
-                    <td className="px-3 py-2 text-right tabular-nums">
+                    <td className={cn(TD, "text-right tabular-nums")}>
                       {formatMoneyCompact(c.wanted_amount_cents)}
                     </td>
-                    <td className="px-3 py-2">
+                    <td className={TD}>
                       {c.scheduled_call_at ? (
                         <ReminderTag
                           text={reminderText(
@@ -269,10 +277,10 @@ export function ClientsTable({ cards }: { cards: ClientCard[] }) {
                           {relativeDay(c.next_due_on, today)}
                         </Badge>
                       ) : c.scheduled_call_at ? null : (
-                        "—"
+                        <span className="text-muted">—</span>
                       )}
                     </td>
-                    <td className="px-3 py-2 text-muted">
+                    <td className={cn(TD, "text-muted")}>
                       {c.last_touch_at ? timeAgo(c.last_touch_at, new Date(nowMs)) : "never"}
                     </td>
                   </tr>

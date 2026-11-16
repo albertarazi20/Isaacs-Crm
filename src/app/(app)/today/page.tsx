@@ -1,6 +1,6 @@
 import { TodayLists } from "@/components/power/TodayLists";
 import { StreakBadge } from "@/components/StreakBadge";
-import { EmptyState, LinkButton } from "@/components/ui";
+import { cn, EmptyState, LinkButton } from "@/components/ui";
 import { requireSession } from "@/lib/auth/server";
 import { snoozeCounts } from "@/lib/data/overdue";
 import { listCards, userContext } from "@/lib/data/queries";
@@ -32,8 +32,15 @@ function Kpi({
           : "text-text";
   return (
     <div className="rounded-xl border border-border bg-surface px-4 py-3.5">
-      <p className="text-[11px] font-semibold tracking-wide text-muted uppercase">{label}</p>
-      <p className={`mt-1 text-[28px] leading-8 font-bold tracking-tight tabular-nums ${color}`}>
+      <p className="truncate text-[11px] font-semibold tracking-wide text-muted uppercase">
+        {label}
+      </p>
+      <p
+        className={cn(
+          "mt-1 text-[26px] leading-8 font-semibold tracking-tight tabular-nums",
+          color,
+        )}
+      >
         {value}
       </p>
     </div>
@@ -67,20 +74,22 @@ export default async function TodayPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">Today&apos;s calls</h1>
-          <p className="text-sm text-muted">
-            {WEEKDAYS[parseISODate(ctx.today).getUTCDay()]}, {formatDate(ctx.today)}
-          </p>
+      <div className="space-y-2">
+        <div className="flex flex-wrap items-end justify-between gap-3">
+          <div className="min-w-0">
+            <h1 className="text-xl font-semibold tracking-tight sm:text-2xl">Today&apos;s calls</h1>
+            <p className="mt-0.5 text-sm text-muted">
+              {WEEKDAYS[parseISODate(ctx.today).getUTCDay()]}, {formatDate(ctx.today)}
+            </p>
+          </div>
+          {dialable > 0 ? (
+            <LinkButton href="/dial" variant="primary">
+              Start dialing ({dialable})
+            </LinkButton>
+          ) : null}
         </div>
-        {dialable > 0 ? (
-          <LinkButton href="/dial" variant="primary">
-            Start dialing ({dialable})
-          </LinkButton>
-        ) : null}
+        <StreakBadge streak={streak} />
       </div>
-      <StreakBadge streak={streak} className="-mt-3" />
 
       <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
         <Kpi label="Overdue" value={kpis.overdue} tone={kpis.overdue > 0 ? "bad" : undefined} />

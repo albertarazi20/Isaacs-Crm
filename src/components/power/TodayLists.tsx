@@ -4,6 +4,7 @@ import { useMemo } from "react";
 import { priorityOf, rankCards, type Priority, type SortMode } from "@/lib/data/priority";
 import type { ClientCard } from "@/lib/data/types";
 import { useApp } from "../app-context";
+import { Icon } from "../client/icons";
 import { ClientRow } from "../ClientRow";
 import { cn, SectionTitle } from "../ui";
 import { BulkReschedule } from "./BulkReschedule";
@@ -68,9 +69,9 @@ export function TodayLists({ scheduled, overdue, dueToday, upcoming, snoozeCount
                 aria-pressed={mode === m.mode}
                 onClick={() => setMode(m.mode)}
                 className={cn(
-                  "h-8 rounded-md px-3 text-sm font-medium transition",
+                  "h-9 rounded-md px-3 text-[13px] font-medium transition sm:h-7",
                   mode === m.mode
-                    ? "bg-accent text-accent-fg"
+                    ? "bg-text text-bg"
                     : "text-muted hover:bg-surface-2 hover:text-text",
                 )}
               >
@@ -78,9 +79,12 @@ export function TodayLists({ scheduled, overdue, dueToday, upcoming, snoozeCount
               </button>
             ))}
           </div>
-          <details className="text-sm text-muted">
-            <summary className="cursor-pointer">How “biggest” is decided</summary>
-            <p className="mt-1 max-w-xl">
+          <details className="group text-xs text-muted">
+            <summary className="flex min-h-9 cursor-pointer list-none items-center gap-1 select-none sm:min-h-7 [&::-webkit-details-marker]:hidden">
+              How “biggest” is decided
+              <Icon name="chevronDown" className="size-3.5 transition group-open:rotate-180" />
+            </summary>
+            <p className="mt-1 max-w-xl text-sm">
               Dollars at stake (what he wants, or what funders would approve, or the payback still
               outstanding on a default) times how close the stage is to funding times a small bonus
               for every day overdue. A renewal call on an advance 50% paid down, or a default that
@@ -116,8 +120,9 @@ export function TodayLists({ scheduled, overdue, dueToday, upcoming, snoozeCount
 
       {lists.upcoming.length > 0 ? (
         <details className="group space-y-2">
-          <summary className="cursor-pointer text-sm font-semibold tracking-wide text-muted uppercase">
+          <summary className="flex min-h-9 cursor-pointer list-none items-center gap-1 text-[13px] font-semibold text-muted select-none hover:text-text [&::-webkit-details-marker]:hidden">
             Coming up in the next 7 days ({lists.upcoming.length})
+            <Icon name="chevronDown" className="size-3.5 transition group-open:rotate-180" />
           </summary>
           <div className="mt-2 grid gap-3 xl:grid-cols-2">{rows(lists.upcoming)}</div>
         </details>

@@ -8,7 +8,7 @@ import { intakeLeadAction, type IntakeOutcome } from "@/app/intake-actions";
 import { lookupSheetRowAction } from "@/app/sheets-actions";
 import { useFormState } from "@/components/client/parts";
 import { useToast } from "@/components/overlay";
-import { Button, Card, Field, Input, Select, Textarea, cn } from "@/components/ui";
+import { Button, buttonClass, Card, Field, Input, Select, Textarea, cn } from "@/components/ui";
 import type { BucketRow } from "@/lib/buckets/queries";
 import { stageDef } from "@/lib/mca/stages";
 
@@ -130,8 +130,8 @@ export function IntakeForm({
 
   if (done) {
     return (
-      <Card className="space-y-3">
-        <p className="text-lg font-semibold">
+      <Card className="space-y-3 p-4 sm:p-5">
+        <p className="text-base font-semibold tracking-tight">
           {done.result === "duplicate"
             ? `${done.businessName} was already here`
             : `${done.businessName} is in`}
@@ -145,11 +145,8 @@ export function IntakeForm({
                 ? `Filed to ${done.bucketName}. No email went out — that bucket has no approved first-step template yet.`
                 : "No bucket chosen, so no emails will go out until you move them."}
         </p>
-        <div className="flex gap-2">
-          <Link
-            href={`/clients/${done.clientId}`}
-            className="inline-flex h-10 items-center rounded-lg bg-accent px-4 text-sm font-semibold text-accent-fg"
-          >
+        <div className="flex flex-wrap gap-2">
+          <Link href={`/clients/${done.clientId}`} className={buttonClass("primary", "md")}>
             Open {done.businessName}
           </Link>
           <Button onClick={reset}>Add another</Button>
@@ -160,13 +157,13 @@ export function IntakeForm({
 
   return (
     <form
-      className="space-y-5"
+      className="space-y-4"
       onSubmit={(e) => {
         e.preventDefault();
         if (!busy) void submit();
       }}
     >
-      <Card className="space-y-4">
+      <Card className="space-y-4 p-4 sm:p-5">
         <div className="grid gap-3 sm:grid-cols-2">
           <Field
             label="Phone"
@@ -223,7 +220,7 @@ export function IntakeForm({
           />
         </Field>
         {lookup?.kind === "crm" ? (
-          <p className="rounded-lg bg-warn-soft px-3 py-2 text-sm text-warn">
+          <p className="rounded-lg border border-warn/30 bg-warn-soft px-3 py-2 text-sm text-warn">
             This number is already in the CRM as{" "}
             <Link href={`/clients/${lookup.id}`} className="font-semibold underline">
               {lookup.name}
@@ -233,12 +230,13 @@ export function IntakeForm({
         ) : null}
       </Card>
 
-      <Card className="flex flex-wrap items-end justify-between gap-3">
+      <Card className="flex flex-col gap-3 p-4 sm:flex-row sm:items-end sm:justify-between sm:p-5">
         <Field
           label="Bucket"
           hint="The bucket's first email goes out on submit; its reminders follow"
+          className="min-w-0 sm:max-w-sm sm:flex-1"
         >
-          <Select {...bind("bucketId")} className="min-w-56">
+          <Select {...bind("bucketId")}>
             <option value="">No bucket — just add the lead</option>
             {buckets.map((b) => (
               <option key={b.id} value={b.id}>
@@ -252,7 +250,7 @@ export function IntakeForm({
           type="submit"
           variant="primary"
           disabled={busy || looking}
-          className={cn(bucket && "min-w-48")}
+          className={cn("shrink-0", bucket && "sm:min-w-48")}
         >
           {busy ? "Submitting…" : bucket ? `Submit to ${bucket.name}` : "Add lead"}
         </Button>

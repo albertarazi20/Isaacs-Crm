@@ -38,16 +38,18 @@ export function StickyBar({ card }: { card: ClientDetail["card"] }) {
   const { today } = useApp();
   const tone = card.next_due_on ? dueTone(card.next_due_on, today) : "later";
   return (
-    <div className="sticky top-[57px] z-20 rounded-xl border border-border bg-surface px-4 py-2.5 shadow-sm">
+    <div className="sticky top-[53px] z-20 rounded-xl border border-border bg-surface/95 px-4 py-2.5 shadow-card backdrop-blur-md">
       <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
         <div className="w-full min-w-0 sm:w-auto sm:flex-1">
           <div className="flex items-center gap-2">
-            <h1 className="truncate text-xl font-bold tracking-tight">{card.business_name}</h1>
+            <h1 className="truncate text-lg font-semibold tracking-tight sm:text-xl">
+              {card.business_name}
+            </h1>
             <StageBadge stage={card.stage} />
           </div>
           <p
             className={cn(
-              "mt-0.5 text-sm",
+              "mt-0.5 text-[13px]",
               tone === "overdue" ? "font-semibold text-bad" : "text-muted",
             )}
           >
@@ -91,7 +93,7 @@ function CopyValue({
         void copy(value, label);
         void logAccessAction({ action: label === "phone" ? "copy_phone" : "copy_email", clientId });
       }}
-      className="max-w-full truncate rounded text-left text-sm font-medium underline decoration-dotted underline-offset-4 hover:text-accent max-sm:py-3"
+      className="max-w-full truncate rounded text-left text-sm font-medium underline decoration-border-strong decoration-dotted underline-offset-4 transition hover:text-accent hover:decoration-accent max-sm:py-3"
     >
       {shown}
     </button>
@@ -118,7 +120,7 @@ export function ClientDetails({ detail, className }: { detail: ClientDetail; cla
     <button
       type="button"
       onClick={() => setEditing(true)}
-      className="text-sm text-muted underline decoration-dotted underline-offset-4 hover:text-accent max-sm:py-3"
+      className="text-sm text-muted underline decoration-dotted underline-offset-4 transition hover:text-accent max-sm:py-3"
     >
       Add {what}
     </button>
@@ -135,7 +137,7 @@ export function ClientDetails({ detail, className }: { detail: ClientDetail; cla
 
   return (
     <div className={cn("rounded-xl border border-border bg-surface p-4", className)}>
-      <div className="flex flex-wrap items-start justify-between gap-3">
+      <div className="flex flex-wrap items-start justify-between gap-x-6 gap-y-3">
         <dl className="grid min-w-0 flex-1 grid-cols-2 gap-x-6 gap-y-3 sm:grid-cols-3 xl:grid-cols-5">
           <Stat label="Merchant">
             {card.contact_name || addLink("name")}
@@ -169,11 +171,11 @@ export function ClientDetails({ detail, className }: { detail: ClientDetail; cla
           </Stat>
           <Stat label="Client since">{formatDate(dateInTz(card.created_at, timezone), today)}</Stat>
         </dl>
-        <div className="flex flex-wrap items-center gap-2">
-          <div className="w-44">
+        <div className="flex w-full flex-wrap items-center gap-2 xl:w-auto xl:justify-end">
+          <div className="w-full sm:w-44">
             <Select
               aria-label="Move to stage"
-              className="sm:h-9"
+              className="sm:h-8 sm:text-[13px]"
               value=""
               disabled={moving}
               onChange={(e) => void move(e.target.value)}
@@ -308,7 +310,7 @@ function EditClientDialog({ card, onClose }: { card: ClientDetail["card"]; onClo
       {dupes ? (
         <div
           role="alert"
-          className="space-y-2 rounded-lg border border-warn bg-warn-soft p-3 text-sm"
+          className="space-y-2 rounded-lg border border-warn/40 bg-warn-soft p-3 text-sm"
         >
           <p className="font-semibold text-warn">This looks like someone you already have:</p>
           <ul className="space-y-2">
@@ -322,7 +324,7 @@ function EditClientDialog({ card, onClose }: { card: ClientDetail["card"]; onClo
                   {d.trashed ? " — removed, but marked do-not-contact." : ""}
                 </span>
                 {d.trashed ? null : merging?.id === d.id ? (
-                  <div className="space-y-2 rounded-md bg-surface p-2">
+                  <div className="space-y-2 rounded-lg border border-border bg-surface p-3">
                     <p>
                       This moves every note, advance, stip and offer from{" "}
                       <strong>{d.business_name}</strong> onto <strong>{card.business_name}</strong>,
@@ -406,7 +408,7 @@ function DeleteClientDialog({ detail, onClose }: { detail: ClientDetail; onClose
           ? " Its funded advances and commission also drop out of Earnings and Renewals until you restore it."
           : ""}
       </p>
-      <p className="rounded-lg bg-surface-2 p-3 text-sm text-muted">
+      <p className="rounded-lg border border-border bg-surface-2 p-3 text-sm text-muted">
         Not ready to lose the notes? Close this and use <em>Move to…</em> instead (Trash). The
         client stays on your follow-up list and comes back when the timer is due.
       </p>

@@ -28,19 +28,19 @@ export function FollowUpPanel({ detail, className }: { detail: ClientDetail; cla
   return (
     <Panel title="Next follow-up" className={className}>
       {timers.length === 0 ? (
-        <p className="rounded-lg bg-warn-soft p-3 text-sm text-warn">
+        <p className="rounded-lg border border-warn/30 bg-warn-soft p-3 text-sm text-warn">
           No follow-up date is set. Pick one below so this client doesn&apos;t go quiet.
         </p>
       ) : (
-        <ul className="space-y-2">
+        <ul className="divide-y divide-border rounded-lg border border-border">
           {timers.map((t) => {
             const tone = dueTone(t.due_on, today);
             return (
               <li
                 key={t.id}
                 className={cn(
-                  "flex items-start justify-between gap-3 rounded-lg border px-3 py-2",
-                  tone === "overdue" ? "border-bad bg-bad-soft" : "border-border bg-surface-2",
+                  "flex items-start justify-between gap-3 px-3 py-2",
+                  tone === "overdue" ? "bg-bad-soft" : "bg-surface-2",
                 )}
               >
                 <div className="min-w-0">
@@ -48,7 +48,7 @@ export function FollowUpPanel({ detail, className }: { detail: ClientDetail; cla
                   {t.note ? <p className="text-xs text-muted">{t.note}</p> : null}
                 </div>
                 <div className="shrink-0 text-right">
-                  <p className="text-sm font-medium">{formatDate(t.due_on, today)}</p>
+                  <p className="text-sm font-medium tabular-nums">{formatDate(t.due_on, today)}</p>
                   <p
                     className={cn(
                       "text-xs",
@@ -135,7 +135,7 @@ function SetFollowUp({
 
   return (
     <div className="mt-4 space-y-2">
-      <p className="text-xs font-medium text-muted">Change the follow-up date</p>
+      <p className="text-[12px] font-medium text-text-2">Change the follow-up date</p>
       <TimerPicker
         value={dueOn}
         onChange={(d) => {
@@ -148,7 +148,7 @@ function SetFollowUp({
         <TimeSelect value={time} onChange={setTime} date={dueOn} none="No set time" />
       ) : null}
       <Button
-        variant="primary"
+        variant="secondary"
         disabled={busy || nothingToChange}
         title={
           dueOn === ""
@@ -200,25 +200,33 @@ function ScheduleCall({ clientId }: { clientId: string }) {
         void book();
       }}
     >
-      <p className="text-xs font-medium text-muted">Set a reminder</p>
-      <div className="flex gap-1" role="group" aria-label="Remind me to">
+      <p className="text-[12px] font-medium text-text-2">Set a reminder</p>
+      <div
+        className="inline-flex gap-0.5 rounded-lg border border-border bg-surface p-0.5"
+        role="group"
+        aria-label="Remind me to"
+      >
         {REMINDER_CHANNELS.map((c) => (
-          <Button
+          <button
             key={c}
-            size="sm"
-            variant={c === channel ? "primary" : "secondary"}
+            type="button"
             aria-pressed={c === channel}
             onClick={() => setChannel(c)}
+            className={cn(
+              "h-9 rounded-md px-3 text-[13px] font-medium transition sm:h-7",
+              c === channel ? "bg-text text-bg" : "text-muted hover:bg-surface-2 hover:text-text",
+            )}
           >
             {CHANNEL_LABEL[c]}
-          </Button>
+          </button>
         ))}
       </div>
-      <div className="flex flex-wrap gap-2" role="group" aria-label="Remind me in">
+      <div className="flex flex-wrap gap-1.5" role="group" aria-label="Remind me in">
         {CALLBACK_HOURS.map((h) => (
           <Button
             key={h}
             size="sm"
+            className="rounded-full"
             disabled={busy}
             onClick={async () => {
               setBusy(true);

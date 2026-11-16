@@ -13,6 +13,8 @@ import { formatUS } from "@/lib/mca/phone";
 import { TIMER_LABELS } from "@/lib/mca/stages";
 import { formatMoney, formatMoneyCompact } from "@/lib/money";
 import { useApp } from "./app-context";
+import { Icon } from "./client/icons";
+import { IconButton } from "./client/primitives";
 import { ReminderTag } from "@/components/ReminderTag";
 import { ContactActions } from "./ContactActions";
 import { toggleHot } from "./power/prefs";
@@ -30,7 +32,7 @@ function Stake({ priority }: { priority: Priority }) {
         aria-expanded={open}
         title={priority.explanation}
         onClick={() => setOpen((v) => !v)}
-        className="rounded-md bg-accent-soft px-1.5 py-0.5 text-xs font-semibold text-accent tabular-nums hover:opacity-80"
+        className="inline-flex items-center rounded-md bg-accent-soft px-1.5 py-0.5 text-[11px] font-semibold text-accent tabular-nums transition hover:brightness-95"
       >
         {priority.basis === "unknown"
           ? "amount not set"
@@ -72,16 +74,16 @@ export const ClientRow = memo(function ClientRow({
   return (
     <article
       className={cn(
-        "rounded-xl border bg-surface p-3.5",
-        overdue ? "border-bad/50" : "border-border",
+        "rounded-xl border bg-surface p-3 transition sm:p-3.5",
+        overdue ? "border-bad/40" : "border-border",
       )}
     >
       <div className="flex items-start justify-between gap-2">
-        <div className="min-w-0 flex-1 space-y-1">
-          <div className="flex flex-wrap items-center gap-2">
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
             <Link
               href={`/clients/${card.id}`}
-              className="text-base font-semibold hover:text-accent hover:underline"
+              className="text-sm font-semibold hover:text-accent hover:underline"
             >
               {card.business_name}
             </Link>
@@ -106,12 +108,12 @@ export const ClientRow = memo(function ClientRow({
             ) : null}
             {priority ? <Stake priority={priority} /> : null}
           </div>
-          <p className="text-sm text-muted">
+          <p className="mt-0.5 text-xs text-muted">
             {[card.contact_name, card.phone ? formatUS(card.phone) : "", card.industry]
               .filter(Boolean)
               .join(" · ")}
             {card.wanted_amount_cents ? (
-              <span className="font-medium text-text">
+              <span className="font-medium text-text-2 tabular-nums">
                 {" "}
                 · wants {formatMoneyCompact(card.wanted_amount_cents)}
               </span>
@@ -124,28 +126,24 @@ export const ClientRow = memo(function ClientRow({
             ) : null}
           </p>
         </div>
-        <div className="flex shrink-0 items-center gap-1">
+        <div className="flex shrink-0 items-center gap-0.5">
           {priority ? (
-            <button
-              type="button"
+            <IconButton
               aria-pressed={hot}
               aria-label={hot ? `Unstar ${card.business_name}` : `Star ${card.business_name}`}
               title={hot ? "Starred: always on top" : "Star: always on top of Today"}
               onClick={() => void toggleHot(card.id, hot)}
-              className={cn(
-                "inline-flex size-8 items-center justify-center rounded-lg text-base hover:bg-surface-2",
-                hot ? "text-warn" : "text-muted",
-              )}
+              className={cn(hot && "text-warn hover:text-warn")}
             >
-              {hot ? "★" : "☆"}
-            </button>
+              <Icon name="star" filled={hot} />
+            </IconButton>
           ) : null}
           {booked ? (
             // Snoozing can't move an appointment, so don't offer a button that appears to do nothing.
             <Link
               href={`/clients/${card.id}`}
               title="This merchant has a call booked today. Move or cancel the call on their page."
-              className="rounded-lg px-2 py-1 text-xs font-medium text-accent hover:bg-surface-2"
+              className="inline-flex h-10 items-center rounded-lg px-2.5 text-[13px] font-medium text-accent transition hover:bg-surface-2 sm:h-8"
             >
               Move the call
             </Link>
@@ -156,21 +154,23 @@ export const ClientRow = memo(function ClientRow({
       </div>
 
       {card.last_call_at ? (
-        <p className="mt-2 line-clamp-2 text-sm">
+        <p className="mt-2 line-clamp-2 text-[13px]">
           <span className="text-muted">
             Last call {timeAgo(card.last_call_at, new Date(nowMs))}
             {card.last_call_note ? ": " : ""}
           </span>
-          {card.last_call_note ? <span className="italic">“{card.last_call_note}”</span> : null}
+          {card.last_call_note ? (
+            <span className="text-text-2 italic">“{card.last_call_note}”</span>
+          ) : null}
         </p>
       ) : (
-        <p className="mt-2 text-sm text-muted">Never called.</p>
+        <p className="mt-2 text-[13px] text-muted">Never called.</p>
       )}
 
       {pct !== null && terms ? (
         <div className="mt-2.5 space-y-1">
           <div
-            className="relative h-2 overflow-hidden rounded-full bg-surface-2"
+            className="relative h-1.5 overflow-hidden rounded-full bg-surface-2"
             role="img"
             aria-label={`${pct}% paid down`}
           >
@@ -180,14 +180,14 @@ export const ClientRow = memo(function ClientRow({
             />
             <div className="absolute inset-y-0 left-1/2 w-px bg-text/40" aria-hidden />
           </div>
-          <p className="text-xs text-muted">
+          <p className="text-xs text-muted tabular-nums">
             {pct}% paid down · {formatMoney(balanceCents(terms, today))} left ·{" "}
             {formatMoney(terms.paymentCents)} {terms.frequency} remittance
           </p>
         </div>
       ) : null}
 
-      <div className="mt-3">
+      <div className="mt-2.5">
         <ContactActions client={card} />
       </div>
     </article>

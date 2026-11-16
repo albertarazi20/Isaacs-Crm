@@ -54,7 +54,7 @@ function Row({
 }) {
   return (
     <label className={cn("block space-y-1", className)}>
-      <span className="text-xs font-medium text-muted">{label}</span>
+      <span className="text-[12px] font-medium text-text-2">{label}</span>
       {children}
       {error ? (
         <span className="block text-xs text-bad">{error}</span>
@@ -76,7 +76,11 @@ function useFocusFirst() {
 }
 
 function Preview({ children }: { children: ReactNode }) {
-  return <div className="space-y-1 rounded-lg bg-surface-2 p-3 text-sm">{children}</div>;
+  return (
+    <div className="space-y-1 rounded-lg border border-border bg-surface-2 p-3 text-sm">
+      {children}
+    </div>
+  );
 }
 
 function useBusy(onSubmit: Submit) {

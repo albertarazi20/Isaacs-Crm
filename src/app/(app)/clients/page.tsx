@@ -32,13 +32,13 @@ export default async function ClientsPage() {
   const session = await requireSession();
   const cards = await db.withUser(session.userId, (q) => listCards(q));
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between gap-3">
-        <h1 className="text-2xl font-bold tracking-tight">Clients</h1>
+    <div className="space-y-5">
+      <div className="flex items-end justify-between gap-3">
+        <h1 className="text-xl font-semibold tracking-tight sm:text-2xl">Clients</h1>
         {/* Wide screens: every action is a button. A phone folds them into one "…" menu so the list starts near the top. */}
-        <div className="hidden flex-wrap gap-2 sm:flex">
+        <div className="hidden flex-wrap justify-end gap-2 sm:flex">
           {TOOLS.map((t) => (
-            <ToolLink key={t.href} tool={t} className={buttonClass("secondary", "md")} />
+            <ToolLink key={t.href} tool={t} className={buttonClass("secondary", "sm")} />
           ))}
         </div>
         <OverflowMenu label="More actions">

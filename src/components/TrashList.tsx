@@ -34,20 +34,23 @@ export function TrashList({ items }: { items: TrashedClient[] }) {
     );
 
   return (
-    <ul className="space-y-2">
-      {items.map((c) => (
-        <li key={c.id}>
-          <Card className="flex flex-wrap items-center justify-between gap-3 p-3">
-            <div className="min-w-0">
-              <p className="truncate font-medium">{c.business_name}</p>
-              <p className="truncate text-sm text-muted">
+    <Card className="p-0">
+      <ul className="divide-y divide-border">
+        {items.map((c) => (
+          <li
+            key={c.id}
+            className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 px-4 py-2 transition hover:bg-surface-3"
+          >
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-sm font-medium">{c.business_name}</p>
+              <p className="truncate text-xs text-muted">
                 {[c.contact_name, formatUS(c.phone), stageDef(c.stage).label]
                   .filter(Boolean)
                   .join(" · ")}
                 {" · "}trashed {timeAgo(c.trashed_at, new Date(nowMs))}
               </p>
             </div>
-            <div className="flex gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <Button
                 size="sm"
                 disabled={busy === c.id}
@@ -63,7 +66,7 @@ export function TrashList({ items }: { items: TrashedClient[] }) {
               </Button>
               {c.contact_status !== "ok" ? (
                 <span
-                  className="self-center text-sm text-muted"
+                  className="text-xs text-muted"
                   title="A merchant who asked not to be contacted stays on file so they can't be added again as a new lead."
                 >
                   Kept on file — do-not-contact
@@ -98,9 +101,9 @@ export function TrashList({ items }: { items: TrashedClient[] }) {
                 </>
               )}
             </div>
-          </Card>
-        </li>
-      ))}
-    </ul>
+          </li>
+        ))}
+      </ul>
+    </Card>
   );
 }
