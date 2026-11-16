@@ -43,16 +43,20 @@ export function TimerPicker({
         })}
       </div>
       <div className="flex items-center gap-3">
-        <Input
-          type="date"
-          aria-label="Follow-up date"
-          className="w-44"
-          min={today}
-          max={addMonths(today, 36)}
-          value={value}
-          onChange={(e) => e.target.value && onChange(e.target.value)}
-        />
-        {value ? <span className="text-xs text-muted">{relativeDay(value, today)}</span> : null}
+        {/* The wrapper fixes the width: the field itself is always full-width. */}
+        <div className="w-44 shrink-0">
+          <Input
+            type="date"
+            aria-label="Follow-up date"
+            min={today}
+            max={addMonths(today, 36)}
+            value={value}
+            onChange={(e) => e.target.value && onChange(e.target.value)}
+          />
+        </div>
+        {value ? (
+          <span className="text-xs whitespace-nowrap text-muted">{relativeDay(value, today)}</span>
+        ) : null}
       </div>
     </div>
   );
