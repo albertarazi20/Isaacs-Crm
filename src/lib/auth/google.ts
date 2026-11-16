@@ -3,10 +3,12 @@ import { createRemoteJWKSet, jwtVerify } from "jose";
 
 export const LOGIN_SCOPES = ["openid", "email", "profile"];
 export const GMAIL_SEND_SCOPE = "https://www.googleapis.com/auth/gmail.send";
+export const SHEETS_READ_SCOPE = "https://www.googleapis.com/auth/spreadsheets.readonly";
+export const GMAIL_READ_SCOPE = "https://www.googleapis.com/auth/gmail.readonly";
 
 export const OAUTH_COOKIE = "isaac_oauth";
 
-export type OAuthPurpose = "login" | "gmail";
+export type OAuthPurpose = "login" | "gmail" | "sheets" | "mail";
 
 export interface OAuthState {
   state: string;
@@ -27,7 +29,13 @@ export function verifyOAuthState(cookie: string | undefined, secret: string): OA
   if (got.length !== want.length || !timingSafeEqual(got, want)) return null;
   try {
     const p = JSON.parse(Buffer.from(body, "base64url").toString("utf8")) as Partial<OAuthState>;
-    if (typeof p.state !== "string" || (p.purpose !== "login" && p.purpose !== "gmail"))
+    if (
+      typeof p.state !== "string" ||
+      (p.purpose !== "login" &&
+        p.purpose !== "gmail" &&
+        p.purpose !== "sheets" &&
+        p.purpose !== "mail")
+    )
       return null;
     return { state: p.state, purpose: p.purpose };
   } catch {
@@ -42,7 +50,15 @@ export function buildAuthUrl(args: {
   purpose: OAuthPurpose;
   loginHint?: string;
 }): string {
-  const scopes = args.purpose === "gmail" ? [...LOGIN_SCOPES, GMAIL_SEND_SCOPE] : LOGIN_SCOPES;
+  // gmail: send as me. sheets: send + read my lead sheets. mail: send + read lender replies (managers / ops).
+  const scopes =
+    args.purpose === "gmail"
+      ? [...LOGIN_SCOPES, GMAIL_SEND_SCOPE]
+      : args.purpose === "sheets"
+        ? [...LOGIN_SCOPES, GMAIL_SEND_SCOPE, SHEETS_READ_SCOPE]
+        : args.purpose === "mail"
+          ? [...LOGIN_SCOPES, GMAIL_SEND_SCOPE, SHEETS_READ_SCOPE, GMAIL_READ_SCOPE]
+          : LOGIN_SCOPES;
   const q = new URLSearchParams({
     client_id: args.clientId,
     redirect_uri: args.redirectUri,
@@ -51,7 +67,7 @@ export function buildAuthUrl(args: {
     state: args.state,
     include_granted_scopes: "true",
   });
-  if (args.purpose === "gmail") {
+  if (args.purpose !== "login") {
     // offline + consent is the only way Google reliably returns a refresh token
     q.set("access_type", "offline");
     q.set("prompt", "consent");

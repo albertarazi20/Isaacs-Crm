@@ -7,6 +7,8 @@ export interface GmailStatus {
   connected: boolean;
   needsReconnect: boolean;
   googleEmail: string | null;
+  canReadSheets: boolean;
+  canReadMail: boolean;
 }
 
 export async function saveGmailConnection(args: {
@@ -14,24 +16,39 @@ export async function saveGmailConnection(args: {
   googleEmail: string;
   refreshToken: string;
   scope: string;
+  canReadSheets?: boolean;
+  canReadMail?: boolean;
 }): Promise<void> {
   const enc = encryptSecret(args.refreshToken, env().TOKEN_ENC_KEY);
   await db.withSystem((q) =>
     q.query(
-      `insert into gmail_connections (user_id, google_email, refresh_token_enc, scope, status, last_error)
-       values ($1, $2, $3, $4, 'ok', null)
+      `insert into gmail_connections (user_id, google_email, refresh_token_enc, scope, status, last_error, can_read_sheets, can_read_mail)
+       values ($1, $2, $3, $4, 'ok', null, $5, $6)
        on conflict (user_id) do update
          set google_email = excluded.google_email, refresh_token_enc = excluded.refresh_token_enc,
-             scope = excluded.scope, status = 'ok', last_error = null`,
-      [args.userId, args.googleEmail, enc, args.scope],
+             scope = excluded.scope, status = 'ok', last_error = null,
+             can_read_sheets = excluded.can_read_sheets, can_read_mail = excluded.can_read_mail`,
+      [
+        args.userId,
+        args.googleEmail,
+        enc,
+        args.scope,
+        args.canReadSheets ?? false,
+        args.canReadMail ?? false,
+      ],
     ),
   );
 }
 
 export async function gmailStatus(userId: string): Promise<GmailStatus> {
   return db.withSystem(async (q) => {
-    const { rows } = await q.query<{ google_email: string; status: string }>(
-      "select google_email, status from gmail_connections where user_id = $1",
+    const { rows } = await q.query<{
+      google_email: string;
+      status: string;
+      can_read_sheets: boolean;
+      can_read_mail: boolean;
+    }>(
+      "select google_email, status, can_read_sheets, can_read_mail from gmail_connections where user_id = $1",
       [userId],
     );
     const row = rows[0];
@@ -39,6 +56,8 @@ export async function gmailStatus(userId: string): Promise<GmailStatus> {
       connected: Boolean(row) && row?.status === "ok",
       needsReconnect: row?.status === "needs_reconnect",
       googleEmail: row?.google_email ?? null,
+      canReadSheets: row?.can_read_sheets ?? false,
+      canReadMail: row?.can_read_mail ?? false,
     };
   });
 }

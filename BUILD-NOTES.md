@@ -13,3 +13,4 @@ Owner's instruction 2026-11-15: build everything first, fix bugs at the end. Thi
 - Deals are a new table on top of `clients`; submissions/offers/fundings get `deal_id` stamped by trigger so the old SQL functions keep working.
 - Deal status is derived in SQL (`app.deal_status`), never stored.
 - Decline reasons moved to a `decline_reasons` table with `curable_after_days` (drives Winback revive dates).
+- **tests/send-engine.test.ts** (2 cases) fail only when run together with buckets-engine.test.ts: the worker test pins `now` to 2026-11-16 but `send_ledger.sent_at` defaults to the real `now()`, so the rolling-24h window and the per-merchant count drift. Fix: pass `now` through to the ledger insert (worker already has it) and seed `sent_at` explicitly in the cap test. Both pass in isolation.

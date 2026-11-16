@@ -1,9 +1,11 @@
 import { NextResponse, type NextRequest } from "next/server";
 import {
   exchangeCode,
+  GMAIL_READ_SCOPE,
   GMAIL_SEND_SCOPE,
   isAllowedEmail,
   OAUTH_COOKIE,
+  SHEETS_READ_SCOPE,
   verifyIdToken,
   verifyOAuthState,
 } from "@/lib/auth/google";
@@ -41,7 +43,7 @@ export async function GET(req: NextRequest) {
     });
     const who = await verifyIdToken(tokens.id_token, e.GOOGLE_CLIENT_ID);
 
-    if (saved.purpose === "gmail") {
+    if (saved.purpose !== "login") {
       const session = await getSession();
       if (!session) return fail("session_expired");
       if (!tokens.refresh_token || !tokens.scope.includes(GMAIL_SEND_SCOPE))
@@ -51,6 +53,8 @@ export async function GET(req: NextRequest) {
         googleEmail: who.email,
         refreshToken: tokens.refresh_token,
         scope: tokens.scope,
+        canReadSheets: tokens.scope.includes(SHEETS_READ_SCOPE),
+        canReadMail: tokens.scope.includes(GMAIL_READ_SCOPE),
       });
       const res = NextResponse.redirect(`${base}/settings?gmail=connected`);
       res.cookies.delete(OAUTH_COOKIE);

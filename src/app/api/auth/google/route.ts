@@ -11,10 +11,11 @@ export async function GET(req: NextRequest) {
   const base = e.APP_URL;
   if (!googleConfigured(e) || !e.GOOGLE_CLIENT_ID)
     return NextResponse.redirect(`${base}/login?error=google_not_configured`);
+  const wanted = req.nextUrl.searchParams.get("purpose");
   const purpose: OAuthPurpose =
-    req.nextUrl.searchParams.get("purpose") === "gmail" ? "gmail" : "login";
+    wanted === "gmail" || wanted === "sheets" || wanted === "mail" ? wanted : "login";
   const session = await getSession();
-  if (purpose === "gmail" && !session) return NextResponse.redirect(`${base}/login`);
+  if (purpose !== "login" && !session) return NextResponse.redirect(`${base}/login`);
 
   const state = randomBytes(24).toString("base64url");
   const url = buildAuthUrl({
@@ -22,7 +23,7 @@ export async function GET(req: NextRequest) {
     redirectUri: `${base}/api/auth/callback`,
     state,
     purpose,
-    loginHint: purpose === "gmail" ? session?.email : undefined,
+    loginHint: purpose !== "login" ? session?.email : undefined,
   });
   const res = NextResponse.redirect(url);
   res.cookies.set(
