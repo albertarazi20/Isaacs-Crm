@@ -27,6 +27,7 @@ import {
   type RepScore,
   type Scoreboard,
 } from "@/lib/dashboard/queries";
+import { speedNumbers, type SpeedNumbers } from "@/lib/dashboard/speed";
 import { dueCount, userContext } from "@/lib/data/queries";
 import { dealStatusCounts } from "@/lib/deals/queries";
 import { db } from "@/lib/db";
@@ -61,6 +62,10 @@ const KIND_LABEL: Record<NowKind, string> = {
   renewal_ready: "Renewal",
   overdue: "Overdue",
   stale_submission: "Chase",
+  late_payout: "Late payout",
+  stale_deal: "Sitting",
+  registration: "Registration",
+  trust: "Trust",
 };
 const KIND_TONE: Record<NowKind, string> = {
   merchant_replied: "bg-bad-soft text-bad",
@@ -71,6 +76,10 @@ const KIND_TONE: Record<NowKind, string> = {
   renewal_ready: "bg-good-soft text-good",
   overdue: "bg-warn-soft text-warn",
   stale_submission: "bg-surface-2 text-muted",
+  late_payout: "bg-warn-soft text-warn",
+  stale_deal: "bg-warn-soft text-warn",
+  registration: "bg-warn-soft text-warn",
+  trust: "bg-bad-soft text-bad",
 };
 
 function Kpi({
@@ -198,7 +207,7 @@ function NowList({
     <Card className="p-0">
       <ol className="divide-y divide-border">
         {items.map((n, i) => (
-          <li key={`${n.kind}-${n.client_id}-${n.deal_id ?? ""}-${i}`}>
+          <li key={`${n.kind}-${n.client_id ?? ""}-${n.deal_id ?? ""}-${i}`}>
             <Link
               href={n.href}
               className="flex items-start gap-3 px-4 py-2.5 transition hover:bg-surface-3"
@@ -212,11 +221,14 @@ function NowList({
                 {KIND_LABEL[n.kind]}
               </span>
               <span className="min-w-0 flex-1">
-                {owners?.[n.client_id] ? (
+                {n.client_id && owners?.[n.client_id] ? (
                   <span className="float-right ml-2 text-xs text-muted">{owners[n.client_id]}</span>
                 ) : null}
                 <span className="block truncate text-sm font-semibold">
-                  {n.label} <span className="font-normal text-muted">· {n.business_name}</span>
+                  {n.label}
+                  {n.business_name && !n.label.includes(n.business_name) ? (
+                    <span className="font-normal text-muted"> · {n.business_name}</span>
+                  ) : null}
                 </span>
                 {n.detail ? (
                   <span className="block truncate text-xs text-muted">{n.detail}</span>
@@ -338,6 +350,66 @@ function MoneyBlock({ m }: { m: MoneyOnTable }) {
   );
 }
 
+const days = (n: number | null): string => (n === null ? "—" : `${n}d`);
+
+/** The speed numbers as medians in days, plus the kickback rate: the shop's for a manager, the rep's own for a rep. */
+function SpeedBlock({
+  speed,
+  reps,
+  month,
+  mine,
+}: {
+  speed: SpeedNumbers;
+  reps: RepScore[];
+  month: string;
+  mine: boolean;
+}) {
+  const kicked = reps.reduce((n, r) => n + r.kickbacks, 0);
+  const filed = reps.reduce((n, r) => n + r.submitted_to_ops, 0);
+  const sample = (n: number) => (n === 0 ? "no deals yet" : `${n} deal${n === 1 ? "" : "s"}`);
+  const cells: { label: string; value: string; sub: string }[] = [
+    {
+      label: "Lead to sub",
+      value: days(speed.lead_to_sub_days),
+      sub: sample(speed.sample.lead_to_sub),
+    },
+    {
+      label: "Sub to first offer",
+      value: days(speed.sub_to_offer_days),
+      sub: sample(speed.sample.sub_to_offer),
+    },
+    {
+      label: "Approval to funded",
+      value: days(speed.approval_to_funded_days),
+      sub: sample(speed.sample.approval_to_funded),
+    },
+    {
+      label: "Kicked back",
+      value: filed === 0 ? "—" : `${Math.round((100 * kicked) / filed)}%`,
+      sub: filed === 0 ? "no files yet" : `${kicked} of ${filed} files`,
+    },
+  ];
+  return (
+    <Card className="p-4">
+      <SectionTitle aside={<span className="text-xs text-muted">{month}</span>}>
+        {mine ? "My speed" : "Speed"}
+      </SectionTitle>
+      <p className="mt-1 text-xs text-muted">Median days, this month.</p>
+      <dl className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4 xl:grid-cols-2">
+        {cells.map((c) => (
+          <div key={c.label} className="min-w-0">
+            <dt className="truncate text-xs text-muted">{c.label}</dt>
+            <dd className="text-[22px] leading-7 font-semibold tracking-tight tabular-nums">
+              {c.value}
+            </dd>
+            <dd className="truncate text-xs text-muted">{c.sub}</dd>
+          </div>
+        ))}
+      </dl>
+    </Card>
+  );
+}
+
 function RepTable({ rows, month }: { rows: RepScore[]; month: string }) {
   return (
     <Card className="min-w-0 overflow-x-auto p-0">
@@ -357,7 +429,31 @@ function RepTable({ rows, month }: { rows: RepScore[]; month: string }) {
             <th className="px-2 py-2 text-right font-semibold">Volume</th>
             <th className="px-2 py-2 text-right font-semibold">Commission</th>
             <th className="px-2 py-2 text-right font-semibold">Overdue</th>
-            <th className="px-4 py-2 text-right font-semibold">Speed to lead</th>
+            <th className="px-2 py-2 text-right font-semibold">Speed to lead</th>
+            <th
+              className="px-2 py-2 text-right font-semibold"
+              title="Median days from a lead landing to the file going to lenders"
+            >
+              Lead to sub
+            </th>
+            <th
+              className="px-2 py-2 text-right font-semibold"
+              title="Median days from the file going to lenders to the first offer"
+            >
+              Sub to offer
+            </th>
+            <th
+              className="px-2 py-2 text-right font-semibold"
+              title="Median days from the first approval to the funding"
+            >
+              Approval to funded
+            </th>
+            <th
+              className="px-4 py-2 text-right font-semibold"
+              title="Files ops sent back, of the files submitted to ops this month"
+            >
+              Kickbacks
+            </th>
           </tr>
         </thead>
         <tbody className="divide-y divide-border">
@@ -382,8 +478,27 @@ function RepTable({ rows, month }: { rows: RepScore[]; month: string }) {
               <td className={cn("px-2 py-2 text-right tabular-nums", r.overdue > 0 && "text-bad")}>
                 {r.overdue}
               </td>
-              <td className="px-4 py-2 text-right tabular-nums">
+              <td className="px-2 py-2 text-right tabular-nums">
                 {r.speed_to_lead_hours === null ? "—" : `${r.speed_to_lead_hours}h`}
+              </td>
+              <td className="px-2 py-2 text-right tabular-nums">{days(r.lead_to_sub_days)}</td>
+              <td className="px-2 py-2 text-right tabular-nums">{days(r.sub_to_offer_days)}</td>
+              <td className="px-2 py-2 text-right tabular-nums">
+                {days(r.approval_to_funded_days)}
+              </td>
+              <td
+                className={cn(
+                  "px-4 py-2 text-right tabular-nums",
+                  (r.kickback_rate_pct ?? 0) >= 25 && "text-bad",
+                )}
+                title={`${r.kickbacks} of ${r.submitted_to_ops} files`}
+              >
+                {r.kickback_rate_pct === null ? "—" : `${r.kickback_rate_pct}%`}
+                {r.submitted_to_ops > 0 ? (
+                  <span className="ml-1 text-xs font-normal text-muted">
+                    {r.kickbacks}/{r.submitted_to_ops}
+                  </span>
+                ) : null}
               </td>
             </tr>
           ))}
@@ -511,16 +626,23 @@ export default async function DashboardPage({
               await q.query<{ id: string; name: string }>(
                 `select c.id, coalesce(nullif(u.name, ''), u.email) as name
                    from clients c join app_users u on u.id = c.user_id where c.id = any($1::uuid[])`,
-                [Array.from(new Set(now.map((n) => n.client_id)))],
+                [
+                  Array.from(
+                    new Set(now.map((n) => n.client_id).filter((c): c is string => c !== null)),
+                  ),
+                ],
               )
             ).rows.map((r) => [r.id, r.name]),
           )
         : {};
     const goals = await listGoals(q, month);
     const due = await dueCount(q, ctx.today);
+    // a rep's scorecard is one row (RLS): their own kickback rate; a manager's is the whole team
+    const reps = ops ? [] : await repScorecard(q, month, ctx.today);
+    const speed = ops ? null : await speedNumbers(q, month, manager ? null : session.userId);
     const extra = manager
       ? ([
-          await repScorecard(q, month, ctx.today),
+          reps,
           await lenderScorecard(q),
           await emailMeters(q),
           (
@@ -530,9 +652,10 @@ export default async function DashboardPage({
           ).rows[0]?.n ?? 0,
         ] as const)
       : null;
-    return { ctx, month, score, money, counts, now, goals, due, extra, queue, owners };
+    return { ctx, month, score, money, counts, now, goals, due, extra, queue, owners, reps, speed };
   });
-  const { ctx, month, score, money, counts, now, goals, due, extra, queue, owners } = data;
+  const { ctx, month, score, money, counts, now, goals, due, extra, queue, owners, reps, speed } =
+    data;
   const monthName = `${MONTHS[Number(month.slice(5, 7)) - 1]} ${month.slice(0, 4)}`;
   const shopGoal = goals.find((g) => g.user_id === null)?.funded_cents ?? 0;
   const myGoal = goals.find((g) => g.user_id === session.userId)?.funded_cents ?? 0;
@@ -646,13 +769,21 @@ export default async function DashboardPage({
         <aside className="min-w-0 space-y-6">
           <MoneyBlock m={money} />
           <FunnelBlock counts={counts} month={monthName} />
+          {speed ? (
+            <SpeedBlock speed={speed} reps={reps} month={monthName} mine={!manager} />
+          ) : null}
         </aside>
       </div>
 
       {extra ? (
-        <div className="grid grid-cols-[minmax(0,1fr)] gap-6 xl:grid-cols-[minmax(0,5fr)_minmax(0,3fr)]">
+        <div className="space-y-6">
           <RepTable rows={extra[0]} month={monthName} />
-          <div className="min-w-0 space-y-6">
+          <div
+            className={cn(
+              "grid grid-cols-[minmax(0,1fr)] gap-6",
+              extra[2].length > 0 && "xl:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]",
+            )}
+          >
             <LenderTable rows={extra[1]} />
             <Meters meters={extra[2]} />
           </div>

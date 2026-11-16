@@ -1,6 +1,14 @@
 import Link from "next/link";
 import { FundedSheet } from "@/components/funded/FundedSheet";
-import { ChipLink, ChipRow, PageHeader, SHEET, StatTile } from "@/components/settings/primitives";
+import { StatementsCard } from "@/components/funded/StatementsCard";
+import {
+  ChipLink,
+  ChipRow,
+  Note,
+  PageHeader,
+  SHEET,
+  StatTile,
+} from "@/components/settings/primitives";
 import { Card, SectionTitle } from "@/components/ui";
 import { requirePage } from "@/lib/auth/server";
 import { CAN } from "@/lib/auth/roles";
@@ -8,6 +16,7 @@ import { userContext } from "@/lib/data/queries";
 import { db } from "@/lib/db";
 import { formatMoneyCompact } from "@/lib/money";
 import { listFunded, monthTotals } from "@/lib/money/fund";
+import { fundedExtras, monthsToClose, statementMonths } from "@/lib/money/fundedExtras";
 
 export const dynamic = "force-dynamic";
 
@@ -25,9 +34,23 @@ export default async function FundedPage({
   const data = await db.withUser(session.userId, async (q) => {
     const ctx = await userContext(q);
     const month = m && /^\d{4}-(0[1-9]|1[0-2])$/.test(m) ? m : ctx.today.slice(0, 7);
-    return { ctx, month, rows: await listFunded(q, month), totals: await monthTotals(q, 12) };
+    const rows = await listFunded(q, month);
+    return {
+      ctx,
+      month,
+      rows,
+      totals: await monthTotals(q, 12),
+      extras: await fundedExtras(
+        q,
+        ctx.today,
+        rows.map((r) => r.id),
+      ),
+      statements: await statementMonths(q),
+      toClose: manager ? await monthsToClose(q) : [],
+    };
   });
-  const { ctx, month, rows, totals } = data;
+  const { ctx, month, rows, totals, extras, statements, toClose } = data;
+  const lateCount = Object.values(extras).filter((x) => (x.late_days ?? 0) > 0).length;
   const t = totals.find((x) => x.month === month);
   const mine = manager ? rows : rows; // RLS already scoped a rep to their own rows
   const myCut = mine.reduce((n, r) => n + (r.rep_cut_cents ?? 0), 0);
@@ -79,7 +102,14 @@ export default async function FundedPage({
           tone={Number(t?.clawed_back_cents ?? 0) > 0 ? "bad" : undefined}
         />
       </div>
-      <FundedSheet rows={rows} manager={manager} today={ctx.today} />
+      {lateCount > 0 ? (
+        <Note tone="warn" role="status">
+          {lateCount} lender{lateCount === 1 ? " is" : "s are"} late paying commission this month.
+          The late ones are flagged on the sheet.
+        </Note>
+      ) : null}
+      <FundedSheet rows={rows} manager={manager} today={ctx.today} extras={extras} />
+      <StatementsCard months={statements} toClose={toClose} manager={manager} />
       {totals.length > 1 ? (
         <Card className="min-w-0 overflow-x-auto p-0">
           <div className="px-4 pt-3.5 pb-3">

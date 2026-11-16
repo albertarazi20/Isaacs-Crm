@@ -98,7 +98,7 @@ export async function listStatements(q: Db, limit = 24): Promise<(Statement & { 
   return rows.map((r) => r.j);
 }
 
-const KIND_WORDS: Record<string, string> = {
+export const KIND_WORDS: Record<string, string> = {
   expected: "Commission",
   paid: "Paid by lender",
   correction: "Correction",

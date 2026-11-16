@@ -156,7 +156,12 @@ export type NowKind =
   | "approval_aging" // approved, not funded, getting cold
   | "renewal_ready" // paid down enough to renew
   | "stale_submission" // sent to a lender, no answer in days
-  | "overdue"; // a follow-up timer is past due
+  | "overdue" // a follow-up timer is past due
+  // the alert kinds stream 3 added (S3-2, S3-6, S3-7, S3-9) that nothing above already covers:
+  | "late_payout" // a lender is past its own pay-after date with commission still owed
+  | "stale_deal" // a deal has sat in one status longer than the shop allows (alert, unread)
+  | "registration" // a state registration lapsed or renews soon (managers)
+  | "trust"; // many copies, after-hours copies, someone else's lead, a canary (managers)
 
 /** Why one kind outranks another, before money and age are applied. */
 export const NOW_WEIGHT: Record<NowKind, number> = {
@@ -168,11 +173,16 @@ export const NOW_WEIGHT: Record<NowKind, number> = {
   renewal_ready: 70,
   overdue: 60,
   stale_submission: 50,
+  trust: 97,
+  late_payout: 75,
+  registration: 65,
+  stale_deal: 55,
 };
 
 export interface NowItem {
   kind: NowKind;
-  client_id: string;
+  /** Null for the items that belong to the shop, not a merchant (a registration, a trust alert). */
+  client_id: string | null;
   deal_id: string | null;
   business_name: string;
   /** One line: what to do. */
