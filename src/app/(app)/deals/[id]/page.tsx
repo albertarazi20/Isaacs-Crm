@@ -378,6 +378,11 @@ export default async function DealPage({
           freshness={fresh}
           canDelete={manager || deal.user_id === session.userId}
           today={ctx.today}
+          lenders={funders.submissions.map((s) => ({
+            submissionId: s.id,
+            name: s.funder_name,
+            status: s.status,
+          }))}
         />
       ) : null}
 

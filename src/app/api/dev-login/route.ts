@@ -14,7 +14,8 @@ export async function GET(req: NextRequest) {
   const user = await upsertDevUser(
     email,
     email.split("@")[0] ?? "",
-    isRole(wanted) ? wanted : "manager",
+    // no ?role= keeps a seeded user's role (browser tests seed reps); a brand-new dev user starts as a manager
+    isRole(wanted) ? wanted : null,
   );
   const res = NextResponse.redirect(`${env().APP_URL}/`);
   res.cookies.set(

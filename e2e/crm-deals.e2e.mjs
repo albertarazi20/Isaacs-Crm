@@ -1,6 +1,6 @@
 // My Deals and the deal page: a note that saves, the tabs, and FUND end to end (a manager confirms in the same click),
 // then the Funded sheet. Run: pnpm e2e crm-deals
-import { BASE, check, openBrowser, withDb } from "./lib.mjs";
+import { BASE, check, openBrowser, setRole, withDb } from "./lib.mjs";
 
 const one = (db, sql, params) => db.query(sql, params).then((r) => r.rows[0]);
 
@@ -28,6 +28,7 @@ export default async function dealsFlow({ email }) {
     ),
   );
 
+  await setRole(email, "manager");
   const { browser, page } = await openBrowser(email);
   await page.goto(`${BASE}/deals`, { waitUntil: "networkidle" });
   check("Deals heading", await page.getByRole("heading", { name: /Deals/ }).isVisible());

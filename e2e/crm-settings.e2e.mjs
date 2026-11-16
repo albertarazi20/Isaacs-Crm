@@ -1,9 +1,10 @@
 // Settings: add a teammate, change the cap, write a template, set a bucket's sequence. Run: pnpm e2e crm-settings
-import { BASE, check, openBrowser, withDb } from "./lib.mjs";
+import { BASE, check, openBrowser, setRole, withDb } from "./lib.mjs";
 
 const one = (db, sql, params) => db.query(sql, params).then((r) => r.rows[0]);
 
 export default async function settingsFlow({ email }) {
+  await setRole(email, "manager");
   const { browser, page } = await openBrowser(email);
   const stamp = Date.now();
 

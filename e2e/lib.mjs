@@ -40,6 +40,11 @@ export async function makeUser(label) {
   return email;
 }
 
+/** The seeded user is a rep; a flow that needs a manager (or ops) says so before opening the browser. */
+export async function setRole(email, role) {
+  await withDb((db) => db.query("update app_users set role = $2 where email = $1", [email, role]));
+}
+
 export async function dropUser(email) {
   await withDb((db) => db.query("delete from app_users where email = $1", [email]));
 }

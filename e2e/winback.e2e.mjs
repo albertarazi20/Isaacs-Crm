@@ -1,5 +1,5 @@
 // Winback: the pools page with a member, stop and resume. Run: pnpm e2e winback
-import { BASE, check, openBrowser, withDb } from "./lib.mjs";
+import { BASE, check, openBrowser, setRole, withDb } from "./lib.mjs";
 
 const one = (db, sql, params) => db.query(sql, params).then((r) => r.rows[0]);
 
@@ -21,6 +21,7 @@ export default async function winbackFlow({ email }) {
       [userId, merchant.id],
     ),
   );
+  await setRole(email, "manager");
   const { browser, page } = await openBrowser(email);
   await page.goto(`${BASE}/winback`, { waitUntil: "networkidle" });
   check("Winback heading", await page.getByRole("heading", { name: "Winback" }).isVisible());

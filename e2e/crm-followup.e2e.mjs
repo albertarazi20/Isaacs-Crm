@@ -1,5 +1,5 @@
 // Follow Up: buckets with their people, a personal bucket, pause, move. Run: pnpm e2e crm-followup
-import { BASE, check, openBrowser, withDb } from "./lib.mjs";
+import { BASE, check, openBrowser, setRole, withDb } from "./lib.mjs";
 
 const one = (db, sql, params) => db.query(sql, params).then((r) => r.rows[0]);
 
@@ -24,6 +24,7 @@ export default async function followUpFlow({ email }) {
       await db.query("select enroll_in_bucket($1, $2, 'moved')", [m.id, bucket.id]);
   });
 
+  await setRole(email, "manager");
   const { browser, page } = await openBrowser(email);
   await page.goto(`${BASE}/follow-up?b=${bucket.id}`, { waitUntil: "networkidle" });
   check("Follow Up heading", await page.getByRole("heading", { name: "Follow Up" }).isVisible());

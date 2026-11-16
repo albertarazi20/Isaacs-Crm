@@ -80,7 +80,7 @@ export default async function powerFlow({ email }) {
 
   // ---------------------------------------------------------------------------------------------
   // 1. Money-first ranking on Today
-  await page.goto(`${BASE}/`, { waitUntil: "networkidle" });
+  await page.goto(`${BASE}/today`, { waitUntil: "networkidle" });
   await page.evaluate(() => localStorage.clear());
   await page.reload({ waitUntil: "networkidle" });
 
@@ -175,7 +175,7 @@ export default async function powerFlow({ email }) {
   check("the star survives a reload", (await firstOverdue()) === lastName);
   // another device: a fresh browser with nothing saved sees the same star, first
   const other = await openBrowser(email);
-  await other.page.goto(`${BASE}/`, { waitUntil: "networkidle" });
+  await other.page.goto(`${BASE}/today`, { waitUntil: "networkidle" });
   const otherFirst = await other.page
     .locator("section", { has: other.page.getByRole("heading", { name: /^Overdue/ }) })
     .locator('article a[href^="/clients/"]')
@@ -225,7 +225,7 @@ export default async function powerFlow({ email }) {
     const errors = [];
     p.on("pageerror", (e) => errors.push(e.message));
     await p.goto(`${BASE}/api/dev-login?email=${encodeURIComponent(email)}`);
-    await p.goto(`${BASE}/`, { waitUntil: "networkidle" });
+    await p.goto(`${BASE}/today`, { waitUntil: "networkidle" });
     await p.getByRole("button", { name: "Oldest first" }).click();
     check(
       "works with storage blocked: no errors, toggle still flips",
@@ -441,7 +441,7 @@ export default async function powerFlow({ email }) {
 
   // ---------------------------------------------------------------------------------------------
   // 4. Global search + inbound-call lookup
-  await page.goto(`${BASE}/`, { waitUntil: "networkidle" });
+  await page.goto(`${BASE}/today`, { waitUntil: "networkidle" });
   await page.keyboard.press("Control+K");
   const palette = page.getByRole("dialog", { name: "Find a client" });
   await palette.waitFor({ timeout: 5000 });
@@ -495,7 +495,7 @@ export default async function powerFlow({ email }) {
   await page.waitForURL(`**/clients/${rivera.id}`, { timeout: 8000 });
   check("Enter opens the client page", true);
 
-  await page.goto(`${BASE}/`, { waitUntil: "networkidle" });
+  await page.goto(`${BASE}/today`, { waitUntil: "networkidle" });
   await page.getByRole("button", { name: "Find a client" }).click();
   await palette.waitFor();
   await palette.getByRole("combobox").fill("hartman");
@@ -527,7 +527,7 @@ export default async function powerFlow({ email }) {
       [email, three.map((r) => r.id)],
     ),
   );
-  await page.goto(`${BASE}/`, { waitUntil: "networkidle" });
+  await page.goto(`${BASE}/today`, { waitUntil: "networkidle" });
   await page.getByRole("link", { name: /^Start dialing \(3\)/ }).click();
   await page.waitForURL("**/dial");
   const region = page.getByRole("region", { name: "Power dial" });
@@ -709,7 +709,7 @@ export default async function powerFlow({ email }) {
       [email, three.map((r) => r.id)],
     ),
   );
-  await page.goto(`${BASE}/`, { waitUntil: "networkidle" });
+  await page.goto(`${BASE}/today`, { waitUntil: "networkidle" });
   await page.emulateMedia({ colorScheme: "dark" });
   await shot(page, "today-dark");
   await page.keyboard.press("Control+K");
@@ -729,7 +729,7 @@ export default async function powerFlow({ email }) {
     { hasTouch: true, isMobile: true },
   );
   const mp = m.page;
-  await mp.goto(`${BASE}/`, { waitUntil: "networkidle" });
+  await mp.goto(`${BASE}/today`, { waitUntil: "networkidle" });
   const bar = mp.getByRole("navigation", { name: "Primary" });
   check("the bottom tab bar is visible at 390px", await bar.isVisible());
   check(
@@ -811,13 +811,13 @@ export default async function powerFlow({ email }) {
   );
   await shot(mp, "dial-390");
   await mp.emulateMedia({ colorScheme: "dark" });
-  await mp.goto(`${BASE}/`, { waitUntil: "networkidle" });
+  await mp.goto(`${BASE}/today`, { waitUntil: "networkidle" });
   await shot(mp, "today-390-dark");
   await m.browser.close();
 
   // Desktop width: no tab bar, top links back.
   const wide = await openBrowser(email, { width: 1280, height: 800 });
-  await wide.page.goto(`${BASE}/`, { waitUntil: "networkidle" });
+  await wide.page.goto(`${BASE}/today`, { waitUntil: "networkidle" });
   check(
     "at desktop width the tab bar is hidden and the top links show",
     !(await wide.page.getByRole("navigation", { name: "Primary" }).isVisible()) &&

@@ -8,7 +8,8 @@ import { UserError } from "@/lib/data/mutations";
 import { id, text } from "@/lib/data/schemas";
 import type { ActionResult } from "@/lib/data/types";
 import { db } from "@/lib/db";
-import { chaseLender, submitToLenders } from "@/lib/inbox/submit";
+import { env } from "@/lib/env";
+import { chaseLender, forwardToLender, submitToLenders } from "@/lib/inbox/submit";
 import { listProposed } from "@/lib/inbox/process";
 import { sendEmailAsUser } from "@/lib/system/gmail";
 
@@ -107,6 +108,44 @@ export async function decideProposedAction(input: unknown): Promise<ActionResult
     });
     revalidatePath("/", "layout");
     return { ok: true, data: null };
+  } catch (e) {
+    return { ok: false, error: toActionError(e) };
+  }
+}
+
+/** Ops (or the rep) sends the checked documents to one lender: expiring watermarked links on the submission thread. */
+export async function forwardDocumentsAction(
+  input: unknown,
+): Promise<ActionResult<{ links: number }>> {
+  const session = await requireSession();
+  try {
+    const i = z
+      .object({
+        submissionId: id,
+        documentIds: z.array(id).min(1).max(20),
+        note: text(500).default(""),
+      })
+      .parse(input);
+    const me = await db.withUser(
+      session.userId,
+      async (q) =>
+        (
+          await q.query<{ name: string }>(
+            "select name from app_users where id = app.current_user_id()",
+          )
+        ).rows[0],
+    );
+    const r = await db.withUser(session.userId, (q) =>
+      forwardToLender(q, {
+        ...i,
+        appUrl: env().APP_URL,
+        senderName: me?.name || session.email,
+        createdBy: session.userId,
+        send: (m) => sendEmailAsUser(session.userId, m),
+      }),
+    );
+    revalidatePath("/", "layout");
+    return { ok: true, data: { links: r.links } };
   } catch (e) {
     return { ok: false, error: toActionError(e) };
   }

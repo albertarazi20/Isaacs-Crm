@@ -65,3 +65,10 @@ trust, email & lenders, commission plan, AI, lender list). Old pages kept off th
 (stage kanban), /clients, /renewals, /earnings, /long-game, /dial, /funders. Full unit suite: 77 files pass,
 14 fail — all in the buckets listed above plus `tests/boundaries.test.ts` "no SQL built from input" flagging the
 constant `${TZ_LABEL}` fragment in src/lib/buckets/queries.ts (register it in the test's ALLOWED map on purpose).
+
+## Browser tests (2026-11-16, ~00:30 ET)
+New flows, all green locally (`pnpm e2e crm-` and `pnpm e2e winback`, CHROMIUM_PATH set, dev server on :3000):
+dashboard 8/8, deals + FUND 13/13, submissions 6/6, intake 6/6, follow-up 5/5, winback 4/4, settings 5/5. Each proves
+the database changed, not just the screen. The older flows (today, pipeline, clients, client, funders, power,
+mobile-ui, import, leads, source, text-guard, trash, session, backup, earnings, contact, funder-package) target pages
+that still exist but moved off the main nav; the full-suite log says which of their checks the nav changes broke.

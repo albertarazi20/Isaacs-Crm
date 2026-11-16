@@ -50,13 +50,13 @@ export async function bootstrapFirstManager(email: string, name: string): Promis
 export async function upsertDevUser(
   email: string,
   name: string,
-  role: Role = "manager",
+  role: Role | null = null,
 ): Promise<AppUser> {
   return db.withSystem(async (q) => {
     const { rows } = await q.query<AppUser>(
-      `insert into app_users (email, name, role) values ($1, $2, $3)
+      `insert into app_users (email, name, role) values ($1, $2, coalesce($3, 'manager'))
        on conflict (email) do update set name = case when app_users.name = '' then excluded.name else app_users.name end,
-                                         role = excluded.role, active = true
+                                         role = coalesce($3, app_users.role), active = true
        returning id, email, name, timezone, session_epoch, role, active`,
       [email.toLowerCase(), name, role],
     );

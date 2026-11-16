@@ -5,7 +5,7 @@ const one = (db, sql, params) => db.query(sql, params).then((r) => r.rows[0]);
 export default async function todayFlow({ email }) {
   const { browser, context, page } = await openBrowser(email);
   await context.grantPermissions(["clipboard-read", "clipboard-write"], { origin: BASE });
-  await page.goto(`${BASE}/`, { waitUntil: "networkidle" });
+  await page.goto(`${BASE}/today`, { waitUntil: "networkidle" });
 
   const kpis = await page.locator("main >> text=Overdue").first().isVisible();
   check("Today shows the follow-up counts", kpis);
@@ -166,7 +166,7 @@ export default async function todayFlow({ email }) {
   check("settings persist", hour?.digest_hour === 7);
 
   // The Today tab shows how many follow-ups are due.
-  await page.goto(`${BASE}/`, { waitUntil: "networkidle" });
+  await page.goto(`${BASE}/today`, { waitUntil: "networkidle" });
   const badge = await page
     .locator("nav [aria-label$='follow-ups due']")
     .first()

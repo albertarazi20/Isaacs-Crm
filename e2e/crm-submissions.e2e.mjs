@@ -1,5 +1,5 @@
 // Submission Board: the ops queue, mark sent, kick back with a reason the rep sees. Run: pnpm e2e crm-submissions
-import { BASE, check, openBrowser, withDb } from "./lib.mjs";
+import { BASE, check, openBrowser, setRole, withDb } from "./lib.mjs";
 
 const one = (db, sql, params) => db.query(sql, params).then((r) => r.rows[0]);
 
@@ -21,6 +21,7 @@ export default async function submissionsFlow({ email }) {
   });
   const [first, second] = names;
 
+  await setRole(email, "manager");
   const { browser, page } = await openBrowser(email);
   await page.goto(`${BASE}/board`, { waitUntil: "networkidle" });
   check(

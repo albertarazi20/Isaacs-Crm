@@ -1,5 +1,6 @@
 "use client";
 
+import { forwardDocumentsAction } from "@/app/inbox-actions";
 import { useRouter } from "next/navigation";
 import { useRef, useState } from "react";
 import {
@@ -83,6 +84,7 @@ export function DocumentsPanel({
   freshness,
   canDelete,
   today,
+  lenders = [],
 }: {
   clientId: string;
   dealId: string | null;
@@ -90,6 +92,8 @@ export function DocumentsPanel({
   freshness: Freshness;
   canDelete: boolean;
   today: string;
+  /** The deal's lender rows, for "send the checked files to…". */
+  lenders?: { submissionId: string; name: string; status: string }[];
 }) {
   const router = useRouter();
   const toast = useToast();
@@ -97,6 +101,43 @@ export function DocumentsPanel({
   const input = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
   const [editing, setEditing] = useState<string | null>(null);
+  const [checked, setChecked] = useState<Set<string>>(new Set());
+  const [lenderSub, setLenderSub] = useState(
+    lenders.find((l) => l.status === "stips_requested")?.submissionId ??
+      lenders[0]?.submissionId ??
+      "",
+  );
+  const toggle = (id: string) =>
+    setChecked((cur) => {
+      const next = new Set(cur);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+
+  async function sendToLender() {
+    const ids = [...checked].filter((id) =>
+      documents.some((d) => d.id === id && d.scan_status === "clean"),
+    );
+    if (!lenderSub || ids.length === 0) return;
+    const name = lenders.find((l) => l.submissionId === lenderSub)?.name ?? "the lender";
+    if (
+      !window.confirm(
+        `Send ${ids.length} file${ids.length === 1 ? "" : "s"} to ${name}? They get expiring links stamped with their name, on the same email thread.`,
+      )
+    )
+      return;
+    setBusy(true);
+    const r = await forwardDocumentsAction({ submissionId: lenderSub, documentIds: ids });
+    setBusy(false);
+    if (!r.ok) return toast({ message: r.error, tone: "error" });
+    toast({
+      message: `Sent ${r.data.links} link${r.data.links === 1 ? "" : "s"} to ${name}`,
+      tone: "success",
+    });
+    setChecked(new Set());
+    router.refresh();
+  }
 
   async function upload(files: FileList) {
     if (files.length === 0) return;
@@ -156,7 +197,30 @@ export function DocumentsPanel({
         >
           {freshness.message}
         </p>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
+          {lenders.length > 0 && documents.some((d) => d.scan_status === "clean") ? (
+            <span className="flex items-center gap-1.5">
+              <select
+                aria-label="Send to lender"
+                value={lenderSub}
+                onChange={(e) => setLenderSub(e.target.value)}
+                className="h-8 rounded-lg border border-border bg-surface px-2 text-sm"
+              >
+                {lenders.map((l) => (
+                  <option key={l.submissionId} value={l.submissionId}>
+                    {l.name} · {l.status.replace(/_/g, " ")}
+                  </option>
+                ))}
+              </select>
+              <Button
+                size="sm"
+                disabled={busy || checked.size === 0 || !lenderSub}
+                onClick={sendToLender}
+              >
+                Send checked ({checked.size})
+              </Button>
+            </span>
+          ) : null}
           <UploadLinkButton clientId={clientId} dealId={dealId} />
           <Button
             size="sm"
@@ -186,30 +250,42 @@ export function DocumentsPanel({
           {documents.map((d) => (
             <li key={d.id} className="px-4 py-3">
               <div className="flex flex-wrap items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <p className="text-sm font-semibold">
-                    {d.label}
-                    {d.label_confidence < 0.8 && d.label_by === "rule" ? (
-                      <span className="ml-2 rounded bg-warn-soft px-1.5 py-0.5 text-[11px] font-medium text-warn">
-                        check the label
-                      </span>
-                    ) : null}
-                    {d.scan_status !== "clean" ? (
-                      <span className="ml-2 rounded bg-surface-2 px-1.5 py-0.5 text-[11px] font-medium text-muted">
-                        {d.scan_status === "pending" ? "being checked" : d.scan_status}
-                      </span>
-                    ) : null}
-                  </p>
-                  <p className="truncate text-xs text-muted">
-                    {d.filename} · {size(d.size_bytes)} ·{" "}
-                    {d.source === "upload_link"
-                      ? "merchant upload"
-                      : d.source === "email"
-                        ? "from email"
-                        : (d.uploaded_by_name ?? "staff")}{" "}
-                    · {formatDate(d.created_at.slice(0, 10), today)}
-                    {d.views > 0 ? ` · opened ${d.views}×` : ""}
-                  </p>
+                <div className="flex min-w-0 items-start gap-2">
+                  {lenders.length > 0 ? (
+                    <input
+                      type="checkbox"
+                      className="mt-1"
+                      aria-label={`Check ${d.label}`}
+                      disabled={d.scan_status !== "clean"}
+                      checked={checked.has(d.id)}
+                      onChange={() => toggle(d.id)}
+                    />
+                  ) : null}
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold">
+                      {d.label}
+                      {d.label_confidence < 0.8 && d.label_by === "rule" ? (
+                        <span className="ml-2 rounded bg-warn-soft px-1.5 py-0.5 text-[11px] font-medium text-warn">
+                          check the label
+                        </span>
+                      ) : null}
+                      {d.scan_status !== "clean" ? (
+                        <span className="ml-2 rounded bg-surface-2 px-1.5 py-0.5 text-[11px] font-medium text-muted">
+                          {d.scan_status === "pending" ? "being checked" : d.scan_status}
+                        </span>
+                      ) : null}
+                    </p>
+                    <p className="truncate text-xs text-muted">
+                      {d.filename} · {size(d.size_bytes)} ·{" "}
+                      {d.source === "upload_link"
+                        ? "merchant upload"
+                        : d.source === "email"
+                          ? "from email"
+                          : (d.uploaded_by_name ?? "staff")}{" "}
+                      · {formatDate(d.created_at.slice(0, 10), today)}
+                      {d.views > 0 ? ` · opened ${d.views}×` : ""}
+                    </p>
+                  </div>
                 </div>
                 <div className="flex flex-wrap gap-1.5">
                   {d.scan_status === "clean" ? (

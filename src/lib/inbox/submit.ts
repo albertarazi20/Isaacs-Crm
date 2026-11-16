@@ -1,6 +1,7 @@
 import { randomBytes } from "node:crypto";
 import type { Db } from "../db";
 import { UserError } from "../data/mutations";
+import { mintDownloadLink, openDocument } from "../docs/upload";
 import { buildSubmissionPackage } from "../funders/package";
 import { getCard } from "../data/queries";
 import type { PositionRow, StipRow } from "../data/types";
@@ -180,6 +181,100 @@ export async function chaseLender(
     [submissionId, `Chased ${row.fname} for an answer`],
   );
   return true;
+}
+
+/**
+ * Ops sends documents to a lender in one click: an expiring, watermarked link per file, in one email on the lender's
+ * own submission thread, from the sender's Gmail. A lender waiting on stips goes back to "sent" — the ball is theirs.
+ */
+export async function forwardToLender(
+  q: Db,
+  args: {
+    submissionId: string;
+    documentIds: string[];
+    appUrl: string;
+    senderName: string;
+    note?: string;
+    createdBy: string;
+    send: Sender;
+  },
+): Promise<{ sent: boolean; links: number }> {
+  if (args.documentIds.length === 0) throw new UserError("Pick at least one document");
+  const row = (
+    await q.query<{
+      to: string;
+      fname: string;
+      funder_id: string;
+      thread: string | null;
+      msg: string | null;
+      number: number;
+      business: string;
+      client_id: string;
+      status: string;
+    }>(
+      `select f.submission_email as to, f.name as fname, f.id as funder_id, s.gmail_thread_id as thread, s.gmail_message_id as msg,
+              d.number, c.business_name as business, s.client_id, s.status
+         from submissions s join funders f on f.id = s.funder_id join deals d on d.id = s.deal_id join clients c on c.id = s.client_id
+        where s.id = $1`,
+      [args.submissionId],
+    )
+  ).rows[0];
+  if (!row) throw new UserError("Submission not found");
+  if (!row.to) throw new UserError("This lender has no submission email on file");
+  const lines: string[] = [];
+  for (const documentId of args.documentIds) {
+    const doc = await openDocument(q, documentId); // visible, and clean — nothing unscanned leaves the shop
+    const link = await mintDownloadLink(q, {
+      documentId,
+      createdBy: args.createdBy,
+      lenderId: row.funder_id,
+      watermark: `Prepared for ${row.fname}`,
+      minutes: 7 * 24 * 60,
+      maxDownloads: 10,
+    });
+    const label =
+      (
+        await q.query<{ l: string }>(
+          "select app.document_label(kind, period) as l from documents where id = $1",
+          [documentId],
+        )
+      ).rows[0]?.l ?? doc.filename;
+    lines.push(`${label}: ${args.appUrl}/d/${link.token}`);
+  }
+  const text = [
+    `Hi ${row.fname} team,`,
+    "",
+    `The documents you asked for on ${row.business} (D-${row.number}):`,
+    "",
+    ...lines,
+    "",
+    "Each link is good for 7 days and the copies carry your name.",
+    ...(args.note?.trim() ? ["", args.note.trim()] : []),
+    "",
+    "Thanks,",
+    args.senderName,
+  ].join("\n");
+  await args.send({
+    to: row.to,
+    subject: `Re: [D-${row.number}] ${row.business} — documents`,
+    text,
+    threadId: row.thread ?? undefined,
+    inReplyTo: row.msg ?? undefined,
+    references: row.msg ? [row.msg] : undefined,
+  });
+  if (row.status === "stips_requested") {
+    await q.query("select set_submission_status($1, 'sent', null, 'stips sent')", [
+      args.submissionId,
+    ]);
+  }
+  await q.query(
+    "insert into activities (user_id, client_id, kind, body) select user_id, client_id, 'system', $2 from submissions where id = $1",
+    [
+      args.submissionId,
+      `Sent ${lines.length} document${lines.length === 1 ? "" : "s"} to ${row.fname}`,
+    ],
+  );
+  return { sent: true, links: lines.length };
 }
 
 /**

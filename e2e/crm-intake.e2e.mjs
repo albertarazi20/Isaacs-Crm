@@ -1,9 +1,10 @@
 // Lead Intake: a lead typed in lands as a merchant, in the bucket, with the welcome email queued. Run: pnpm e2e crm-intake
-import { BASE, check, openBrowser, withDb } from "./lib.mjs";
+import { BASE, check, openBrowser, setRole, withDb } from "./lib.mjs";
 
 const one = (db, sql, params) => db.query(sql, params).then((r) => r.rows[0]);
 
 export default async function intakeFlow({ email }) {
+  await setRole(email, "manager");
   const { browser, page } = await openBrowser(email);
   await page.goto(`${BASE}/lead-intake`, { waitUntil: "networkidle" });
   check(

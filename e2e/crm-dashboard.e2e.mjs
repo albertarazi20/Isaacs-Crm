@@ -1,9 +1,10 @@
 // Dashboard: the month scoreboard, the do-this-now list and a goal that really lands in the database. Run: pnpm e2e crm-dashboard
-import { BASE, check, openBrowser, withDb } from "./lib.mjs";
+import { BASE, check, openBrowser, setRole, withDb } from "./lib.mjs";
 
 const one = (db, sql, params) => db.query(sql, params).then((r) => r.rows[0]);
 
 export default async function dashboardFlow({ email }) {
+  await setRole(email, "manager");
   const { browser, page } = await openBrowser(email);
   await page.goto(`${BASE}/`, { waitUntil: "networkidle" });
   check(
