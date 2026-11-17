@@ -109,6 +109,15 @@ export default async function clientsFlow({ email }) {
   await page.getByPlaceholder(/Search name/).fill("zzzz-no-such-merchant");
   check("a search with no matches says so", await page.getByText("No matches").isVisible());
 
+  // Most active: the merchant's own last move first (the page error check above fails if the sort throws)
+  await page.getByPlaceholder(/Search name/).fill("");
+  await page.getByLabel("Sort by").selectOption("active");
+  check(
+    "Most active sorts the list without an error",
+    (await page.getByLabel("Sort by").inputValue()) === "active" &&
+      (await page.locator('[role="table"][aria-label="Merchants"] [role="row"]').count()) > 1,
+  );
+
   await page.setViewportSize({ width: 390, height: 844 });
   await page.getByPlaceholder(/Search name/).fill("");
   const overflow = await page.evaluate(

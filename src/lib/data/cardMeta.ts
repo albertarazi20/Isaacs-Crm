@@ -19,7 +19,13 @@ export interface CardMeta {
 
 /** Bucket, owner and hand-off for every merchant the caller can see, by client id. Trash is left out. */
 export async function listCardMeta(q: Db): Promise<Record<string, CardMeta>> {
-  const { rows } = await q.query<CardMeta & { id: string }>(
+  const { rows } = await q.query<
+    Omit<CardMeta, "brought_in_at" | "active_at"> & {
+      id: string;
+      brought_in_at: string | Date | null;
+      active_at: string | Date | null;
+    }
+  >(
     `select c.id, c.brought_in_at, c.user_id as owner_id,
             coalesce((select u.name from app_users u where u.id = c.user_id), '') as owner_name,
             e.bucket_id, e.bucket_name,
@@ -38,7 +44,10 @@ export async function listCardMeta(q: Db): Promise<Record<string, CardMeta>> {
           order by en.entered_at desc limit 1) e on true
       where not exists (select 1 from trashed_clients t where t.client_id = c.id)`,
   );
+  // timestamps arrive from pg as Date objects; the list sorts and compares them as ISO strings
+  const iso = (v: string | Date | null) => (v === null ? null : new Date(v).toISOString());
   const out: Record<string, CardMeta> = {};
-  for (const { id, ...meta } of rows) out[id] = meta;
+  for (const { id, ...meta } of rows)
+    out[id] = { ...meta, brought_in_at: iso(meta.brought_in_at), active_at: iso(meta.active_at) };
   return out;
 }

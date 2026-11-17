@@ -58,6 +58,9 @@ describe("the merchant's own last move", () => {
     // the staff upload just now is the rep's move; the merchant's own upload was an hour ago
     expect(hoursAgo(meta[sent]!.active_at)).toBeCloseTo(1, 0);
     expect(meta[called]!.active_at).toBeNull();
+    // the list sorts these as text: an ISO string, never a Date object
+    expect(typeof meta[opened]!.active_at).toBe("string");
+    expect(meta[opened]!.active_at).toMatch(/^\d{4}-\d{2}-\d{2}T.*Z$/);
     // another rep's merchant is not on this rep's list at all
     expect(meta[theirs]).toBeUndefined();
   });
