@@ -129,6 +129,10 @@ export function TimeSelect({
           id={id}
           role="dialog"
           aria-label={label}
+          // Inside a Field (a <label>) the browser clicks the label's own button again after a click on
+          // something that has since left the page. A full pick removes this popover, so without this
+          // the picker opened again the moment the time was chosen.
+          onClick={(e) => e.preventDefault()}
           className={cn(
             "absolute right-0 z-30 w-56 rounded-xl border border-border bg-surface p-2 shadow-pop",
             up ? "bottom-full mb-1" : "mt-1",

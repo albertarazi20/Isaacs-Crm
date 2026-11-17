@@ -158,7 +158,7 @@ export function ClientHero({ detail, className }: { detail: ClientDetail; classN
           <div className="min-w-0 flex-1 basis-64">
             <Link
               href="/clients"
-              className="eyebrow mb-1.5 inline-flex items-center gap-1.5 transition hover:text-text"
+              className="eyebrow mb-1.5 inline-flex items-center gap-1.5 transition hover:text-text max-sm:-mt-3 max-sm:mb-0 max-sm:h-10"
             >
               <Icon name="arrowLeft" className="size-3" />
               Merchants
@@ -249,7 +249,7 @@ export function ClientHero({ detail, className }: { detail: ClientDetail; classN
             "No follow-up set"
           )}
         </p>
-        <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
+        <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto sm:flex-wrap sm:items-center">
           <div className="relative w-full sm:w-auto">
             <select
               aria-label="Move to stage"

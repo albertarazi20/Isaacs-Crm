@@ -16,16 +16,34 @@ export default async function clientsFlow({ email }) {
         )
         .then((r) => r.rows[0].n),
     );
+  // The line under the filter bar: "232 merchants" with nothing narrowing it, "12 of 232 merchants" otherwise.
   const shown = async () => {
-    const t = await page.getByText(/^\d+ of \d+$/).innerText();
-    return Number(t.split(" of ")[0]);
+    const t = await page.getByText(/^\d+( of \d+)? merchants?$/).innerText();
+    return Number(t.split(" ")[0]);
   };
+  const filters = page.getByRole("button", { name: /^Filters/ });
+  const clear = page.getByRole("button", { name: "Clear filters" }).first();
 
   await page.goto(`${BASE}/clients`, { waitUntil: "networkidle" });
   const total = await q("true");
   check("all clients are listed", (await shown()) === total, `shown ${await shown()} db ${total}`);
 
-  await page.getByRole("button", { name: /^More filters/ }).click();
+  // The stage groups are pills in the bar; the rest of the filters sit behind the Filters button.
+  await page
+    .getByRole("group", { name: "Filter by group" })
+    .getByRole("button", { name: /^Trash/ })
+    .click();
+  check(
+    "a group pill agrees with the database",
+    (await shown()) === (await q("c.stage = 'dead'")),
+    `shown ${await shown()}`,
+  );
+  await page
+    .getByRole("group", { name: "Filter by group" })
+    .getByRole("button", { name: /^All/ })
+    .click();
+
+  await filters.click();
 
   await page.getByLabel("Stage", { exact: true }).selectOption("dead");
   check(
@@ -33,8 +51,25 @@ export default async function clientsFlow({ email }) {
     (await shown()) === (await q("c.stage = 'dead'")),
     `shown ${await shown()}`,
   );
-  await page.getByRole("button", { name: "Clear filters" }).click();
-  check("clear filters brings everyone back", (await shown()) === total);
+  // A filtered view lives in the address bar, so it can be bookmarked or sent.
+  check(
+    "the filter is written to the address bar",
+    new URL(page.url()).searchParams.get("stage") === "dead",
+    page.url(),
+  );
+  await page.reload({ waitUntil: "networkidle" });
+  check(
+    "opening that address shows the same filtered list with the filters open",
+    (await shown()) === (await q("c.stage = 'dead'")) &&
+      (await page.getByLabel("Stage", { exact: true }).inputValue()) === "dead",
+    `shown ${await shown()}`,
+  );
+  await clear.click();
+  check(
+    "clear filters brings everyone back",
+    (await shown()) === total && new URL(page.url()).search === "",
+    page.url(),
+  );
 
   await page.getByLabel("Wants at least").selectOption({ label: "Wants $50k or more" });
   check(
@@ -42,7 +77,7 @@ export default async function clientsFlow({ email }) {
     (await shown()) === (await q("coalesce(c.wanted_amount_cents, 0) >= 5000000")),
     `shown ${await shown()}`,
   );
-  await page.getByRole("button", { name: "Clear filters" }).click();
+  await clear.click();
 
   await page.getByLabel("Not contacted in").selectOption("never");
   check(
@@ -50,8 +85,8 @@ export default async function clientsFlow({ email }) {
     (await shown()) === (await q("c.last_touch_at is null")),
     `shown ${await shown()}`,
   );
-  const label = await page.getByRole("button", { name: /^More filters/ }).innerText();
-  check("the button says how many filters are on", /\(1\)/.test(label), label);
+  const label = (await filters.innerText()).replace(/\s+/g, " ").trim();
+  check("the button says how many filters are on", /^Filters ?1$/.test(label), label);
 
   // The download is exactly what is on screen.
   const [download] = await Promise.all([

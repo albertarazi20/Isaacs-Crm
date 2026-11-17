@@ -213,7 +213,7 @@ function SidebarBody({
     (v) => pathname === v.href || pathname.startsWith(`${v.href}/`),
   );
   const inSettings = pathname.startsWith("/settings");
-  // what the person toggled by hand; until they do, a dropdown is open when you are inside it (Follow Up always)
+  // what the person toggled by hand; until they do, a dropdown is open when you are inside it
   const [manual, setManual] = useState<Partial<Record<GroupKey, boolean>>>({});
   const [account, setAccount] = useState(false);
   const isOpen = (k: GroupKey, fallback: boolean) => manual[k] ?? fallback;
@@ -222,7 +222,10 @@ function SidebarBody({
 
   const shared = buckets.filter((b) => !b.mine);
   const mine = buckets.filter((b) => b.mine);
-  const followOpen = isOpen("follow", true);
+  // Follow Up starts open where the buckets are the point (here and on the Overview); elsewhere the group you are in
+  // is the one that starts open, so the rail never needs scrolling to reach where you are
+  const followDefault = inFollow || pathname === "/";
+  const followOpen = isOpen("follow", followDefault);
   const merchantsOpen = isOpen("merchants", inMerchants);
   const settingsOpen = isOpen("settings", inSettings);
 
@@ -274,7 +277,7 @@ function SidebarBody({
           label="Follow Up"
           active={inFollow}
           open={followOpen}
-          onToggle={() => toggle("follow", true)}
+          onToggle={() => toggle("follow", followDefault)}
         >
           <SubLink
             href="/follow-up"

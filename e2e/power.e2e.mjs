@@ -1,4 +1,4 @@
-// Power dial, bulk reschedule, snooze guard, biggest-first ranking, global search and the phone tab bar.
+// Power dial, bulk reschedule, snooze guard, biggest-first ranking, global search and the phone's top bar and menu.
 //   CHROMIUM_PATH=... DATABASE_URL=... pnpm e2e power
 // Every check asserts on DATABASE ROWS (or on what the page really shows), never on "it returned 200".
 import { mkdirSync } from "node:fs";
@@ -373,12 +373,13 @@ export default async function powerFlow({ email }) {
     .evaluateAll((els) => els.map((e) => e.textContent?.trim()));
   const firstMover = uiOrder.find((n) => moving.some((m) => m.business_name === n));
 
-  await page.getByRole("button", { name: "Reschedule all…" }).click();
+  await page.getByRole("button", { name: "Reschedule all", exact: true }).click();
   const dlg = page.getByRole("dialog");
   await dlg.waitFor();
   const summary = async () => {
+    // the line is set in small caps, and innerText reads it as drawn
     const t = await dlg.locator("[aria-live=polite]").innerText();
-    return Number(/(\d+) clients?, biggest asks first/.exec(t)?.[1] ?? 0);
+    return Number(/(\d+) clients?, biggest asks first/i.exec(t)?.[1] ?? 0);
   };
   check(
     "preview says how many will move (application-in merchants kept by default)",
@@ -510,12 +511,12 @@ export default async function powerFlow({ email }) {
   check("Enter opens the client page", true);
 
   await page.goto(`${BASE}/today`, { waitUntil: "networkidle" });
-  await page.getByRole("button", { name: "Find a client" }).click();
+  await page.locator("aside").getByRole("button", { name: "Find a client" }).click();
   await palette.waitFor();
   await palette.getByRole("combobox").fill("hartman");
   await palette.getByRole("option").first().waitFor({ timeout: 8000 });
   check(
-    "the header search box opens it too and finds by name",
+    "the sidebar's search button opens it too and finds by name",
     (await palette.getByRole("option").count()) >= 1 &&
       (await palette.getByRole("option").first().innerText()).includes("Hartman"),
   );
@@ -542,22 +543,23 @@ export default async function powerFlow({ email }) {
     ),
   );
   await page.goto(`${BASE}/today`, { waitUntil: "networkidle" });
-  await page.getByRole("link", { name: /^Start dialing \(3\)/ }).click();
+  await page.getByRole("link", { name: /^Start power dial\s*3$/ }).click();
   await page.waitForURL("**/dial");
   const region = page.getByRole("region", { name: "Power dial" });
   const progress = () => region.locator("p[aria-live=polite]").innerText();
   const title = () => region.getByRole("heading", { level: 1 }).innerText();
   await region.getByRole("heading", { level: 1 }).waitFor();
   check(
-    "'Start dialing (3)' opens the dial with the first of three",
+    "'Start power dial' (3) opens the dial with the first of three",
     (await progress()) === "1 of 3",
     await progress(),
   );
   const a = await title();
   check(
     "the card shows his phone, what he wants and the last call",
-    (await region.innerText()).includes("Wants") &&
-      (await region.innerText()).includes("Last call"),
+    // the labels are set in small caps, so they are matched as written, not as drawn
+    (await region.locator("dt", { hasText: /^Wants$/ }).isVisible()) &&
+      (await region.locator("dt", { hasText: /^Last call$/ }).isVisible()),
   );
   await shot(page, "dial-light");
 
@@ -705,7 +707,11 @@ export default async function powerFlow({ email }) {
   await shot(page, "dial-done-light");
   await region.getByRole("link", { name: "Done for today" }).click();
   await page.waitForURL(`${BASE}/`);
-  check("'Done for today' goes back to Today", true);
+  check(
+    "'Done for today' leaves the dial for the Overview",
+    (await until(() => page.getByRole("region", { name: "Right now" }).isVisible())) &&
+      (await page.getByRole("region", { name: "Power dial" }).count()) === 0,
+  );
   const left = await one(
     `select count(*)::int as n from client_cards c join app_users u on u.id = c.user_id
       where u.email = $1 and c.next_due_on <= ${NY_TODAY} and c.contact_status <> 'dnc'`,
@@ -736,7 +742,7 @@ export default async function powerFlow({ email }) {
   await browser.close();
 
   // ---------------------------------------------------------------------------------------------
-  // 7. The phone: tab bar, no top links, safe room at the bottom
+  // 7. The phone: a top bar, the sidebar's navigation behind its Menu button, nothing hidden under the bar
   const m = await openBrowser(
     email,
     { width: 390, height: 844 },
@@ -744,33 +750,40 @@ export default async function powerFlow({ email }) {
   );
   const mp = m.page;
   await mp.goto(`${BASE}/today`, { waitUntil: "networkidle" });
-  const bar = mp.getByRole("navigation", { name: "Primary" });
-  check("the bottom tab bar is visible at 390px", await bar.isVisible());
+  // a dialog's own header is a banner too, so the app's bar is the one with the Menu button
+  const bar = mp.getByRole("banner").filter({ has: mp.getByRole("button", { name: "Menu" }) });
+  check("the top bar is visible at 390px", await bar.isVisible());
   check(
-    "the top links are hidden at 390px",
-    !(await mp.getByRole("navigation", { name: "Main" }).isVisible()),
+    "the sidebar is hidden at 390px",
+    !(await mp.locator("aside").isVisible()) &&
+      !(await mp.getByRole("navigation", { name: "Main" }).isVisible()),
   );
-  const labels = await bar.locator("a, button").allInnerTexts();
+  const labels = await bar
+    .locator("a, button")
+    .evaluateAll((els) =>
+      els.map((e) => (e.getAttribute("aria-label") ?? e.textContent ?? "").trim()),
+    );
   check(
-    "tabs: Home, Intake, Follow, Merchants, More",
-    labels.map((l) => l.replace(/\d+/g, "").trim()).join("|") ===
-      "Home|Intake|Follow|Merchants|More",
+    "the bar holds: Menu, the brand, Find a client, Alerts, New lead",
+    labels.map((l) => l.replace(/, \d+ unread$/, "")).join("|") ===
+      "Menu|Selective CRM home|Find a client|Alerts|New lead",
     labels.join("|"),
   );
-  check("Today shows the due badge", (await bar.getByLabel(/follow-ups due/).count()) === 1);
   const vp = mp.viewportSize();
-  const bb = await bar.boundingBox();
+  const barBox = await bar.boundingBox();
+  const barBottom = (barBox?.y ?? 0) + (barBox?.height ?? 0);
   check(
-    "it is fixed to the bottom edge",
-    Math.abs((bb?.y ?? 0) + (bb?.height ?? 0) - (vp?.height ?? 0)) <= 1,
-    JSON.stringify(bb),
+    "it sits on the top edge, full width",
+    Math.abs(barBox?.y ?? -1) <= 1 && Math.abs((barBox?.width ?? 0) - (vp?.width ?? 0)) <= 1,
+    JSON.stringify(barBox),
   );
   check(
-    "brand, search and Add client are still in the header",
-    (await mp.getByRole("link", { name: "Selective CRM home" }).isVisible()) &&
-      (await mp.getByRole("button", { name: "Find a client" }).isVisible()) &&
-      (await mp.getByRole("button", { name: "+ Add client" }).isVisible()),
+    "brand, search and New lead are in the bar",
+    (await bar.getByRole("link", { name: "Selective CRM home" }).isVisible()) &&
+      (await bar.getByRole("button", { name: "Find a client" }).isVisible()) &&
+      (await bar.getByRole("button", { name: "New lead" }).isVisible()),
   );
+  const firstTop = (await mp.getByRole("heading", { level: 1 }).first().boundingBox())?.y ?? 0;
   await mp.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
   await mp.waitForTimeout(300);
   const lastCard = await mp.evaluate(
@@ -779,30 +792,69 @@ export default async function powerFlow({ email }) {
         .bottom ?? 0,
   );
   check(
-    "the last card clears the bar when scrolled to the bottom",
-    lastCard <= (bb?.y ?? 0) + 1,
-    `${lastCard} vs ${bb?.y}`,
+    "the page starts below the bar, and the last card is clear of it and on screen when scrolled to the bottom",
+    firstTop >= barBottom && lastCard > barBottom && lastCard <= (vp?.height ?? 0),
+    `first ${firstTop}, last ${lastCard}, bar ends ${barBottom}, screen ${vp?.height}`,
   );
   await shot(mp, "today-390");
-  await bar.getByRole("button", { name: "More" }).click();
-  const sheet = mp.getByRole("dialog", { name: "More" });
-  await sheet.waitFor();
-  const more = (await sheet.innerText()).replace(/\n+/g, "|");
+
+  // The Menu button slides the sidebar's navigation in; the due count rides on the Call list row.
+  const dueNow = (
+    await one(
+      `select count(distinct t.client_id)::int as n from timers t join clients c on c.id = t.client_id
+         join app_users u on u.id = c.user_id
+        where u.email = $1 and t.done_at is null and t.due_on <= ${NY_TODAY} and c.contact_status <> 'dnc'`,
+      [email],
+    )
+  ).n;
+  await bar.getByRole("button", { name: "Menu" }).click();
+  const menu = mp.getByRole("dialog", { name: "Menu" });
+  await menu.waitFor();
+  const nav = menu.getByRole("navigation", { name: "Main" });
+  const callList = nav.getByRole("link", { name: /^Call list/ });
   check(
-    "More lists Alerts, Today's calls, Power dial, Trash, Settings and Log out, and nothing of the removed pages",
-    ["Alerts", "Today's calls", "Power dial", "Trash", "Settings", "Log out"].every((x) =>
-      more.includes(x),
-    ) && !/Pipeline board|Winback|Funded|Deals|All merchants/.test(more),
-    more,
+    "the Menu shows the due count on the Call list row (database)",
+    dueNow > 0 && Number((await callList.innerText()).replace(/\D/g, "")) === dueNow,
+    `${(await callList.innerText()).replace(/\s+/g, " ")} vs ${dueNow}`,
   );
-  await shot(mp, "more-390");
-  await sheet.getByRole("link", { name: "Settings" }).click();
+  await menu.getByRole("button", { name: "Account" }).click();
+  const menuText = (await menu.innerText()).replace(/\n+/g, "|");
+  check(
+    "the Menu holds Overview, Follow Up, Merchants (with the call list, power dial and trash), Settings, Alerts and Log out, and nothing of the removed pages",
+    (await nav.getByRole("link", { name: /^Overview/ }).isVisible()) &&
+      (await nav.getByRole("button", { name: /^Follow Up/ }).isVisible()) &&
+      (await nav.getByRole("button", { name: /^Merchants/ }).getAttribute("aria-expanded")) ===
+        "true" &&
+      (await callList.isVisible()) &&
+      (await nav.getByRole("link", { name: /^Power dial/ }).isVisible()) &&
+      (await nav.getByRole("link", { name: /^Trash/ }).isVisible()) &&
+      (await nav.getByRole("button", { name: /^Settings/ }).isVisible()) &&
+      (await menu.getByRole("link", { name: /^Alerts/ }).isVisible()) &&
+      (await menu.getByRole("button", { name: "Log out" }).isVisible()) &&
+      !/Pipeline board|Winback|Funded|Deals|Lead intake/i.test(menuText),
+    menuText,
+  );
+  await shot(mp, "menu-390");
+  await nav.getByRole("button", { name: /^Settings/ }).click();
+  await nav.getByRole("link", { name: /^My account/ }).click();
   await mp.waitForURL("**/settings");
   check(
-    "a More link navigates and the sheet closes",
-    (await mp.getByRole("dialog", { name: "More" }).count()) === 0 ||
-      !(await mp.getByRole("dialog", { name: "More" }).isVisible()),
+    "a Menu link navigates and the menu closes",
+    await until(async () => !(await menu.isVisible())),
   );
+
+  // The bar is sticky: on a long page it is still on the top edge after scrolling.
+  await mp.goto(`${BASE}/clients`, { waitUntil: "networkidle" });
+  await mp.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
+  await mp.waitForTimeout(300);
+  const scrolled = await mp.evaluate(() => window.scrollY);
+  const stuck = await bar.boundingBox();
+  check(
+    "the bar stays on the top edge when a long page is scrolled",
+    scrolled > 100 && Math.abs(stuck?.y ?? -1) <= 1,
+    `scrolled ${scrolled}px, bar at ${stuck?.y}`,
+  );
+
   for (const path of ["/", "/clients", "/dial"]) {
     await mp.goto(`${BASE}${path}`, { waitUntil: "networkidle" });
     const overflow = await mp.evaluate(
@@ -810,7 +862,7 @@ export default async function powerFlow({ email }) {
     );
     check(`mobile ${path} has no horizontal overflow`, overflow <= 1, `${overflow}px`);
   }
-  // /dial at 390: full screen, big touch targets, no tab bar in the way.
+  // /dial at 390: full screen, big touch targets, the app's bar out of the way.
   await mp.goto(`${BASE}/dial`, { waitUntil: "networkidle" });
   await mp.getByRole("heading", { level: 1 }).first().waitFor();
   const tall = async (loc) => (await loc.boundingBox())?.height ?? 0;
@@ -822,8 +874,16 @@ export default async function powerFlow({ email }) {
       (await tall(dialRegion.getByRole("button", { name: /^Next/ }))) >= 44,
   );
   check(
-    "…and the tab bar is out of the way",
-    !(await mp.getByRole("navigation", { name: "Primary" }).isVisible()),
+    "…and the app's top bar is out of the way (covered by the dial and inert)",
+    await mp.evaluate(() => {
+      const btn = document.querySelector('[data-app-header] button[aria-label="Menu"]');
+      if (!btn) return false;
+      const r = btn.getBoundingClientRect();
+      const onTop = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+      return (
+        Boolean(onTop?.closest('[aria-label="Power dial"]')) && btn.closest("[inert]") !== null
+      );
+    }),
   );
   await shot(mp, "dial-390");
   await mp.emulateMedia({ colorScheme: "dark" });
@@ -831,13 +891,13 @@ export default async function powerFlow({ email }) {
   await shot(mp, "today-390-dark");
   await m.browser.close();
 
-  // Desktop width: no tab bar, top links back.
+  // Desktop width: no top bar, the sidebar back.
   const wide = await openBrowser(email, { width: 1280, height: 800 });
   await wide.page.goto(`${BASE}/today`, { waitUntil: "networkidle" });
   check(
-    "at desktop width the tab bar is hidden and the top links show",
-    !(await wide.page.getByRole("navigation", { name: "Primary" }).isVisible()) &&
-      (await wide.page.getByRole("navigation", { name: "Main" }).isVisible()),
+    "at desktop width the top bar is hidden and the sidebar shows",
+    !(await wide.page.getByRole("button", { name: "Menu" }).isVisible()) &&
+      (await wide.page.locator("aside").getByRole("navigation", { name: "Main" }).isVisible()),
   );
   await wide.browser.close();
 }

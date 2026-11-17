@@ -1,6 +1,8 @@
 // The page controls for the intake and follow-up backends, each driven in the browser and then read back from the
 // DATABASE: paste a lead line, the cross-rep owner warning and the manager's override, bulk intake, the reply tag chip,
 // pause until a date, bucket scores, and the merchant's application link and signed application.
+// Intake lives in the New lead sheet (dialog "Bring a merchant in"): "One lead" is the form, "From your sheets" the
+// staged rows. A merchant's actions on Follow Up live in the drawer its row opens.
 // Run: CHROMIUM_PATH=... BASE_URL=http://localhost:3007 node e2e/run.mjs wire-intake
 import { BASE, check, openBrowser, setRole, withDb } from "./lib.mjs";
 
@@ -32,6 +34,29 @@ const wide = (page) =>
   page.evaluate(
     () => document.documentElement.scrollWidth > document.documentElement.clientWidth + 1,
   );
+
+/** The same question for a sheet, which sits over the page: does it leave the screen, or does anything it scrolls go sideways? */
+const sheetWide = (sheet) =>
+  sheet.evaluate((d) => {
+    const box = d.getBoundingClientRect();
+    if (box.left < -1 || box.right > window.innerWidth + 1) return true;
+    return [d, ...d.querySelectorAll("*")]
+      .filter((el) => el === d || /auto|scroll/.test(getComputedStyle(el).overflowY))
+      .some((el) => el.scrollWidth > el.clientWidth + 1);
+  });
+
+/** The New lead sheet, opened fresh by its own address (the old Lead Intake page redirects to it). */
+async function newLead(page, tab = "One lead") {
+  await page.goto(`${BASE}/?new-lead=1`, { waitUntil: "networkidle" });
+  const sheet = page.getByRole("dialog", { name: "Bring a merchant in" });
+  await sheet.waitFor({ timeout: 10000 });
+  if (tab !== "One lead") {
+    // opened by address the staged rows are asked for when their tab is chosen
+    await sheet.getByRole("tab", { name: new RegExp(`^${tab}`) }).click();
+    await sheet.getByText("File staged sheet rows").waitFor({ timeout: 15000 });
+  }
+  return sheet;
+}
 
 export default async function wireIntake({ email }) {
   // the second rep lives outside the runner's own user, so he is removed here, crash or not (his rows cascade)
@@ -105,27 +130,27 @@ async function flow(email, mikeEmail) {
     };
   });
 
-  // ---------------------------------------------------------------------------------- Lead Intake, as a rep
+  // ------------------------------------------------------------------------------- the New lead sheet, as a rep
   const runsBefore = await withDb((db) =>
     one(db, "select count(*)::int as n from ai_runs where purpose = 'split_lead_line'", []),
   );
   const { browser, context, page } = await openBrowser(email);
-  await page.goto(`${BASE}/lead-intake`, { waitUntil: "networkidle" });
+  const intake = await newLead(page);
 
   // Paste a lead line. Without a model key the box says so and stays shut; with one, a faked answer fills the form.
-  const paste = page.getByLabel("Paste a lead line");
+  const paste = intake.getByLabel("Paste a lead line");
   if (await paste.isDisabled()) {
     check(
       "paste box: disabled, and it says why in words",
-      await page
+      await intake
         .getByText(/The assistant is not set up on this server/)
         .first()
         .isVisible(),
     );
     check(
       "paste box: the Fill button is disabled too, and the form below still works",
-      (await page.getByRole("button", { name: "Fill the form" }).isDisabled()) &&
-        (await page.getByPlaceholder("(305) 555-0100").isEnabled()),
+      (await intake.getByRole("button", { name: "Fill the form" }).isDisabled()) &&
+        (await intake.getByPlaceholder("(305) 555-0100").isEnabled()),
     );
   } else {
     // a key is set on this server. First the real call (a made-up key, so the model refuses): the failure is a toast
@@ -133,15 +158,16 @@ async function flow(email, mikeEmail) {
     await paste.fill(
       `Rosa Lind, E2E Pasted Tacos, ${phone(5)}, rosa@e2e-pasted.test, CA, wants 60k for a truck`,
     );
-    await page.getByRole("button", { name: "Fill the form" }).click();
+    await intake.getByRole("button", { name: "Fill the form" }).click();
     await page.getByRole("alert").first().waitFor({ timeout: 45000 });
     check(
       "paste box: a failed call is an error toast and the form stays empty",
-      (await page.getByPlaceholder("(305) 555-0100").inputValue()) === "" &&
-        (await page.getByText("Filled from the line:").count()) === 0,
+      (await intake.getByPlaceholder("(305) 555-0100").inputValue()) === "" &&
+        (await intake.getByText("Filled from the line:").count()) === 0,
     );
-    // then answer the action ourselves so the page's own wiring is what is tested
-    await page.route("**/lead-intake", async (route) => {
+    // then answer the action ourselves so the page's own wiring is what is tested. The sheet has no address of its
+    // own (an action posts to whatever page it is over), so every request is looked at and only the paste is answered.
+    const answerPaste = async (route) => {
       const req = route.request();
       // only the paste call is answered here; the lookups that follow it (duplicates, sheet, owner) run for real
       if (
@@ -169,19 +195,20 @@ async function flow(email, mikeEmail) {
         contentType: "text/x-component",
         body: `0:{"a":"$@1","f":"","b":"e2e"}\n1:${JSON.stringify({ ok: true, data: { fields } })}\n`,
       });
-    });
+    };
+    await page.route("**/*", answerPaste);
     await paste.fill(
       `Rosa Lind, E2E Pasted Tacos, ${phone(5)}, rosa@e2e-pasted.test, CA, wants 60k for a truck`,
     );
-    await page.getByRole("button", { name: "Fill the form" }).click();
-    await page.getByText("Filled from the line:").waitFor({ timeout: 10000 });
+    await intake.getByRole("button", { name: "Fill the form" }).click();
+    await intake.getByText("Filled from the line:").waitFor({ timeout: 10000 });
     check(
       "paste box: the form is filled and the fields are named",
-      (await page.getByPlaceholder("(305) 555-0100").inputValue()) === phone(5) &&
-        (await page.getByPlaceholder("Mike's Pizza").inputValue()) === "E2E Pasted Tacos" &&
-        (await page.getByText("Amount they want", { exact: true }).count()) >= 1,
+      (await intake.getByPlaceholder("(305) 555-0100").inputValue()) === phone(5) &&
+        (await intake.getByPlaceholder("Mike's Pizza").inputValue()) === "E2E Pasted Tacos" &&
+        (await intake.getByText("Amount they want", { exact: true }).count()) >= 1,
     );
-    await page.unroute("**/lead-intake");
+    await page.unroute("**/*", answerPaste);
   }
   const runsAfter = await withDb((db) =>
     one(db, "select count(*)::int as n from ai_runs where purpose = 'split_lead_line'", []),
@@ -194,27 +221,27 @@ async function flow(email, mikeEmail) {
 
   // The duplicate warning: another rep owns this number
   const ownerLine = "Already in the system: Mike's lead, in Missing statements, touched 3 days ago";
-  await page.reload({ waitUntil: "networkidle" });
-  await page.getByPlaceholder("(305) 555-0100").fill(phone(0));
-  await page.getByPlaceholder("owner@business.com").click();
-  await page.getByText(ownerLine, { exact: true }).waitFor({ timeout: 10000 });
+  await newLead(page);
+  await intake.getByPlaceholder("(305) 555-0100").fill(phone(0));
+  await intake.getByPlaceholder("owner@business.com").click();
+  await intake.getByText(ownerLine, { exact: true }).waitFor({ timeout: 10000 });
   check("rep: the warning shows the server's owner line, owner, bucket and last touch", true);
-  const submit = page.getByRole("button", { name: /Submit to Interested|Add lead/ });
+  const submit = intake.getByRole("button", { name: /Submit to Interested|Add lead/ });
   check(
     "rep: Submit is disabled and the page says a rep cannot add it",
     (await submit.isDisabled()) &&
-      (await page.getByText(/A rep cannot add a lead another rep has/).isVisible()),
+      (await intake.getByText(/A rep cannot add a lead another rep has/).isVisible()),
   );
   check(
     "rep: the warning names no merchant and offers no override",
-    (await page.getByText("Add it anyway").count()) === 0 &&
-      (await page.getByRole("link", { name: /Open E2E Harbor Tacos/ }).count()) === 0,
+    (await intake.getByText("Add it anyway").count()) === 0 &&
+      (await intake.getByRole("link", { name: /Open E2E Harbor Tacos/ }).count()) === 0,
   );
   // the same merchant by email alone
-  await page.getByPlaceholder("(305) 555-0100").fill("");
-  await page.getByPlaceholder("owner@business.com").fill("ROSA@e2e-harbor.test");
-  await page.getByPlaceholder("Mike", { exact: true }).click();
-  await page.getByText(ownerLine, { exact: true }).waitFor({ timeout: 10000 });
+  await intake.getByPlaceholder("(305) 555-0100").fill("");
+  await intake.getByPlaceholder("owner@business.com").fill("ROSA@e2e-harbor.test");
+  await intake.getByPlaceholder("Mike", { exact: true }).click();
+  await intake.getByText(ownerLine, { exact: true }).waitFor({ timeout: 10000 });
   check("rep: the same merchant is found by email alone", true);
   const harborCount = await withDb((db) =>
     one(
@@ -226,14 +253,12 @@ async function flow(email, mikeEmail) {
   check("rep: nothing was written", harborCount.n === 1, JSON.stringify(harborCount));
 
   // ------------------------------------------------------------------------------------------ bulk intake
-  await page.reload({ waitUntil: "networkidle" });
-  const list = page.getByText("File staged sheet rows");
-  await list.waitFor();
+  await newLead(page, "From your sheets");
   for (const n of ["Bulk Fresh One", "Bulk Fresh Two", "Bulk Own Dup", "Bulk Mikes Dup"])
-    await page.getByRole("checkbox", { name: `Check ${n}` }).check();
-  await page.getByLabel("Bucket for these rows").selectOption({ label: "Missing statements" });
-  await page.getByRole("button", { name: "File 4 rows to Missing statements" }).click();
-  const results = page.getByRole("list", { name: "Filing results" });
+    await intake.getByRole("checkbox", { name: `Check ${n}` }).check();
+  await intake.getByLabel("Bucket for these rows").selectOption({ label: "Missing statements" });
+  await intake.getByRole("button", { name: "File 4 rows to Missing statements" }).click();
+  const results = intake.getByRole("list", { name: "Filing results" });
   await results.waitFor({ timeout: 20000 });
   const text = await results.innerText();
   check(
@@ -286,32 +311,33 @@ async function flow(email, mikeEmail) {
       marks[2].client_id !== null,
     JSON.stringify(marks),
   );
-  await page.reload({ waitUntil: "networkidle" });
+  // the list is asked for again (the tab waits for it), so an empty count is the list's answer and not a blank sheet
+  await newLead(page, "From your sheets");
   check(
     "bulk: filed rows leave the staged list",
-    (await page.getByRole("checkbox", { name: /Check Bulk / }).count()) === 0,
+    (await intake.getByRole("checkbox", { name: /Check Bulk / }).count()) === 0,
   );
 
   // ------------------------------------------------------------------- the manager's override on the same number
   await setRole(email, "manager");
   await page.goto(`${BASE}/api/dev-login?email=${encodeURIComponent(email)}`);
-  await page.goto(`${BASE}/lead-intake`, { waitUntil: "networkidle" });
-  await page.getByPlaceholder("(305) 555-0100").fill(phone(0));
-  await page.getByPlaceholder("owner@business.com").click();
-  await page.getByText(ownerLine, { exact: true }).waitFor({ timeout: 10000 });
-  const toggle = page.getByLabel("Add it anyway (manager override)");
+  await newLead(page);
+  await intake.getByPlaceholder("(305) 555-0100").fill(phone(0));
+  await intake.getByPlaceholder("owner@business.com").click();
+  await intake.getByText(ownerLine, { exact: true }).waitFor({ timeout: 10000 });
+  const toggle = intake.getByLabel("Add it anyway (manager override)");
   check(
     "manager: the same line, a link to open the merchant, and an override toggle",
-    (await page.getByRole("link", { name: /Open E2E Harbor Tacos/ }).isVisible()) &&
+    (await intake.getByRole("link", { name: /Open E2E Harbor Tacos/ }).isVisible()) &&
       (await toggle.isVisible()),
   );
-  const submitM = page.getByRole("button", { name: /Submit to Interested|Add lead/ });
+  const submitM = intake.getByRole("button", { name: /Submit to Interested|Add lead/ });
   check("manager: Submit waits for the override", await submitM.isDisabled());
   await toggle.check();
   check("manager: ticking the override enables Submit", await submitM.isEnabled());
-  await page.getByPlaceholder("Mike's Pizza").fill("E2E Harbor Tacos II");
+  await intake.getByPlaceholder("Mike's Pizza").fill("E2E Harbor Tacos II");
   await submitM.click();
-  await page.getByText(/E2E Harbor Tacos II is in/).waitFor({ timeout: 10000 });
+  await intake.getByText(/E2E Harbor Tacos II is in/).waitFor({ timeout: 10000 });
   const both = await withDb((db) =>
     rows(
       db,
@@ -383,7 +409,7 @@ async function flow(email, mikeEmail) {
   );
 
   await page.goto(`${BASE}/follow-up?b=${bucket.id}`, { waitUntil: "networkidle" });
-  const line = (m) => page.locator("li", { hasText: m.business_name }).first();
+  const line = (m) => page.locator("main li", { hasText: m.business_name }).first();
   check(
     "reply chips: interested, sending docs, and not now with its revive date",
     (await line(A).getByText("Interested", { exact: true }).isVisible()) &&
@@ -419,7 +445,7 @@ async function flow(email, mikeEmail) {
     scores,
   );
 
-  // pause D until a date, from the row's own popup
+  // pause D until a date, from the drawer the row opens
   const target = await withDb((db) =>
     one(db, "select ((now() at time zone 'America/New_York')::date + 10)::text as d", []),
   ).then((r) => r.d);
@@ -427,9 +453,11 @@ async function flow(email, mikeEmail) {
     .getByRole("button", { name: new RegExp(`Actions for ${D.business_name}`) })
     .first()
     .click();
-  const pauseButton = page.getByRole("button", { name: "Pause until", exact: true });
+  const drawer = page.getByRole("dialog", { name: D.business_name });
+  await drawer.waitFor({ timeout: 8000 });
+  const pauseButton = drawer.getByRole("button", { name: "Pause until", exact: true });
   check("pause until: the button waits for a date", await pauseButton.isDisabled());
-  await page.getByLabel("Pause until date").fill(target);
+  await drawer.getByLabel("Pause until date").fill(target);
   await pauseButton.click();
   await page
     .getByText(`Paused until ${fmt(target)}`)
@@ -459,7 +487,7 @@ async function flow(email, mikeEmail) {
   );
   check("pause until DB: the timeline says so", queued.n === 1, JSON.stringify(queued));
   // Resume clears the date
-  await page.getByRole("button", { name: "Resume", exact: true }).first().click();
+  await drawer.getByRole("button", { name: "Resume", exact: true }).click();
   const resumed = await until(async () => {
     const r = await withDb((db) =>
       one(
@@ -472,7 +500,7 @@ async function flow(email, mikeEmail) {
   });
   check("resume DB: unpaused, date cleared", resumed?.resume_on === null, JSON.stringify(resumed));
   // a date in the past is refused in words (the input's min stops it in the browser; the action stops it anywhere)
-  const bad = await page.getByLabel("Pause until date").getAttribute("min");
+  const bad = await drawer.getByLabel("Pause until date").getAttribute("min");
   check(
     "pause until: the picker starts tomorrow",
     bad > target.slice(0, 0) && bad.length === 10,
@@ -587,15 +615,23 @@ async function flow(email, mikeEmail) {
 
   // ----------------------------------------------------------------------------- nothing scrolls sideways at 390px
   const phoneView = await openBrowser(email, { width: 390, height: 844 });
-  for (const path of ["/lead-intake", `/follow-up?b=${bucket.id}`, `/clients/${A.id}`]) {
+  for (const path of [`/follow-up?b=${bucket.id}`, `/clients/${A.id}`]) {
     await phoneView.page.goto(`${BASE}${path}`, { waitUntil: "networkidle" });
     check(`390px: ${path.split("?")[0]} does not scroll sideways`, !(await wide(phoneView.page)));
   }
-  await phoneView.page.goto(`${BASE}/lead-intake`, { waitUntil: "networkidle" });
-  await phoneView.page.getByPlaceholder("(305) 555-0100").fill(phone(0));
-  await phoneView.page.getByPlaceholder("owner@business.com").click();
-  await phoneView.page.getByText(ownerLine, { exact: true }).waitFor({ timeout: 10000 });
-  check("390px: the owner warning does not scroll sideways", !(await wide(phoneView.page)));
+  // the intake form is a sheet now, so the sheet is measured as well as the page under it
+  const phoneSheet = await newLead(phoneView.page);
+  check(
+    "390px: the New lead sheet does not scroll sideways",
+    !(await wide(phoneView.page)) && !(await sheetWide(phoneSheet)),
+  );
+  await phoneSheet.getByPlaceholder("(305) 555-0100").fill(phone(0));
+  await phoneSheet.getByPlaceholder("owner@business.com").click();
+  await phoneSheet.getByText(ownerLine, { exact: true }).waitFor({ timeout: 10000 });
+  check(
+    "390px: the owner warning does not scroll sideways",
+    !(await wide(phoneView.page)) && !(await sheetWide(phoneSheet)),
+  );
   await phoneView.browser.close();
 
   await browser.close();

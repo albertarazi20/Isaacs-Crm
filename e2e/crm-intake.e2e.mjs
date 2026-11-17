@@ -1,4 +1,5 @@
-// Lead Intake: a lead typed in lands as a merchant, in the bucket, with the welcome email queued. Run: pnpm e2e crm-intake
+// New lead: a lead typed into the sheet lands as a merchant, in the bucket, and a known phone makes no second one.
+// Run: pnpm e2e crm-intake
 import { BASE, check, openBrowser, setRole, withDb } from "./lib.mjs";
 
 const one = (db, sql, params) => db.query(sql, params).then((r) => r.rows[0]);
@@ -6,24 +7,41 @@ const one = (db, sql, params) => db.query(sql, params).then((r) => r.rows[0]);
 export default async function intakeFlow({ email }) {
   await setRole(email, "manager");
   const { browser, page } = await openBrowser(email);
-  await page.goto(`${BASE}/lead-intake`, { waitUntil: "networkidle" });
+  await page.goto(`${BASE}/`, { waitUntil: "networkidle" });
+  // the Lead Intake page is now a sheet over whatever page you are on, opened by the sidebar's New lead button
+  await page
+    .locator("aside")
+    .getByRole("button", { name: /^New lead/ })
+    .click();
+  const sheet = page.getByRole("dialog", { name: "Bring a merchant in" });
+  await sheet.waitFor({ timeout: 10000 });
   check(
-    "Lead Intake heading",
-    await page.getByRole("heading", { name: "Lead Intake" }).isVisible(),
+    "New lead opens the intake sheet on its One lead tab",
+    (await sheet.getByRole("heading", { name: "Bring a merchant in" }).isVisible()) &&
+      (await sheet.getByRole("tab", { name: "One lead" }).getAttribute("aria-selected")) === "true",
   );
-  await page.getByPlaceholder("(305) 555-0100").fill("3055550199");
-  await page.getByPlaceholder("owner@business.com").fill("rosa@e2e-cafe.test");
-  await page.getByPlaceholder("Mike", { exact: true }).fill("Rosa");
-  await page.getByPlaceholder("Ross", { exact: true }).fill("Lind");
-  await page.getByPlaceholder("Mike's Pizza").fill("E2E Cafe");
-  await page.getByPlaceholder("Restaurant").fill("Cafe");
-  await page.getByPlaceholder("FL", { exact: true }).fill("FL");
-  await page.getByPlaceholder("50k").fill("45k");
-  await page.locator("textarea").fill("New espresso machines before the season");
-  const submit = page.getByRole("button", { name: /Submit to Interested/ });
-  check("the button names the bucket", await submit.isVisible());
+  await sheet.getByPlaceholder("(305) 555-0100").fill("3055550199");
+  await sheet.getByPlaceholder("owner@business.com").fill("rosa@e2e-cafe.test");
+  await sheet.getByPlaceholder("Mike", { exact: true }).fill("Rosa");
+  await sheet.getByPlaceholder("Ross", { exact: true }).fill("Lind");
+  await sheet.getByPlaceholder("Mike's Pizza").fill("E2E Cafe");
+  await sheet.getByPlaceholder("Restaurant").fill("Cafe");
+  await sheet.getByPlaceholder("FL", { exact: true }).fill("FL");
+  await sheet.getByPlaceholder("50k").fill("45k");
+  await sheet
+    .getByLabel("What are they looking for")
+    .fill("New espresso machines before the season");
+  const submit = sheet.getByRole("button", { name: /Submit to Interested/ });
+  check(
+    "the button names the bucket",
+    (await submit.isVisible()) &&
+      (await sheet
+        .getByRole("radiogroup", { name: "Bucket" })
+        .getByRole("radio", { name: /^Interested/ })
+        .getAttribute("aria-checked")) === "true",
+  );
   await submit.click();
-  await page.getByText(/E2E Cafe is in/).waitFor({ timeout: 10000 });
+  await sheet.getByText(/E2E Cafe is in/).waitFor({ timeout: 10000 });
   const row = await withDb((db) =>
     one(
       db,
@@ -50,13 +68,13 @@ export default async function intakeFlow({ email }) {
   );
 
   // the same phone again is a duplicate, not a second merchant
-  await page.getByRole("button", { name: "Add another" }).click();
-  await page.getByPlaceholder("(305) 555-0100").fill("3055550199");
-  await page.getByPlaceholder("owner@business.com").click();
-  await page.getByText(/already in the CRM/).waitFor({ timeout: 8000 });
+  await sheet.getByRole("button", { name: "Add another" }).click();
+  await sheet.getByPlaceholder("(305) 555-0100").fill("3055550199");
+  await sheet.getByPlaceholder("owner@business.com").click();
+  await sheet.getByText(/already in the CRM/).waitFor({ timeout: 8000 });
   check("a known phone warns before submit", true);
-  await page.getByRole("button", { name: /Submit to Interested|Add lead/ }).click();
-  await page.getByText(/was already here/).waitFor({ timeout: 10000 });
+  await sheet.getByRole("button", { name: /Submit to Interested|Add lead/ }).click();
+  await sheet.getByText(/was already here/).waitFor({ timeout: 10000 });
   const n = await withDb((db) =>
     one(
       db,

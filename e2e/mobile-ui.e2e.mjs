@@ -68,46 +68,63 @@ export default async function mobileUi({ email }) {
     const m = await openBrowser(email, PHONE, TOUCH);
     const p = m.page;
     await p.goto(`${BASE}/clients`, { waitUntil: "domcontentloaded" });
-    await p.getByRole("heading", { name: "Merchants", exact: true }).waitFor();
+    await p.getByRole("heading", { name: /^All merchants/ }).waitFor();
     check(
-      "the toolbar buttons are not on the page",
-      (await p.getByRole("link", { name: "Download clients (CSV)" }).count()) === 0,
+      "the downloads and Import are not loose buttons on the page",
+      (await p.getByRole("link", { name: /^Download (merchants|notes) \(CSV\)/ }).count()) === 0 &&
+        (await p.getByRole("main").getByRole("link", { name: "Import a file" }).count()) === 0,
     );
-    const more = p.getByRole("button", { name: "More actions" });
+    const more = p.getByRole("button", { name: "Export and tools" });
     const box = await more.boundingBox();
     check(
-      "a '…' button replaces them, at least 40px square",
+      "one Export menu button holds them, at least 40px square",
       !!box && box.width >= 40 && box.height >= 40,
       JSON.stringify(box),
     );
     await more.tap();
-    // the menu's own panel: a merchant card in the Trash stage is also a link with "Trash" in its name
+    // the menu's own panel: the Menu and the cards have links of their own
     const panel = p.locator(`[id="${await more.getAttribute("aria-controls")}"]`);
-    const items = await panel.getByRole("link").allInnerTexts();
+    const items = (await panel.getByRole("link").allInnerTexts()).map((t) => t.trim());
     check(
-      "the menu has all five: both downloads, Import, Lead intake, Trash",
-      items.length === 5 && !items.includes("Reports"),
+      "the menu has all three: both downloads and Import (New lead is its own button, Trash is in the Menu)",
+      items.join("|") === "Download merchants (CSV)|Download notes (CSV)|Import a file",
       JSON.stringify(items),
+    );
+    check(
+      "New lead sits beside it as the page's one main button, at least 40px tall",
+      ((await p.getByRole("main").getByRole("button", { name: "New lead" }).boundingBox())
+        ?.height ?? 0) >= 40,
     );
     await shot(p, "clients-menu-open");
     await p.keyboard.press("Escape");
     check(
       "Escape closes the menu",
-      (await panel.getByRole("link", { name: "Trash" }).count()) === 0,
+      (await panel.getByRole("link", { name: "Import a file" }).count()) === 0,
     );
     await more.tap();
-    await panel.getByRole("link", { name: "Trash" }).tap();
-    await p.waitForURL(/\/trash/);
-    check("a menu item goes to its page", /\/trash/.test(p.url()));
+    await panel.getByRole("link", { name: "Import a file" }).tap();
+    await p.waitForURL(/\/import/);
+    check("a menu item goes to its page", /\/import/.test(p.url()));
     await p.goBack();
-    await p.getByRole("heading", { name: "Merchants", exact: true }).waitFor();
+    await p.getByRole("heading", { name: /^All merchants/ }).waitFor();
+    // Trash moved from this menu to the phone's Menu, under Merchants.
+    await p.getByRole("button", { name: "Menu" }).tap();
+    const menu = p.getByRole("dialog", { name: "Menu" });
+    await menu.getByRole("link", { name: /^Trash/ }).tap();
+    await p.waitForURL(/\/trash/);
+    check(
+      "Trash is reached from the Menu, which closes behind it",
+      /\/trash/.test(p.url()) && !!(await until(async () => !(await menu.isVisible()))),
+    );
+    await p.goBack();
+    await p.getByRole("heading", { name: /^All merchants/ }).waitFor();
 
-    const first = p.locator("ul[aria-label=Clients] > li").first();
+    const first = p.locator("ul[aria-label=Merchants] > li").first();
     await first.waitFor();
     const geo = await p.evaluate(() => {
-      const li = document.querySelector("ul[aria-label=Clients] > li");
+      const li = document.querySelector("ul[aria-label=Merchants] > li");
       const r = li?.getBoundingClientRect();
-      const links = [...document.querySelectorAll("ul[aria-label=Clients] > li")].length;
+      const links = [...document.querySelectorAll("ul[aria-label=Merchants] > li")].length;
       const over = document.documentElement.scrollWidth - innerWidth;
       return {
         top: r?.top ?? -1,
@@ -131,17 +148,35 @@ export default async function mobileUi({ email }) {
     );
     check(`there is one card per merchant (${total})`, geo.links === total, `${geo.links}`);
     const cardText = await first.innerText();
-    check(
-      "a card shows the date he is due (a chip like 'Today' / 'in 3 days' plus the date)",
-      /Today|Tomorrow|overdue|in \d+ (days|weeks|months)|No follow-up/.test(cardText) &&
-        /[A-Z][a-z]{2} \d{1,2}/.test(cardText),
-      cardText.replace(/\s+/g, " ").slice(0, 120),
+    // The list opens in follow-up order, so the first card is the merchant due soonest: read his date from the database.
+    const soonest = await one(
+      `select c.business_name, c.next_due_on::text due from client_cards c join app_users u on u.id = c.user_id
+        where u.email = $1 and c.next_due_on is not null order by c.next_due_on, c.business_name limit 1`,
+      [email],
     );
-    const visibleDue = await first.evaluate((li) => {
-      const chip = li.querySelector("span.rounded-md");
-      const r = chip?.getBoundingClientRect();
-      return !!r && r.left >= 0 && r.right <= innerWidth;
-    });
+    const gap = Math.round(
+      (Date.parse(`${soonest.due}T00:00:00Z`) - Date.parse(`${today}T00:00:00Z`)) / 86_400_000,
+    );
+    const dueWords =
+      gap === 0
+        ? "Today"
+        : gap === 1
+          ? "Tomorrow"
+          : gap < 0
+            ? `${-gap} day${gap === -1 ? "" : "s"} overdue`
+            : `in ${gap} days`;
+    const dueChip = first.getByText(dueWords, { exact: true });
+    check(
+      "a card says when he is due, in words that match his date in the database",
+      cardText.includes(soonest.business_name) && (await dueChip.count()) === 1,
+      `${cardText.replace(/\s+/g, " ").slice(0, 120)} — expected "${dueWords}" (${soonest.due})`,
+    );
+    const visibleDue =
+      (await dueChip.count()) === 1 &&
+      (await dueChip.evaluate((chip) => {
+        const r = chip.getBoundingClientRect();
+        return r.width > 0 && r.left >= 0 && r.right <= innerWidth;
+      }));
     check("and the due chip is fully on screen (no swipe needed)", visibleDue);
     check(
       "and the stage",
@@ -167,23 +202,41 @@ export default async function mobileUi({ email }) {
     await shot(p, "clients-phone");
     await shot(p, "clients-phone-full", true);
     // Searching still narrows the cards.
-    await p.getByRole("searchbox", { name: "Search clients" }).fill("zzz-nobody");
+    await p.getByRole("searchbox", { name: "Search merchants" }).fill("zzz-nobody");
     check(
       "search with no match shows 'No matches' and no cards",
       (await p.getByText("No matches").isVisible()) &&
-        (await p.locator("ul[aria-label=Clients] > li").count()) === 0,
+        (await p.locator("ul[aria-label=Merchants] > li").count()) === 0,
     );
     await m.browser.close();
 
     const d = await openBrowser(email, { width: 1440, height: 900 });
     await d.page.goto(`${BASE}/clients`, { waitUntil: "domcontentloaded" });
-    await d.page.getByRole("heading", { name: "Merchants", exact: true }).waitFor();
+    await d.page.getByRole("heading", { name: /^All merchants/ }).waitFor();
+    // By design the desktop header now folds the same three into the same Export menu, beside New lead.
+    const dMore = d.page.getByRole("button", { name: "Export and tools" });
+    await dMore.click();
+    const dItems = (
+      await d.page
+        .locator(`[id="${await dMore.getAttribute("aria-controls")}"]`)
+        .getByRole("link")
+        .allInnerTexts()
+    ).map((t) => t.trim());
     check(
-      "desktop keeps the buttons in a row and no '…' menu",
-      (await d.page.getByRole("link", { name: "Download clients (CSV)" }).isVisible()) &&
-        !(await d.page.getByRole("button", { name: "More actions" }).isVisible()),
+      "desktop has the same Export menu beside New lead",
+      dItems.join("|") === "Download merchants (CSV)|Download notes (CSV)|Import a file" &&
+        (await d.page.getByRole("main").getByRole("button", { name: "New lead" }).isVisible()),
+      JSON.stringify(dItems),
     );
-    check("desktop keeps the table", (await d.page.locator("table tbody tr").count()) === total);
+    await d.page.keyboard.press("Escape");
+    const grid = d.page.getByRole("table", { name: "Merchants" });
+    check(
+      "desktop keeps the table, one row per merchant, and not the phone's cards",
+      (await grid.getByRole("row").count()) === total + 1 &&
+        (await grid.getByRole("columnheader", { name: /Next follow-up/ }).isVisible()) &&
+        !(await d.page.locator("ul[aria-label=Merchants]").isVisible()),
+      `${(await grid.getByRole("row").count()) - 1} rows`,
+    );
     await shot(d.page, "clients-desktop");
     await d.browser.close();
   }
@@ -194,11 +247,12 @@ export default async function mobileUi({ email }) {
     const m = await openBrowser(email, PHONE, TOUCH);
     const p = m.page;
     await p.goto(`${BASE}/import`, { waitUntil: "domcontentloaded" });
-    const chooser = p.locator("label", { hasText: "Choose a spreadsheet" });
+    // the chooser is now a drop zone that is also the file input's label ("Drop a CSV here or choose a spreadsheet")
+    const chooser = p.locator("label", { hasText: "choose a spreadsheet" });
     await chooser.waitFor();
     const b = await chooser.boundingBox();
     check(
-      "a 'Choose a spreadsheet' button is there, at least 40px tall",
+      "a 'choose a spreadsheet' drop zone is there, at least 40px tall",
       !!b && b.height >= 40 && b.width >= 120,
       JSON.stringify(b),
     );
@@ -220,15 +274,19 @@ export default async function mobileUi({ email }) {
     const csv = `${SHOTS}/people.csv`;
     writeFileSync(csv, "Business,Owner,Phone,Amount\nZeta Plumbing,Ann Zeta,(212) 555-0111,25k\n");
     await p.setInputFiles("input[type=file]", csv);
+    // a readable file now goes straight to the column check; its name is on the chooser one step back
     check(
-      "after choosing a file its name shows",
-      await p.getByText("people.csv", { exact: true }).isVisible(),
-    );
-    check(
-      "and the wizard reads it (step 2 appears)",
-      await p.getByText("2. Check the columns").isVisible(),
+      "after choosing a file the wizard reads it (the column check appears, step 2 is current)",
+      !!(await until(() => p.getByRole("heading", { name: "Check the columns" }).isVisible())) &&
+        /Match columns/.test(await p.locator("button[aria-current=step]").innerText()),
     );
     await shot(p, "import-after");
+    await p.getByRole("button", { name: "Back", exact: true }).tap();
+    check(
+      "and its name shows on the chooser in place of 'No file chosen yet'",
+      !!(await until(() => chooser.getByText("people.csv", { exact: true }).isVisible())) &&
+        (await p.getByText("No file chosen yet").count()) === 0,
+    );
     // Keyboard: tabbing onto the hidden input draws a visible focus ring on the button.
     await p.reload({ waitUntil: "domcontentloaded" });
     await chooser.waitFor();
@@ -349,7 +407,7 @@ export default async function mobileUi({ email }) {
     const p = m.page;
     const rivera = await client("Rivera Auto Repair");
     for (const [name, path, ready] of [
-      ["clients-dark", "/clients", "ul[aria-label=Clients] > li"],
+      ["clients-dark", "/clients", "ul[aria-label=Merchants] > li"],
       ["import-dark", "/import", "label"],
       ["client-dark", `/clients/${rivera.id}`, "#new-note"],
     ]) {
@@ -359,7 +417,7 @@ export default async function mobileUi({ email }) {
       await shot(p, name);
     }
     await p.goto(`${BASE}/clients`, { waitUntil: "domcontentloaded" });
-    await p.getByRole("button", { name: "More actions" }).tap();
+    await p.getByRole("button", { name: "Export and tools" }).tap();
     await shot(p, "clients-menu-dark");
     check("dark screenshots taken", true);
     await m.browser.close();

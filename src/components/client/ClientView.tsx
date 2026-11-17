@@ -16,9 +16,10 @@ import { NotesPanel, Timeline } from "./Timeline";
 /**
  * One merchant, worked until the file is in. Wide screen: the hero, the "Bringing them in" strip, then the story on
  * the left (note box, timeline) and the working rail on the right (follow-up, documents, application, stips).
- * Phone: one column, most important first (hero, progress, note box, follow-up, documents, application, timeline,
+ * Phone: one column, most important first (hero, note box, progress, follow-up, documents, application, timeline,
  * stips), which the `order-*` classes set (the two column wrappers are `contents` there), with call, text and email
- * in a glass bar pinned to the bottom.
+ * in a glass bar pinned to the bottom. The note box sits above the progress strip on a phone so it is on the first
+ * screen: a rep on a call writes before anything else.
  */
 export function ClientView({
   detail,
@@ -45,8 +46,13 @@ export function ClientView({
       <MobileActionBar card={card} />
       <div className="stagger flex min-w-0 flex-col gap-4 max-sm:pb-10 lg:gap-5">
         <ClientHero detail={detail} />
-        <BringInStrip detail={detail} application={application} documents={documents} />
         <div className="flex flex-col gap-4 xl:grid xl:grid-cols-[minmax(0,1fr)_minmax(0,420px)] xl:items-start xl:gap-5">
+          <BringInStrip
+            detail={detail}
+            application={application}
+            documents={documents}
+            className="max-sm:order-2 xl:col-span-2"
+          />
           <div className="contents xl:flex xl:min-w-0 xl:flex-col xl:gap-5">
             <NotesPanel card={card} activities={detail.activities} className="order-1" />
             <Timeline activities={detail.activities} className="order-5" />

@@ -98,81 +98,100 @@ export default async function todayFlow({ email }) {
   );
   await page.keyboard.press("Escape");
 
-  // Quick add.
-  await page.getByRole("button", { name: "+ Add client" }).click();
-  await page.getByLabel("Business name *").fill("E2E Test Bakery");
-  await page.getByLabel("Merchant's name", { exact: true }).fill("Pat Baker");
-  await page.getByLabel("Phone", { exact: true }).fill("(305) 555-0999");
-  await page.getByLabel("Funding they want").fill("45k");
-  await page.getByRole("button", { name: "3m" }).first().click();
-  await page.getByRole("button", { name: "Add client" }).last().click();
-  await page.getByText(/Added E2E Test Bakery/).waitFor({ timeout: 8000 });
+  // New lead. The quick "+ Add client" dialog is gone: adding a merchant is the New lead sheet, which takes no
+  // follow-up date. A new lead is a call to make today.
+  const sheet = page.getByRole("dialog", { name: "Bring a merchant in" });
+  await page
+    .locator("aside")
+    .getByRole("button", { name: /^New lead/ })
+    .click();
+  await sheet.getByLabel("Phone", { exact: true }).fill("(305) 555-0999");
+  await sheet.getByLabel("First name").fill("Pat");
+  await sheet.getByLabel("Last name").fill("Baker");
+  await sheet.getByLabel("Business", { exact: true }).fill("E2E Test Bakery");
+  await sheet.getByLabel("Amount they want").fill("45k");
+  await sheet.getByRole("button", { name: /^(Submit to|Add lead)/ }).click();
+  await sheet.getByText("E2E Test Bakery is in").waitFor({ timeout: 12000 });
   const row = await withDb((db) =>
     one(
       db,
-      "select c.stage, c.wanted_amount_cents::int w, (c.next_due_on - current_date)::int d from client_cards c join app_users u on u.id = c.user_id where u.email = $1 and c.business_name = 'E2E Test Bakery'",
+      "select c.stage, c.contact_name, c.wanted_amount_cents::int w, (c.next_due_on - (now() at time zone 'America/New_York')::date)::int d from client_cards c join app_users u on u.id = c.user_id where u.email = $1 and c.business_name = 'E2E Test Bakery'",
       [email],
     ),
   );
   check(
-    "quick add stores stage, ask and a 3-month timer",
-    // "Name in" folds into Interested, so that is what quick add stores
-    row?.stage === "interested" && row?.w === 4_500_000 && row?.d >= 89 && row?.d <= 92,
+    "New lead stores the stage, the name, the ask and a call-today timer",
+    row?.stage === "name_in" &&
+      row?.contact_name === "Pat Baker" &&
+      row?.w === 4_500_000 &&
+      row?.d === 0,
     JSON.stringify(row),
   );
 
-  // Adding someone who is already in the CRM warns instead of quietly making a second card.
-  await page.getByRole("button", { name: "+ Add client" }).click();
-  await page.getByLabel("Business name *").fill("Totally Different Name");
-  await page.getByLabel("Phone", { exact: true }).fill("305-555-0999");
-  await page.getByRole("button", { name: "Add client" }).last().click();
-  await page.getByText("This looks like someone you already have").waitFor({ timeout: 8000 });
+  // Adding someone who is already in the CRM warns as soon as the number is typed, and never makes a second card.
+  await sheet.getByRole("button", { name: "Add another" }).click();
+  await sheet.getByLabel("Phone", { exact: true }).fill("305-555-0999");
+  await sheet.getByLabel("Business", { exact: true }).fill("Totally Different Name");
+  const warning = sheet.getByRole("status").filter({ hasText: "already in the CRM" });
+  await warning.waitFor({ timeout: 8000 });
   check(
     "duplicate phone is flagged by name",
-    (await page.getByRole("alert").filter({ hasText: "looks like someone" }).innerText()).includes(
-      "E2E Test Bakery",
-    ),
+    (await warning.innerText()).includes("E2E Test Bakery"),
+    await warning.innerText(),
   );
   const dupeCount = () =>
     withDb((db) =>
       one(
         db,
-        "select count(*)::int n from clients c join app_users u on u.id = c.user_id where u.email = $1 and c.business_name = 'Totally Different Name'",
+        "select count(*) filter (where c.business_name = 'Totally Different Name')::int n, count(*) filter (where c.phone = '+13055550999')::int same_phone from clients c join app_users u on u.id = c.user_id where u.email = $1",
         [email],
       ),
     );
   check("nothing was created while the warning is up", (await dupeCount()).n === 0);
-  await page.getByRole("button", { name: "Add as a new client anyway" }).click();
-  await page.getByText(/Added Totally Different Name/).waitFor({ timeout: 8000 });
-  check("'add anyway' does create it", (await dupeCount()).n === 1);
+  // The old dialog had "Add as a new client anyway". The sheet has no such button for your own merchant: submitting
+  // points at the one already there.
+  await sheet.getByRole("button", { name: /^(Submit to|Add lead)/ }).click();
+  await sheet.getByText("E2E Test Bakery was already here").waitFor({ timeout: 12000 });
+  const afterDupe = await dupeCount();
+  check(
+    "submitting the duplicate makes no second merchant (database)",
+    afterDupe.n === 0 && afterDupe.same_phone === 1,
+    JSON.stringify(afterDupe),
+  );
+  await page.keyboard.press("Escape");
+  await sheet.waitFor({ state: "hidden", timeout: 5000 });
 
   // Clients search by phone digits.
   await page.goto(`${BASE}/clients`, { waitUntil: "networkidle" });
-  await page.getByLabel("Search clients").fill("0999");
-  const found = await page.locator("tbody tr").allInnerTexts();
+  await page.getByLabel("Search merchants").fill("0999");
+  const found = await page
+    .getByRole("table", { name: "Merchants" })
+    .getByRole("row")
+    .filter({ has: page.getByRole("cell") })
+    .allInnerTexts();
   check(
     "clients search finds merchants by phone digits",
-    found.length === 2 && found.some((r) => r.includes("E2E Test Bakery")),
+    found.length === 1 && found[0].includes("E2E Test Bakery"),
     `${found.length} rows`,
   );
 
   // Settings persist.
   await page.goto(`${BASE}/settings`, { waitUntil: "networkidle" });
-  await page.locator("select").first().selectOption("7");
-  await page.getByRole("button", { name: "Save", exact: true }).first().click();
+  const reminders = page.locator("section", { has: page.getByLabel("Send at") });
+  await reminders.getByLabel("Send at").selectOption("7");
+  await reminders.getByRole("button", { name: "Save", exact: true }).click();
   await page.getByText("Settings saved").waitFor({ timeout: 8000 });
   const hour = await withDb((db) =>
     one(db, "select digest_hour from app_users where email = $1", [email]),
   );
   check("settings persist", hour?.digest_hour === 7);
 
-  // The Today tab shows how many follow-ups are due.
+  // The sidebar shows how many follow-ups are due, on Overview and on Call list.
   await page.goto(`${BASE}/today`, { waitUntil: "networkidle" });
-  const badge = await page
-    .locator("nav [aria-label$='follow-ups due']")
-    .first()
-    .innerText()
-    .catch(() => "");
+  const nav = page.locator("aside").getByRole("navigation", { name: "Main" });
+  const countOn = async (name) =>
+    Number((await nav.getByRole("link", { name }).innerText()).match(/(\d+)\s*$/)?.[1] ?? 0);
+  const badge = { callList: await countOn(/^Call list/), overview: await countOn(/^Overview/) };
   const due = await withDb((db) =>
     one(
       db,
@@ -181,9 +200,9 @@ export default async function todayFlow({ email }) {
     ),
   );
   check(
-    "Today tab badge equals clients due or overdue",
-    Number(badge) === due.n,
-    `badge ${badge} vs db ${due.n}`,
+    "the sidebar's Call list and Overview counts equal clients due or overdue",
+    badge.callList === due.n && badge.overview === due.n,
+    `${JSON.stringify(badge)} vs db ${due.n}`,
   );
   check(
     "browser tab title carries the count",

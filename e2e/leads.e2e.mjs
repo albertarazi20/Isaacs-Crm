@@ -111,14 +111,17 @@ export default async function leadsFlow({ email }) {
     (await count("c.business_name = 'After Revoke'")) === 0,
   );
 
-  // The Lead intake page: make a connection, see the token once, use it, turn it off.
+  // Settings, Lead sources: make a connection, see the token once, use it, turn it off.
   await setRole(email, "manager"); // the web connections panel is a manager's
   const { browser, page } = await openBrowser(email);
-  await page.goto(`${BASE}/lead-intake`, { waitUntil: "networkidle" });
-  await page.getByText("Web lead connections").click(); // folded under a details block on the intake page
-  await page.getByLabel("Where will the leads come from?").fill("E2E panel");
-  await page.getByRole("button", { name: "Make a connection" }).click();
-  const shown = await page.getByRole("alert").locator("code").first().innerText();
+  await page.goto(`${BASE}/settings/sheets`, { waitUntil: "networkidle" });
+  // the panel moved off the old Lead Intake page; the page header's button jumps down to it
+  await page.locator("main").getByRole("link", { name: "Web lead connections" }).click();
+  const panel = page.locator("#web-leads");
+  await panel.getByRole("heading", { name: "Web lead connections" }).waitFor();
+  await panel.getByLabel("Where will the leads come from?").fill("E2E panel");
+  await panel.getByRole("button", { name: "Make a connection" }).click();
+  const shown = await panel.getByRole("alert").locator("code").first().innerText();
   check(
     "the new token is shown once, in the right shape",
     /^isl_[A-Za-z0-9_-]{43}$/.test(shown),
@@ -137,14 +140,16 @@ export default async function leadsFlow({ email }) {
   });
   check("the token from the page works", live.status === 201, String(live.status));
   await page.reload({ waitUntil: "networkidle" });
-  await page.getByText("Web lead connections").click();
+  await panel.getByRole("heading", { name: "Web lead connections" }).waitFor();
   check(
     "after a reload the token is gone from the page",
     (await page.content()).includes(shown) === false,
   );
-  check("the connection is listed", await page.getByText("E2E panel").first().isVisible());
-  await page.getByRole("button", { name: "Turn off" }).first().click();
-  await page.getByRole("button", { name: "Yes, turn it off" }).click();
+  // its own row: a shop can have other live connections, and only this one is turned off
+  const mine = panel.locator("li", { hasText: "E2E panel" });
+  check("the connection is listed", await mine.getByText("E2E panel").first().isVisible());
+  await mine.getByRole("button", { name: "Turn off" }).click();
+  await mine.getByRole("button", { name: "Yes, turn it off" }).click();
   await page.getByText("Connection turned off").waitFor({ timeout: 8000 });
   const off = await fetch(`${BASE}/api/leads`, {
     method: "POST",

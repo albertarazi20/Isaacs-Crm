@@ -308,7 +308,8 @@ export default async function wireSettings({ email }) {
 
     // ---- Me: the colour mode ------------------------------------------------------------------------------------
     await open("/settings");
-    const group = page.getByRole("radiogroup", { name: "Color mode" });
+    // a desktop user has the same switch in the sidebar's account panel; this is the one on the page
+    const group = page.locator("main").getByRole("radiogroup", { name: "Color mode" });
     await group.getByRole("radio", { name: "Dark" }).click();
     await page.waitForFunction(
       () => document.documentElement.getAttribute("data-theme") === "dark",
