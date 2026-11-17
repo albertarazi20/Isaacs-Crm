@@ -117,9 +117,12 @@ export function ContactActions({
   size = "sm",
   suggestedText,
   explain,
+  bar = false,
 }: {
   client: ContactTarget;
   size?: "sm" | "md";
+  /** Three equal buttons across the full width, with the reason above them: the phone's pinned action bar. */
+  bar?: boolean;
   /** A ready-made message for the Text dialog to start from. */
   suggestedText?: string;
   /**
@@ -147,7 +150,7 @@ export function ContactActions({
     const quiet = quietHours(client.state ?? "");
     if (quiet) {
       toast({
-        message: `It's ${quiet.localTime} where ${client.business_name} is — a call now may not be welcome`,
+        message: `It's ${quiet.localTime} where ${client.business_name} is. A call now may not be welcome`,
       });
     }
     if (isTouchDevice()) {
@@ -155,7 +158,7 @@ export function ContactActions({
     } else {
       void copy(e164);
       window.open(voiceCallHref(e164), "_blank", "noopener");
-      toast({ message: `${e164} copied — paste it into Google Voice if it doesn't dial` });
+      toast({ message: `${e164} copied. Paste it into Google Voice if it doesn't dial` });
     }
     setPending({
       clientId: client.id,
@@ -169,10 +172,11 @@ export function ContactActions({
   // A blocked contact status wins: that is the reason that matters. Otherwise say what is wrong with the number.
   const callWhy = callOk.ok ? phoneWhy : callOk.reason;
   const textWhy = textOk.ok ? phoneWhy : textOk.reason;
-  const showWhy = explain !== undefined && phoneWhy !== null;
+  const showWhy = (bar || explain !== undefined) && phoneWhy !== null;
+  const wide = bar ? "w-full" : undefined;
 
   return (
-    <div className="flex flex-wrap items-center gap-1.5">
+    <div className={bar ? "grid grid-cols-3 gap-2" : "flex flex-wrap items-center gap-1.5"}>
       <Button
         size={size}
         variant="secondary"
@@ -181,6 +185,7 @@ export function ContactActions({
         aria-describedby={showWhy && !e164 ? whyId : undefined}
         disabled={!e164 || !callOk.ok}
         title={callWhy ?? undefined}
+        className={wide}
       >
         <Icon name="phone" className="text-muted" />
         Call
@@ -193,6 +198,7 @@ export function ContactActions({
         aria-describedby={showWhy && !e164 ? whyId : undefined}
         disabled={!e164 || !textOk.ok}
         title={textWhy ?? undefined}
+        className={wide}
       >
         <Icon name="message" className="text-muted" />
         Text
@@ -204,17 +210,22 @@ export function ContactActions({
         aria-label={`Email ${client.business_name}`}
         disabled={!emailOk.ok}
         title={emailOk.ok ? undefined : emailOk.reason}
+        className={wide}
       >
         <Icon name="mail" className="text-muted" />
         Email
       </Button>
-      {status !== "ok" ? <Badge tone="bad">{CONTACT_STATUS_LABELS[status]}</Badge> : null}
+      {status !== "ok" ? (
+        <Badge tone="bad" className={bar ? "order-first col-span-3 justify-self-start" : undefined}>
+          {CONTACT_STATUS_LABELS[status]}
+        </Badge>
+      ) : null}
       {showWhy ? (
         <p
           id={whyId}
           className={cn(
             // w-0 + min-w-full: its own line, but it never widens the buttons' row.
-            "w-0 min-w-full text-xs text-warn",
+            bar ? "order-first col-span-3 text-xs text-warn" : "w-0 min-w-full text-xs text-warn",
             explain === "touch" && "pointer-fine:hidden",
           )}
         >
@@ -331,9 +342,9 @@ function TextDialogBody({
     >
       <div className="space-y-3">
         {quiet ? (
-          <p role="note" className="rounded-lg bg-warn-soft p-3 text-sm text-warn">
+          <p role="note" className="rounded-xl bg-warn-soft p-3 text-sm text-warn">
             It&apos;s {quiet.localTime} where {client.business_name} is. Texts before 8 AM or after
-            9 PM are unwelcome and can be a compliance problem — consider waiting.
+            9 PM are unwelcome and can be a compliance problem. Consider waiting.
           </p>
         ) : null}
         <div className="space-y-1">
@@ -355,13 +366,13 @@ function TextDialogBody({
             rows={5}
           />
           {leftover ? (
-            <p role="alert" className="rounded-lg bg-warn-soft p-2 text-sm text-warn">
+            <p role="alert" className="rounded-xl bg-warn-soft p-2.5 text-sm text-warn">
               {leftover}
             </p>
           ) : null}
         </div>
         {countWarning ? (
-          <p role="note" className="rounded-lg bg-warn-soft p-3 text-sm text-warn">
+          <p role="note" className="rounded-xl bg-warn-soft p-3 text-sm text-warn">
             {countWarning}
           </p>
         ) : null}
@@ -395,7 +406,7 @@ function TextDialogBody({
                 rel="noopener noreferrer"
                 onClick={() => {
                   void copy(message).then(
-                    (ok) => ok && toast({ message: "Message copied — paste it into Google Voice" }),
+                    (ok) => ok && toast({ message: "Message copied. Paste it into Google Voice" }),
                   );
                 }}
               >
@@ -495,7 +506,7 @@ function EmailDialogBody({
     if (!res.ok && res.reconnect) setReconnect(true);
     const card = await call(
       Promise.resolve(res),
-      `Sent — next follow-up ${formatDate(next, today)}`,
+      `Sent. Next follow-up ${formatDate(next, today)}`,
     );
     if (card) onClose();
   }
@@ -586,12 +597,12 @@ function EmailDialogBody({
               onChange={(e) => setBody(e.target.value)}
             />
             {leftover ? (
-              <p role="alert" className="rounded-lg bg-warn-soft p-2 text-sm text-warn">
+              <p role="alert" className="rounded-xl bg-warn-soft p-2.5 text-sm text-warn">
                 {leftover}
               </p>
             ) : null}
           </div>
-          <div className="rounded-lg border border-dashed border-border-strong p-3">
+          <div className="rounded-xl border border-dashed border-border-strong p-3">
             <p className="text-[12px] font-medium text-text-2">
               Signature (added to the end automatically)
             </p>
@@ -606,7 +617,7 @@ function EmailDialogBody({
             <TimerPicker value={next} onChange={setNext} today={today} />
           </Field>
           {reconnect ? (
-            <p className="rounded-lg bg-warn-soft p-3 text-sm text-warn">
+            <p className="rounded-xl bg-warn-soft p-3 text-sm text-warn">
               Gmail needs to be reconnected (Google expired the permission). “Open in Gmail instead”
               still works.
             </p>
@@ -715,7 +726,7 @@ export function PendingTouchPrompt() {
                 aria-pressed={outcome === o}
                 onClick={() => choose(o)}
                 className={cn(
-                  "h-11 rounded-lg border text-sm font-medium transition sm:h-10",
+                  "h-11 rounded-xl border text-sm font-medium transition duration-150 active:scale-[0.97] sm:h-10",
                   outcome === o
                     ? "border-accent/40 bg-accent-soft text-accent"
                     : "border-border bg-surface text-text-2 hover:border-border-strong hover:bg-surface-3 hover:text-text",

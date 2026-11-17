@@ -108,6 +108,20 @@ const PATHS = {
       <path d="M16 2v4M8 2v4M3 10h18" />
     </>
   ),
+  flag: <path d="M5 21V4M5 4h12l-2.5 4 2.5 4H5" />,
+  reply: <path d="M9 14 4 9l5-5M4 9h10a6 6 0 0 1 6 6v4" />,
+  layers: <path d="m12 2.5 9 5-9 5-9-5 9-5zM3 12.2l9 5 9-5M3 16.8l9 5 9-5" />,
+  user: (
+    <>
+      <circle cx="12" cy="8" r="4" />
+      <path d="M4 21a8 8 0 0 1 16 0" />
+    </>
+  ),
+  upload: <path d="M12 16V4M7 9l5-5 5 5M4 20h16" />,
+  arrowRight: <path d="M5 12h14M13 6l6 6-6 6" />,
+  undo: <path d="M9 14 4 9l5-5M4 9h10.5a5.5 5.5 0 0 1 0 11H11" />,
+  external: <path d="M7 17 17 7M8 7h9v9" />,
+  shield: <path d="M12 3 4.5 6v5.5c0 4.6 3.1 8 7.5 9.5 4.4-1.5 7.5-4.9 7.5-9.5V6L12 3z" />,
 } as const;
 
 export type IconName = keyof typeof PATHS;

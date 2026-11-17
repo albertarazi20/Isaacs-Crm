@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import {
@@ -23,60 +24,29 @@ import {
 import { formatMoney } from "@/lib/money";
 import { ContactStatusButton } from "./ContactStatus";
 import { ContactActions } from "../ContactActions";
+import { toggleHot, useHotIds } from "../power/prefs";
 import { SourceInput } from "../SourceInput";
 import { StageBadge } from "../StageBadge";
 import { useStageMove } from "../stage-move/useStageMove";
 import { useApp } from "../app-context";
 import { useCall } from "../overlay";
-import { Button, cn, Field, Input, Select } from "../ui";
+import { Avatar, Badge, Button, cn, Field, Input } from "../ui";
+import { Icon, type IconName } from "./icons";
 import { clientFieldsPayload, clientForm, dateInTz, dueTone, type ClientForm } from "./logic";
-import { FormDialog, Muted, Stat, useCopy, useFormState, useRun } from "./parts";
+import { Dot } from "./primitives";
+import { FormDialog, useCopy, useFormState, useRun } from "./parts";
 
-/** Business name, stage, next follow-up and Call/Text/Email — pinned under the app nav while scrolling. */
-export function StickyBar({ card }: { card: ClientDetail["card"] }) {
-  const { today } = useApp();
-  const tone = card.next_due_on ? dueTone(card.next_due_on, today) : "later";
-  return (
-    <div className="sticky top-[53px] z-20 rounded-xl border border-border bg-surface/95 px-4 py-2.5 shadow-card backdrop-blur-md">
-      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
-        <div className="w-full min-w-0 sm:w-auto sm:flex-1">
-          <div className="flex items-center gap-2">
-            <h1 className="truncate text-lg font-semibold tracking-tight sm:text-xl">
-              {card.business_name}
-            </h1>
-            <StageBadge stage={card.stage} />
-          </div>
-          <p
-            className={cn(
-              "mt-0.5 text-[13px]",
-              tone === "overdue" ? "font-semibold text-bad" : "text-muted",
-            )}
-          >
-            {card.next_due_on && card.next_due_kind ? (
-              <>
-                Next: {timerLabel(card.next_due_kind).toLowerCase()}{" "}
-                <span className={cn("font-medium", tone === "overdue" ? "" : "text-text")}>
-                  {formatDate(card.next_due_on, today)}
-                </span>{" "}
-                · {relativeDay(card.next_due_on, today)}
-              </>
-            ) : (
-              "No follow-up set"
-            )}
-          </p>
-        </div>
-        <ContactActions client={card} size="md" explain="always" />
-      </div>
-    </div>
-  );
-}
+const CHIP =
+  "inline-flex h-10 max-w-full items-center gap-2 rounded-full border border-border bg-surface-3/70 px-3 text-[13px] font-medium whitespace-nowrap text-text-2 sm:h-8";
 
-/** The value is the button: click copies it. */
-function CopyValue({
+/** A value you can copy with one click: the icon says what it is, the copy mark lights up on hover. */
+function CopyChip({
+  icon,
   value,
   shown,
   label,
 }: {
+  icon: IconName;
   value: string;
   shown: string;
   label: "phone" | "email";
@@ -85,116 +55,254 @@ function CopyValue({
   return (
     <button
       type="button"
-      title="Click to copy"
+      title={`Copy ${label}`}
       onClick={() => void copy(value, label)}
-      className="max-w-full truncate rounded text-left text-sm font-medium underline decoration-border-strong decoration-dotted underline-offset-4 transition hover:text-accent hover:decoration-accent max-sm:py-3"
+      className={cn(
+        CHIP,
+        "group pr-2.5 text-text transition duration-150 hover:border-border-strong hover:bg-surface-2 active:scale-[0.97]",
+      )}
     >
-      {shown}
+      <Icon name={icon} className="size-3.5 text-muted" />
+      <span className="sr-only">Copy {label}: </span>
+      <span className="truncate tabular-nums">{shown}</span>
+      <Icon name="copy" className="size-3.5 text-muted transition group-hover:text-accent" />
     </button>
   );
 }
 
-export function ClientDetails({ detail, className }: { detail: ClientDetail; className?: string }) {
-  const { card } = detail;
+/** Star a merchant: it stays on top of Today on every device. */
+function StarToggle({ id, name }: { id: string; name: string }) {
+  const hot = useHotIds().has(id);
+  return (
+    <button
+      type="button"
+      aria-pressed={hot}
+      aria-label={hot ? `Unstar ${name}` : `Star ${name}`}
+      title={hot ? "Starred: always on top of Today" : "Star: keep on top of Today"}
+      onClick={() => void toggleHot(id, hot)}
+      className={cn(
+        "inline-flex size-10 shrink-0 items-center justify-center rounded-full transition duration-150 active:scale-90 sm:size-8",
+        hot ? "bg-warn-soft text-warn" : "text-muted hover:bg-surface-2 hover:text-text",
+      )}
+    >
+      <Icon name="star" filled={hot} />
+    </button>
+  );
+}
+
+/**
+ * The top of a merchant: who they are, how to reach them, where they sit (stage, bucket, owner), and everything a rep
+ * does to the record itself. Call, text and email sit beside the name on a wide screen; on a phone they ride in the
+ * glass bar at the bottom (MobileActionBar).
+ */
+export function ClientHero({ detail, className }: { detail: ClientDetail; className?: string }) {
+  const { card, bringIn } = detail;
   const { today, timezone } = useApp();
   const { requestMove, dialogs } = useStageMove();
   const [editing, setEditing] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [moving, setMoving] = useState(false);
+  const current = foldStage(card.stage);
 
   async function move(stage: string) {
     const def = STAGES.find((s) => s.key === stage);
-    if (!def || def.key === foldStage(card.stage)) return;
+    if (!def || def.key === current) return;
     setMoving(true);
     await requestMove(card, def.key);
     setMoving(false);
   }
 
-  const addLink = (what: string) => (
+  const addChip = (what: string, icon: IconName) => (
     <button
       type="button"
       onClick={() => setEditing(true)}
-      className="text-sm text-muted underline decoration-dotted underline-offset-4 transition hover:text-accent max-sm:py-3"
+      className={cn(
+        CHIP,
+        "border-dashed border-border-strong text-muted transition duration-150 hover:border-accent/50 hover:text-accent active:scale-[0.97]",
+      )}
     >
+      <Icon name={icon} className="size-3.5" />
       Add {what}
     </button>
   );
   const facts = [
+    card.dba ? `dba ${card.dba}` : "",
     card.industry,
     card.state,
-    card.source ? `Source: ${card.source}` : "",
     card.monthly_revenue_cents !== null
       ? `${formatMoney(card.monthly_revenue_cents)}/mo revenue`
       : "",
     card.time_in_business_months !== null ? `${card.time_in_business_months} mo in business` : "",
+    card.source ? `Source: ${card.source}` : "",
   ].filter(Boolean);
+  const tone = card.next_due_on ? dueTone(card.next_due_on, today) : "later";
 
   return (
-    <div className={cn("rounded-xl border border-border bg-surface p-4", className)}>
-      <div className="flex flex-wrap items-start justify-between gap-x-6 gap-y-3">
-        <dl className="grid min-w-0 flex-1 grid-cols-2 gap-x-6 gap-y-3 sm:grid-cols-3 xl:grid-cols-5">
-          <Stat label="Merchant">
-            {card.contact_name || addLink("name")}
-            {card.dba ? <span className="font-normal text-muted"> · dba {card.dba}</span> : null}
-          </Stat>
-          <Stat label="Phone">
-            {card.phone ? (
-              <CopyValue value={card.phone} shown={formatUS(card.phone)} label="phone" />
-            ) : (
-              addLink("phone")
-            )}
-          </Stat>
-          <Stat label="Email" className="col-span-2 sm:col-span-1">
-            {card.email ? (
-              <CopyValue value={card.email} shown={card.email} label="email" />
-            ) : (
-              addLink("email")
-            )}
-          </Stat>
-          <Stat label="Application in">
-            {card.application_received_on ? (
-              formatDate(card.application_received_on, today)
-            ) : (
-              <span className="font-normal text-muted">—</span>
-            )}
-          </Stat>
-          <Stat label="Client since">{formatDate(dateInTz(card.created_at, timezone), today)}</Stat>
-        </dl>
-        <div className="flex w-full flex-wrap items-center gap-2 xl:w-auto xl:justify-end">
-          <div className="w-full sm:w-44">
-            <Select
+    <header
+      className={cn(
+        "ring-brand relative overflow-hidden rounded-3xl border border-border bg-surface",
+        className,
+      )}
+    >
+      <div
+        aria-hidden
+        className="bg-brand-soft pointer-events-none absolute inset-x-0 top-0 h-32 [mask-image:linear-gradient(to_bottom,black,transparent)]"
+      />
+      <div className="relative p-4 sm:p-6">
+        <div className="flex flex-wrap items-start gap-x-5 gap-y-4">
+          <Avatar
+            name={card.business_name}
+            size={60}
+            className="rounded-2xl shadow-card max-sm:!size-12 max-sm:!text-base"
+          />
+          <div className="min-w-0 flex-1 basis-64">
+            <Link
+              href="/clients"
+              className="eyebrow mb-1.5 inline-flex items-center gap-1.5 transition hover:text-text"
+            >
+              <Icon name="arrowLeft" className="size-3" />
+              Merchants
+            </Link>
+            <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1.5">
+              <h1 className="min-w-0 text-[26px] leading-[1.1] font-semibold tracking-[-0.03em] break-words sm:text-[30px]">
+                {card.business_name}
+              </h1>
+              <StarToggle id={card.id} name={card.business_name} />
+              <StageBadge stage={card.stage} />
+              {bringIn.brought_in_at ? (
+                <Badge tone="good">
+                  <Icon name="check" className="size-3" />
+                  Brought in
+                </Badge>
+              ) : null}
+            </div>
+            <p className="mt-1.5 text-sm text-text-2">
+              {card.contact_name ? (
+                <span className="font-medium text-text">{card.contact_name}</span>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setEditing(true)}
+                  className="text-muted underline decoration-dotted underline-offset-4 transition hover:text-accent"
+                >
+                  Add the merchant&apos;s name
+                </button>
+              )}
+              {facts.length > 0 ? <span className="text-muted"> · {facts.join(" · ")}</span> : null}
+            </p>
+          </div>
+          <div className="max-sm:hidden">
+            <ContactActions client={card} size="md" explain="always" />
+          </div>
+        </div>
+
+        <div className="mt-4 flex flex-wrap items-center gap-2">
+          {card.phone ? (
+            <CopyChip icon="phone" value={card.phone} shown={formatUS(card.phone)} label="phone" />
+          ) : (
+            addChip("phone", "phone")
+          )}
+          {card.email ? (
+            <CopyChip icon="mail" value={card.email} shown={card.email} label="email" />
+          ) : (
+            addChip("email", "mail")
+          )}
+          <span className={CHIP} title="The bucket this merchant is in">
+            <Icon name="layers" className="size-3.5 text-muted" />
+            <span className="truncate">{bringIn.bucket_name ?? "No bucket"}</span>
+          </span>
+          {bringIn.owner_name ? (
+            <span className={cn(CHIP, "pl-1.5")} title="Whose merchant this is">
+              <Avatar name={bringIn.owner_name} size={20} />
+              <span className="truncate">{bringIn.owner_name}</span>
+            </span>
+          ) : null}
+          <span className={cn(CHIP, "border-transparent bg-transparent px-1 text-muted")}>
+            Since {formatDate(dateInTz(card.created_at, timezone), today)}
+          </span>
+        </div>
+      </div>
+
+      <div className="relative flex flex-wrap items-center gap-x-4 gap-y-2.5 border-t border-border bg-surface-3/50 px-4 py-3 sm:px-6">
+        <p
+          className={cn(
+            "flex min-w-0 flex-1 basis-56 items-center gap-2 text-[13px]",
+            tone === "overdue" ? "font-semibold text-bad" : "text-muted",
+          )}
+        >
+          <Dot
+            className={
+              tone === "overdue" ? "text-bad" : tone === "today" ? "text-warn" : "text-good"
+            }
+          />
+          {card.next_due_on && card.next_due_kind ? (
+            <span className="truncate">
+              Next: {timerLabel(card.next_due_kind).toLowerCase()}{" "}
+              <span className={cn("font-medium", tone === "overdue" ? "" : "text-text")}>
+                {formatDate(card.next_due_on, today)}
+              </span>{" "}
+              · {relativeDay(card.next_due_on, today)}
+            </span>
+          ) : bringIn.brought_in_at ? (
+            "Handed off. Nothing left to chase."
+          ) : (
+            "No follow-up set"
+          )}
+        </p>
+        <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
+          <div className="relative w-full sm:w-auto">
+            <select
               aria-label="Move to stage"
-              className="sm:h-8 sm:text-[13px]"
               value=""
               disabled={moving}
               onChange={(e) => void move(e.target.value)}
+              className="h-10 w-full cursor-pointer appearance-none rounded-full border border-border bg-surface pr-8 pl-3.5 text-sm font-medium text-text shadow-card transition duration-150 hover:border-border-strong hover:bg-surface-3 focus:border-accent focus:ring-[3px] focus:ring-ring focus:outline-none disabled:cursor-not-allowed disabled:opacity-50 sm:h-8 sm:w-40 sm:text-[13px]"
             >
               <option value="">Move to…</option>
               {STAGE_GROUPS.map((g) => (
                 <optgroup key={g.key} label={g.label}>
                   {CORE_STAGES.filter((s) => s.group === g.key).map((s) => (
-                    <option key={s.key} value={s.key} disabled={s.key === foldStage(card.stage)}>
+                    <option key={s.key} value={s.key} disabled={s.key === current}>
                       {s.label}
-                      {s.key === foldStage(card.stage) ? " (current)" : ""}
+                      {s.key === current ? " (current)" : ""}
                     </option>
                   ))}
                 </optgroup>
               ))}
-            </Select>
+            </select>
+            <Icon
+              name="chevronDown"
+              className="pointer-events-none absolute top-1/2 right-3 size-3.5 -translate-y-1/2 text-muted"
+            />
           </div>
           <Button size="sm" onClick={() => setEditing(true)}>
+            <Icon name="note" className="size-3.5 text-muted" />
             Edit details
           </Button>
           <ContactStatusButton card={card} />
-          <Button size="sm" variant="danger" onClick={() => setDeleting(true)}>
+          <Button
+            size="sm"
+            variant="ghost"
+            className="hover:bg-bad-soft hover:text-bad"
+            onClick={() => setDeleting(true)}
+          >
+            <Icon name="trash" className="size-3.5" />
             Move to trash
           </Button>
         </div>
       </div>
-      {facts.length > 0 ? <Muted className="mt-3">{facts.join(" · ")}</Muted> : null}
       {dialogs}
       {editing ? <EditClientDialog card={card} onClose={() => setEditing(false)} /> : null}
       {deleting ? <DeleteClientDialog detail={detail} onClose={() => setDeleting(false)} /> : null}
+    </header>
+  );
+}
+
+/** Call, text and email, always under the thumb on a phone: a glass bar pinned to the bottom of the screen. */
+export function MobileActionBar({ card }: { card: ClientDetail["card"] }) {
+  return (
+    <div className="glass-strong fixed inset-x-0 bottom-0 z-30 border-t border-border px-4 pt-2.5 pb-[max(0.625rem,env(safe-area-inset-bottom))] sm:hidden">
+      <ContactActions client={card} size="md" bar />
     </div>
   );
 }
@@ -268,7 +376,7 @@ function EditClientDialog({ card, onClose }: { card: ClientDetail["card"]; onClo
           label="Phone"
           hint={
             v.phone.trim() !== "" && normalizeUS(v.phone) === null
-              ? "Not a usable phone number yet — Call and Text stay off until it has 10 digits."
+              ? "Not a usable phone number yet. Call and Text stay off until it has 10 digits."
               : undefined
           }
         >
@@ -299,7 +407,7 @@ function EditClientDialog({ card, onClose }: { card: ClientDetail["card"]; onClo
       {dupes ? (
         <div
           role="alert"
-          className="space-y-2 rounded-lg border border-warn/40 bg-warn-soft p-3 text-sm"
+          className="space-y-2 rounded-xl border border-warn/40 bg-warn-soft p-3 text-sm"
         >
           <p className="font-semibold text-warn">This looks like someone you already have:</p>
           <ul className="space-y-2">
@@ -309,11 +417,11 @@ function EditClientDialog({ card, onClose }: { card: ClientDetail["card"]; onClo
                   {d.business_name}
                 </a>{" "}
                 <span className="text-muted">
-                  ({stageDef(d.stage).label}) — {d.reason}
-                  {d.trashed ? " — removed, but marked do-not-contact." : ""}
+                  ({stageDef(d.stage).label}), {d.reason}
+                  {d.trashed ? ". Removed, but marked do-not-contact." : ""}
                 </span>
                 {d.trashed ? null : merging?.id === d.id ? (
-                  <div className="space-y-2 rounded-lg border border-border bg-surface p-3">
+                  <div className="space-y-2 rounded-xl border border-border bg-surface p-3">
                     <p>
                       This moves every note, stip and document from{" "}
                       <strong>{d.business_name}</strong> onto <strong>{card.business_name}</strong>,
@@ -341,7 +449,7 @@ function EditClientDialog({ card, onClose }: { card: ClientDetail["card"]; onClo
                 ) : (
                   <div>
                     <Button size="sm" onClick={() => setMerging(d)}>
-                      Same merchant — merge into this card
+                      Same merchant: merge into this card
                     </Button>
                   </div>
                 )}
@@ -389,9 +497,9 @@ function DeleteClientDialog({ detail, onClose }: { detail: ClientDetail; onClose
       <p className="text-sm">
         <strong>{card.business_name}</strong> disappears from your lists and every reminder stops.
         {attached.length > 0 ? ` Kept in the trash: ${attached.join(", ")}.` : ""} You can restore
-        it any time from <em>Merchants → Trash</em>.
+        it any time from <em>Merchants, Trash</em>.
       </p>
-      <p className="rounded-lg border border-border bg-surface-2 p-3 text-sm text-muted">
+      <p className="rounded-xl border border-border bg-surface-2 p-3 text-sm text-muted">
         Not ready to lose the notes? Close this and use <em>Move to…</em> instead (Trash). The
         client stays on your follow-up list and comes back when the timer is due.
       </p>

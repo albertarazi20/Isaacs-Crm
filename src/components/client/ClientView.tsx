@@ -5,7 +5,8 @@ import type { Freshness } from "@/lib/docs/freshness";
 import type { DocumentRow } from "@/lib/docs/upload";
 import type { MerchantApplication } from "@/lib/leads/application";
 import { ApplicationCard } from "./ApplicationCard";
-import { ClientDetails, StickyBar } from "./ClientHeader";
+import { BringInStrip } from "./BringIn";
+import { ClientHero, MobileActionBar } from "./ClientHeader";
 import { DocumentsCard } from "./DocumentsCard";
 import { FollowUpPanel } from "./FollowUpPanel";
 import { NowProvider } from "./parts";
@@ -13,9 +14,11 @@ import { StipsCard } from "./StipsCard";
 import { NotesPanel, Timeline } from "./Timeline";
 
 /**
- * Desktop: timeline left, panels right. Phone: one column in this order — pinned header, last call and
- * note box (he is on the phone with the merchant), details, follow-up, documents, history, then the rest
- * — which the `order-*` classes set (the wrappers are `contents` there).
+ * One merchant, worked until the file is in. Wide screen: the hero, the "Bringing them in" strip, then the story on
+ * the left (note box, timeline) and the working rail on the right (follow-up, documents, application, stips).
+ * Phone: one column, most important first (hero, progress, note box, follow-up, documents, application, timeline,
+ * stips), which the `order-*` classes set (the two column wrappers are `contents` there), with call, text and email
+ * in a glass bar pinned to the bottom.
  */
 export function ClientView({
   detail,
@@ -38,32 +41,34 @@ export function ClientView({
   const { card } = detail;
   return (
     <NowProvider serverNow={serverNow}>
-      <div className="flex min-w-0 flex-col gap-4">
-        <StickyBar card={card} />
-        <ClientDetails detail={detail} className="order-2 lg:order-1" />
-        <div className="contents lg:order-2 lg:grid lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)] lg:items-start lg:gap-4">
-          <div className="contents lg:flex lg:flex-col lg:gap-4">
+      {/* first in the page so the phone's own copy of the buttons is the first one found */}
+      <MobileActionBar card={card} />
+      <div className="stagger flex min-w-0 flex-col gap-4 max-sm:pb-10 lg:gap-5">
+        <ClientHero detail={detail} />
+        <BringInStrip detail={detail} application={application} documents={documents} />
+        <div className="flex flex-col gap-4 xl:grid xl:grid-cols-[minmax(0,1fr)_minmax(0,420px)] xl:items-start xl:gap-5">
+          <div className="contents xl:flex xl:min-w-0 xl:flex-col xl:gap-5">
             <NotesPanel card={card} activities={detail.activities} className="order-1" />
             <Timeline activities={detail.activities} className="order-5" />
           </div>
-          <div className="contents lg:flex lg:flex-col lg:gap-4">
-            <FollowUpPanel detail={detail} application={application} className="order-3" />
-            {application && appUrl ? (
-              <ApplicationCard
-                card={card}
-                application={application}
-                appUrl={appUrl}
-                className="order-3"
-              />
-            ) : null}
+          <div className="contents xl:flex xl:min-w-0 xl:flex-col xl:gap-5">
+            <FollowUpPanel detail={detail} application={application} className="order-2" />
             <DocumentsCard
               clientId={card.id}
               documents={documents}
               freshness={freshness}
               today={today}
-              className="order-4"
+              className="order-3"
             />
-            <StipsCard clientId={card.id} stips={detail.stips} className="order-9" />
+            {application && appUrl ? (
+              <ApplicationCard
+                card={card}
+                application={application}
+                appUrl={appUrl}
+                className="order-4"
+              />
+            ) : null}
+            <StipsCard clientId={card.id} stips={detail.stips} className="order-6" />
           </div>
         </div>
       </div>

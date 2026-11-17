@@ -12,7 +12,8 @@ import {
 } from "react";
 import type { ActionResult } from "@/lib/data/types";
 import { Dialog, useCall, useToast } from "../overlay";
-import { Button, Card, cn, SectionTitle } from "../ui";
+import { Button, cn } from "../ui";
+import { Icon, type IconName } from "./icons";
 
 /**
  * Like useCall, but resolves true/false. useCall returns null for a failure AND for an action
@@ -62,29 +63,45 @@ export function useCopy() {
       toast(
         ok
           ? { message: `Copied ${label}: ${text}`, tone: "success" }
-          : { message: `Couldn't copy — select it and press Ctrl+C`, tone: "error" },
+          : { message: `Couldn't copy. Select it and press Ctrl+C`, tone: "error" },
       );
     },
     [toast],
   );
 }
 
+/** One working panel: a small icon tile, its title, an optional aside, then the content. */
 export function Panel({
   title,
+  icon,
   aside,
   children,
   className,
 }: {
   title: string;
+  icon?: IconName;
   aside?: ReactNode;
   children: ReactNode;
   className?: string;
 }) {
   return (
-    <Card className={cn("p-4", className)}>
-      <SectionTitle aside={aside}>{title}</SectionTitle>
-      <div className="mt-3">{children}</div>
-    </Card>
+    <section className={cn("rounded-2xl border border-border bg-surface p-4 sm:p-5", className)}>
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex min-w-0 items-center gap-2.5">
+          {icon ? (
+            <span
+              aria-hidden
+              className="flex size-7 shrink-0 items-center justify-center rounded-lg bg-surface-2 text-text-2 ring-1 ring-border ring-inset"
+            >
+              <Icon name={icon} className="size-3.5" />
+            </span>
+          ) : null}
+          <h2 className="truncate text-sm font-semibold tracking-tight text-text">{title}</h2>
+        </div>
+        {aside}
+      </div>
+      <div className="mt-4">{children}</div>
+    </section>
   );
 }
 
@@ -168,16 +185,19 @@ export function ConfirmButton({
   confirmLabel,
   onConfirm,
   busy,
+  size = "md",
 }: {
   label: string;
   confirmLabel: string;
   onConfirm: () => void;
   busy: boolean;
+  size?: "sm" | "md";
 }) {
   const [armed, setArmed] = useState(false);
   return (
     <Button
-      variant="danger"
+      variant={armed ? "danger" : "ghost"}
+      size={size}
       disabled={busy}
       onClick={() => (armed ? onConfirm() : setArmed(true))}
       onBlur={() => setArmed(false)}

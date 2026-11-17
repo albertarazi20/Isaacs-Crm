@@ -49,18 +49,25 @@ export function ApplicationCard({
     toast(
       ok
         ? { message: "Application link copied", tone: "success" }
-        : { message: "Couldn't copy — select the link and press Ctrl+C", tone: "error" },
+        : { message: "Couldn't copy. Select the link and press Ctrl+C", tone: "error" },
     );
   }
 
   return (
-    <Panel title="Application" className={className}>
+    <Panel
+      title="Application"
+      icon="note"
+      className={className}
+      aside={
+        <Badge tone={signed ? "good" : "neutral"}>{signed ? "Signed" : "Not signed yet"}</Badge>
+      }
+    >
       <div className="space-y-3">
         {signed ? (
-          <div className="space-y-2 rounded-lg border border-good/30 bg-good-soft px-3 py-2.5">
+          <div className="space-y-2 rounded-xl bg-good-soft px-3 py-2.5">
             <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-              <Badge tone="good">Application signed</Badge>
-              <p className="min-w-0 text-sm wrap-anywhere">
+              <p className="min-w-0 text-[13px] text-good wrap-anywhere">
+                <span className="font-semibold">Application signed</span>{" "}
                 {formatDate(dateInTz(signed.signed_at, timezone), today)} · signed by{" "}
                 <span className="font-medium">{signed.signer_name}</span>
               </p>
@@ -82,39 +89,39 @@ export function ApplicationCard({
             </div>
           </div>
         ) : (
-          <p className="flex items-center gap-2 text-sm text-muted">
-            <Badge>Not signed yet</Badge>
+          <p className="text-[13px] text-muted">
             Send the link below and the signed application lands in Documents.
           </p>
         )}
         <Field label="Application link">
-          <div className="flex flex-col gap-2 sm:flex-row">
+          <div className="flex flex-col gap-2">
             <Input
               readOnly
               value={link}
               onFocus={(e) => e.currentTarget.select()}
-              className="min-w-0 sm:flex-1"
+              className="min-w-0 font-mono text-xs"
             />
             <span className="flex gap-2">
-              <Button onClick={() => void copy()} className="flex-1 sm:flex-none">
-                <Icon name="copy" className="text-muted" />
+              <Button size="sm" onClick={() => void copy()} className="flex-1">
+                <Icon name="copy" className="size-3.5 text-muted" />
                 Copy link
               </Button>
               <Button
+                size="sm"
                 onClick={() => setEmailOpen(true)}
                 disabled={Boolean(emailWhy)}
                 title={emailWhy}
-                className="flex-1 sm:flex-none"
+                className="flex-1"
               >
-                <Icon name="send" className="text-muted" />
+                <Icon name="send" className="size-3.5 text-muted" />
                 Email link
               </Button>
             </span>
           </div>
         </Field>
         <Muted>
-          The merchant fills it in and signs on their phone, no sign-in. Their answers fill the
-          blanks on this card and you get an alert when it is signed.
+          The merchant fills it in and signs on their phone, no sign-in. You get an alert when it is
+          signed.
         </Muted>
       </div>
       {emailOpen ? (
@@ -163,7 +170,7 @@ function EmailLinkDialog({
     if (!res.ok && res.reconnect) setReconnect(true);
     const sent = await call(
       Promise.resolve(res),
-      `Application link sent — next follow-up ${formatDate(next, today)}`,
+      `Application link sent. Next follow-up ${formatDate(next, today)}`,
     );
     if (sent) onClose();
   }
@@ -215,7 +222,7 @@ function EmailLinkDialog({
         >
           <Textarea rows={8} value={body} onChange={(e) => setBody(e.target.value)} />
         </Field>
-        <div className="rounded-lg border border-dashed border-border-strong p-3">
+        <div className="rounded-xl border border-dashed border-border-strong p-3">
           <p className="text-[12px] font-medium text-text-2">
             Signature (added to the end automatically)
           </p>
@@ -225,7 +232,7 @@ function EmailLinkDialog({
           <TimerPicker value={next} onChange={setNext} today={today} />
         </Field>
         {reconnect ? (
-          <p className="rounded-lg bg-warn-soft p-3 text-sm text-warn">
+          <p className="rounded-xl bg-warn-soft p-3 text-sm text-warn">
             Gmail needs to be reconnected (Google expired the permission).
           </p>
         ) : null}

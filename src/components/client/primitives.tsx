@@ -67,3 +67,26 @@ export function IconButton({
     </button>
   );
 }
+
+/**
+ * The page's second-rank solid button: ink on paper. The brand gradient is kept for the one action that finishes the
+ * page (Hand off), so saving a note or a date uses this.
+ */
+export function inkButtonClass(extra?: string): string {
+  return cn(
+    "inline-flex h-10 items-center justify-center gap-1.5 rounded-full bg-text px-4 text-sm font-semibold whitespace-nowrap text-bg transition duration-150 ease-out select-none hover:opacity-90 active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-40 disabled:active:scale-100 sm:h-9",
+    extra,
+  );
+}
+
+/** A small caps label inside a panel, over a group of controls. */
+export function Label({ children, className }: { children: ReactNode; className?: string }) {
+  return <p className={cn("eyebrow", className)}>{children}</p>;
+}
+
+/** A status dot in a tone's ink. */
+export function Dot({ className }: { className?: string }) {
+  return (
+    <span aria-hidden className={cn("size-1.5 shrink-0 rounded-full bg-current", className)} />
+  );
+}

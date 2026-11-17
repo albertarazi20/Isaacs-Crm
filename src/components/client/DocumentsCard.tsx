@@ -8,9 +8,10 @@ import { DOC_KINDS, DOC_LABELS, type DocKind } from "@/lib/docs/label";
 import type { DocumentRow } from "@/lib/docs/upload";
 import { formatDate } from "@/lib/format";
 import { useToast } from "../overlay";
-import { Badge, Button, buttonClass, cn, EmptyState, Input, Select } from "../ui";
+import { Badge, Button, buttonClass, cn, Input, Select } from "../ui";
 import { Icon } from "./icons";
 import { ConfirmButton, Panel, useRun } from "./parts";
+import { Dot } from "./primitives";
 import { ResetUploadLinkButton, UploadLinkButton } from "./UploadLinkButton";
 
 const ACCEPT = ".pdf,.jpg,.jpeg,.png,.heic,.heif,.webp,.csv,.xlsx,.docx";
@@ -98,6 +99,7 @@ export function DocumentsCard({
   const input = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
   const [editing, setEditing] = useState<string | null>(null);
+  const [over, setOver] = useState(false);
 
   async function upload(files: FileList) {
     if (files.length === 0) return;
@@ -127,28 +129,66 @@ export function DocumentsCard({
     }
   }
 
+  const freshTone =
+    freshness.status === "fresh" ? "good" : freshness.status === "none" ? "neutral" : "warn";
+
   return (
-    <Panel title="Documents" className={className}>
-      <div className="space-y-4">
+    <Panel
+      title="Documents"
+      icon="file"
+      className={className}
+      aside={
+        documents.length > 0 ? (
+          <span className="text-xs font-medium text-muted tabular-nums">
+            {documents.length} file{documents.length === 1 ? "" : "s"}
+          </span>
+        ) : null
+      }
+    >
+      <div className="space-y-3">
         <p
           className={cn(
-            "flex items-center gap-2 text-sm",
-            freshness.status === "fresh"
-              ? "text-good"
-              : freshness.status === "none"
-                ? "text-muted"
-                : "text-warn",
+            "flex items-start gap-2 rounded-xl px-3 py-2 text-[13px]",
+            freshTone === "good"
+              ? "bg-good-soft text-good"
+              : freshTone === "warn"
+                ? "bg-warn-soft text-warn"
+                : "bg-surface-2/70 text-muted",
           )}
         >
-          <Icon name="file" />
+          <Dot className="mt-1.5" />
           {freshness.message}
         </p>
-        <div className="flex flex-wrap items-center gap-2">
-          <UploadLinkButton clientId={clientId} />
-          <ResetUploadLinkButton clientId={clientId} />
-          <Button size="sm" disabled={busy} onClick={() => input.current?.click()}>
-            {busy ? "Filing…" : "Add files"}
-          </Button>
+        <div
+          onDragOver={(e) => {
+            e.preventDefault();
+            setOver(true);
+          }}
+          onDragLeave={() => setOver(false)}
+          onDrop={(e) => {
+            e.preventDefault();
+            setOver(false);
+            if (!busy) void upload(e.dataTransfer.files);
+          }}
+          className={cn(
+            "rounded-2xl border border-dashed px-4 py-4 text-center transition duration-150",
+            over ? "border-accent bg-accent-soft" : "border-border-strong/70 bg-surface-3/40",
+          )}
+        >
+          <p className="text-[13px] font-medium">
+            {busy ? "Filing…" : over ? "Drop to file them" : "Drop files here"}
+          </p>
+          <p className="mt-0.5 text-xs text-muted">
+            Or send the merchant their upload link. Statements file themselves by month.
+          </p>
+          <div className="mt-3 flex flex-wrap items-center justify-center gap-2">
+            <UploadLinkButton clientId={clientId} />
+            <Button size="sm" disabled={busy} onClick={() => input.current?.click()}>
+              <Icon name="upload" className="size-3.5 text-muted" />
+              {busy ? "Filing…" : "Add files"}
+            </Button>
+            <ResetUploadLinkButton clientId={clientId} />
+          </div>
           <input
             ref={input}
             type="file"
@@ -160,75 +200,86 @@ export function DocumentsCard({
           />
         </div>
         {documents.length === 0 ? (
-          <EmptyState title="No documents yet">
-            Drop files here, or send the merchant their upload link — statements file themselves by
-            month.
-          </EmptyState>
+          <p className="px-1 text-center text-xs text-muted">No documents yet.</p>
         ) : (
-          <ul className="divide-y divide-border rounded-xl border border-border bg-surface">
+          <ul className="-mx-2 divide-y divide-border">
             {documents.map((d) => (
-              <li key={d.id} className="px-4 py-3 sm:py-2.5">
-                <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2">
-                  <div className="flex min-w-0 flex-1 basis-64 items-start gap-2.5">
-                    <Icon name="file" className="mt-1 text-muted" />
-                    <div className="min-w-0">
-                      <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm font-semibold">
-                        {d.label}
-                        {d.label_confidence < 0.8 && d.label_by === "rule" ? (
-                          <Badge tone="warn" className="font-medium">
-                            check the label
-                          </Badge>
-                        ) : null}
-                        {d.scan_status !== "clean" ? (
-                          <Badge className="font-medium">
-                            {d.scan_status === "pending" ? "being checked" : d.scan_status}
-                          </Badge>
-                        ) : null}
-                      </p>
-                      <p className="truncate text-xs text-muted">
-                        {d.filename} · {size(d.size_bytes)} ·{" "}
-                        {d.source === "upload_link"
-                          ? "merchant upload"
-                          : d.source === "email"
-                            ? "from email"
-                            : (d.uploaded_by_name ?? "staff")}{" "}
-                        · {formatDate(d.created_at.slice(0, 10), today)}
-                      </p>
-                    </div>
-                  </div>
-                  <div className="flex flex-wrap items-center gap-1.5">
-                    {d.scan_status === "clean" ? (
-                      <a
-                        href={`/api/docs/${d.id}`}
-                        target="_blank"
-                        rel="noreferrer"
-                        className={buttonClass("secondary", "sm")}
+              <li
+                key={d.id}
+                className="rounded-xl px-2 py-2.5 transition duration-150 hover:bg-surface-2/50"
+              >
+                <div className="flex items-start gap-3">
+                  <span
+                    aria-hidden
+                    className={cn(
+                      "mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-lg ring-1 ring-inset",
+                      d.scan_status === "clean"
+                        ? "bg-accent-soft text-accent ring-accent/20"
+                        : "bg-surface-2 text-muted ring-border",
+                    )}
+                  >
+                    <Icon name="file" className="size-3.5" />
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[13px] font-semibold">
+                      {d.label}
+                      {d.label_confidence < 0.8 && d.label_by === "rule" ? (
+                        <Badge tone="warn">check the label</Badge>
+                      ) : null}
+                      {d.scan_status !== "clean" ? (
+                        <Badge>
+                          {d.scan_status === "pending" ? "being checked" : d.scan_status}
+                        </Badge>
+                      ) : null}
+                    </p>
+                    <p className="truncate text-xs text-muted">
+                      {d.filename} · {size(d.size_bytes)} ·{" "}
+                      {d.source === "upload_link"
+                        ? "merchant upload"
+                        : d.source === "email"
+                          ? "from email"
+                          : (d.uploaded_by_name ?? "staff")}{" "}
+                      · {formatDate(d.created_at.slice(0, 10), today)}
+                    </p>
+                    <div className="mt-1.5 flex flex-wrap items-center gap-1">
+                      {d.scan_status === "clean" ? (
+                        <a
+                          href={`/api/docs/${d.id}`}
+                          target="_blank"
+                          rel="noreferrer"
+                          className={buttonClass("secondary", "sm")}
+                        >
+                          Open
+                          <Icon name="external" className="size-3 text-muted" />
+                        </a>
+                      ) : null}
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => setEditing(editing === d.id ? null : d.id)}
                       >
-                        Open
-                      </a>
-                    ) : null}
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      onClick={() => setEditing(editing === d.id ? null : d.id)}
-                    >
-                      Relabel
-                    </Button>
-                    <ConfirmButton
-                      label="Delete"
-                      confirmLabel="Really delete"
-                      busy={busy}
-                      onConfirm={async () => {
-                        setBusy(true);
-                        const ok = await run(deleteDocumentAction({ documentId: d.id }), "Deleted");
-                        setBusy(false);
-                        if (ok) router.refresh();
-                      }}
-                    />
+                        Relabel
+                      </Button>
+                      <ConfirmButton
+                        size="sm"
+                        label="Delete"
+                        confirmLabel="Really delete"
+                        busy={busy}
+                        onConfirm={async () => {
+                          setBusy(true);
+                          const ok = await run(
+                            deleteDocumentAction({ documentId: d.id }),
+                            "Deleted",
+                          );
+                          setBusy(false);
+                          if (ok) router.refresh();
+                        }}
+                      />
+                    </div>
                   </div>
                 </div>
                 {editing === d.id ? (
-                  <div className="mt-2">
+                  <div className="mt-2 pl-11">
                     <Relabel
                       d={d}
                       onDone={() => {

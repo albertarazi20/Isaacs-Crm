@@ -32,7 +32,7 @@ export function UploadLinkButton({
         }
         const copied = await copyText(r.data.url);
         toast({
-          message: copied ? "Upload link copied — good for 2 hours" : r.data.url,
+          message: copied ? "Upload link copied. Good for 2 hours" : r.data.url,
           tone: copied ? "success" : "info",
         });
       }}
@@ -68,7 +68,7 @@ export function ResetUploadLinkButton({ clientId }: { clientId: string }) {
         setBusy(true);
         const ok = await run(
           rotateUploadTokenAction({ clientId }),
-          "Upload link reset — the old one no longer works",
+          "Upload link reset. The old one no longer works",
         );
         setBusy(false);
         if (ok) router.refresh();

@@ -4,17 +4,18 @@ import { useState } from "react";
 import { addNoteAction, setFollowUpAction } from "@/app/actions";
 import type { ActivityRow, ClientCard } from "@/lib/data/types";
 import { formatDate, timeAgo } from "@/lib/format";
-import type { ISODate } from "@/lib/mca/dates";
+import { diffDays, type ISODate } from "@/lib/mca/dates";
 import { stageDef } from "@/lib/mca/stages";
 import { outcomeLabel } from "@/lib/mca/touch";
 import { useApp } from "../app-context";
-import { Badge, Button, cn, EmptyState, Textarea } from "../ui";
+import { Badge, Button, cn, Kbd, type Tone } from "../ui";
 import { HintChips } from "../messaging/HintChips";
 import { Icon, type IconName } from "./icons";
-import { Chip } from "./primitives";
+import { Chip, inkButtonClass } from "./primitives";
 import {
   activityBody,
   countByFilter,
+  dateInTz,
   filterActivities,
   fullDateTime,
   lastCallSummary,
@@ -22,16 +23,16 @@ import {
   TIMELINE_FILTERS,
   type TimelineFilter,
 } from "./logic";
-import { Muted, useNowMs, useRun } from "./parts";
+import { useNowMs, useRun } from "./parts";
 
-const KIND_META: Record<ActivityRow["kind"], { icon: IconName; label: string }> = {
-  note: { icon: "note", label: "Note" },
-  call: { icon: "phone", label: "Call" },
-  text: { icon: "message", label: "Text" },
-  email: { icon: "mail", label: "Email" },
-  stage_change: { icon: "shuffle", label: "Stage change" },
-  timer: { icon: "bell", label: "Follow-up" },
-  system: { icon: "info", label: "Update" },
+const KIND_META: Record<ActivityRow["kind"], { icon: IconName; label: string; tone: Tone }> = {
+  note: { icon: "note", label: "Note", tone: "accent" },
+  call: { icon: "phone", label: "Call", tone: "good" },
+  text: { icon: "message", label: "Text", tone: "info" },
+  email: { icon: "mail", label: "Email", tone: "info" },
+  stage_change: { icon: "shuffle", label: "Stage change", tone: "accent" },
+  timer: { icon: "bell", label: "Follow-up", tone: "warn" },
+  system: { icon: "info", label: "Update", tone: "neutral" },
 };
 
 const OUTCOME_TONE = {
@@ -41,11 +42,39 @@ const OUTCOME_TONE = {
   bad_number: "bad",
 } as const;
 
+/** The dot on the line: a soft disc in the entry's tone, ringed in the panel colour so the line stops at it. */
+const DOT: Record<Tone, string> = {
+  neutral: "bg-surface-2 text-muted",
+  good: "bg-good-soft text-good",
+  warn: "bg-warn-soft text-warn",
+  bad: "bg-bad-soft text-bad",
+  accent: "bg-accent-soft text-accent",
+  info: "bg-info-soft text-info",
+};
+
+/** What an entry is, in a colour: a reply and a received document are good news, a bad number is not. */
+function look(a: ActivityRow): { icon: IconName; label: string; tone: Tone } {
+  const meta = KIND_META[a.kind] ?? KIND_META.system;
+  if (a.kind === "call" && a.outcome) return { ...meta, tone: OUTCOME_TONE[a.outcome] };
+  if (a.kind === "email" && a.body.startsWith("Merchant replied"))
+    return { icon: "reply", label: "Reply", tone: "good" };
+  if (a.kind === "system") {
+    if (/^(Received|Stip received|Document received)/.test(a.body))
+      return { icon: "file", label: "Document", tone: "good" };
+    if (a.body.startsWith("Handed off")) return { icon: "flag", label: "Hand-off", tone: "good" };
+    if (a.body.startsWith("Hand-off undone"))
+      return { icon: "undo", label: "Hand-off", tone: "warn" };
+    if (a.body.startsWith("Moved to bucket"))
+      return { icon: "layers", label: "Bucket", tone: "info" };
+  }
+  return meta;
+}
+
 const PAGE = 40;
 
 /**
  * The last call and the note box. A separate block from the history so a phone can put it right under
- * the pinned header: he is on the phone with the merchant, the note box is what he needs (I-13).
+ * the header: he is on the phone with the merchant, the note box is what he needs (I-13).
  */
 export function NotesPanel({
   card,
@@ -57,11 +86,28 @@ export function NotesPanel({
   className?: string;
 }) {
   return (
-    <section aria-label="Last call and note box" className={cn("space-y-4", className)}>
+    <section
+      aria-label="Last call and note box"
+      className={cn(
+        "overflow-hidden rounded-2xl border border-border bg-surface transition duration-200 focus-within:border-accent/60 focus-within:ring-[3px] focus-within:ring-ring",
+        className,
+      )}
+    >
       <LastContact card={card} activities={activities} />
       <NoteComposer card={card} />
     </section>
   );
+}
+
+function dayLabel(day: ISODate, today: ISODate): string {
+  const ago = diffDays(day, today);
+  const date = formatDate(day, today);
+  if (ago === 0) return `Today · ${date}`;
+  if (ago === 1) return `Yesterday · ${date}`;
+  const weekday = new Intl.DateTimeFormat("en-US", { weekday: "long", timeZone: "UTC" }).format(
+    new Date(`${day}T12:00:00Z`),
+  );
+  return `${weekday} · ${date}`;
 }
 
 export function Timeline({
@@ -71,47 +117,79 @@ export function Timeline({
   activities: ActivityRow[];
   className?: string;
 }) {
+  const { timezone, today } = useApp();
   const [filter, setFilter] = useState<TimelineFilter>("all");
   const [limit, setLimit] = useState(PAGE);
   const counts = countByFilter(activities);
   const rows = filterActivities(activities, filter);
   const shown = rows.slice(0, limit);
+  // newest first, so each day's entries are already together
+  const days: { day: ISODate; items: ActivityRow[] }[] = [];
+  for (const a of shown) {
+    const day = dateInTz(a.occurred_at, timezone);
+    const last = days[days.length - 1];
+    if (last && last.day === day) last.items.push(a);
+    else days.push({ day, items: [a] });
+  }
 
   return (
-    <section aria-label="Notes and history" className={cn("space-y-3", className)}>
-      <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label="Show">
-        {TIMELINE_FILTERS.map((f) => (
-          <Chip
-            key={f.key}
-            title={f.hint}
-            active={filter === f.key}
-            count={counts[f.key]}
-            onClick={() => {
-              setFilter(f.key);
-              setLimit(PAGE);
-            }}
-          >
-            {f.label}
-          </Chip>
-        ))}
+    <section
+      aria-label="Notes and history"
+      className={cn("rounded-2xl border border-border bg-surface p-4 sm:p-5", className)}
+    >
+      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-3">
+        <h2 className="text-sm font-semibold tracking-tight">Timeline</h2>
+        <div
+          className="-mx-1 flex max-w-full gap-1.5 overflow-x-auto px-1"
+          role="group"
+          aria-label="Show"
+        >
+          {TIMELINE_FILTERS.map((f) => (
+            <Chip
+              key={f.key}
+              title={f.hint}
+              active={filter === f.key}
+              count={counts[f.key]}
+              onClick={() => {
+                setFilter(f.key);
+                setLimit(PAGE);
+              }}
+            >
+              {f.label}
+            </Chip>
+          ))}
+        </div>
       </div>
       {rows.length === 0 ? (
-        activities.length === 0 ? (
-          <EmptyState title="Nothing logged yet">
-            Write the first note above — what he wants, who he owes, when to call back.
-          </EmptyState>
-        ) : (
-          <EmptyState title="Nothing here">No entries match this filter.</EmptyState>
-        )
+        <div className="mt-4 rounded-2xl border border-dashed border-border-strong/70 bg-surface-3/40 px-6 py-10 text-center">
+          <p className="text-sm font-semibold">
+            {activities.length === 0 ? "Nothing logged yet" : "Nothing here"}
+          </p>
+          <p className="mx-auto mt-1 max-w-sm text-sm text-muted">
+            {activities.length === 0
+              ? "Write the first note above: what they want, who they owe, when to call back."
+              : "No entries match this filter."}
+          </p>
+        </div>
       ) : (
-        <ol className="divide-y divide-border overflow-hidden rounded-xl border border-border bg-surface">
-          {shown.map((a) => (
-            <Entry key={a.id} a={a} />
+        <div className="mt-5 space-y-6">
+          {days.map((d) => (
+            <div key={d.day}>
+              <h3 className="eyebrow mb-3 flex items-center gap-3">
+                {dayLabel(d.day, today)}
+                <span aria-hidden className="h-px flex-1 bg-border" />
+              </h3>
+              <ol className="relative before:absolute before:top-2 before:bottom-2 before:left-[13px] before:w-px before:bg-border">
+                {d.items.map((a) => (
+                  <Entry key={a.id} a={a} />
+                ))}
+              </ol>
+            </div>
           ))}
-        </ol>
+        </div>
       )}
       {rows.length > shown.length ? (
-        <Button className="w-full" onClick={() => setLimit((n) => n + PAGE)}>
+        <Button className="mt-4 w-full" onClick={() => setLimit((n) => n + PAGE)}>
           Show older ({rows.length - shown.length} more)
         </Button>
       ) : null}
@@ -130,34 +208,43 @@ function LastContact({ card, activities }: { card: ClientCard; activities: Activ
       ? touch
       : null;
   return (
-    <div className="rounded-xl border border-border bg-surface px-4 py-3">
-      {last.never ? (
-        <p className="text-sm font-medium">
-          Never called yet
-          <span className="font-normal text-muted"> — no call has been logged.</span>
-        </p>
-      ) : (
-        <p className="text-sm">
-          <span className="font-semibold" title={fullDateTime(last.atIso, timezone)}>
-            Last call {last.ago}
-          </span>
-          {last.note ? (
-            <>
-              <span className="text-muted"> — </span>
-              <span className="whitespace-pre-wrap break-words">{last.note}</span>
-            </>
-          ) : (
-            <span className="text-muted"> — no note was left.</span>
-          )}
-        </p>
-      )}
-      {otherTouch ? (
-        <Muted className="mt-1">
-          <span title={fullDateTime(otherTouch.atIso, timezone)}>
+    <div className="flex items-start gap-3 border-b border-border bg-surface-3/50 px-4 py-3 sm:px-5">
+      <span
+        aria-hidden
+        className={cn(
+          "mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-full",
+          last.never ? DOT.neutral : DOT.good,
+        )}
+      >
+        <Icon name="phone" className="size-3.5" />
+      </span>
+      <div className="min-w-0 flex-1 text-sm">
+        {last.never ? (
+          <p>
+            <span className="font-semibold">Never called yet</span>
+            <span className="text-muted"> · no call has been logged.</span>
+          </p>
+        ) : (
+          <p>
+            <span className="font-semibold" title={fullDateTime(last.atIso, timezone)}>
+              Last call {last.ago}
+            </span>
+            {last.note ? (
+              <>
+                <span className="text-muted"> · </span>
+                <span className="break-words whitespace-pre-wrap text-text-2">{last.note}</span>
+              </>
+            ) : (
+              <span className="text-muted"> · no note was left.</span>
+            )}
+          </p>
+        )}
+        {otherTouch ? (
+          <p className="mt-0.5 text-xs text-muted" title={fullDateTime(otherTouch.atIso, timezone)}>
             Last follow-up: {otherTouch.kind} {timeAgo(otherTouch.atIso, new Date(nowMs))}
-          </span>
-        </Muted>
-      ) : null}
+          </p>
+        ) : null}
+      </div>
     </div>
   );
 }
@@ -198,7 +285,6 @@ function NoteComposer({ card }: { card: ClientCard }) {
 
   return (
     <form
-      className="rounded-xl border border-border bg-surface p-3 transition focus-within:border-accent"
       onSubmit={(e) => {
         e.preventDefault();
         void save();
@@ -207,7 +293,7 @@ function NoteComposer({ card }: { card: ClientCard }) {
       <label className="sr-only" htmlFor="new-note">
         New note
       </label>
-      <Textarea
+      <textarea
         id="new-note"
         rows={3}
         value={body}
@@ -219,16 +305,11 @@ function NoteComposer({ card }: { card: ClientCard }) {
             void save();
           }
         }}
-        placeholder="Write a note — what he said, what he wants, when to call back…"
+        placeholder="Write a note: what they said, what they want, when to call back…"
+        className="block min-h-24 w-full resize-y bg-transparent px-4 pt-3.5 pb-2 text-[15px] leading-relaxed text-text placeholder:text-muted/70 focus:outline-none sm:px-5"
       />
-      <div className="mt-2 flex items-center justify-between gap-3">
-        <Muted>Ctrl+Enter (⌘+Enter on Mac) saves</Muted>
-        <Button type="submit" variant="primary" disabled={busy || !body.trim()}>
-          {busy ? "Saving…" : "Save note"}
-        </Button>
-      </div>
       {hintSource.trim() ? (
-        <div className="mt-2 border-t border-border pt-2">
+        <div className="px-4 pb-2 empty:hidden sm:px-5">
           <HintChips
             note={hintSource}
             today={today}
@@ -241,6 +322,20 @@ function NoteComposer({ card }: { card: ClientCard }) {
           />
         </div>
       ) : null}
+      <div className="flex items-center justify-between gap-3 px-4 pb-3 sm:px-5">
+        <p className="flex items-center gap-1.5 text-xs text-muted max-sm:hidden">
+          <Kbd>⌘</Kbd>
+          <Kbd>Enter</Kbd>
+          <span>saves (Ctrl+Enter on Windows)</span>
+        </p>
+        <p className="text-xs text-muted tabular-nums sm:hidden">
+          {body.length > 0 ? `${body.length} characters` : "Saved to the timeline"}
+        </p>
+        <button type="submit" disabled={busy || !body.trim()} className={inkButtonClass()}>
+          <Icon name="check" className="size-3.5" />
+          {busy ? "Saving…" : "Save note"}
+        </button>
+      </div>
     </form>
   );
 }
@@ -249,55 +344,53 @@ function Entry({ a }: { a: ActivityRow }) {
   const { timezone, today } = useApp();
   const nowMs = useNowMs();
   // older rows can hold a kind the removed features wrote (funding): show it as a plain update
-  const meta = KIND_META[a.kind] ?? KIND_META.system;
+  const meta = look(a);
   const body = activityBody(a, today);
   const isNote = a.kind === "note";
-  const when = (
-    <time
-      dateTime={a.occurred_at}
-      title={fullDateTime(a.occurred_at, timezone)}
-      className="shrink-0 text-xs text-muted"
-    >
-      {timeAgo(a.occurred_at, new Date(nowMs))}
-    </time>
-  );
 
   return (
-    <li className={cn("px-4 py-2.5 transition", isNote ? "bg-surface" : "bg-surface-3/60")}>
-      <div className="flex items-start gap-3">
-        <span
-          className={cn(
-            "mt-0.5 inline-flex size-6 shrink-0 items-center justify-center rounded-md",
-            isNote ? "bg-accent-soft text-accent" : "bg-surface-2 text-muted",
-          )}
-        >
-          <Icon name={meta.icon} className="size-3.5" />
-        </span>
-        <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
-            <div className="flex flex-wrap items-center gap-2 text-[13px] font-semibold">
-              {a.kind === "stage_change" ? (
-                <StageChangeLabel from={a.from_stage} to={a.to_stage} />
-              ) : (
-                meta.label
-              )}
-              {a.kind === "call" && a.outcome ? (
-                <Badge tone={OUTCOME_TONE[a.outcome]}>{outcomeLabel(a.kind, a.outcome)}</Badge>
-              ) : null}
-            </div>
-            {when}
+    <li className="group relative flex gap-3 pb-4 last:pb-0">
+      <span
+        aria-hidden
+        className={cn(
+          "relative z-10 flex size-[27px] shrink-0 items-center justify-center rounded-full ring-4 ring-surface",
+          DOT[meta.tone],
+        )}
+      >
+        <Icon name={meta.icon} className="size-3.5" />
+      </span>
+      <div className="min-w-0 flex-1 pt-0.5">
+        <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5">
+          <div className="flex flex-wrap items-center gap-2 text-[13px] font-semibold">
+            {a.kind === "stage_change" ? (
+              <StageChangeLabel from={a.from_stage} to={a.to_stage} />
+            ) : (
+              meta.label
+            )}
+            {a.kind === "call" && a.outcome ? (
+              <Badge tone={OUTCOME_TONE[a.outcome]}>{outcomeLabel(a.kind, a.outcome)}</Badge>
+            ) : null}
           </div>
-          {body ? (
-            <p
-              className={cn(
-                "mt-0.5 break-words whitespace-pre-wrap",
-                isNote ? "text-sm text-text" : "text-[13px] text-text-2",
-              )}
-            >
-              {body}
-            </p>
-          ) : null}
+          <time
+            dateTime={a.occurred_at}
+            title={fullDateTime(a.occurred_at, timezone)}
+            className="shrink-0 text-xs text-muted tabular-nums"
+          >
+            {timeAgo(a.occurred_at, new Date(nowMs))}
+          </time>
         </div>
+        {body ? (
+          <p
+            className={cn(
+              "mt-1 break-words whitespace-pre-wrap",
+              isNote
+                ? "rounded-xl rounded-tl-sm border border-border bg-surface-3/70 px-3 py-2 text-sm text-text"
+                : "text-[13px] text-text-2",
+            )}
+          >
+            {body}
+          </p>
+        ) : null}
       </div>
     </li>
   );
