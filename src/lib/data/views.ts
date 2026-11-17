@@ -1,6 +1,6 @@
 import { addDays, type ISODate } from "../mca/dates";
 import { bookedToday } from "../mca/booked";
-import { stageDef, type StageGroup, type TimerKind } from "../mca/stages";
+import { stageDef, timerKind, type StageGroup, type TimerKind } from "../mca/stages";
 import type { ClientCard } from "./types";
 
 const KIND_RANK: Record<TimerKind, number> = {
@@ -15,8 +15,8 @@ const GROUP_RANK: Record<StageGroup, number> = {
 };
 
 function byPriority(a: ClientCard, b: ClientCard): number {
-  const ka = KIND_RANK[a.next_due_kind ?? "follow_up"];
-  const kb = KIND_RANK[b.next_due_kind ?? "follow_up"];
+  const ka = KIND_RANK[timerKind(a.next_due_kind)];
+  const kb = KIND_RANK[timerKind(b.next_due_kind)];
   if (ka !== kb) return ka - kb;
   if (a.next_due_kind === "scheduled_call" && a.scheduled_call_at && b.scheduled_call_at) {
     return a.scheduled_call_at.localeCompare(b.scheduled_call_at);

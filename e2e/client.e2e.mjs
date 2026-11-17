@@ -1,5 +1,5 @@
-// Client page: notes, call outcomes, booked calls, follow-ups, ask, other advances, competing offers,
-// stips, edit details, sensitive-data guard, mobile layout. Every check reads the DATABASE.
+// Client page: notes, call outcomes, booked calls, follow-ups, stips, edit details, stage moves, sensitive-data
+// guard, mobile layout. Every check reads the DATABASE.
 // A failing check is a finding for docs/ISSUES.md.   E2E_ONLY=stips pnpm -s e2e client   runs one section.
 import { mkdirSync } from "node:fs";
 import { BASE, check as libCheck, openBrowser, withDb } from "./lib.mjs";
@@ -170,9 +170,6 @@ async function alertText(page, timeout = 5000) {
   if (text) await loc.evaluate((e) => e.setAttribute("data-seen", "1")).catch(() => undefined);
   return text;
 }
-/** Waits (no sleeping) until a panel's text matches. */
-const panelHas = (p, re, timeout = 6000) =>
-  until(async () => re.test(await p.innerText()), timeout).then((v) => !!v);
 const gone = (loc, timeout = 8000) =>
   loc
     .waitFor({ state: "hidden", timeout })
@@ -546,7 +543,7 @@ export default async function clientFlow({ email }) {
         .click();
     };
     await pickReminder(addDays(today, 1), "10", "30", "AM");
-    await p.getByLabel("What it's about").fill("Review the two offers");
+    await p.getByLabel("What it's about").fill("Go over the statements");
     await p.getByRole("button", { name: /^Set (call|text|email) reminder$/ }).click();
     await page
       .getByText(/reminder set/)
@@ -567,7 +564,7 @@ export default async function clientFlow({ email }) {
         (x) =>
           x.kind === "scheduled_call" &&
           x.due_on === addDays(today, 1) &&
-          x.note === "Review the two offers",
+          x.note === "Go over the statements",
       ),
       JSON.stringify(t.map((x) => `${x.kind}:${x.due_on}`)),
     );
@@ -758,386 +755,6 @@ export default async function clientFlow({ email }) {
       "each saved follow-up left a line in the timeline",
       nTimer >= PRESETS.length + 1,
       `${nTimer} timer activities`,
-    );
-  });
-
-  // =========================== 5. the ask =============================================================
-  await section("the ask", async () => {
-    const c = await clientOf("Mike's Pizza");
-    await openClient(page, c.id);
-    const p = panel(page, "The ask");
-    const asks = () =>
-      rows(
-        "select wanted_amount_cents::int wanted, est_approval_cents::int est, wanted_terms, est_approval_note from client_asks where client_id = $1 order by created_at",
-        [c.id],
-      );
-    check("precondition: no ask recorded yet", (await asks()).length === 0);
-    await p.getByRole("button", { name: "Record the ask" }).click();
-    let d = dialogOf(page);
-    await field(d, /^How much he wants/).fill("$50,000");
-    await field(d, /^The offer he wants/).fill("6 months, daily");
-    await field(d, /^What I think funders would approve/).fill("30k");
-    await field(d, /^Why/).fill("Thin August deposits");
-    check("the ask saves", await saveDialog(page));
-    let a = await asks();
-    check(
-      "DB: one client_asks row — wanted $50,000, estimate $30,000, terms and reason",
-      a.length === 1 &&
-        a[0].wanted === 5_000_000 &&
-        a[0].est === 3_000_000 &&
-        a[0].wanted_terms === "6 months, daily" &&
-        a[0].est_approval_note === "Thin August deposits",
-      JSON.stringify(a),
-    );
-    check("the card shows $50,000", await panelHas(p, /\$50,000/));
-    await p.getByRole("button", { name: "Edit", exact: true }).click();
-    d = dialogOf(page);
-    check(
-      "the dialog starts from what he saved",
-      (await field(d, /^How much he wants/).inputValue()) === "50000",
-    );
-    await field(d, /^How much he wants/).fill("60k");
-    await field(d, /^What I think funders would approve/).fill("45k");
-    check("changing the ask saves", await saveDialog(page));
-    a = await asks();
-    check(
-      "DB: BOTH snapshots exist — $50,000 then $60,000 (history kept, not overwritten)",
-      a.length === 2 &&
-        a[0].wanted === 5_000_000 &&
-        a[1].wanted === 6_000_000 &&
-        a[1].est === 4_500_000,
-      JSON.stringify(a),
-    );
-    const card = await one(
-      "select wanted_amount_cents::int w, est_approval_cents::int e from client_cards where id = $1",
-      [c.id],
-    );
-    check(
-      "DB: the client card reads the newest ask ($60,000 / est $45,000)",
-      card.w === 6_000_000 && card.e === 4_500_000,
-      JSON.stringify(card),
-    );
-    check(
-      "the card now shows $60,000 and the earlier ask under 'in the past'",
-      (await panelHas(p, /\$60,000/)) && (await panelHas(p, /in the past \(1\)/)),
-    );
-    await p.getByText(/How much he wanted in the past/).click();
-    check(
-      "the earlier ask shows $50,000 with its date",
-      /Wanted \$50,000/.test(await p.innerText()),
-    );
-    // Bad input.
-    await p.getByRole("button", { name: "Edit", exact: true }).click();
-    d = dialogOf(page);
-    await field(d, /^How much he wants/).fill("abc");
-    await d.getByRole("button", { name: "Save", exact: true }).click();
-    const msg = await alertText(page);
-    check("an amount of 'abc' is refused with an example", /50k|amount/i.test(msg), msg);
-    await field(d, /^How much he wants/).fill("0");
-    await d.getByRole("button", { name: "Save", exact: true }).click();
-    const msg0 = await until(async () => (await alertText(page, 700)) || null, 3000);
-    check(
-      "an amount of 0 is refused in plain words",
-      !!msg0 && !/went wrong|isn't allowed/i.test(msg0),
-      msg0 ?? "it was accepted",
-    );
-    check(
-      "DB: neither bad save added a snapshot",
-      (await asks()).length === (msg0 ? 2 : 3),
-      `${(await asks()).length} rows`,
-    );
-    await d.getByRole("button", { name: "Cancel" }).click();
-    // Free-text 'terms' is a one-line field: is it guarded like notes?
-    await p.getByRole("button", { name: "Edit", exact: true }).click();
-    d = dialogOf(page);
-    await field(d, /^The offer he wants/).fill("SSN 123-45-6789, 6 months");
-    await d.getByRole("button", { name: "Save", exact: true }).click();
-    const sens = await until(async () => (await alertText(page, 700)) || null, 3000);
-    const stored = await one(
-      "select count(*)::int n from client_asks where client_id = $1 and wanted_terms like '%123-45-6789%'",
-      [c.id],
-    );
-    check(
-      "an SSN typed into the ask's 'terms' line is refused, not stored",
-      stored.n === 0,
-      sens ?? `STORED in client_asks.wanted_terms (${stored.n} row)`,
-    );
-    if (
-      await dialogOf(page)
-        .isVisible()
-        .catch(() => false)
-    )
-      await dialogOf(page).getByRole("button", { name: "Cancel" }).click();
-    await shot(page, "client-ask");
-  });
-
-  // =========================== 6. other advances ======================================================
-  await section("other advances (positions)", async () => {
-    const c = await clientOf("Mike's Pizza");
-    await openClient(page, c.id);
-    const p = panel(page, "Other advances");
-    const pos = () =>
-      rows(
-        `select id, position_no, funder_name, funded_amount_cents::int amount, payback_cents::int payback, balance_cents::int balance,
-                payment_cents::int payment, frequency, funded_on::text funded_on, note from positions where client_id = $1 order by position_no`,
-        [c.id],
-      );
-    check(
-      "empty state says a new advance would be 1st position",
-      /1st position/.test(await p.innerText()),
-    );
-    await p.getByRole("button", { name: "+ Add" }).click();
-    let d = dialogOf(page);
-    check("a new position starts at 1", (await field(d, /^Position/).inputValue()) === "1");
-    await field(d, /^Funder/).fill("Libertas");
-    await field(d, /^Advance amount taken/).fill("40k");
-    await field(d, /^Total payback/).fill("54.8k");
-    await field(d, /^Balance still owed/).fill("21k");
-    await field(d, /^Date funded/).fill(addDays(today, -60));
-    await field(d, /^Remittance/).fill("450");
-    await field(d, /^How often/).selectOption({ label: "Daily" });
-    await field(d, /^Note/).fill("Paying on time");
-    check("the position saves", await saveDialog(page));
-    let r = await pos();
-    check(
-      "DB: positions row has funder, amount, payback, balance, remittance, frequency, date and note",
-      r.length === 1 &&
-        r[0].funder_name === "Libertas" &&
-        r[0].amount === 4_000_000 &&
-        r[0].payback === 5_480_000 &&
-        r[0].balance === 2_100_000 &&
-        r[0].payment === 45_000 &&
-        r[0].frequency === "daily" &&
-        r[0].funded_on === addDays(today, -60) &&
-        r[0].note === "Paying on time" &&
-        r[0].position_no === 1,
-      JSON.stringify(r),
-    );
-    await panelHas(p, /61\.7% paid down/);
-    const txt = await p.innerText();
-    check(
-      "the panel rolls up 1 position, $21,000 owed, 61.7% paid down; next would be 2nd",
-      /1 position/.test(txt) &&
-        /\$21,000 still owed/.test(txt) &&
-        /61\.7% paid down/.test(txt) &&
-        /2nd position/.test(txt),
-      txt.replace(/\s+/g, " ").slice(0, 200),
-    );
-    // Edit.
-    await p.getByRole("button", { name: "Edit", exact: true }).click();
-    d = dialogOf(page);
-    check(
-      "edit starts from the saved values",
-      (await field(d, /^Balance still owed/).inputValue()) === "21000" &&
-        (await field(d, /^Funder/).inputValue()) === "Libertas",
-    );
-    await field(d, /^Balance still owed/).fill("10k");
-    check("the edit saves", await saveDialog(page));
-    await panelHas(p, /\$10,000 still owed/);
-    r = await pos();
-    check(
-      "DB: balance updated to $10,000 on the same row",
-      r.length === 1 && r[0].balance === 1_000_000,
-      JSON.stringify(r.map((x) => x.balance)),
-    );
-    // Second position, no payback.
-    await p.getByRole("button", { name: "+ Add" }).click();
-    d = dialogOf(page);
-    check("the next position starts at 2", (await field(d, /^Position/).inputValue()) === "2");
-    await field(d, /^Funder/).fill("Cobalt Capital");
-    await field(d, /^Advance amount taken/).fill("25k");
-    await field(d, /^Balance still owed/).fill("30k");
-    await saveDialog(page);
-    await panelHas(p, /Cobalt Capital/);
-    r = await pos();
-    check(
-      "DB: two positions, the second without a payback",
-      r.length === 2 && r[1].funder_name === "Cobalt Capital" && r[1].payback === null,
-      JSON.stringify(r.map((x) => `${x.position_no}:${x.funder_name}`)),
-    );
-    check(
-      "the card's own line for the one without payback does not invent a %",
-      !/Cobalt[\s\S]{0,80}% paid down/.test(
-        await p.locator("li").filter({ hasText: "Cobalt" }).innerText(),
-      ),
-      (await p.locator("li").filter({ hasText: "Cobalt" }).innerText()).replace(/\s+/g, " "),
-    );
-    // Validation.
-    await p.getByRole("button", { name: "+ Add" }).click();
-    d = dialogOf(page);
-    await field(d, /^Position/).fill("0");
-    await d.getByRole("button", { name: "Save", exact: true }).click();
-    const posBox = field(d, /^Position/);
-    const pv = await posBox.evaluate((el) => ({
-      bad: !el.validity.valid,
-      msg: el.validationMessage,
-    }));
-    const toastMsg = await alertText(page, 800);
-    check(
-      "position 0 is refused in plain words (browser tooltip or our own message) and the dialog stays",
-      (await d.isVisible()) && (pv.bad || /1 to 20/.test(toastMsg)),
-      `browser says "${pv.msg}", toast "${toastMsg}"`,
-    );
-    await field(d, /^Position/).fill("3");
-    await field(d, /^Advance amount taken/).fill("abc");
-    await d.getByRole("button", { name: "Save", exact: true }).click();
-    const m2 = await until(async () => (await alertText(page, 700)) || null, 3000);
-    check(
-      "an advance amount of 'abc' is refused with an example",
-      /50k|amount/i.test(m2 ?? ""),
-      m2 ?? "no message",
-    );
-    await field(d, /^Advance amount taken/).fill("20k");
-    await field(d, /^Total payback/).fill("10k");
-    await field(d, /^Balance still owed/).fill("50k");
-    await d.getByRole("button", { name: "Save", exact: true }).click();
-    const closed = await gone(d, 2500);
-    const bad = await pos();
-    check(
-      "a payback smaller than the advance, and a balance bigger than the payback, are questioned",
-      !closed && bad.length === 2,
-      closed ? "saved silently: amount $20k, payback $10k, balance $50k" : "refused",
-    );
-    if (await d.isVisible().catch(() => false))
-      await d.getByRole("button", { name: "Cancel" }).click();
-    else await rows("delete from positions where client_id = $1 and position_no = 3", [c.id]); // tidy up the silently-saved one
-    await openClient(page, c.id);
-    // Delete needs a second click.
-    await p
-      .locator("li")
-      .filter({ hasText: "Libertas" })
-      .getByRole("button", { name: "Edit" })
-      .click();
-    d = dialogOf(page);
-    await d.getByRole("button", { name: "Delete", exact: true }).click();
-    check(
-      "one click on Delete asks to confirm",
-      (await d.getByRole("button", { name: "Click again to delete" }).count()) === 1,
-    );
-    check(
-      "DB: still there after the first click",
-      (await pos()).some((x) => x.funder_name === "Libertas"),
-    );
-    await d.getByRole("button", { name: "Click again to delete" }).click();
-    await gone(d, 6000);
-    const ok = await until(async () => !(await pos()).some((x) => x.funder_name === "Libertas"));
-    check(
-      "DB: the position is gone after the second click",
-      !!ok,
-      JSON.stringify((await pos()).map((x) => x.funder_name)),
-    );
-    check(
-      "DB: the other position is untouched",
-      (await pos()).some((x) => x.funder_name === "Cobalt Capital"),
-    );
-    await shot(page, "client-positions");
-  });
-
-  // =========================== 7. competing offers ====================================================
-  await section("competing offers", async () => {
-    const c = await clientOf("Mike's Pizza");
-    await openClient(page, c.id);
-    const p = panel(page, "Competing offers");
-    const offers = () =>
-      rows(
-        `select id, funder_name, amount_cents::int amount, factor_rate::float factor, payment_cents::int payment, frequency, position_no,
-                term_days, offered_on::text offered_on, won, note from competing_offers where client_id = $1 order by created_at`,
-        [c.id],
-      );
-    await p.getByRole("button", { name: "+ Add" }).click();
-    let d = dialogOf(page);
-    await field(d, /^Funder/).fill("Pearl Funding");
-    await field(d, /^Advance amount/).fill("45k");
-    await field(d, /^Factor rate/).fill("1.34");
-    await field(d, /^Remittance/).fill("400");
-    await field(d, /^How often/).selectOption({ label: "Daily" });
-    await field(d, /^Position/).fill("1");
-    await field(d, /^Term/).fill("120");
-    await field(d, /^Note/).fill("Faster funding");
-    check("the offer saves", await saveDialog(page));
-    let r = await offers();
-    check(
-      "DB: competing_offers row with every field, won = false, dated today",
-      r.length === 1 &&
-        r[0].funder_name === "Pearl Funding" &&
-        r[0].amount === 4_500_000 &&
-        r[0].factor === 1.34 &&
-        r[0].payment === 40_000 &&
-        r[0].frequency === "daily" &&
-        r[0].position_no === 1 &&
-        r[0].term_days === 120 &&
-        r[0].won === false &&
-        r[0].offered_on === today &&
-        r[0].note === "Faster funding",
-      JSON.stringify(r),
-    );
-    check(
-      "no 'average factor' insight with a single offer",
-      !/Average factor/.test(await p.innerText()),
-    );
-    // Second offer → insight.
-    await p.getByRole("button", { name: "+ Add" }).click();
-    d = dialogOf(page);
-    await field(d, /^Funder/).fill("Everest Funding");
-    await field(d, /^Factor rate/).fill("1.38");
-    await field(d, /^Advance amount/).fill("40k");
-    await saveDialog(page);
-    check(
-      "with two offers the average factor appears (1.36, range 1.34 to 1.38)",
-      await panelHas(p, /Average factor across 2 offers: 1\.36 \(1\.34 to 1\.38\)/),
-      (await p.innerText()).replace(/\s+/g, " ").slice(0, 160),
-    );
-    // Validation.
-    await p.getByRole("button", { name: "+ Add" }).click();
-    d = dialogOf(page);
-    await field(d, /^Funder/).fill("Bad Factor Inc");
-    await field(d, /^Factor rate/).fill("5");
-    await d.getByRole("button", { name: "Save", exact: true }).click();
-    const msg = await alertText(page);
-    check("a factor rate of 5 is refused in plain words", /1\.00 and 3\.00/.test(msg), msg);
-    await field(d, /^Factor rate/).fill("");
-    await field(d, /^Funder/).fill("");
-    await d.getByRole("button", { name: "Save", exact: true }).click();
-    check(
-      "a blank funder does not save (the browser asks for it)",
-      (await d.isVisible()) && (await offers()).length === 2,
-    );
-    await d.getByRole("button", { name: "Cancel" }).click();
-    // Mark one as the winner.
-    await p
-      .locator("li")
-      .filter({ hasText: "Everest Funding" })
-      .getByRole("button", { name: "Edit" })
-      .click();
-    d = dialogOf(page);
-    await d.getByRole("checkbox", { name: /They won this deal/ }).check();
-    await saveDialog(page);
-    r = await offers();
-    check(
-      "DB: Everest is marked won, Pearl is not",
-      r.find((x) => x.funder_name === "Everest Funding")?.won === true &&
-        r.find((x) => x.funder_name === "Pearl Funding")?.won === false,
-    );
-    check("the card says 'Won the deal'", await panelHas(p, /Won the deal/));
-    // Delete.
-    await p
-      .locator("li")
-      .filter({ hasText: "Pearl Funding" })
-      .getByRole("button", { name: "Edit" })
-      .click();
-    d = dialogOf(page);
-    await d.getByRole("button", { name: "Delete", exact: true }).click();
-    await d.getByRole("button", { name: "Click again to delete" }).click();
-    await gone(d, 6000);
-    const ok = await until(async () => (await offers()).length === 1);
-    check(
-      "DB: Pearl's offer is deleted, Everest's remains",
-      !!ok && (await offers())[0].funder_name === "Everest Funding",
-      JSON.stringify((await offers()).map((x) => x.funder_name)),
-    );
-    check(
-      "with one offer left the average insight goes away",
-      !!(await until(async () => !/Average factor/.test(await p.innerText()), 5000)),
     );
   });
 
@@ -1417,18 +1034,25 @@ export default async function clientFlow({ email }) {
 
   // =========================== stage move from the client page =========================================
   await section("move to a stage from the client page", async () => {
-    const c = await clientOf("Verde Landscaping");
+    const c = await clientOf("Harbor Seafood");
     await openClient(page, c.id);
     const sel = page.getByLabel("Move to stage");
     const current = await sel.locator("option[disabled]").first().innerText();
     check(
       "the current stage is listed but cannot be picked again",
-      /\(current\)/.test(current),
+      /Application in.*\(current\)/.test(current),
       current,
     );
-    await sel.selectOption({ label: "Offers in" }); // "Offer presented" folds into "Offers in" in every dropdown
-    const ok = await until(async () => (await clientById(c.id)).stage === "offers_in");
-    check("DB: picking 'Offers in' moves him", !!ok, (await clientById(c.id)).stage);
+    const offered = await sel.locator("option:not([value=''])").allInnerTexts();
+    check(
+      "the picker offers Interested, Application in and Trash, and nothing else",
+      JSON.stringify(offered.map((x) => x.replace(" (current)", ""))) ===
+        JSON.stringify(["Interested", "Application in", "Trash"]),
+      JSON.stringify(offered),
+    );
+    await sel.selectOption({ label: "Interested" });
+    const ok = await until(async () => (await clientById(c.id)).stage === "interested");
+    check("DB: picking 'Interested' moves him", !!ok, (await clientById(c.id)).stage);
     const t = await followUps(c.id);
     check(
       "DB: with the stage's own follow-up (one open timer, after today)",
@@ -1436,9 +1060,9 @@ export default async function clientFlow({ email }) {
       JSON.stringify(t.map((x) => x.due_on)),
     );
     check(
-      "the badge at the top now says Offers in",
+      "the badge at the top now says Interested",
       !!(await until(
-        async () => /Offers in/.test(await page.locator("h1").locator("xpath=..").innerText()),
+        async () => /Interested/.test(await page.locator("h1").locator("xpath=..").innerText()),
         5000,
       )),
     );
@@ -1448,44 +1072,25 @@ export default async function clientFlow({ email }) {
       [c.id],
     );
     check(
-      "DB: a stage_change row application_in → offers_in",
-      sc.some((x) => x.from_stage === "application_in" && x.to_stage === "offers_in"),
+      "DB: a stage_change row application_in → interested",
+      sc.some((x) => x.from_stage === "application_in" && x.to_stage === "interested"),
       JSON.stringify(sc),
     );
-    await sel.selectOption({ label: "Funded" });
-    const d = dialogOf(page);
-    await d.getByRole("heading", { name: /funded/ }).waitFor({ timeout: 5000 });
-    check(
-      "Funded opens the terms dialog and nothing moves yet",
-      (await clientById(c.id)).stage === "offers_in",
-    );
-    await field(d, /^Advance amount/).fill("25k");
-    await field(d, /^Factor rate/).fill("1.4");
-    await field(d, /^Remittance/).fill("350");
-    await d.getByRole("button", { name: "Mark funded" }).click();
-    await gone(d, 8000);
-    const ok2 = await until(async () => (await clientById(c.id)).stage === "funded");
-    const f = await one(
-      "select amount_cents::int a, payback_cents::int p, payment_cents::int r from fundings where client_id = $1",
+    await sel.selectOption({ label: "Application in" });
+    const ok2 = await until(async () => (await clientById(c.id)).stage === "application_in");
+    const received = await one(
+      "select application_received_on::text d from clients where id = $1",
       [c.id],
     );
     check(
-      "DB: funded with payback = amount × factor ($35,000)",
-      !!ok2 && f?.a === 2_500_000 && f.p === 3_500_000 && f.r === 35_000,
-      JSON.stringify(f),
+      "DB: moving into Application in stamps the day the application came in, and no dialog asks for anything",
+      !!ok2 && received?.d === today && (await dialogOf(page).count()) === 0,
+      JSON.stringify(received),
     );
-    const tm = await openTimers(c.id);
-    check(
-      "DB: check-in 30 days out and a renewal call",
-      tm.some((x) => x.kind === "check_in" && x.due_on === addDays(today, 30)) &&
-        tm.some((x) => x.kind === "renewal"),
-      JSON.stringify(tm.map((x) => `${x.kind}:${x.due_on}`)),
-    );
-    check(
-      "the Funding panel appears on the page",
-      !!(await until(async () => (await panel(page, "Funding").count()) > 0, 5000)),
-    );
-    await shot(page, "client-funded");
+    await sel.selectOption({ label: "Trash" });
+    const ok3 = await until(async () => (await clientById(c.id)).stage === "dead");
+    check("DB: picking 'Trash' moves him to the dead stage", !!ok3, (await clientById(c.id)).stage);
+    await shot(page, "client-stage-moves");
   });
 
   // =========================== 12. sensitive data in notes ============================================

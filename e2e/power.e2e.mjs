@@ -1,4 +1,4 @@
-// Power dial, bulk reschedule, snooze guard, money-first ranking, global search and the phone tab bar.
+// Power dial, bulk reschedule, snooze guard, biggest-first ranking, global search and the phone tab bar.
 //   CHROMIUM_PATH=... DATABASE_URL=... pnpm e2e power
 // Every check asserts on DATABASE ROWS (or on what the page really shows), never on "it returned 200".
 import { mkdirSync } from "node:fs";
@@ -9,7 +9,7 @@ const SHOTS =
   "/tmp/claude-0/-home-user-Isaac/17874b0e-83c6-5f06-8a6a-1bf11b991d45/scratchpad/power";
 mkdirSync(SHOTS, { recursive: true });
 
-const UNDERWRITING = [
+const APPLICATION_IN = [
   "application_in",
   "stips",
   "submitted",
@@ -79,7 +79,7 @@ export default async function powerFlow({ email }) {
     page.locator("section", { has: page.getByRole("heading", { name: new RegExp(`^${name}`) }) });
 
   // ---------------------------------------------------------------------------------------------
-  // 1. Money-first ranking on Today
+  // 1. Biggest-first ranking on Today
   await page.goto(`${BASE}/today`, { waitUntil: "networkidle" });
   await page.evaluate(() => localStorage.clear());
   await page.reload({ waitUntil: "networkidle" });
@@ -140,7 +140,7 @@ export default async function powerFlow({ email }) {
   );
   await page.getByRole("button", { name: "Biggest first" }).click();
   check(
-    "switching back restores the money-first order",
+    "switching back restores the biggest-first order",
     await until(
       async () =>
         (
@@ -258,13 +258,13 @@ export default async function powerFlow({ email }) {
     `select c.id, c.business_name, c.stage from client_cards c join app_users u on u.id = c.user_id
       where u.email = $1 and c.stage = any($2::text[]) and c.next_due_on <= ${NY_TODAY} and c.next_due_kind = 'follow_up'
         and c.contact_status = 'ok' order by c.business_name limit 1`,
-    [email, UNDERWRITING],
+    [email, APPLICATION_IN],
   );
   const uw2 = await one(
     `select c.id, c.business_name from client_cards c join app_users u on u.id = c.user_id
       where u.email = $1 and c.stage = any($2::text[]) and c.next_due_on <= ${NY_TODAY} and c.next_due_kind = 'follow_up'
         and c.contact_status = 'ok' and c.id <> $3 order by c.business_name limit 1`,
-    [email, UNDERWRITING, uw.id],
+    [email, APPLICATION_IN, uw.id],
   );
   const early = await one(
     `select c.id, c.business_name from client_cards c join app_users u on u.id = c.user_id
@@ -298,13 +298,14 @@ export default async function powerFlow({ email }) {
   const uwRow = rowOf(uw.business_name);
   await uwRow.locator("summary", { hasText: "Snooze" }).click();
   await uwRow.getByRole("button", { name: "1 month" }).click();
-  const form = page.getByRole("form", { name: "Why snooze this deal" });
+  const form = page.getByRole("form", { name: "Why snooze this merchant" });
   await form.waitFor({ timeout: 5000 });
   await shot(page, "snooze-guard-light");
   const beforeGuard = await openTimers(uw.id);
   check(
-    "snoozing a live deal a month asks WHY and has not moved anything yet",
-    (await form.innerText()).includes("live deal") && beforeGuard.every((t) => t.due <= today),
+    "snoozing a merchant whose application is in, a month, asks WHY and has not moved anything yet",
+    (await form.innerText()).includes("has the application in") &&
+      beforeGuard.every((t) => t.due <= today),
     JSON.stringify(beforeGuard),
   );
   await form.getByRole("button", { name: "Back" }).click();
@@ -344,8 +345,8 @@ export default async function powerFlow({ email }) {
     .getByText(new RegExp(`${esc(uw2.business_name)} — snoozed until`))
     .waitFor({ timeout: 8000 });
   check(
-    "a week or less on a live deal does not ask",
-    (await page.getByRole("form", { name: "Why snooze this deal" }).count()) === 0 &&
+    "a week or less on a merchant whose application is in does not ask",
+    (await page.getByRole("form", { name: "Why snooze this merchant" }).count()) === 0 &&
       (await openTimers(uw2.id))[0]?.due === addDays(today, 7),
   );
   await page.waitForTimeout(400);
@@ -356,7 +357,7 @@ export default async function powerFlow({ email }) {
     .waitFor({ timeout: 8000 });
   check(
     "an early-stage client is never asked, whatever the length",
-    (await page.getByRole("form", { name: "Why snooze this deal" }).count()) === 0 &&
+    (await page.getByRole("form", { name: "Why snooze this merchant" }).count()) === 0 &&
       (await openTimers(early.id))[0]?.due === monthOut.d,
   );
 
@@ -364,11 +365,9 @@ export default async function powerFlow({ email }) {
   // 3. Bulk reschedule overdue
   await page.reload({ waitUntil: "networkidle" });
   const overdueBefore = await overdueSet();
-  const movable = overdueBefore.filter(
-    (r) => r.contact_status !== "dnc" && ["follow_up", "check_in", "renewal"].includes(r.kind),
-  );
-  const keptUw = movable.filter((r) => UNDERWRITING.includes(r.stage));
-  const moving = movable.filter((r) => !UNDERWRITING.includes(r.stage));
+  const movable = overdueBefore.filter((r) => r.contact_status !== "dnc" && r.kind === "follow_up");
+  const keptUw = movable.filter((r) => APPLICATION_IN.includes(r.stage));
+  const moving = movable.filter((r) => !APPLICATION_IN.includes(r.stage));
   const uiOrder = await section("Overdue")
     .locator('article a[href^="/clients/"]')
     .evaluateAll((els) => els.map((e) => e.textContent?.trim()));
@@ -379,10 +378,10 @@ export default async function powerFlow({ email }) {
   await dlg.waitFor();
   const summary = async () => {
     const t = await dlg.locator("[aria-live=polite]").innerText();
-    return Number(/(\d+) clients?, biggest deals first/.exec(t)?.[1] ?? 0);
+    return Number(/(\d+) clients?, biggest asks first/.exec(t)?.[1] ?? 0);
   };
   check(
-    "preview says how many will move (underwriting kept by default)",
+    "preview says how many will move (application-in merchants kept by default)",
     (await summary()) === moving.length,
     `${await summary()} vs ${moving.length}`,
   );
@@ -401,7 +400,7 @@ export default async function powerFlow({ email }) {
   await shot(page, "bulk-dialog-light");
   await dlg.getByRole("checkbox").uncheck();
   check(
-    "switching 'keep underwriting' off adds those deals to the move",
+    "switching 'keep application-in' off adds those merchants to the move",
     (await summary()) === moving.length + keptUw.length,
     `${await summary()} vs ${moving.length + keptUw.length}`,
   );
@@ -434,13 +433,13 @@ export default async function powerFlow({ email }) {
   );
   const top = movedRows.find((r) => r.business_name === firstMover);
   check(
-    "the biggest deal on the page landed on the first day",
+    "the biggest ask on the page landed on the first day",
     top?.due === slotDays[0],
     `${firstMover}: ${top?.due} (first day ${slotDays[0]})`,
   );
   const stillOverdue = await overdueSet();
   check(
-    "underwriting deals and anything else needing a hand are still overdue",
+    "application-in merchants and anything else needing a hand are still overdue",
     stillOverdue.length === overdueBefore.length - moving.length &&
       keptUw.every((k) => stillOverdue.some((s) => s.id === k.id)),
     `${stillOverdue.length} left`,
@@ -753,8 +752,9 @@ export default async function powerFlow({ email }) {
   );
   const labels = await bar.locator("a, button").allInnerTexts();
   check(
-    "tabs: Home, Intake, Follow, Deals, More",
-    labels.map((l) => l.replace(/\d+/g, "").trim()).join("|") === "Home|Intake|Follow|Deals|More",
+    "tabs: Home, Intake, Follow, Merchants, More",
+    labels.map((l) => l.replace(/\d+/g, "").trim()).join("|") ===
+      "Home|Intake|Follow|Merchants|More",
     labels.join("|"),
   );
   check("Today shows the due badge", (await bar.getByLabel(/follow-ups due/).count()) === 1);
@@ -789,9 +789,10 @@ export default async function powerFlow({ email }) {
   await sheet.waitFor();
   const more = (await sheet.innerText()).replace(/\n+/g, "|");
   check(
-    "More lists Alerts, Today's calls, Settings and Log out",
-    ["Alerts", "Today's calls", "Settings", "Log out"].every((x) => more.includes(x)) &&
-      !more.includes("Pipeline board"),
+    "More lists Alerts, Today's calls, Power dial, Trash, Settings and Log out, and nothing of the removed pages",
+    ["Alerts", "Today's calls", "Power dial", "Trash", "Settings", "Log out"].every((x) =>
+      more.includes(x),
+    ) && !/Pipeline board|Winback|Funded|Deals|All merchants/.test(more),
     more,
   );
   await shot(mp, "more-390");

@@ -1,16 +1,9 @@
 // The settings controls that finished backends were missing (docs/UI-WIRING.md, Settings): each one is driven in the
 // browser, then the DATABASE is read — a toast or a 200 is not proof. Run:
-//   CHROMIUM_PATH=... BASE_URL=http://localhost:3006 node e2e/run.mjs wire-settings
+//   CHROMIUM_PATH=... BASE_URL=http://localhost:3012 node e2e/run.mjs wire-settings
 // Everything it seeds is removed again, and the shop_settings columns it touches are put back.
 import { BASE, check, openBrowser, setRole, withDb } from "./lib.mjs";
 
-// "2026-11-14" the way formatDate writes it: "Nov 14", and "Nov 14, 2025" when the year is not this one
-const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-const shortDate = (iso) => {
-  const [y, m, d] = iso.split("-").map(Number);
-  const day = `${MONTHS[m - 1]} ${d}`;
-  return y === new Date().getFullYear() ? day : `${day}, ${y}`;
-};
 const q = (sql, params) => withDb((db) => db.query(sql, params).then((r) => r.rows));
 const one = (sql, params) => q(sql, params).then((r) => r[0]);
 const SHOP_COLS = [
@@ -19,12 +12,8 @@ const SHOP_COLS = [
   "dns_checked_at",
   "dns_result",
   "send_on_holidays",
-  "approval_valid_days",
-  "resubmit_block_days",
-  "deals_inbox_address",
-  "lender_chase_mode",
-  "document_retention_days",
-  "winback_opener_mode",
+  "daily_cap",
+  "ai_daily_cap_cents",
 ];
 
 export default async function wireSettings({ email }) {
@@ -36,56 +25,46 @@ export default async function wireSettings({ email }) {
   const toast = (re) => page.getByText(re).first().waitFor({ timeout: 10000 });
   const open = (path) => page.goto(`${BASE}${path}`, { waitUntil: "networkidle" });
   const shop = () => one(`select ${SHOP_COLS.join(", ")} from shop_settings`, []);
-  const made = {
-    templates: [],
-    funders: [],
-    users: [],
-    regState: null,
-    regBefore: null,
-    closePeriod: null,
-  };
+  const made = { templates: [] };
 
   try {
-    // ---- Email & lenders: the shop fields ----------------------------------------------------------------------
+    // ---- Email: the shop fields --------------------------------------------------------------------------------
     await open("/settings/email");
-    await page.getByLabel("Deals inbox").fill(`e2e-deals-${stamp}@mail.example.com`);
-    await page.getByLabel("Approval stays good for").fill("21");
-    await page.getByLabel("Block a double submission for").fill("45");
+    check(
+      "the Email page has no lender, deal or win-back fields",
+      !/lender|deal|chase|approval stays|double submission/i.test(
+        await page.locator("main").innerText(),
+      ),
+    );
+    await page.getByLabel("Daily cap").fill("1450");
     await page.getByLabel("Send on US holidays").check();
-    await page.getByLabel("Auto-chase").selectOption("draft");
     await page.getByRole("button", { name: "Save settings" }).click();
     await toast(/^Saved$/);
     await page.waitForTimeout(500);
     const saved = await shop();
     check(
-      "the deals inbox, both day counts, the holiday switch and chase mode draft reach the database",
-      saved.deals_inbox_address === `e2e-deals-${stamp}@mail.example.com` &&
-        saved.approval_valid_days === 21 &&
-        saved.resubmit_block_days === 45 &&
-        saved.send_on_holidays === true &&
-        saved.lender_chase_mode === "draft",
+      "the daily cap and the holiday switch reach the database",
+      saved.daily_cap === 1450 && saved.send_on_holidays === true,
       JSON.stringify(saved),
     );
 
-    await page.getByLabel("Approval stays good for").fill("0");
+    await page.getByLabel("Daily cap").fill("10");
     await page.getByRole("button", { name: "Save settings" }).click();
-    await toast(/Approval validity is at least 1 day/);
-    await page.waitForTimeout(400);
+    await toast(/Too small: expected number to be >=50/);
     check(
       "a refused value shows the reason and leaves the database as it was",
-      (await shop()).approval_valid_days === 21,
+      (await shop()).daily_cap === 1450,
     );
 
     // the form loads what is stored: a reload shows what was saved
     await open("/settings/email");
     check(
       "a reload shows the saved values",
-      (await page.getByLabel("Approval stays good for").inputValue()) === "21" &&
-        (await page.getByLabel("Send on US holidays").isChecked()) &&
-        (await page.getByLabel("Auto-chase").inputValue()) === "draft",
+      (await page.getByLabel("Daily cap").inputValue()) === "1450" &&
+        (await page.getByLabel("Send on US holidays").isChecked()),
     );
 
-    // ---- Email & lenders: the DNS check ------------------------------------------------------------------------
+    // ---- Email: the DNS check ------------------------------------------------------------------------
     await page
       .getByLabel("Automation sender")
       .fill("Selective <hello@mail.example.com>", { timeout: 5000 });
@@ -134,7 +113,7 @@ export default async function wireSettings({ email }) {
       cardText.replace(/\s+/g, " ").slice(0, 300),
     );
 
-    // ---- Email & lenders: last synced per mailbox --------------------------------------------------------------
+    // ---- Email: last synced per mailbox --------------------------------------------------------------
     await q(
       "insert into gmail_connections (user_id, google_email, refresh_token_enc, scope, status, can_read_mail) values ($1, 'e2e-mailbox@example.com', 'x', 'mail', 'ok', true) on conflict (user_id) do update set can_read_mail = true, status = 'ok'",
       [uid],
@@ -158,49 +137,6 @@ export default async function wireSettings({ email }) {
     );
     await q("delete from mail_sync_state where user_id = $1", [uid]);
     await q("delete from gmail_connections where user_id = $1", [uid]);
-
-    // ---- Lender form: blank approval days = the shop default ---------------------------------------------------
-    const lender = `E2E Lender ${String(stamp).slice(-6)}`;
-    const f = await one(
-      "insert into funders (user_id, name, submission_email, approval_valid_days) values ($1, $2, 'subs@e2e-lender.example.com', 30) returning id",
-      [uid, lender],
-    );
-    made.funders.push(f.id);
-    await open("/funders");
-    // the lender list is itself a card, so the innermost match is the lender's own section
-    const lenderCard = () => page.locator("section", { hasText: lender }).last();
-    await lenderCard().getByRole("button", { name: "Edit", exact: true }).click();
-    const dlg = page.getByRole("dialog");
-    await dlg.waitFor();
-    check(
-      "the lender form shows the stored days, and a placeholder for blank",
-      (await dlg.getByLabel("Approval good for").inputValue()) === "30" &&
-        (await dlg.getByLabel("Approval good for").getAttribute("placeholder")) === "shop default",
-    );
-    await dlg.getByLabel("Approval good for").fill("");
-    await dlg.getByRole("button", { name: "Save", exact: true }).click();
-    await toast(new RegExp(`Saved ${lender}`));
-    await page.waitForTimeout(500);
-    check(
-      "a blank approval-days box stores null, so the shop's number applies",
-      (await one("select approval_valid_days from funders where id = $1", [f.id]))
-        .approval_valid_days === null,
-    );
-    await lenderCard().getByRole("button", { name: "Edit", exact: true }).click();
-    await dlg.waitFor();
-    check(
-      "the next edit shows the box still blank",
-      (await dlg.getByLabel("Approval good for").inputValue()) === "",
-    );
-    await dlg.getByLabel("Approval good for").fill("14");
-    await dlg.getByRole("button", { name: "Save", exact: true }).click();
-    await toast(new RegExp(`Saved ${lender}`));
-    await page.waitForTimeout(500);
-    check(
-      "a number still sets this lender's own",
-      (await one("select approval_valid_days from funders where id = $1", [f.id]))
-        .approval_valid_days === 14,
-    );
 
     // ---- Buckets & templates: the claim checker's reasons ------------------------------------------------------
     const bad = `E2E claim ${stamp}`;
@@ -305,195 +241,27 @@ export default async function wireSettings({ email }) {
     );
     await q("delete from outbox where template_id = $1", [t1.id]);
 
-    // ---- Commission plan: document retention -------------------------------------------------------------------
-    await open("/settings/plan");
-    await page.getByLabel("Keep documents of dead deals for").fill("400");
-    await page.getByRole("button", { name: "Save retention" }).click();
-    await toast(/Retention saved/);
-    await page.waitForTimeout(500);
-    check(
-      "document retention days reach the database",
-      (await shop()).document_retention_days === 400,
-    );
-    await page.getByLabel("Keep documents of dead deals for").fill("10");
-    await page.getByRole("button", { name: "Save retention" }).click();
-    await toast(/Keep documents at least 30 days/);
-    await page.waitForTimeout(400);
-    check(
-      "a number below 30 is refused and nothing changes",
-      (await shop()).document_retention_days === 400,
-    );
-
-    // ---- Commission plan: the month-end statements and the printable page ---------------------------------------
-    const period = "2024-02-01";
-    const closeIns = await q(
-      "insert into commission_closes (period, closed_by, line_count, gross_cents, rep_cents, house_cents) values ($1, $2, 2, 500000, 250000, 250000) on conflict (period) do nothing returning period",
-      [period, uid],
-    );
-    if (closeIns.length) made.closePeriod = period;
-    const lines = [
-      {
-        id: 1,
-        funding_id: "f1",
-        kind: "expected",
-        gross_cents: 400000,
-        rep_cents: 200000,
-        house_cents: 200000,
-        note: "",
-        business: "E2E Pizza & <Grill>",
-        funder: "Pearl",
-        funded_on: "2024-02-09",
-      },
-      {
-        id: 2,
-        funding_id: "f2",
-        kind: "correction",
-        gross_cents: 100000,
-        rep_cents: 50000,
-        house_cents: 50000,
-        note: "terms fixed",
-        business: "E2E Deli",
-        funder: "Fora",
-        funded_on: "2024-02-20",
-      },
-    ];
-    const st = await one(
-      "insert into commission_statements (period, user_id, line_count, gross_cents, rep_cents, house_cents, lines) values ($1, $2, 2, 500000, 250000, 250000, $3::jsonb) returning id",
-      [period, uid, JSON.stringify(lines)],
-    );
-    await open("/settings/plan");
-    const strow = page.locator(`[data-statement="${st.id}"]`);
-    const stText = await strow.innerText();
-    check(
-      "the statements list shows the closed month and the person's statement totals",
-      (await page.locator(`[data-month="${period}"]`).innerText()).includes("February 2024") &&
-        stText.includes("$5,000.00") &&
-        stText.includes("$2,500.00"),
-      stText.replace(/\s+/g, " "),
-    );
-    const href = await strow
-      .getByRole("link", { name: /Printable statement/ })
-      .getAttribute("href");
-    const res = await context.request.get(`${BASE}${href}`);
-    const html = await res.text();
-    check(
-      "the printable page is plain HTML with every line, the totals and the lines' text escaped",
-      res.status() === 200 &&
-        (res.headers()["content-type"] ?? "").startsWith("text/html") &&
-        html.includes("Commission statement — February 2024") &&
-        html.includes("E2E Pizza &amp; &lt;Grill&gt;") &&
-        html.includes("terms fixed") &&
-        html.includes("$2,500.00") &&
-        html.includes("2 lines") &&
-        !html.includes("<Grill>"),
-    );
-    await page.goto(`${BASE}${href}`, { waitUntil: "networkidle" });
-    check(
-      "opened in the browser it shows the statement and a Print button",
-      (await page.getByRole("button", { name: "Print" }).isVisible()) &&
-        (await page.getByText("E2E Deli").isVisible()),
-    );
-    check(
-      "a statement id that is not a statement is a 404",
-      (
-        await context.request.get(
-          `${BASE}/settings/plan/statements/00000000-0000-4000-8000-000000000000`,
-        )
-      ).status() === 404,
-    );
-    await q("delete from commission_statements where id = $1", [st.id]);
-
-    // ---- Team & trust --------------------------------------------------------------------------------------------
-    const lenderX = await one(
-      "insert into funders (user_id, name, submission_email) values ($1, $2, 'subs@e2e-x.example.com') returning id",
-      [uid, `E2E Backdoor ${String(stamp).slice(-6)}`],
-    );
-    made.funders.push(lenderX.id);
-    const cl = await q("select id from clients where user_id = $1 order by created_at limit 2", [
-      uid,
-    ]);
-    for (const c of cl)
-      await q(
-        "insert into submissions (user_id, client_id, funder_id, sent_on) values ($1, $2, $3, current_date)",
-        [uid, c.id, lenderX.id],
-      );
-    await q(
-      "insert into backdoor_reports (client_id, reported_by, lender_ids) values ($1, $2, $3::uuid[])",
-      [cl[0].id, uid, [lenderX.id]],
-    );
-    // a teammate who has not accepted the policy (the signed-in manager is sent to /policy until they have)
-    const mate = await one(
-      "insert into app_users (email, name, role, active, policy_accepted_at) values ($1, 'E2E Policy', 'rep', true, null) returning id",
-      [`e2e-policy-${stamp}@example.com`],
-    );
-    made.users.push(mate.id);
-    await open("/settings/team");
-    check(
-      "a person who has not accepted the policy reads 'not yet'",
-      (await page.locator(`[data-policy="${mate.id}"]`).innerText()).includes("not yet"),
-    );
-    const acceptedAt = await one(
-      `update app_users set policy_accepted_at = (date_trunc('day', now() at time zone 'UTC') - interval '2 days' + interval '12 hours') at time zone 'UTC'
-        where id = $1
-        returning to_char(policy_accepted_at at time zone $2, 'YYYY-MM-DD') as d`,
-      [mate.id, (await one("select timezone from app_users where id = $1", [uid])).timezone],
-    );
-    await open("/settings/team");
-    check(
-      "and once the database has a time it shows that date",
-      (await page.locator(`[data-policy="${mate.id}"]`).innerText()).includes(
-        `accepted ${shortDate(acceptedAt.d)}`,
-      ),
-      await page.locator(`[data-policy="${mate.id}"]`).innerText(),
-    );
-    const bd = page.locator(`[data-lender-score="${lenderX.id}"]`);
-    check(
-      "the lender's backdoor score is reports per hundred files from the database (1 report, 2 files = 50)",
-      (await bd.count()) === 1 &&
-        (await bd.innerText()).replace(/\s+/g, " ").includes("2 1 50 per 100"),
-      (await bd.count()) ? await bd.innerText() : "row missing",
-    );
-    const kinds = await page.locator("[data-trust-kind]").allInnerTexts();
-    check(
-      "each trust alert kind has its explanation line",
-      kinds.length === 4 &&
-        kinds.some((k) => k.includes("Canary touched") && k.includes("fake merchant")) &&
-        kinds.some((k) => k.includes("Another rep's lead")) &&
-        kinds.some((k) => k.includes("Burst of copies") && k.includes("20 or more")) &&
-        kinds.some((k) => k.includes("after hours")),
-      JSON.stringify(kinds.map((k) => k.slice(0, 30))),
-    );
-    await q(
-      "insert into user_alerts (user_id, kind, title, href, dedupe_key) values ($1, 'trust', $2, '/settings/team', $3)",
-      [uid, `E2E canary alert ${stamp}`, `trust:canary:e2e:${stamp}`],
-    );
-    await open("/settings/team");
-    check(
-      "a trust alert the hourly job wrote shows with its pattern's name",
-      (await page.locator("section", { hasText: "Trust alerts" }).first().innerText()).includes(
-        `E2E canary alert ${stamp}`,
-      ),
-    );
-    await q("delete from user_alerts where user_id = $1 and dedupe_key like 'trust:canary:e2e:%'", [
-      uid,
-    ]);
-    await q("delete from backdoor_reports where client_id = $1", [cl[0].id]);
-    await q("delete from submissions where funder_id = $1", [lenderX.id]);
-
-    // ---- AI: the opener mode and the spend list ----------------------------------------------------------------
+    // ---- AI: the switches and the spend list -------------------------------------------------------------------
     await open("/settings/ai");
-    await page.getByLabel("Win-back opening line").selectOption("auto");
+    await page.getByLabel("Daily spend cap (cents)").fill("1234");
     await page.getByRole("button", { name: "Save", exact: true }).click();
     await toast(/^Saved$/);
     await page.waitForTimeout(500);
     check(
-      "the win-back opener mode reaches the database",
-      (await shop()).winback_opener_mode === "auto",
+      "the AI daily spend cap reaches the database",
+      (await shop()).ai_daily_cap_cents === 1234,
     );
     await open("/settings/ai");
     check(
       "and the form loads it back",
-      (await page.getByLabel("Win-back opening line").inputValue()) === "auto",
+      (await page.getByLabel("Daily spend cap (cents)").inputValue()) === "1234",
+    );
+    // the run history below the form is data (old purposes keep their names); the words above it are the app's
+    const aiText = (await page.locator("main").innerText()).split("Spend by purpose")[0];
+    check(
+      "the AI page speaks of replies and lead lines, not lenders, deals or win-back",
+      !/lender|deal|win-?back|offer/i.test(aiText),
+      aiText.replace(/\s+/g, " ").slice(0, 200),
     );
     await q(
       "insert into ai_runs (purpose, model, prompt_version, input_hash, cost_cents, created_at) values ('e2e_wire_check', 'm', 'v', 'h', 12.5, now()), ('e2e_wire_check', 'm', 'v', 'h', 7.5, now()), ('e2e_wire_check', 'm', 'v', 'h', 80, now() - interval '10 days')",
@@ -511,80 +279,32 @@ export default async function wireSettings({ email }) {
     );
     await q("delete from ai_runs where purpose = 'e2e_wire_check'");
 
-    // ---- State rules and registrations ---------------------------------------------------------------------------
-    const pick = await one(
-      "select r.state::text as state from state_rules r where not exists (select 1 from shop_registrations g where g.state = r.state) order by r.state limit 1",
-      [],
+    // ---- Team: no trust, policy or deal columns; and the removed pages are really gone ---------------------------
+    await open("/settings/team");
+    const teamText = await page.locator("main").innerText();
+    check(
+      "the Team table has no Policy, Trust or Open deals column",
+      teamText.includes("The team") && !/policy|trust|open deals|offboard/i.test(teamText),
     );
-    let state = pick?.state;
-    if (!state) {
-      state = (await one("select state::text as state from state_rules order by state limit 1", []))
-        .state;
-      made.regBefore = await one("select * from shop_registrations where state = $1", [state]);
+    const gone = [];
+    for (const path of [
+      "/policy",
+      "/board",
+      "/deals",
+      "/funders",
+      "/funded",
+      "/winback",
+      "/earnings",
+      "/renewals",
+      "/long-game",
+      "/settings/plan",
+      "/settings/lenders",
+      "/settings/states",
+    ]) {
+      const status = (await page.request.get(`${BASE}${path}`, { maxRedirects: 0 })).status();
+      if (status !== 404) gone.push(`${path}:${status}`);
     }
-    made.regState = state;
-    await open("/settings/states");
-    check(
-      "the page says the shop's lawyer maintains the rules",
-      await page.getByText("The shop's lawyer maintains the rules").isVisible(),
-    );
-    const in20 = (await one("select (current_date + 20)::text as d", [])).d;
-    const in200 = (await one("select (current_date + 200)::text as d", [])).d;
-    if (made.regBefore) {
-      await page.getByRole("button", { name: `Edit ${state} registration` }).click();
-    } else {
-      await page.getByRole("button", { name: "+ Registration" }).click();
-    }
-    const sd = page.getByRole("dialog");
-    await sd.waitFor();
-    if (!made.regBefore) await sd.locator("select").first().selectOption(state); // the State box is the first select
-    await sd.getByLabel("Status").selectOption("registered");
-    await sd.getByLabel("Registration number").fill("E2E-77");
-    await sd.getByLabel("Renews on").fill(in20);
-    await sd.getByRole("button", { name: "Save registration" }).click();
-    await toast(/Registration saved/);
-    await page.waitForTimeout(500);
-    const reg1 = await one(
-      "select status, registration_no, renews_on::text as renews_on from shop_registrations where state = $1",
-      [state],
-    );
-    check(
-      "a new registration is in the table with its status, number and renewal date",
-      reg1?.status === "registered" && reg1.registration_no === "E2E-77" && reg1.renews_on === in20,
-      JSON.stringify(reg1),
-    );
-    const srow = page.locator(`[data-state-row="${state}"]`);
-    check(
-      "the list shows it, with how close the renewal is",
-      (await srow.innerText()).includes("renews in 20 days"),
-      (await srow.innerText()).replace(/\s+/g, " "),
-    );
-    await page.getByRole("button", { name: `Edit ${state} registration` }).click();
-    await sd.waitFor();
-    await sd.getByLabel("Renews on").fill(in200);
-    await sd.getByRole("button", { name: "Save registration" }).click();
-    await toast(/Registration saved/);
-    await page.waitForTimeout(500);
-    const reg2 = await q(
-      "select renews_on::text as renews_on, registration_no from shop_registrations where state = $1",
-      [state],
-    );
-    check(
-      "editing the renewal date changes that row, not a copy",
-      reg2.length === 1 && reg2[0].renews_on === in200 && reg2[0].registration_no === "E2E-77",
-      JSON.stringify(reg2),
-    );
-    await page.getByRole("button", { name: `Edit ${state} registration` }).click();
-    await sd.waitFor();
-    await sd.getByLabel("Renews on").fill("");
-    await sd.getByRole("button", { name: "Save registration" }).click();
-    await toast(/Registration saved/);
-    await page.waitForTimeout(500);
-    check(
-      "emptying the date clears it",
-      (await one("select renews_on from shop_registrations where state = $1", [state]))
-        .renews_on === null,
-    );
+    check("the pages of the removed features answer 404", gone.length === 0, gone.join(", "));
 
     // ---- Me: the colour mode ------------------------------------------------------------------------------------
     await open("/settings");
@@ -613,11 +333,9 @@ export default async function wireSettings({ email }) {
       "/settings",
       "/settings/email",
       "/settings/buckets",
-      "/settings/buckets?tab=winback",
       "/settings/team",
-      "/settings/plan",
       "/settings/ai",
-      "/settings/states",
+      "/settings/sheets",
     ]) {
       await open(path);
       const wide = await page.evaluate(
@@ -634,50 +352,23 @@ export default async function wireSettings({ email }) {
         console.log(`cleanup: ${sql.slice(0, 40)}… — ${e.message.split("\n")[0]}`);
       }
     };
-    await tidy("delete from commission_statements where user_id = $1", [uid]);
-    if (made.closePeriod)
-      await tidy("delete from commission_closes where period = $1", [made.closePeriod]);
     await tidy("delete from outbox where user_id = $1", [uid]);
-    await tidy(
-      "delete from user_alerts where user_id = $1 and dedupe_key like 'trust:canary:e2e:%'",
-      [uid],
-    );
-    await tidy("delete from backdoor_reports where reported_by = $1", [uid]);
     for (const id of made.templates) await tidy("delete from templates where id = $1", [id]);
-    for (const id of made.funders) {
-      await tidy("delete from submissions where funder_id = $1", [id]);
-      await tidy("delete from funders where id = $1", [id]);
-    }
-    for (const id of made.users) await tidy("delete from app_users where id = $1", [id]);
     await tidy("delete from ai_runs where purpose = 'e2e_wire_check'");
     await tidy("delete from mail_sync_state where user_id = $1", [uid]);
     await tidy("delete from gmail_connections where user_id = $1", [uid]);
-    if (made.regState) {
-      await tidy("delete from shop_registrations where state = $1", [made.regState]);
-      const b = made.regBefore;
-      if (b)
-        await tidy(
-          "insert into shop_registrations (state, registration_no, status, renews_on, note) values ($1, $2, $3, $4, $5)",
-          [b.state, b.registration_no, b.status, b.renews_on, b.note],
-        );
-    }
     // the sender first (changing it resets the DNS columns), then everything else the run touched
     await tidy("update shop_settings set automation_from = $1", [before.automation_from]);
     await tidy(
       `update shop_settings set dns_ok = $1, dns_checked_at = $2, dns_result = $3::jsonb, send_on_holidays = $4,
-              approval_valid_days = $5, resubmit_block_days = $6, deals_inbox_address = $7, lender_chase_mode = $8,
-              document_retention_days = $9, winback_opener_mode = $10`,
+              daily_cap = $5, ai_daily_cap_cents = $6`,
       [
         before.dns_ok,
         before.dns_checked_at,
         JSON.stringify(before.dns_result),
         before.send_on_holidays,
-        before.approval_valid_days,
-        before.resubmit_block_days,
-        before.deals_inbox_address,
-        before.lender_chase_mode,
-        before.document_retention_days,
-        before.winback_opener_mode,
+        before.daily_cap,
+        before.ai_daily_cap_cents,
       ],
     );
     await browser.close();

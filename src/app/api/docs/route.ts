@@ -22,8 +22,7 @@ export async function POST(req: Request) {
   const clientId = String(form.get("clientId") ?? "");
   const kindRaw = String(form.get("kind") ?? "");
   const period = String(form.get("period") ?? "") || null;
-  if (!UUID.test(clientId))
-    return NextResponse.json({ error: "Bad merchant id" }, { status: 400 });
+  if (!UUID.test(clientId)) return NextResponse.json({ error: "Bad merchant id" }, { status: 400 });
   const kind =
     kindRaw && (DOC_KINDS as readonly string[]).includes(kindRaw)
       ? (kindRaw as DocKind)

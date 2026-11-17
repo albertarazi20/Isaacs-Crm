@@ -8,7 +8,7 @@ import { relativeDay, timeAgo } from "@/lib/format";
 import { bookedToday } from "@/lib/mca/booked";
 import { reminderText } from "@/lib/mca/reminder";
 import { formatUS } from "@/lib/mca/phone";
-import { TIMER_LABELS } from "@/lib/mca/stages";
+import { timerLabel } from "@/lib/mca/stages";
 import { formatMoneyCompact } from "@/lib/money";
 import { useApp } from "./app-context";
 import { Icon } from "./client/icons";
@@ -96,7 +96,7 @@ export const ClientRow = memo(function ClientRow({
             ) : null}
             {due ? (
               <Badge tone={overdue ? "bad" : isToday ? "warn" : "neutral"}>
-                {card.next_due_kind ? `${TIMER_LABELS[card.next_due_kind]} · ` : ""}
+                {card.next_due_kind ? `${timerLabel(card.next_due_kind)} · ` : ""}
                 {relativeDay(due, today)}
               </Badge>
             ) : null}

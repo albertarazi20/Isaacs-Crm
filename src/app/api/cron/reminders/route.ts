@@ -45,12 +45,7 @@ async function handle(req: Request): Promise<NextResponse> {
   // A run in which any email failed to send (a wrong RESEND_FROM, a dead key) is not a healthy run: leave the
   // heartbeat alone so the banner fires, and answer 502 so the external scheduler alerts too. The failed sends
   // rolled their claims back, so the next hourly run retries them.
-  if (
-    digest.failed > 0 ||
-    calls.failed > 0 ||
-    weekly.failed > 0 ||
-    alerts.failed > 0
-  ) {
+  if (digest.failed > 0 || calls.failed > 0 || weekly.failed > 0 || alerts.failed > 0) {
     return NextResponse.json(
       { ...digest, calls, weekly, alerts, error: "some reminder emails failed to send" },
       { status: 502 },

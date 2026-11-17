@@ -18,7 +18,7 @@ import {
   stageDef,
   STAGE_GROUPS,
   STAGES,
-  TIMER_LABELS,
+  timerLabel,
 } from "@/lib/mca/stages";
 import { formatMoney } from "@/lib/money";
 import { ContactStatusButton } from "./ContactStatus";
@@ -54,7 +54,7 @@ export function StickyBar({ card }: { card: ClientDetail["card"] }) {
           >
             {card.next_due_on && card.next_due_kind ? (
               <>
-                Next: {TIMER_LABELS[card.next_due_kind].toLowerCase()}{" "}
+                Next: {timerLabel(card.next_due_kind).toLowerCase()}{" "}
                 <span className={cn("font-medium", tone === "overdue" ? "" : "text-text")}>
                   {formatDate(card.next_due_on, today)}
                 </span>{" "}

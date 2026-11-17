@@ -520,10 +520,7 @@ async function flow(email, mikeEmail) {
   );
   await dialog.getByRole("button", { name: "Cancel" }).click();
 
-  // the merchant signs through the public page's own endpoint; a deal gives Documents a place to open it
-  const deal = await withDb((db) =>
-    one(db, "insert into deals (user_id, client_id) values ($1, $2) returning id", [userId, A.id]),
-  );
+  // the merchant signs through the public page's own endpoint; the PDF lands in the merchant page's Documents card
   const res = await fetch(`${BASE}/api/apply/${token}`, {
     method: "POST",
     headers: { "content-type": "application/json" },
@@ -577,15 +574,16 @@ async function flow(email, mikeEmail) {
     got.status() === 200 && (got.headers()["content-type"] ?? "").includes("application/pdf"),
     `${got.status()} ${got.headers()["content-type"]}`,
   );
-  const docsLink = page.getByRole("link", { name: /In Documents/ });
+  const docs = page.locator("section", {
+    has: page.getByRole("heading", { name: "Documents", exact: true }),
+  });
   check(
-    "application card: 'In Documents' opens the deal's Documents tab",
-    (await docsLink.getAttribute("href")) === `/deals/${deal.id}?tab=documents`,
+    "Documents card: lists the signed application, labelled, with an Open link to its PDF",
+    (await docs.getByText(signed.filename).first().isVisible()) &&
+      (await docs.getByText("Signed application", { exact: true }).first().isVisible()) &&
+      (await docs.getByRole("link", { name: "Open" }).first().getAttribute("href")) ===
+        `/api/docs/${signed.document_id}`,
   );
-  await docsLink.click();
-  await page.waitForURL(/tab=documents/);
-  await page.getByText(signed.filename).first().waitFor({ timeout: 10000 });
-  check("Documents lists the signed application", true);
 
   // ----------------------------------------------------------------------------- nothing scrolls sideways at 390px
   const phoneView = await openBrowser(email, { width: 390, height: 844 });

@@ -29,7 +29,7 @@ export async function withDb(fn) {
   }
 }
 
-/** A throwaway user with 51 seeded merchants, so a run never touches real data and RLS keeps runs apart. */
+/** A throwaway user with the seeded merchants (scripts/seed-dev.ts), so a run never touches real data and RLS keeps runs apart. */
 export async function makeUser(label) {
   const email = `e2e-${label}-${Date.now()}@example.com`;
   const seed = spawnSync("pnpm", ["-s", "db:seed", email], {
@@ -40,7 +40,7 @@ export async function makeUser(label) {
   return email;
 }
 
-/** The seeded user is a rep; a flow that needs a manager (or ops) says so before opening the browser. */
+/** The seeded user is a rep; a flow that needs a manager says so before opening the browser. */
 export async function setRole(email, role) {
   await withDb((db) => db.query("update app_users set role = $2 where email = $1", [email, role]));
 }

@@ -22,7 +22,7 @@ export default async function todayFlow({ email }) {
   );
   await card.locator("summary", { hasText: "Snooze" }).click(); // the snooze menu is a <details>
   await page.getByRole("button", { name: "1 month" }).first().click();
-  // Snoozing a deal that is in underwriting asks for a one-line reason first; give one if it shows.
+  // Snoozing a merchant whose application is in asks for a one-line reason first; give one if it shows.
   const ask = page.getByRole("button", { name: /^Snooze until/ });
   await ask
     .waitFor({ timeout: 1500 })
@@ -199,7 +199,7 @@ export default async function todayFlow({ email }) {
     { width: 390, height: 800 },
     { hasTouch: true, isMobile: true },
   );
-  for (const path of ["/", "/clients", "/renewals", "/long-game", "/settings", "/import"]) {
+  for (const path of ["/", "/clients", "/follow-up", "/settings", "/import"]) {
     await m.page.goto(`${BASE}${path}`, { waitUntil: "networkidle" });
     const overflow = await m.page.evaluate(
       () => document.documentElement.scrollWidth - window.innerWidth,

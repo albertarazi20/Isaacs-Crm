@@ -12,31 +12,34 @@ export default async function settingsFlow({ email }) {
 
   // team
   await page.goto(`${BASE}/settings/team`, { waitUntil: "networkidle" });
-  check("Team & trust page", await page.getByText("The team").isVisible());
-  await page.getByPlaceholder("Sam Rivera").fill("E2E Ops");
-  await page.getByPlaceholder("sam@selectivecap.com").fill(`e2e-ops-${stamp}@selectivecap.com`);
-  await page
-    .locator("form", { hasText: "selectivecap.com email" })
-    .getByLabel("Role")
-    .selectOption("ops");
+  check("Team page", await page.getByText("The team").isVisible());
+  await page.getByPlaceholder("Sam Rivera").fill("E2E Manager");
+  await page.getByPlaceholder("sam@selectivecap.com").fill(`e2e-mgr-${stamp}@selectivecap.com`);
+  const roleField = page.locator("form", { hasText: "selectivecap.com email" }).getByLabel("Role");
+  check(
+    "the role picker offers rep and manager only",
+    JSON.stringify(await roleField.locator("option").allInnerTexts()) ===
+      JSON.stringify(["rep", "manager"]),
+  );
+  await roleField.selectOption("manager");
   await page.getByRole("button", { name: "Add", exact: true }).click();
   await page.getByText(/Added — they sign in/).waitFor({ timeout: 8000 });
   await page.waitForTimeout(600);
   const member = await withDb((db) =>
     one(db, "select role, active from app_users where email = $1", [
-      `e2e-ops-${stamp}@selectivecap.com`,
+      `e2e-mgr-${stamp}@selectivecap.com`,
     ]),
   );
   check(
-    "the teammate is in the database as ops",
-    member?.role === "ops" && member?.active === true,
+    "the teammate is in the database as a manager",
+    member?.role === "manager" && member?.active === true,
     JSON.stringify(member),
   );
   await withDb((db) =>
-    db.query("delete from app_users where email = $1", [`e2e-ops-${stamp}@selectivecap.com`]),
+    db.query("delete from app_users where email = $1", [`e2e-mgr-${stamp}@selectivecap.com`]),
   );
 
-  // email & lenders: the cap
+  // email: the cap
   await page.goto(`${BASE}/settings/email`, { waitUntil: "networkidle" });
   const before = await withDb((db) => one(db, "select daily_cap from shop_settings", []));
   const capField = page.getByLabel("Daily cap");

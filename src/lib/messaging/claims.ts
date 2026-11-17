@@ -35,7 +35,9 @@ const isCalifornia = (state: string): boolean => {
 export function checkClaims(text: string, ctx?: ClaimContext): ClaimCheck {
   const reasons: string[] = [];
   if (APPROVED.test(text))
-    reasons.push('Says "approved": nothing is approved at this stage, so automated mail cannot say it');
+    reasons.push(
+      'Says "approved": nothing is approved at this stage, so automated mail cannot say it',
+    );
   if (GUARANTEED.test(text)) reasons.push('Says "guaranteed": nothing in funding is guaranteed');
   if (NO_FEES.test(text)) reasons.push("Promises no fees: leave fees out of automated mail");
   if (LOAN.test(text)) reasons.push('Says "loan": an advance is not a loan');

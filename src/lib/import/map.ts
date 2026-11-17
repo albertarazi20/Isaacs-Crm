@@ -186,7 +186,7 @@ export function parseStageWord(raw: string): { stage: StageKey | null; unsupport
   const byKey = STAGES.find((s) => s.key === key || norm(s.label) === w);
   const hit =
     byKey?.key ??
-    (isStageKey(key) ? key : null) ??
+    (isStageKey(key) && IMPORTABLE.has(key) ? key : null) ??
     STAGE_WORDS.find(([re]) => re.test(w))?.[1] ??
     null;
   if (hit && IMPORTABLE.has(hit) && !WORKED_ELSEWHERE.test(w))

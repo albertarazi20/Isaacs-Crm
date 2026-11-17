@@ -68,13 +68,14 @@ export default async function importFlow({ email }) {
     JSON.stringify(sources),
   );
   check(
-    "Funded came in as Name in with a note, not as a fake advance",
+    "a status about a file worked elsewhere (Funded) came in as Name in with a note, not as a stage",
     rows.find((r) => r.business_name === "Zulu Auto")?.stage === "name_in",
   );
   check(
-    "a sheet's follow-up date and stage are kept",
-    rows.find((r) => r.business_name === "Zeta Nails")?.stage === "declined" &&
+    "a sheet's follow-up date is kept, and Declined lands in Trash",
+    rows.find((r) => r.business_name === "Zeta Nails")?.stage === "dead" &&
       rows.find((r) => r.business_name === "Zeta Nails")?.d > 100,
+    JSON.stringify(rows.find((r) => r.business_name === "Zeta Nails")),
   );
   const notes = await withDb((db) =>
     db.query(

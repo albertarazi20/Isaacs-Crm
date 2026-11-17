@@ -6,7 +6,7 @@ import type { Priority } from "@/lib/data/priority";
 import type { ClientCard } from "@/lib/data/types";
 import { formatDateTime, relativeDay, timeAgo } from "@/lib/format";
 import { formatUS } from "@/lib/mca/phone";
-import { TIMER_LABELS, type TimerKind } from "@/lib/mca/stages";
+import { timerLabel, type TimerKind } from "@/lib/mca/stages";
 import { formatMoney, formatMoneyCompact } from "@/lib/money";
 import { useApp } from "../app-context";
 import { bookedToday } from "@/lib/mca/booked";
@@ -270,7 +270,7 @@ function DialCard({
           <StageBadge stage={card.stage} />
           {due ? (
             <Badge tone={overdue ? "bad" : due === today ? "warn" : "neutral"}>
-              {kind ? `${TIMER_LABELS[kind]} · ` : ""}
+              {kind ? `${timerLabel(kind)} · ` : ""}
               {relativeDay(due, today)}
             </Badge>
           ) : null}
@@ -317,7 +317,7 @@ function DialCard({
             )}
           </Row>
           <Row label="Why now">
-            {kind ? TIMER_LABELS[kind] : "Follow up"}
+            {timerLabel(kind)}
             {reason ? <span className="text-muted"> — {reason}</span> : null}
           </Row>
           <Row label="At stake">

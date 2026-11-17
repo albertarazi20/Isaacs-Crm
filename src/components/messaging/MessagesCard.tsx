@@ -161,8 +161,8 @@ export function MessagesCard({
           <>
             <div className="px-4 pb-3">
               <Note>
-                You&apos;re using the built-in snippets. Save one of your own and your list
-                replaces them everywhere. “Customize” starts you from a built-in one.
+                You&apos;re using the built-in snippets. Save one of your own and your list replaces
+                them everywhere. “Customize” starts you from a built-in one.
               </Note>
             </div>
             <ul className="divide-y divide-border border-t border-border">

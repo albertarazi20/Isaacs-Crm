@@ -1,6 +1,6 @@
 import { diffDays, type ISODate } from "./dates";
 import { formatUS } from "./phone";
-import { stageDef, TIMER_LABELS, type StageKey, type TimerKind } from "./stages";
+import { stageDef, timerKind, timerLabel, type StageKey, type TimerKind } from "./stages";
 
 export interface DueTimer {
   timerId: string;
@@ -32,7 +32,7 @@ function onePerClient(timers: readonly DueTimer[]): DueTimer[] {
     if (
       !cur ||
       t.dueOn < cur.dueOn ||
-      (t.dueOn === cur.dueOn && KIND_RANK[t.kind] < KIND_RANK[cur.kind])
+      (t.dueOn === cur.dueOn && KIND_RANK[timerKind(t.kind)] < KIND_RANK[timerKind(cur.kind)])
     )
       best.set(t.clientId, t);
   }
@@ -61,7 +61,7 @@ function esc(s: string): string {
 function line(t: DueTimer, today: ISODate, appUrl: string): { text: string; html: string } {
   const late = diffDays(t.dueOn, today);
   const when = late > 0 ? `${late}d overdue` : "today";
-  const label = `${TIMER_LABELS[t.kind]} · ${stageDef(t.stage).label}`;
+  const label = `${timerLabel(t.kind)} · ${stageDef(t.stage).label}`;
   const who = `${t.businessName} — ${t.contactName}`;
   const href = `${appUrl}/clients/${t.clientId}`;
   const phone = t.phone ? formatUS(t.phone) : "";

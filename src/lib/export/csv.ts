@@ -1,6 +1,6 @@
 import type { ActivityRow, ClientCard } from "../data/types";
 import { formatUS } from "../mca/phone";
-import { stageDef, TIMER_LABELS } from "../mca/stages";
+import { stageDef, timerLabel } from "../mca/stages";
 
 /**
  * A spreadsheet runs any cell that starts with = + - @ (or tab/CR) as a formula.
@@ -54,7 +54,7 @@ export function clientRows(cards: readonly ClientCard[]): unknown[][] {
     c.source,
     stageDef(c.stage).label,
     c.next_due_on,
-    c.next_due_kind ? TIMER_LABELS[c.next_due_kind] : "",
+    c.next_due_kind ? timerLabel(c.next_due_kind) : "",
     c.last_call_at?.slice(0, 10),
     c.last_call_note,
     dollars(c.wanted_amount_cents),

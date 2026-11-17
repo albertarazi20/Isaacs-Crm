@@ -1,4 +1,5 @@
-// Dashboard: the month scoreboard, the do-this-now list and a goal that really lands in the database. Run: pnpm e2e crm-dashboard
+// Dashboard: the month's new leads and applications in, the do-this-now list, the team table and the follow-ups
+// button. Run: pnpm e2e crm-dashboard
 import { BASE, check, openBrowser, setRole, withDb } from "./lib.mjs";
 
 const one = (db, sql, params) => db.query(sql, params).then((r) => r.rows[0]);
@@ -11,39 +12,58 @@ export default async function dashboardFlow({ email }) {
     "Dashboard heading",
     await page.getByRole("heading", { name: "Dashboard", exact: true }).isVisible(),
   );
+  const nav = await page
+    .getByRole("navigation", { name: "Main" })
+    .getByRole("link")
+    .allInnerTexts();
   check(
-    "month scoreboard shows Funded",
-    await page.locator("main").getByText("Funded", { exact: true }).first().isVisible(),
+    "the main nav is Dashboard, Lead Intake, Follow Up, Merchants, Settings",
+    JSON.stringify(nav.map((x) => x.replace(/\d+/g, "").trim())) ===
+      JSON.stringify(["Dashboard", "Lead Intake", "Follow Up", "Merchants", "Settings"]),
+    JSON.stringify(nav),
+  );
+  check(
+    "the month scoreboard shows New leads and Applications in",
+    (await page.locator("main").getByText("New leads", { exact: true }).first().isVisible()) &&
+      (await page
+        .locator("main")
+        .getByText("Applications in", { exact: true })
+        .first()
+        .isVisible()),
+  );
+  const counts = await withDb((db) =>
+    one(
+      db,
+      `select (select count(*)::int from clients c where to_char(c.created_at, 'YYYY-MM') = to_char(current_date, 'YYYY-MM')
+                 and not exists (select 1 from trashed_clients t where t.client_id = c.id)
+                 and c.user_id = (select id from app_users where email = $1)) as leads`,
+      [email],
+    ),
+  );
+  check(
+    "New leads counts this rep's merchants added this month (the manager's own book is part of the shop's)",
+    counts.leads > 0 &&
+      Number(
+        (
+          await page
+            .locator("main")
+            .getByText("New leads", { exact: true })
+            .first()
+            .locator("xpath=following-sibling::p[1]")
+            .innerText()
+        ).trim(),
+      ) >= counts.leads,
+    JSON.stringify(counts),
   );
   check("do-this-now section", await page.getByText("Do this now").isVisible());
-  check("funnel block", await page.getByText("Funnel", { exact: true }).isVisible());
   check(
     "team table for a manager",
     await page.getByText("Team", { exact: true }).first().isVisible(),
   );
-
-  // set the shop goal: the pace bar must read it back and the row must exist in the database
-  await page.getByRole("button", { name: /Set a goal for the shop|Goal .* edit/ }).click();
-  await page.getByPlaceholder("250k").fill("300k");
-  await page.getByRole("button", { name: "Save" }).click();
-  await page.getByText(/Goal saved/).waitFor({ timeout: 8000 });
-  await page.waitForTimeout(800);
-  const goal = await withDb((db) =>
-    one(
-      db,
-      "select funded_cents from goals where user_id is null and month = date_trunc('month', current_date)::date",
-      [],
-    ),
-  );
+  const body = await page.locator("main").innerText();
   check(
-    "the shop goal is in the database",
-    Number(goal?.funded_cents) === 30_000_000,
-    JSON.stringify(goal),
-  );
-  await page.goto(`${BASE}/`, { waitUntil: "networkidle" });
-  check(
-    "the pace bar shows the goal",
-    (await page.locator("main").innerText()).includes("of $300k"),
+    "nothing about the removed money, lender or funnel blocks is left on the Dashboard",
+    !/funnel|money on the table|lender|commission|funded|goal/i.test(body),
   );
 
   // the follow-ups button goes to the calls page
@@ -56,10 +76,5 @@ export default async function dashboardFlow({ email }) {
     await page.waitForURL(/\/today/);
     check("follow-ups due opens Today's calls", page.url().endsWith("/today"));
   }
-  await withDb((db) =>
-    db.query(
-      "update goals set funded_cents = 0 where user_id is null and month = date_trunc('month', current_date)::date",
-    ),
-  );
   await browser.close();
 }

@@ -26,7 +26,9 @@ const ICONS: Record<string, ReactNode> = {
   "/": svg("M4 5h16v15H4zM4 10h16M9 3v4M15 3v4"),
   "/lead-intake": svg("M12 5v14M5 12h14"),
   "/follow-up": svg("M4 6h16M4 12h10M4 18h7M18 15l3 3-3 3"),
-  "/clients": svg("M16 20v-1.5a3.5 3.5 0 0 0-3.5-3.5h-5A3.5 3.5 0 0 0 4 18.5V20M10 11a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7zM20 20v-1.5a3.5 3.5 0 0 0-2.5-3.35"),
+  "/clients": svg(
+    "M16 20v-1.5a3.5 3.5 0 0 0-3.5-3.5h-5A3.5 3.5 0 0 0 4 18.5V20M10 11a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7zM20 20v-1.5a3.5 3.5 0 0 0-2.5-3.35",
+  ),
 };
 const fallbackIcon = svg("M4 6h16M4 12h16M4 18h16");
 

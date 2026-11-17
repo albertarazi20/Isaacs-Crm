@@ -12,7 +12,7 @@ import {
   type ReminderChannel,
 } from "@/lib/mca/reminder";
 import type { ISODate } from "@/lib/mca/dates";
-import { TIMER_LABELS } from "@/lib/mca/stages";
+import { timerLabel } from "@/lib/mca/stages";
 import { formatDate, formatDateTime, relativeDay } from "@/lib/format";
 import { useApp } from "../app-context";
 import { TimeSelect } from "../TimeSelect";
@@ -70,7 +70,7 @@ export function FollowUpPanel({
                 )}
               >
                 <div className="min-w-0">
-                  <p className="text-sm font-medium">{TIMER_LABELS[t.kind]}</p>
+                  <p className="text-sm font-medium">{timerLabel(t.kind)}</p>
                   {t.note ? <p className="text-xs text-muted">{t.note}</p> : null}
                 </div>
                 <div className="shrink-0 text-right">

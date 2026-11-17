@@ -128,8 +128,8 @@ function BulkDialog({ overdue, onClose }: { overdue: ClientCard[]; onClose: () =
           <span>
             Keep merchants with the application in overdue — they need a call
             <span className="block text-xs text-muted">
-              Merchants in Application in are left alone ({plan.keptApplicationIn.length}{" "}
-              right now).
+              Merchants in Application in are left alone ({plan.keptApplicationIn.length} right
+              now).
             </span>
           </span>
         </label>

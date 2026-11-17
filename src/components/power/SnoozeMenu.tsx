@@ -195,8 +195,8 @@ function ReasonForm({
   return (
     <form onSubmit={submit} aria-label="Why snooze this merchant" className="space-y-2 p-3">
       <p className="text-sm">
-        <span className="font-semibold">{stageDef(card.stage).label}</span> has the application in, and{" "}
-        {pending.label} puts it off until {formatDate(pending.dueOn, today)} (
+        <span className="font-semibold">{stageDef(card.stage).label}</span> has the application in,
+        and {pending.label} puts it off until {formatDate(pending.dueOn, today)} (
         {relativeDay(pending.dueOn, today)}). Why?
       </p>
       <Input

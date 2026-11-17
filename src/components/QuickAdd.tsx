@@ -15,7 +15,9 @@ import { TimeSelect } from "./TimeSelect";
 import { TimerPicker } from "./TimerPicker";
 import { Button, Field, Input, Select } from "./ui";
 
-const START_STAGES = CORE_STAGES.filter((s) => s.group === "prospecting" || s.group === "application");
+const START_STAGES = CORE_STAGES.filter(
+  (s) => s.group === "prospecting" || s.group === "application",
+);
 
 const stageDue = (stage: StageKey, today: ISODate): ISODate =>
   defaultTimers(stage, { today })[0]?.dueOn ?? today;

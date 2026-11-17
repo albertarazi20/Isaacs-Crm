@@ -71,9 +71,7 @@ export async function relabelDocumentAction(input: unknown): Promise<ActionResul
   const session = await requireSession();
   try {
     const i = z.object({ documentId: id, kind: z.enum(DOC_KINDS), period }).parse(input);
-    await db.withUser(session.userId, (q) =>
-      relabelDocument(q, i.documentId, i.kind, i.period),
-    );
+    await db.withUser(session.userId, (q) => relabelDocument(q, i.documentId, i.kind, i.period));
     revalidatePath("/", "layout");
     return { ok: true, data: null };
   } catch (e) {

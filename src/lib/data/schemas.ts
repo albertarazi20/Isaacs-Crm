@@ -93,15 +93,14 @@ export const newClientSchema = z.object({
 });
 export type NewClientInput = z.output<typeof newClientSchema>;
 
-export const moveSchema = z
-  .object({
-    clientId: id,
-    stage: z.enum(STAGE_KEYS),
-    followUpOn: isoDate.optional(),
-    reason: text().default(""),
-    /** "Phone call scheduled" only: when the call is, as typed (local date and time). */
-    callAt: localDateTime.optional(),
-  });
+export const moveSchema = z.object({
+  clientId: id,
+  stage: z.enum(STAGE_KEYS),
+  followUpOn: isoDate.optional(),
+  reason: text().default(""),
+  /** "Phone call scheduled" only: when the call is, as typed (local date and time). */
+  callAt: localDateTime.optional(),
+});
 export type MoveInput = z.output<typeof moveSchema>;
 
 /** keepCalls: leave a booked call on its own date (a drag does; Snooze doesn't). */

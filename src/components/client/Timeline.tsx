@@ -248,7 +248,8 @@ function NoteComposer({ card }: { card: ClientCard }) {
 function Entry({ a }: { a: ActivityRow }) {
   const { timezone, today } = useApp();
   const nowMs = useNowMs();
-  const meta = KIND_META[a.kind];
+  // older rows can hold a kind the removed features wrote (funding): show it as a plain update
+  const meta = KIND_META[a.kind] ?? KIND_META.system;
   const body = activityBody(a, today);
   const isNote = a.kind === "note";
   const when = (

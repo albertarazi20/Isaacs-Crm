@@ -1,6 +1,6 @@
-// Phone fixes from docs/ISSUES.md: I-9 (Board remembers its view), I-11 (disabled Call/Text says why), I-14 (Clients on a
-// phone), I-18 (follow-up picker starts empty), I-19 (styled file chooser), I-20 (stage-group tabs on the phone Board).
-// The 40px tap-target rule (I-12) and the note box position (I-13) are checked by board.e2e / client.e2e.
+// Phone fixes from docs/ISSUES.md: I-11 (disabled Call/Text says why), I-14 (Merchants on a phone), I-18 (follow-up
+// picker starts empty), I-19 (styled file chooser).
+// The 40px tap-target rule (I-12) and the note box position (I-13) are checked by client.e2e.
 //   pnpm -s e2e mobile-ui        E2E_SHOTS=/some/dir to keep the 390px screenshots
 import { mkdirSync, writeFileSync } from "node:fs";
 import { BASE, check, openBrowser, withDb } from "./lib.mjs";
@@ -56,15 +56,21 @@ export default async function mobileUi({ email }) {
     return d.toISOString().slice(0, 10);
   };
 
-  // ======================= I-14: Clients on a phone =======================
-  console.log("\n-- I-14 Clients page on a phone");
+  // ======================= I-14: Merchants on a phone =======================
+  console.log("\n-- I-14 Merchants page on a phone");
   if (on("I-14")) {
+    const total = (
+      await one(
+        "select count(*)::int n from clients c join app_users u on u.id = c.user_id where u.email = $1 and not exists (select 1 from trashed_clients t where t.client_id = c.id)",
+        [email],
+      )
+    ).n;
     const m = await openBrowser(email, PHONE, TOUCH);
     const p = m.page;
     await p.goto(`${BASE}/clients`, { waitUntil: "domcontentloaded" });
-    await p.getByRole("heading", { name: "Clients", exact: true }).waitFor();
+    await p.getByRole("heading", { name: "Merchants", exact: true }).waitFor();
     check(
-      "the six toolbar buttons are not on the page",
+      "the toolbar buttons are not on the page",
       (await p.getByRole("link", { name: "Download clients (CSV)" }).count()) === 0,
     );
     const more = p.getByRole("button", { name: "More actions" });
@@ -79,8 +85,8 @@ export default async function mobileUi({ email }) {
     const panel = p.locator(`[id="${await more.getAttribute("aria-controls")}"]`);
     const items = await panel.getByRole("link").allInnerTexts();
     check(
-      "the menu has all six: both downloads, Import, Lead intake, Reports, Trash",
-      items.length === 6,
+      "the menu has all five: both downloads, Import, Lead intake, Trash",
+      items.length === 5 && !items.includes("Reports"),
       JSON.stringify(items),
     );
     await shot(p, "clients-menu-open");
@@ -94,7 +100,7 @@ export default async function mobileUi({ email }) {
     await p.waitForURL(/\/trash/);
     check("a menu item goes to its page", /\/trash/.test(p.url()));
     await p.goBack();
-    await p.getByRole("heading", { name: "Clients", exact: true }).waitFor();
+    await p.getByRole("heading", { name: "Merchants", exact: true }).waitFor();
 
     const first = p.locator("ul[aria-label=Clients] > li").first();
     await first.waitFor();
@@ -123,7 +129,7 @@ export default async function mobileUi({ email }) {
       fit.ok,
       JSON.stringify(fit),
     );
-    check("there is one card per merchant (51)", geo.links === 51, `${geo.links}`);
+    check(`there is one card per merchant (${total})`, geo.links === total, `${geo.links}`);
     const cardText = await first.innerText();
     check(
       "a card shows the date he is due (a chip like 'Today' / 'in 3 days' plus the date)",
@@ -139,9 +145,7 @@ export default async function mobileUi({ email }) {
     check("and the due chip is fully on screen (no swipe needed)", visibleDue);
     check(
       "and the stage",
-      /Interested|Name in|Funded|Submitted|Collecting|Application|Offer|Lost|Dead|Trash|Declined|Killed|Default|Paid|Phone|Contract|Not interested|Paying/.test(
-        cardText,
-      ),
+      /Interested|Application|Trash/.test(cardText),
       cardText.replace(/\s+/g, " ").slice(0, 80),
     );
     const tiny = await p.evaluate(() =>
@@ -173,13 +177,13 @@ export default async function mobileUi({ email }) {
 
     const d = await openBrowser(email, { width: 1440, height: 900 });
     await d.page.goto(`${BASE}/clients`, { waitUntil: "domcontentloaded" });
-    await d.page.getByRole("heading", { name: "Clients", exact: true }).waitFor();
+    await d.page.getByRole("heading", { name: "Merchants", exact: true }).waitFor();
     check(
-      "desktop keeps the six buttons in a row and no '…' menu",
+      "desktop keeps the buttons in a row and no '…' menu",
       (await d.page.getByRole("link", { name: "Download clients (CSV)" }).isVisible()) &&
         !(await d.page.getByRole("button", { name: "More actions" }).isVisible()),
     );
-    check("desktop keeps the table", (await d.page.locator("table tbody tr").count()) === 51);
+    check("desktop keeps the table", (await d.page.locator("table tbody tr").count()) === total);
     await shot(d.page, "clients-desktop");
     await d.browser.close();
   }

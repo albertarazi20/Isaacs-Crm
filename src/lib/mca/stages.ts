@@ -135,6 +135,16 @@ export const TIMER_LABELS: Record<TimerKind, string> = {
   scheduled_call: "Scheduled call",
 };
 
+/**
+ * The database still allows the kinds the removed features wrote (check_in, renewal, chase), and an old row may hold
+ * one: read it as the plain follow-up it is here, so no page breaks on it.
+ */
+export const timerKind = (kind: string | null | undefined): TimerKind =>
+  kind === "scheduled_call" ? "scheduled_call" : "follow_up";
+
+export const timerLabel = (kind: string | null | undefined): string =>
+  TIMER_LABELS[timerKind(kind)];
+
 export interface PlannedTimer {
   kind: TimerKind;
   dueOn: ISODate;

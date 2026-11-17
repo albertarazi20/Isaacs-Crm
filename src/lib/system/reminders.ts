@@ -1,10 +1,6 @@
 import type { Db, DbAccess } from "../db";
 import { todayIn } from "../mca/dates";
-import {
-  buildCallReminder,
-  buildDigest,
-  type DueTimer,
-} from "../mca/digest";
+import { buildCallReminder, buildDigest, type DueTimer } from "../mca/digest";
 import { formatMoneyCompact } from "../money";
 import type { StageKey, TimerKind } from "../mca/stages";
 
