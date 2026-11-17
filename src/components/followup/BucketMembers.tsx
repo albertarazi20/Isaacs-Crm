@@ -24,7 +24,15 @@ import type { MemberMeta } from "@/lib/messaging/memberMeta";
 import { mergeValues, resolveMergeFields } from "@/lib/messaging/merge";
 import { isReadyBucket } from "./bucketCopy";
 import { MemberDrawer, type MemberActions } from "./MemberDrawer";
-import { Ico, MemberChips, NEXT_TONE, copyUploadLink, nextUp, noUsableEmail } from "./memberParts";
+import {
+  Ico,
+  MemberChips,
+  NEXT_TONE,
+  copyUploadLink,
+  nextUp,
+  noUsableEmail,
+  rowActionLabel,
+} from "./memberParts";
 
 type Filter = "all" | "due" | "replied" | "quiet" | "no_email" | "paused";
 const FILTERS: readonly { id: Filter; label: string }[] = [
@@ -362,13 +370,16 @@ export function BucketMembers({
 
         {/* Column heads; on a phone this row is just "check all". */}
         <div className={cn(GRID, "border-y border-border bg-surface-3/50 px-3 py-2 sm:px-4")}>
-          <input
-            type="checkbox"
-            className="size-4 accent-accent"
-            checked={allShown}
-            onChange={toggleAll}
-            aria-label="Check every row shown"
-          />
+          {/* a 40px target on a phone around the 17px box */}
+          <label className="-m-3 inline-flex size-10 cursor-pointer items-center justify-center sm:m-0 sm:size-auto">
+            <input
+              type="checkbox"
+              className="size-4 accent-accent"
+              checked={allShown}
+              onChange={toggleAll}
+              aria-label="Check every row shown"
+            />
+          </label>
           <span className="eyebrow">
             <span className="md:hidden">
               {ids.length ? `${ids.length} checked` : `Check all ${shown.length}`}
@@ -413,13 +424,15 @@ export function BucketMembers({
                     on ? "bg-accent-soft/40" : "hover:bg-surface-2/50",
                   )}
                 >
-                  <input
-                    type="checkbox"
-                    className="relative z-10 size-4 accent-accent"
-                    checked={on}
-                    onChange={() => toggle(m.client_id)}
-                    aria-label={`Check ${m.business_name}`}
-                  />
+                  <label className="relative z-10 -m-3 inline-flex size-10 cursor-pointer items-center justify-center sm:m-0 sm:size-auto">
+                    <input
+                      type="checkbox"
+                      className="size-4 accent-accent"
+                      checked={on}
+                      onChange={() => toggle(m.client_id)}
+                      aria-label={`Check ${m.business_name}`}
+                    />
+                  </label>
                   <div className="flex min-w-0 items-center gap-3">
                     <Avatar name={m.business_name} size={34} />
                     <div className="min-w-0">
@@ -485,11 +498,14 @@ export function BucketMembers({
                           >
                             <Glyph name="flag" className="size-4" />
                           </IconButton>
-                          <IconButton label="Copy upload link" onClick={() => void uploadLink(m)}>
+                          <IconButton
+                            label={rowActionLabel.copyLink(m)}
+                            onClick={() => void uploadLink(m)}
+                          >
                             <Glyph name="link" className="size-4" />
                           </IconButton>
                           <IconButton
-                            label={m.paused ? "Resume" : "Pause"}
+                            label={rowActionLabel.pause(m)}
                             disabled={busy}
                             onClick={() => void pause([m], !m.paused)}
                           >
