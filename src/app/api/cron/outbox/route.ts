@@ -1,5 +1,6 @@
 import { timingSafeEqual } from "node:crypto";
 import { NextResponse } from "next/server";
+import { runApprovalEmails } from "@/lib/system/approvals";
 import { db } from "@/lib/db";
 import { documentStore } from "@/lib/docs/storage";
 import { scanPending } from "@/lib/docs/upload";
@@ -23,6 +24,12 @@ async function handle(req: Request): Promise<NextResponse> {
   const e = env();
   if (!authorised(req, e.CRON_SECRET))
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  // the approval emails that are due go on the outbox first, so this same run sends them. Whatever happens there, the
+  // send below still runs: intake, replies and sequences never wait on the approvals.
+  const approvals = await runApprovalEmails({ db, appUrl: e.APP_URL }).catch((err: unknown) => {
+    console.error("approval emails:", err);
+    return { checked: 0, queued: 0, stopped: 0, finished: 0, errors: 1, deferred: 0 };
+  });
   const summary = await drainOutbox({
     db,
     deliver: productionDeliverer(),
@@ -32,7 +39,10 @@ async function handle(req: Request): Promise<NextResponse> {
   // merchant uploads wait here until checked; nothing opens before that
   const scan = await scanPending(db, documentStore(e));
   await recordHeartbeat("outbox");
-  return NextResponse.json({ ...summary, scan }, { status: summary.failed > 0 ? 502 : 200 });
+  return NextResponse.json(
+    { ...summary, scan, approvals },
+    { status: summary.failed > 0 || approvals.errors > 0 ? 502 : 200 },
+  );
 }
 
 export const GET = handle;

@@ -123,6 +123,7 @@ describe("architecture boundaries", () => {
       "lib/messaging/mutations.ts": 2, // ${COLUMNS}
       "lib/data/mutations.ts": 2, // ${sets} from the CLIENT_COLUMNS map; ${fn} from a fixed list
       "lib/data/queries.ts": 1, // ${NAME_KEY_SQL("business_name")}
+      "lib/approvals/queries.ts": 2, // ${SELECT} (one fixed column list); ${order} from a fixed three-way choice
       // ${TZ_LABEL}: a constant CASE expression (time-zone label); stream 1 adds ${SENDS_SQL} / ${TOTALS_SQL}, the
       // fixed fragments the template and bucket scores are counted with (the window is a bound parameter)
       "lib/buckets/queries.ts": 3,

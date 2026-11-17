@@ -10,6 +10,7 @@ import { ReminderWatcher } from "@/components/ReminderWatcher";
 import { AssistantProvider } from "@/components/assistant/Assistant";
 import { NewLeadProvider } from "@/components/shell/NewLead";
 import { Sidebar } from "@/components/shell/Sidebar";
+import { openApprovalCount } from "@/lib/approvals/queries";
 import { CAN, ROLE_LABEL } from "@/lib/auth/roles";
 import { requireSession } from "@/lib/auth/server";
 import { listBuckets } from "@/lib/buckets/queries";
@@ -52,6 +53,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     db.withUser(session.userId, async (q) => ({
       buckets: await listBuckets(q),
       assistant: await assistantState(q, Boolean(env().ANTHROPIC_API_KEY)),
+      approvals: await openApprovalCount(q),
     })),
   ]);
   const theme = parseTheme(store.get(THEME_COOKIE)?.value);
@@ -95,6 +97,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
                 mine: b.owner_id !== null,
               }))}
               due={me.due}
+              approvals={shell.approvals}
               unreadAlerts={me.unreadAlerts}
             />
             <GlobalSearch />

@@ -5,7 +5,7 @@ import type { ISODate } from "../mca/dates";
  * The worker (worker.ts) reads the numbers from the database and asks these functions what to do.
  */
 
-export const LANES = ["intake", "reply", "sequence", "blast", "system"] as const;
+export const LANES = ["intake", "reply", "sequence", "blast", "system", "approval"] as const;
 export type Lane = (typeof LANES)[number];
 
 export interface CapInput {

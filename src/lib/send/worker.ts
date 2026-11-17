@@ -1,12 +1,28 @@
 import type { Db, DbAccess } from "../db";
+import { approvalClaims, hasPostalAddress, withFooter } from "../approvals/html";
 import { checkClaims } from "../messaging/claims";
-import { capAllows, legalFooter, merchantCapAllows, textToHtml, type Lane } from "./rules";
+import {
+  capAllows,
+  inSendWindow,
+  legalFooter,
+  merchantCapAllows,
+  nextSendTime,
+  textToHtml,
+  type Lane,
+  type WindowInput,
+} from "./rules";
 
 export interface Deliverer {
-  /** Send through the rep's Gmail. Returns the provider id. */
+  /** Send through the rep's Gmail. Returns the provider id. `html` is the designed version (approval emails). */
   gmail(
     userId: string,
-    m: { to: string; subject: string; text: string; headers?: Readonly<Record<string, string>> },
+    m: {
+      to: string;
+      subject: string;
+      text: string;
+      html?: string;
+      headers?: Readonly<Record<string, string>>;
+    },
   ): Promise<string>;
   /** Send through the shop's Resend domain. Returns the provider id. */
   resend(m: {
@@ -49,6 +65,8 @@ interface Job {
   to_address: string;
   subject: string;
   text_body: string;
+  /** The designed HTML (approval emails); null: the HTML is made from the text. */
+  html_body: string | null;
   expires_at: string | null;
   attempts: number;
   last_error: string | null;
@@ -67,6 +85,18 @@ interface Job {
   unsubscribe_token: string | null;
   merchant_24h: number;
   merchant_7d: number;
+}
+
+/** What the worker re-reads right before an approval email goes. */
+interface ApprovalCheck {
+  halt: string | null;
+  owner_id: string;
+  email: string;
+  tz: string;
+  approval_window_start: number;
+  approval_window_end: number;
+  approval_weekends: boolean;
+  send_on_holidays: boolean;
 }
 
 const MAX_ATTEMPTS = 3;
@@ -117,12 +147,12 @@ export async function drainOutbox(args: {
         `with next as (
            select o.id from outbox o
             where o.status = 'queued' and o.not_before <= $1
-            order by case o.lane when 'intake' then 0 when 'reply' then 1 when 'system' then 2 when 'sequence' then 3 else 4 end,
+            order by case o.lane when 'intake' then 0 when 'reply' then 1 when 'system' then 2 when 'approval' then 2 when 'sequence' then 3 else 4 end,
                      o.not_before
             for update skip locked limit 1)
          update outbox o set status = 'sending', attempts = o.attempts + 1
            from next where o.id = next.id
-         returning o.id, o.user_id, o.client_id, o.lane, o.source, o.to_address, o.subject, o.text_body, o.expires_at, o.attempts,
+         returning o.id, o.user_id, o.client_id, o.lane, o.source, o.to_address, o.subject, o.text_body, o.html_body, o.expires_at, o.attempts,
            o.last_error,
            (select email from app_users u where u.id = o.user_id) as rep_email,
            (select google_email from gmail_connections g where g.user_id = o.user_id) as gmail_address,
@@ -175,13 +205,61 @@ export async function drainOutbox(args: {
       if (job.client_dnc) return (skip("dnc"), false);
       // a nudge after an open goes only if nothing happened since it was queued (0552)
       if (job.nudge_overtaken) return (cancel("overtaken"), false);
+      if (job.lane === "approval") {
+        // Right before an approval email goes: is its approval still open with nothing stopping it (a reply, a pitch,
+        // a pause, the hold date), is it still inside the merchant's day (a retry an hour later may not be), and is it
+        // still for this rep and this address? Checked under a savepoint, so a bad row fails alone and the run goes on.
+        let c: ApprovalCheck | undefined;
+        try {
+          await q.query("savepoint approval_check");
+          c = (
+            await q.query<ApprovalCheck>(
+              `select app.approval_halt(app.approval_of($1)) as halt, cl.user_id as owner_id, cl.email,
+                      app.client_timezone(cl) as tz, s.approval_window_start, s.approval_window_end,
+                      s.approval_weekends, s.send_on_holidays
+                 from clients cl cross join shop_settings s where cl.id = $2`,
+              [job.source, job.client_id],
+            )
+          ).rows[0];
+          // the zone is used below: a zone the database cannot read must fail here, inside the savepoint
+          if (c) await q.query("select now() at time zone $1", [c.tz]);
+          await q.query("release savepoint approval_check");
+        } catch (e) {
+          await q.query("rollback to savepoint approval_check");
+          await q.query("update outbox set status = 'failed', last_error = $2 where id = $1", [
+            job.id,
+            `approval check: ${e instanceof Error ? e.message : String(e)}`.slice(0, 500),
+          ]);
+          summary.failed += 1;
+          return false;
+        }
+        if (!c) return (cancel("gone"), false);
+        if (c.halt) return (cancel(c.halt), false);
+        // the merchant changed hands: the email names the old rep, so it is filled again for the new one
+        if (c.owner_id !== job.user_id) return (cancel("owner_changed"), false);
+        if (c.email.trim().toLowerCase() !== job.to_address.trim().toLowerCase())
+          return (cancel("address_changed"), false);
+        const w: WindowInput = {
+          timezone: c.tz,
+          startHour: c.approval_window_start,
+          endHour: c.approval_window_end,
+          weekends: c.approval_weekends,
+          holidays: c.send_on_holidays,
+        };
+        if (!inSendWindow(now, w)) {
+          await defer(nextSendTime(now, w, 0), "outside_window");
+          return false;
+        }
+      }
       const bulk = job.lane === "sequence" || job.lane === "blast";
+      // mail the engine sends on its own: the sequence lanes and the approval emails
+      const automated = bulk || job.lane === "approval";
       if (bulk && job.enrollment_paused) {
         // the rep pressed Pause (or the merchant said "not now"): the step waits, it is not lost
         await defer(new Date(now.getTime() + hour), "paused");
         return false;
       }
-      if (bulk && settings.postal_address.trim() === "") {
+      if (automated && settings.postal_address.trim() === "") {
         // CAN-SPAM: automated mail carries a postal address or it does not go. Intake and replies still do.
         await defer(new Date(now.getTime() + hour), "no_postal_address");
         return false;
@@ -199,11 +277,14 @@ export async function drainOutbox(args: {
         await defer(new Date(now.getTime() + 24 * hour), "per_merchant_cap");
         return false;
       }
-      if (bulk) {
-        // the claim checker (S1-15): what the engine says on its own must be true for this merchant
-        const claims = checkClaims(`${job.subject}\n${job.text_body}`, {
-          state: job.client_state ?? "",
-        });
+      if (automated) {
+        // the claim checker (S1-15): what the engine says on its own must be true for this merchant. An approval
+        // email may say "approved" (the merchant is); every other rule holds.
+        const text = `${job.subject}\n${job.text_body}`;
+        const ctx = { state: job.client_state ?? "" };
+        const claims = bulk
+          ? checkClaims(text, ctx)
+          : { ok: approvalClaims(text, ctx).length === 0, reasons: approvalClaims(text, ctx) };
         if (!claims.ok) {
           if (job.last_error !== "claim_check" && job.client_id)
             await q.query(
@@ -220,7 +301,10 @@ export async function drainOutbox(args: {
       }
 
       // Which mailbox: automation goes out from the shop's Resend domain when set; everything else from the rep's Gmail.
-      const useResend = bulk && settings.automation_from !== "";
+      // An approval email is the rep's own one-to-one email: from their Gmail whenever it is connected (replies land
+      // in the inbox the sync reads), the shop's domain only when it is not.
+      const repMailbox = job.lane === "approval" && Boolean(job.gmail_address && job.gmail_ok);
+      const useResend = automated && settings.automation_from !== "" && !repMailbox;
       if (useResend && !settings.dns_ok) {
         // the automation domain has not passed its SPF / DKIM / DMARC check (Settings → Email): hold, do not fall back
         await defer(new Date(now.getTime() + hour), "dns_not_verified");
@@ -267,12 +351,16 @@ export async function drainOutbox(args: {
         return false;
       }
 
-      // The footer is the engine's, not the template's: every automated email carries it.
+      // The footer is the engine's, not the template's: every automated email carries it. A designed approval email
+      // has its own footer with the merchant's unsubscribe link in it (checked when it was saved): the HTML is sent
+      // as designed and the footer goes on the plain-text part.
       let text = job.text_body;
-      let html = textToHtml(job.text_body);
+      const designed =
+        job.lane === "approval" && job.html_body !== null && job.html_body.trim() !== "";
+      let html = designed ? (job.html_body ?? "") : textToHtml(job.text_body);
       // RFC 8058 one-click unsubscribe: Gmail and Yahoo require it on bulk mail
       let headers: Record<string, string> | undefined;
-      if (bulk && job.unsubscribe_token) {
+      if (automated && job.unsubscribe_token) {
         headers = {
           "List-Unsubscribe": `<${args.appUrl}/api/unsubscribe/${job.unsubscribe_token}>`,
           "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
@@ -283,7 +371,10 @@ export async function drainOutbox(args: {
           unsubscribeUrl: `${args.appUrl}/u/${job.unsubscribe_token}`,
         });
         text += f.text;
-        html += f.html;
+        // a design without the shop's postal address gets the engine's footer too (the law asks for it)
+        if (!designed) html += f.html;
+        else if (!hasPostalAddress(job.text_body, settings.postal_address))
+          html = withFooter(html, f.html);
       }
 
       try {
@@ -293,14 +384,18 @@ export async function drainOutbox(args: {
               subject: job.subject,
               text,
               html,
+              // an approval's reply must reach the rep (and the inbox sync that stops the emails)
               replyTo:
-                settings.automation_reply_to_rep && job.rep_email ? job.rep_email : undefined,
+                (settings.automation_reply_to_rep || job.lane === "approval") && job.rep_email
+                  ? job.rep_email
+                  : undefined,
               headers,
             })
           : await args.deliver.gmail(job.user_id, {
               to: job.to_address,
               subject: job.subject,
               text,
+              ...(designed ? { html } : {}),
               headers,
             });
         await q.query(
@@ -315,7 +410,7 @@ export async function drainOutbox(args: {
           await q.query("update clients set last_automated_email_at = $2 where id = $1 and $3", [
             job.client_id,
             now.toISOString(),
-            bulk,
+            automated,
           ]);
           await q.query(
             `insert into activities (user_id, client_id, kind, body) values ($1, $2, 'email', $3)`,

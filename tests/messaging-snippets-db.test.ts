@@ -377,6 +377,8 @@ describe("column grants on app_users are exactly what we meant", () => {
       "digest_hour",
       "invited_by",
       "name",
+      // 0553: the rep's own phone for the approval emails ({{rep_phone}}); app_users_self_update limits it to their row
+      "phone",
       "role",
       "signature",
       "timezone",

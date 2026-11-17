@@ -8,9 +8,9 @@ environment variables; Claude only needs to be told they are set.
 ## Selective Capital, as of 2026-11-17 (this is the list that applies now)
 
 The live site is the Netlify project `selective-capital-crm`; the database is Supabase `aztoxzcmnvqaypjuuuwj`, in step
-with the code (migrations through 0550). What only you can do, most useful first:
+with the code (migrations through 0553). What only you can do, most useful first:
 
-1. **Turn the assistant on:** add `ANTHROPIC_API_KEY` in Netlify → Site configuration → Environment variables, marked
+1. **Turn the assistant on (on hold since 2026-11-17, the owner's call):** add `ANTHROPIC_API_KEY` in Netlify → Site configuration → Environment variables, marked
    secret. Until then the panel says it is not set up (the recommendations still link to the pages).
 2. **Set the shop's postal address** in Settings → Email. Bucket sequences and blasts wait until it is filled (the
    law asks for it in every automated email); welcome emails and replies already go.
@@ -21,6 +21,9 @@ with the code (migrations through 0550). What only you can do, most useful first
 5. **Decide on "Nudge after an open"** (Settings → Email, off): a merchant who opens their link and does not finish
    gets it again a day later, once a week at most. The two emails are the "Nudge" templates.
 6. **Run the two Supabase statements** listed in `BUILD-NOTES.md` ("Automations pass") in the SQL editor.
+7. **Open approvals (2026-11-17):** send Claude the final four approval email designs (or upload them yourself in
+   Settings → Approval emails), and have every rep put their phone number in Settings → My account: the emails ask
+   the merchant to call it, and wait until it is there.
 
 Everything below this section was written for the original Isaac deployment and is kept for reference.
 

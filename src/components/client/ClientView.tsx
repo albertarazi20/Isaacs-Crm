@@ -1,9 +1,12 @@
 "use client";
 
+import type { ApprovalRow } from "@/lib/approvals/queries";
+import type { CadenceStep } from "@/lib/approvals/words";
 import type { ClientDetail } from "@/lib/data/types";
 import type { Freshness } from "@/lib/docs/freshness";
 import type { DocumentRow } from "@/lib/docs/upload";
 import type { MerchantApplication } from "@/lib/leads/application";
+import { ApprovalCard } from "../approvals/ApprovalCard";
 import { ApplicationCard } from "./ApplicationCard";
 import { BringInStrip } from "./BringIn";
 import { ClientHero, MobileActionBar } from "./ClientHeader";
@@ -29,6 +32,8 @@ export function ClientView({
   freshness,
   today,
   appUrl,
+  approval = null,
+  cadence = [],
 }: {
   detail: ClientDetail;
   serverNow: number;
@@ -38,6 +43,9 @@ export function ClientView({
   freshness: Freshness;
   today: string;
   appUrl?: string;
+  /** The merchant's open approval, else their latest one. */
+  approval?: ApprovalRow | null;
+  cadence?: readonly CadenceStep[];
 }) {
   const { card } = detail;
   return (
@@ -51,6 +59,13 @@ export function ClientView({
             detail={detail}
             application={application}
             documents={documents}
+            className="max-sm:order-2 xl:col-span-2"
+          />
+          <ApprovalCard
+            merchant={{ id: card.id, name: card.business_name || card.contact_name }}
+            approval={approval}
+            cadence={cadence}
+            broughtIn={detail.bringIn.brought_in_at !== null}
             className="max-sm:order-2 xl:col-span-2"
           />
           <div className="contents xl:flex xl:min-w-0 xl:flex-col xl:gap-5">

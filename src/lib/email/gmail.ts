@@ -61,6 +61,8 @@ export interface OutgoingMessage {
   to: string;
   subject: string;
   text: string;
+  /** The designed version (approval emails); sent as multipart/alternative. */
+  html?: string;
   messageId?: string;
   inReplyTo?: string;
   references?: readonly string[];
@@ -81,6 +83,7 @@ export async function sendViaGmail(
     to: message.to,
     subject: message.subject,
     text: message.text,
+    html: message.html,
     messageId: message.messageId,
     inReplyTo: message.inReplyTo,
     references: message.references,

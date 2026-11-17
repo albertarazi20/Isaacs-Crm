@@ -1,5 +1,6 @@
 /**
- * The navigation: four places, each a dropdown in the sidebar. Pure, shared by the sidebar and the tests.
+ * The navigation: two links (Overview, Open approvals) and three dropdowns in the sidebar. Pure, shared by the sidebar
+ * and the tests.
  * Adding a lead is not a place: it is the "New lead" button, which opens over whatever page you are on.
  */
 
@@ -11,6 +12,7 @@ export interface NavItem {
 /** Reps and managers see the same pages; an ops account (the role stays in the database) is shown them too. */
 const ITEMS: readonly NavItem[] = [
   { href: "/", label: "Overview" },
+  { href: "/approvals", label: "Open approvals" },
   { href: "/follow-up", label: "Follow Up" },
   { href: "/clients", label: "Merchants" },
   { href: "/settings", label: "Settings" },
@@ -40,6 +42,7 @@ export const SETTINGS_VIEWS: readonly (NavItem & { manager?: boolean })[] = [
   { href: "/settings/buckets", label: "Buckets & templates" },
   { href: "/settings/sheets", label: "Lead sources" },
   { href: "/settings/email", label: "Email", manager: true },
+  { href: "/settings/approvals", label: "Approval emails", manager: true },
   { href: "/settings/team", label: "Team", manager: true },
   { href: "/settings/ai", label: "AI assistant", manager: true },
 ];

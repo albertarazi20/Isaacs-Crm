@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { ClientView } from "@/components/client/ClientView";
+import { approvalCadence, approvalForClient } from "@/lib/approvals/queries";
 import { requireSession } from "@/lib/auth/server";
 import { getClientDetail, userContext } from "@/lib/data/queries";
 import { db } from "@/lib/db";
@@ -48,6 +49,8 @@ export default async function ClientPage({ params }: { params: Promise<{ id: str
       application: await merchantApplication(q, id),
       documents: await listDocuments(q, id),
       freshness: await clientFreshness(q, id, today),
+      approval: await approvalForClient(q, id),
+      cadence: await approvalCadence(q),
       today,
     };
   });
@@ -61,6 +64,8 @@ export default async function ClientPage({ params }: { params: Promise<{ id: str
       freshness={data.freshness}
       today={data.today}
       appUrl={env().APP_URL}
+      approval={data.approval}
+      cadence={data.cadence}
     />
   );
 }

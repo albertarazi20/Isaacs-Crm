@@ -3,6 +3,8 @@ export interface RawEmail {
   to: string;
   subject: string;
   text: string;
+  /** A designed version: the message becomes multipart/alternative with the text as the fallback. */
+  html?: string;
   replyTo?: string;
   /** Our own Message-ID, so a lender's reply can be matched by In-Reply-To even when Gmail re-threads. */
   messageId?: string;
@@ -61,9 +63,11 @@ export function buildRawEmail(m: RawEmail): string {
     assertHeaderSafe(k, v);
   }
   if (!SINGLE_ADDRESS.test(m.to)) throw new Error("to must be exactly one email address");
-  const body = Buffer.from(m.text, "utf8")
-    .toString("base64")
-    .replace(/(.{76})/g, "$1\r\n");
+  const b64 = (s: string) =>
+    Buffer.from(s, "utf8")
+      .toString("base64")
+      .replace(/(.{76})/g, "$1\r\n");
+  const body = b64(m.text);
   const headers = [
     `From: ${m.from}`,
     `To: ${m.to}`,
@@ -74,9 +78,26 @@ export function buildRawEmail(m: RawEmail): string {
     ...Object.entries(m.headers ?? {}).map(([k, v]) => `${k}: ${v}`),
     `Subject: ${encodeSubject(m.subject)}`,
     "MIME-Version: 1.0",
-    'Content-Type: text/plain; charset="UTF-8"',
-    "Content-Transfer-Encoding: base64",
   ];
-  const message = `${headers.join("\r\n")}\r\n\r\n${body}\r\n`;
+  let message: string;
+  if (m.html !== undefined && m.html.trim() !== "") {
+    // a boundary that cannot occur in base64 parts (it has characters base64 never uses)
+    const boundary = `=_alt_${Buffer.from(m.subject + m.to)
+      .toString("hex")
+      .slice(0, 16)}_${Date.now().toString(36)}`;
+    const part = (type: string, content: string) =>
+      [
+        `--${boundary}`,
+        `Content-Type: ${type}; charset="UTF-8"`,
+        "Content-Transfer-Encoding: base64",
+        "",
+        b64(content),
+      ].join("\r\n");
+    headers.push(`Content-Type: multipart/alternative; boundary="${boundary}"`);
+    message = `${headers.join("\r\n")}\r\n\r\n${part("text/plain", m.text)}\r\n${part("text/html", m.html)}\r\n--${boundary}--\r\n`;
+  } else {
+    headers.push('Content-Type: text/plain; charset="UTF-8"', "Content-Transfer-Encoding: base64");
+    message = `${headers.join("\r\n")}\r\n\r\n${body}\r\n`;
+  }
   return Buffer.from(message, "utf8").toString("base64url");
 }

@@ -170,6 +170,10 @@ describe("C-6: an older backup still restores after a new column with a default"
       "applications", // 0530: the signed application record; the PDF itself is in documents
       "assistant_threads", // 0541: a person's conversations with the assistant, private to them
       "link_opens", // 0547: page-view signals, worth nothing after a few days
+      // 0553: the shop's approval emails (shop-level, like templates) and the approvals on them (funding-stage state,
+      // like the offers above); both are in the database backup
+      "approval_emails",
+      "approvals",
       "ai_runs",
       "app_state_tz",
       "area_code_tz",

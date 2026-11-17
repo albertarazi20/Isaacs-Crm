@@ -29,6 +29,8 @@ export interface SidebarProps {
   buckets: SidebarBucket[];
   /** Follow-ups due today or overdue. */
   due: number;
+  /** Open approvals waiting on a pitch. */
+  approvals: number;
   unreadAlerts: number;
 }
 
@@ -49,6 +51,7 @@ const SETTINGS_ICON: Record<string, GlyphName> = {
   "/settings/buckets": "bucket",
   "/settings/sheets": "sheet",
   "/settings/email": "mail",
+  "/settings/approvals": "send",
   "/settings/team": "merchants",
   "/settings/ai": "sparkles",
 };
@@ -205,6 +208,7 @@ function SidebarBody({
   manager,
   buckets,
   due,
+  approvals,
   unreadAlerts,
   onNavigate,
 }: SidebarProps & { onNavigate?: () => void }) {
@@ -287,6 +291,25 @@ function SidebarBody({
           />
           <span className="flex-1">Overview</span>
           <Count n={due} tone="hot" />
+        </Link>
+
+        <Link
+          href="/approvals"
+          onClick={onNavigate}
+          aria-current={pathname.startsWith("/approvals") ? "page" : undefined}
+          aria-label={approvals > 0 ? `Open approvals, ${approvals} waiting on a pitch` : undefined}
+          className={rowClass(pathname.startsWith("/approvals"))}
+        >
+          {pathname.startsWith("/approvals") ? <ActiveBar /> : null}
+          <Glyph
+            name="target"
+            className={cn(
+              "size-[18px] shrink-0",
+              pathname.startsWith("/approvals") && "text-accent",
+            )}
+          />
+          <span className="flex-1">Open approvals</span>
+          <Count n={approvals} />
         </Link>
 
         <Group

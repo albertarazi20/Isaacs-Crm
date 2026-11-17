@@ -6,7 +6,8 @@ const CSP = [
   "default-src 'self'",
   "script-src 'self' 'unsafe-inline'",
   "style-src 'self' 'unsafe-inline'",
-  "img-src 'self' data: blob:",
+  // the shop's own site: the approval email designs (shown in Settings in a sandboxed frame) load their logos from it
+  "img-src 'self' data: blob: https://selectivecap.com https://*.selectivecap.com",
   "font-src 'self'",
   "connect-src 'self'",
   "object-src 'none'",

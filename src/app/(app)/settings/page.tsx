@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { cookies } from "next/headers";
 import { SecurityPanel } from "@/components/SecurityPanel";
+import { ApprovalPhoneField } from "@/components/settings/ApprovalPhoneField";
 import {
   ICON,
   Icon,
@@ -90,8 +91,9 @@ export default async function AccountSettingsPage({
       timezone: string;
       digest_enabled: boolean;
       digest_hour: number;
+      phone: string;
     }>(
-      "select email, name, timezone, digest_enabled, digest_hour from app_users where id = app.current_user_id()",
+      "select email, name, timezone, digest_enabled, digest_hour, phone from app_users where id = app.current_user_id()",
     );
     return rows[0];
   });
@@ -176,6 +178,7 @@ export default async function AccountSettingsPage({
             </div>
           </dl>
         </div>
+        <ApprovalPhoneField initial={user?.phone ?? ""} />
       </SettingsCard>
 
       <SettingsPanels

@@ -373,3 +373,23 @@ for the night to be spent finding bugs, fixing designs and adding ideas that mak
 - **Gates**: typecheck, lint, format clean; unit 104 files / 1,408 tests; `pnpm build` passes; browser suites run
   locally against the stand-in model.
 - **Supabase `aztoxzcmnvqaypjuuuwj`**: 0541–0552 applied by hand, one transaction each (no 0545); 91 migrations.
+
+## Open approvals (2026-11-17, evening)
+
+The owner: "an open approval tab … any merchant who gets an offer and hasn't been pitched will be in there … we will
+send them a html template which i already made … 1 initial [and] follow ups … automatically send them and read the
+time stamp the initial was sent to send the follow up … in settings you can choose how long after each template the
+next one sends." The owner will send the final designs; their drafts (four emails, options A/B/C each, in
+`~/Downloads/selectivecap-templates-html`) set the fields: `{{first_name}} {{business_name}} {{offer_amount}}
+{{offer_expiry}} {{rep_name}} {{rep_phone}} {{rep_email}} {{unsubscribe_link}}`.
+
+- **Defaults taken (no question asked):** a rep marks the approval (amount, the date the funder holds it until,
+  funder and note for the rep only) from Open approvals or the merchant's page; the first email goes at once inside
+  the approval window (9am to 6pm merchant's time, weekdays; Settings); each follow-up goes its delay after the one
+  before it was sent; Pitched or Close takes the merchant off the page; a reply stops the emails and puts the merchant
+  first ("Replied, call them now"); four emails by default (1 + 3 follow-ups, 1, 2 and 3 days apart), up to six.
+- **0553:** `approvals`, `approval_emails`, `app_users.phone`, the approval settings, outbox lane `approval` (each
+  step once: `outbox_approval_once_idx`), `app.approval_halt` (read by the engine and by the worker right before a
+  send), `app.approval_of`.
+- **Sending HTML:** the worker sends a designed email as it is (its own footer and unsubscribe link, required when it
+  is saved) with the legal footer on the plain-text part; Gmail sends multipart/alternative (`buildRawEmail`).

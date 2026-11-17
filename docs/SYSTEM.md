@@ -72,6 +72,15 @@ transaction. Tables from the removed features stay in the schema, unused.
 - **Signals:** a merchant keeping their upload link or application open is an "Opened link" in Do this now (a
   signed-in rep looking is not); "Most active" sorts the list by the merchant's own last move; the nudge after an
   open sends the link again a day later when a manager has switched it on.
+- **Open approvals (0553):** a rep marks a merchant approved (amount, how long the funder holds it). The shop's HTML
+  approval emails then go by themselves: the first at once (inside the approval window, 9am to 6pm merchant's time,
+  weekdays by default), each follow-up a set number of hours after the one before it was **sent** (the outbox's
+  `sent_at` is the clock; nothing is queued ahead). They stop at a reply, Pitched, Close, Pause, the hold date, an
+  unsubscribe, a bounce or do-not-contact; the worker re-checks right before each send (`app.approval_halt`). They
+  ride their own outbox lane `approval`: the unsubscribe link, suppression, the postal address and the daily cap
+  apply; the sequence frequency limit, the hand-off cancel and the "approved" claim rule do not. A design must hold
+  `{{unsubscribe_link}}`; a field with no value (no rep phone, no hold date) holds the email and says why. The engine
+  runs at the start of every outbox cron. Code: `src/lib/approvals/`.
 - **The statement clock:** when a new month's statement becomes due, merchants being chased for documents are asked
   for it and the oldest month still missing drops off.
 - **Sending:** a per-mailbox cap (CRM and outside mail counted), a slice held for intake and replies, the legal
@@ -82,21 +91,22 @@ transaction. Tables from the removed features stay in the schema, unused.
 
 ## 6. The screens
 
-Rebuilt on 2026-11-16 for the follow-up scope (the look is `docs/DESIGN.md`). Reps and managers see the same four
+Rebuilt on 2026-11-16 for the follow-up scope (the look is `docs/DESIGN.md`). Reps and managers see the same
 places in the left sidebar (`src/lib/nav.ts`), each a dropdown; a phone gets a top bar whose menu button slides the
 same sidebar in, and bottom-sheet dialogs.
 
-| Screen       | For                    | What it is for                                                                                                                               |
-| ------------ | ---------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
-| Overview     | all                    | Brought in, new leads, replies and docs this month; what needs a person now, ranked; the funnel; the buckets; 8 weeks; the team (managers)   |
-| New lead     | all                    | Not a page: a sheet any "New lead" button (or the N key) opens over the page. Phone first, sheet lookup, paste a lead line, rows from sheets |
-| Follow Up    | all                    | The all-buckets board; a bucket's workspace (its sequence, its members, search, bulk actions, a merchant sheet, Hand off)                    |
-| Merchants    | all                    | The whole book with filters; the call list; power dial; import a file; trash                                                                 |
-| A merchant   | all                    | The hero, the "bringing them in" strip with Hand off, notes and timeline, next follow-up, documents, application                             |
-| Settings     | all, managers see more | My account, buckets and templates, lead sources (Google Sheets and web lead connections), email, team, AI assistant                          |
-| Assistant    | all                    | A side panel (⌘J, the sparkles buttons): Plan my day, recommendations, answers read from the CRM, and action buttons that wait for a click   |
-| Alerts       | all                    | What the automations wrote for you, by day                                                                                                   |
-| Public pages | merchants              | Upload link, application, unsubscribe (the token is the key, no sign-in)                                                                     |
+| Screen         | For                    | What it is for                                                                                                                               |
+| -------------- | ---------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| Overview       | all                    | Brought in, new leads, replies and docs this month; what needs a person now, ranked; the funnel; the buckets; 8 weeks; the team (managers)   |
+| Open approvals | all                    | Merchants with an offer not pitched yet: amount, hold, where the approval emails stand; Call, Pitched, Pause, Change, Close; replies first   |
+| New lead       | all                    | Not a page: a sheet any "New lead" button (or the N key) opens over the page. Phone first, sheet lookup, paste a lead line, rows from sheets |
+| Follow Up      | all                    | The all-buckets board; a bucket's workspace (its sequence, its members, search, bulk actions, a merchant sheet, Hand off)                    |
+| Merchants      | all                    | The whole book with filters; the call list; power dial; import a file; trash                                                                 |
+| A merchant     | all                    | The hero, the "bringing them in" strip with Hand off, notes and timeline, next follow-up, documents, application                             |
+| Settings       | all, managers see more | My account (with the phone the approval emails use), buckets and templates, lead sources, email, approval emails, team, AI assistant         |
+| Assistant      | all                    | A side panel (⌘J, the sparkles buttons): Plan my day, recommendations, answers read from the CRM, and action buttons that wait for a click   |
+| Alerts         | all                    | What the automations wrote for you, by day                                                                                                   |
+| Public pages   | merchants              | Upload link, application, unsubscribe (the token is the key, no sign-in)                                                                     |
 
 ## 7. How to run it
 
