@@ -13,7 +13,7 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: "Selective CRM",
-  appleWebApp: { capable: true, title: "Selective CRM", statusBarStyle: "default" },
+  appleWebApp: { capable: true, title: "Selective CRM", statusBarStyle: "black-translucent" },
 };
 
 export const viewport: Viewport = {

@@ -15,7 +15,9 @@ import { loadDirectoryAction } from "@/app/power-actions";
 import type { DirectoryRow } from "@/lib/data/overdue";
 import { CONTACT_STATUS_LABELS } from "@/lib/mca/contact";
 import { useApp } from "../app-context";
-import { cn } from "../ui";
+import { Glyph, type GlyphName } from "../shell/icons";
+import { useNewLead } from "../shell/NewLead";
+import { Avatar, cn, Kbd } from "../ui";
 import { callingYouLine, detailLine, searchDirectory } from "./search";
 
 /** The directory is re-read when the palette opens and the copy is older than this. */
@@ -158,6 +160,17 @@ function PaletteDialog({
   );
 }
 
+interface Command {
+  id: string;
+  label: string;
+  hint: string;
+  icon: GlyphName;
+  run: () => void;
+}
+type Item =
+  | { type: "row"; id: string; row: DirectoryRow; calling: boolean }
+  | { type: "cmd"; id: string; cmd: Command };
+
 function Palette({
   rows,
   error,
@@ -171,36 +184,99 @@ function Palette({
 }) {
   const { nowMs } = useApp();
   const router = useRouter();
+  const newLead = useNewLead();
   const [query, setQuery] = useState("");
   const [active, setActive] = useState(0);
 
+  // the palette also goes places and starts things: with nothing typed it is a jump list
+  const commands = useMemo<Command[]>(() => {
+    const to = (href: string) => () => {
+      onClose();
+      router.push(href);
+    };
+    return [
+      {
+        id: "new-lead",
+        label: "New lead",
+        hint: "Add a merchant",
+        icon: "plus",
+        run: () => {
+          onClose();
+          // after this dialog has closed, so the two never fight over the top layer
+          setTimeout(() => newLead(), 0);
+        },
+      },
+      { id: "overview", label: "Overview", hint: "Go to", icon: "overview", run: to("/") },
+      { id: "follow", label: "Follow Up", hint: "Go to", icon: "followup", run: to("/follow-up") },
+      {
+        id: "merchants",
+        label: "Merchants",
+        hint: "Go to",
+        icon: "merchants",
+        run: to("/clients"),
+      },
+      { id: "calls", label: "Call list", hint: "Go to", icon: "list", run: to("/today") },
+      { id: "dial", label: "Power dial", hint: "Start", icon: "zap", run: to("/dial") },
+      { id: "import", label: "Import a file", hint: "Go to", icon: "upload", run: to("/import") },
+      { id: "alerts", label: "Alerts", hint: "Go to", icon: "bell", run: to("/alerts") },
+      { id: "settings", label: "Settings", hint: "Go to", icon: "settings", run: to("/settings") },
+    ];
+  }, [newLead, onClose, router]);
+
   const result = useMemo(() => (rows ? searchDirectory(rows, query) : null), [rows, query]);
-  const options = useMemo(() => (result ? [...result.calling, ...result.matches] : []), [result]);
-  const activeIdx = Math.min(active, Math.max(0, options.length - 1));
-  const activeRow = options[activeIdx];
-  const optionId = (r: DirectoryRow) => `gs-opt-${r.id}`;
+  const items = useMemo<Item[]>(() => {
+    const q = query.trim().toLowerCase();
+    const found: Item[] = result
+      ? [
+          ...result.calling.map((row) => ({
+            type: "row" as const,
+            id: row.id,
+            row,
+            calling: true,
+          })),
+          ...result.matches.map((row) => ({
+            type: "row" as const,
+            id: row.id,
+            row,
+            calling: false,
+          })),
+        ]
+      : [];
+    const cmds: Item[] =
+      result?.kind === "number"
+        ? []
+        : commands
+            .filter((c) => !q || c.label.toLowerCase().includes(q))
+            .map((cmd) => ({ type: "cmd" as const, id: cmd.id, cmd }));
+    return [...found, ...cmds];
+  }, [commands, query, result]);
+  const merchants = items.filter((i) => i.type === "row").length;
+  const activeIdx = Math.min(active, Math.max(0, items.length - 1));
+  const activeItem = items[activeIdx];
+  const optionId = (it: Item) => `gs-${it.type === "cmd" ? "cmd" : "opt"}-${it.id}`;
+  const activeId = activeItem ? optionId(activeItem) : undefined;
 
   useEffect(() => {
-    if (activeRow)
-      document.getElementById(optionId(activeRow))?.scrollIntoView({ block: "nearest" });
-  }, [activeRow]);
+    if (activeId) document.getElementById(activeId)?.scrollIntoView({ block: "nearest" });
+  }, [activeId]);
 
-  const go = (row: DirectoryRow) => {
+  const go = (it: Item) => {
+    if (it.type === "cmd") return it.cmd.run();
     onClose();
-    router.push(`/clients/${row.id}`);
+    router.push(`/clients/${it.row.id}`);
   };
 
   function onKeyDown(e: ReactKeyboardEvent<HTMLInputElement>) {
-    const n = options.length;
+    const n = items.length;
     if (e.key === "ArrowDown" && n > 0) {
       e.preventDefault();
       setActive((activeIdx + 1) % n);
     } else if (e.key === "ArrowUp" && n > 0) {
       e.preventDefault();
       setActive((activeIdx - 1 + n) % n);
-    } else if (e.key === "Enter" && activeRow) {
+    } else if (e.key === "Enter" && activeItem) {
       e.preventDefault();
-      go(activeRow);
+      go(activeItem);
     }
   }
 
@@ -208,27 +284,27 @@ function Palette({
   if (error) status = error;
   else if (!rows) status = "Loading clients…";
   else if (result?.kind === "empty") status = "Type to search";
-  else status = `${options.length} result${options.length === 1 ? "" : "s"}`;
+  else status = `${merchants} result${merchants === 1 ? "" : "s"}`;
 
   const optionClass = (selected: boolean, calling = false) =>
     cn(
-      "cursor-pointer rounded-lg px-3 py-2",
+      "flex cursor-pointer items-center gap-3 rounded-xl px-3 py-2 transition-colors duration-100",
       calling ? "bg-accent-soft" : "",
-      selected ? "outline-2 -outline-offset-2 outline-accent" : "hover:bg-surface-2",
+      selected ? "bg-surface-2 ring-1 ring-accent/40 ring-inset" : "hover:bg-surface-2/60",
     );
 
   return (
-    <div className="flex max-h-[80vh] flex-col">
-      <div className="flex items-center gap-2 border-b border-border px-3 focus-within:border-accent">
+    <div className="flex max-h-[76vh] flex-col">
+      <div className="flex items-center gap-3 border-b border-border px-4 text-muted focus-within:text-accent">
         <SearchIcon />
         <input
           role="combobox"
-          aria-expanded={options.length > 0}
+          aria-expanded={items.length > 0}
           aria-controls="gs-list"
           aria-autocomplete="list"
-          aria-activedescendant={activeRow ? optionId(activeRow) : undefined}
+          aria-activedescendant={activeId}
           aria-label="Search by name, DBA, merchant, email or phone"
-          placeholder="Name, DBA, email, or phone digits…"
+          placeholder="Find a merchant, or jump somewhere…"
           autoComplete="off"
           autoCapitalize="off"
           spellCheck={false}
@@ -239,13 +315,13 @@ function Palette({
             setActive(0);
           }}
           onKeyDown={onKeyDown}
-          className="h-12 flex-1 bg-transparent text-base text-text outline-none! placeholder:text-muted/70"
+          className="h-14 flex-1 bg-transparent text-base text-text outline-none! placeholder:text-muted/70"
         />
         <button
           type="button"
           aria-label="Close search"
           onClick={onClose}
-          className="rounded-md px-2 py-1 text-sm text-muted hover:bg-surface-2"
+          className="rounded-md border border-border bg-surface-2 px-1.5 py-0.5 text-[11px] font-medium text-muted transition hover:text-text"
         >
           Esc
         </button>
@@ -265,53 +341,86 @@ function Palette({
         ) : !rows ? (
           <p className="p-3 text-sm text-muted">Loading clients…</p>
         ) : result?.kind === "empty" ? (
-          <p className="p-3 text-sm text-muted">
+          <p className="px-3 pt-2 pb-3 text-[13px] text-muted">
             Search every client by name, DBA, merchant, email or phone digits (305555 finds them).
             Type a whole phone number to see who is calling.
           </p>
-        ) : options.length === 0 ? (
+        ) : merchants === 0 ? (
           <p className="p-3 text-sm text-muted">
             {result?.kind === "number"
               ? "No client has that number."
               : `No client matches “${query.trim()}”.`}
           </p>
-        ) : (
-          <ul id="gs-list" role="listbox" aria-label="Clients" className="space-y-1">
-            {options.map((row, i) => {
-              const calling = i < (result?.calling.length ?? 0);
+        ) : null}
+        {rows && !error && items.length > 0 ? (
+          <ul id="gs-list" role="listbox" aria-label="Clients" className="space-y-0.5">
+            {items.map((it, i) => {
+              const selected = i === activeIdx;
+              const first = it.type === "cmd" && items[i - 1]?.type !== "cmd";
               return (
-                <li
-                  key={row.id}
-                  id={optionId(row)}
-                  role="option"
-                  aria-selected={i === activeIdx}
-                  className={optionClass(i === activeIdx, calling)}
-                  onMouseMove={() => i !== activeIdx && setActive(i)}
-                  onClick={() => go(row)}
-                >
-                  {calling ? (
-                    <p className="text-sm font-semibold">{callingYouLine(row, nowMs)}</p>
-                  ) : (
-                    <>
-                      <p className="flex items-center gap-2 text-sm font-semibold">
-                        {row.business_name}
-                        {row.contact_status !== "ok" ? (
-                          <span className="rounded-md bg-bad-soft px-1.5 py-0.5 text-xs font-semibold text-bad">
-                            {CONTACT_STATUS_LABELS[row.contact_status]}
+                <li key={optionId(it)} role="presentation">
+                  {first ? (
+                    <p className="eyebrow px-3 pt-3 pb-1.5 text-[10px]!">
+                      {query.trim() ? "Actions" : "Jump to"}
+                    </p>
+                  ) : null}
+                  <div
+                    id={optionId(it)}
+                    role="option"
+                    aria-selected={selected}
+                    className={optionClass(selected, it.type === "row" && it.calling)}
+                    onMouseMove={() => i !== activeIdx && setActive(i)}
+                    onClick={() => go(it)}
+                  >
+                    {it.type === "cmd" ? (
+                      <>
+                        <span
+                          aria-hidden
+                          className="flex size-8 shrink-0 items-center justify-center rounded-lg border border-border bg-surface-3 text-text-2"
+                        >
+                          <Glyph name={it.cmd.icon} className="size-4" />
+                        </span>
+                        <span className="flex-1 text-sm font-medium">{it.cmd.label}</span>
+                        <span className="text-xs text-muted">{it.cmd.hint}</span>
+                      </>
+                    ) : it.calling ? (
+                      <p className="text-sm font-semibold">{callingYouLine(it.row, nowMs)}</p>
+                    ) : (
+                      <>
+                        <Avatar name={it.row.business_name} size={32} />
+                        <span className="min-w-0 flex-1">
+                          <span className="flex items-center gap-2 text-sm font-semibold">
+                            <span className="truncate">{it.row.business_name}</span>
+                            {it.row.contact_status !== "ok" ? (
+                              <span className="rounded-full bg-bad-soft px-1.5 py-0.5 text-[11px] font-semibold text-bad">
+                                {CONTACT_STATUS_LABELS[it.row.contact_status]}
+                              </span>
+                            ) : null}
                           </span>
-                        ) : null}
-                      </p>
-                      <p className="truncate text-xs text-muted">{detailLine(row)}</p>
-                    </>
-                  )}
+                          <span className="block truncate text-xs text-muted">
+                            {detailLine(it.row)}
+                          </span>
+                        </span>
+                      </>
+                    )}
+                  </div>
                 </li>
               );
             })}
           </ul>
-        )}
+        ) : null}
       </div>
-      <p className="border-t border-border px-3 py-2 text-xs text-muted">
-        ↑ ↓ to move · Enter to open · Esc to close
+      <p className="flex items-center gap-3 border-t border-border px-4 py-2.5 text-xs text-muted">
+        <span className="inline-flex items-center gap-1">
+          <Kbd>↑</Kbd>
+          <Kbd>↓</Kbd> to move
+        </span>
+        <span className="inline-flex items-center gap-1">
+          <Kbd>Enter</Kbd> to open
+        </span>
+        <span className="inline-flex items-center gap-1">
+          <Kbd>Esc</Kbd> to close
+        </span>
       </p>
     </div>
   );
