@@ -37,7 +37,7 @@ import { Dot } from "./primitives";
 import { FormDialog, useCopy, useFormState, useRun } from "./parts";
 
 const CHIP =
-  "inline-flex h-10 max-w-full items-center gap-2 rounded-full border border-border bg-surface-3/70 px-3 text-[13px] font-medium whitespace-nowrap text-text-2 sm:h-8";
+  "inline-flex h-11 max-w-full items-center gap-2 rounded-full border border-border bg-surface-3/70 px-3 text-[13px] font-medium whitespace-nowrap text-text-2 sm:h-8";
 
 /** A value you can copy with one click: the icon says what it is, the copy mark lights up on hover. */
 function CopyChip({
