@@ -10,7 +10,7 @@ import { getClientDetail } from "../data/queries";
 import type { Db } from "../db";
 import { addDays, type ISODate } from "../mca/dates";
 import { stageDef } from "../mca/stages";
-import { stipLabel } from "../mca/stips";
+import { missingDocsPhrase, stipLabel } from "../mca/stips";
 import { contactAllowed, type ContactStatus } from "../mca/contact";
 import { appendSignature, effectiveSignature } from "../messaging/merge";
 import { monthOf } from "../dashboard/queries";
@@ -471,6 +471,8 @@ export async function runReadTool(
         required: s.required,
         received: Boolean(s.received_at),
       })),
+      // the same words the {missing_docs} merge field uses, ready for an email
+      still_owes: missingDocsPhrase(d.stips.filter((s) => s.required && !s.received_at)) || null,
       open_follow_ups: d.timers.map((t) => ({
         kind: t.kind,
         due: t.due_on,
