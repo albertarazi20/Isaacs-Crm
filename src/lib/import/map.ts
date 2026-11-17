@@ -1,7 +1,7 @@
 import { findSensitive } from "../data/sensitive";
 import { addDays, addMonths, parseISODate, toISODate, type ISODate } from "../mca/dates";
 import { normalizeUS } from "../mca/phone";
-import { STAGES, type StageKey } from "../mca/stages";
+import { isStageKey, STAGES, type StageKey } from "../mca/stages";
 import { parseMoney } from "../money";
 
 export const IMPORT_FIELDS = [
@@ -154,34 +154,46 @@ const STAGE_WORDS: [RegExp, StageKey][] = [
   [/app(lication)? (sent|out)|sent app/, "application_sent"],
   [/app(lication)? (in|back|received)|signed app/, "application_in"],
   [/stips?|docs?|statements?/, "stips"],
-  [/submitted|sent to (funders?|lenders?)/, "submitted"],
-  [/offers?|approved|approval/, "offers_in"],
-  [/presented/, "offer_presented"],
-  [/contract/, "contract_out"],
-  [/paid (in full|off)|paid$/, "paid_in_full"],
-  [/declined|denied|rejected/, "declined"],
-  [/^lost|went (with|elsewhere)|funded elsewhere|competitor/, "lost"],
-  [/killed|withdrew|pulled/, "killed"],
+  [
+    /declined|denied|rejected|killed|withdrew|pulled|^lost|went (with|elsewhere)|competitor/,
+    "dead",
+  ],
   [/dead|no response|ghost/, "dead"],
   [/not interested|no thanks/, "not_interested"],
 ];
 
-/** Stages that can be imported with no extra data. Funded and default stages need terms, so they can't be. */
-const IMPORTABLE = new Set<StageKey>(
-  STAGES.filter((s) => ["prospecting", "underwriting", "exit"].includes(s.group)).map((s) => s.key),
-);
-IMPORTABLE.add("paid_in_full");
+/** A status from a sheet that is about a file being worked elsewhere; it can't become a stage here, so the note says it. */
+const WORKED_ELSEWHERE =
+  /submitted|sent to|offers?|approved|approval|presented|contract|funded|default|collections|written|paid/;
+
+/** The stages a sheet's status can put a merchant in. */
+const IMPORTABLE = new Set<StageKey>([
+  "name_in",
+  "spoke_with_owner",
+  "interested",
+  "call_scheduled",
+  "application_sent",
+  "application_in",
+  "stips",
+  "dead",
+  "not_interested",
+]);
 
 export function parseStageWord(raw: string): { stage: StageKey | null; unsupported: boolean } {
   const w = norm(raw);
   if (!w) return { stage: null, unsupported: false };
-  const byKey = STAGES.find((s) => s.key === w.replace(/ /g, "_") || norm(s.label) === w);
-  const hit = byKey?.key ?? STAGE_WORDS.find(([re]) => re.test(w))?.[1] ?? null;
-  if (hit && IMPORTABLE.has(hit)) return { stage: hit, unsupported: false };
+  const key = w.replace(/ /g, "_");
+  const byKey = STAGES.find((s) => s.key === key || norm(s.label) === w);
+  const hit =
+    byKey?.key ??
+    (isStageKey(key) ? key : null) ??
+    STAGE_WORDS.find(([re]) => re.test(w))?.[1] ??
+    null;
+  if (hit && IMPORTABLE.has(hit) && !WORKED_ELSEWHERE.test(w))
+    return { stage: hit, unsupported: false };
   return {
     stage: null,
-    unsupported:
-      /funded|default|collections|written/.test(w) || (hit !== null && !IMPORTABLE.has(hit)),
+    unsupported: WORKED_ELSEWHERE.test(w) || (hit !== null && !IMPORTABLE.has(hit)),
   };
 }
 
@@ -228,7 +240,7 @@ export interface ImportRow {
   followUpOn: ISODate;
   /** Where the merchant came from: the sheet's column, else the list name typed in the wizard. */
   source: string;
-  /** Set when the sheet's status couldn't be imported as-is (e.g. "Funded"), so the note says so. */
+  /** Set when the sheet's status couldn't be imported as-is (e.g. "Submitted"), so the note says so. */
   statusNote: string;
 }
 

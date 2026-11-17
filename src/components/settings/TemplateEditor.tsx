@@ -110,12 +110,10 @@ function Editor({
 export function TemplateEditor({
   templates,
   manager,
-  only,
   scores = [],
 }: {
   templates: TemplateRow[];
   manager: boolean;
-  only?: "winback" | "buckets";
   /** Each template's score row, for the bounce-spike pause (S1-7). */
   scores?: TemplateScore[];
 }) {
@@ -142,13 +140,7 @@ export function TemplateEditor({
       if (!check.ok) setRefused((cur) => ({ ...cur, [t.id]: check.reasons }));
     }
   }
-  const isWinback = (t: TemplateRow) => t.name.toLowerCase().startsWith("winback");
-  const shown =
-    only === "winback"
-      ? templates.filter(isWinback)
-      : only === "buckets"
-        ? templates.filter((t) => !isWinback(t))
-        : templates;
+  const shown = templates;
   return (
     <SettingsCard
       title="Templates"

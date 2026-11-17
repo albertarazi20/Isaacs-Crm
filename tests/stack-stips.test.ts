@@ -1,43 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { stackRollup } from "@/lib/mca/positions";
 import { defaultStips, stipLabel, stipRollup, type StipInput } from "@/lib/mca/stips";
-
-describe("position stack", () => {
-  it("rolls up balances, depth and the next position", () => {
-    const r = stackRollup([
-      {
-        positionNo: 1,
-        funderName: "Alpha",
-        fundedAmountCents: 3_000_000,
-        balanceCents: 2_100_000,
-        paybackCents: 4_200_000,
-      },
-      {
-        positionNo: 2,
-        funderName: "Beta",
-        fundedAmountCents: 1_000_000,
-        balanceCents: 1_400_000,
-        paybackCents: 1_400_000,
-      },
-    ]);
-    expect(r.count).toBe(2);
-    expect(r.totalBalanceCents).toBe(3_500_000);
-    expect(r.totalFundedCents).toBe(4_000_000);
-    expect(r.paidDownPct).toBe(37.5);
-    expect(r.deepestPosition).toBe(2);
-    expect(r.nextPosition).toBe(3);
-  });
-  it("won't invent a paid-down % without payback figures", () => {
-    const r = stackRollup([
-      { positionNo: 1, funderName: "Alpha", fundedAmountCents: 3_000_000, balanceCents: 2_100_000 },
-    ]);
-    expect(r.paidDownPct).toBeNull();
-  });
-  it("handles a merchant with no other advances", () => {
-    const r = stackRollup([]);
-    expect(r).toMatchObject({ count: 0, deepestPosition: 0, nextPosition: 1, paidDownPct: null });
-  });
-});
 
 describe("stip checklist", () => {
   const seeds = defaultStips("2026-10-23", 4);

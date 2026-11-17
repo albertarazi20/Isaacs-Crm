@@ -15,7 +15,7 @@ export async function generateMetadata(): Promise<Metadata> {
   };
 }
 
-/** The person's alert feed: approvals that landed, files sitting too long, kickbacks, what the trust checks saw. */
+/** The person's alert feed: signed applications, paused templates, bounce spikes. */
 export default async function AlertsPage() {
   const session = await requireSession();
   const [{ ctx }, rows] = await Promise.all([

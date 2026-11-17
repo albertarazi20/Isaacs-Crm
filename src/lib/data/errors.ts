@@ -8,17 +8,7 @@ const SAFE_CODES = new Set(["22023", "P0002"]);
 export function checkMessage(constraint: string | undefined): string {
   const c = constraint ?? "";
   if (c === "clients_business_name_check") return "Business name is required";
-  if (c === "fundings_position_range") return "Position must be a whole number from 1 to 20";
-  if (c === "fundings_commission_not_above_amount")
-    return "Commission can't be more than the advance";
-  if (/factor_rate_check$/.test(c)) return "Factor rate must be between 1.00 and 3.00";
-  if (/position_no_check$/.test(c)) return "Position must be 1 or more";
-  if (/term_days_check$/.test(c)) return "Term must be 1 day or more";
-  if (
-    /(amount|payment)_cents_check$/.test(c) &&
-    /^(client_asks_wanted|fundings|competing|positions_payment)/.test(c)
-  )
-    return "Enter an amount above $0";
+  if (/_cents_check$/.test(c) && /^client_asks_wanted/.test(c)) return "Enter an amount above $0";
   if (/_cents_check$/.test(c)) return "Amounts can't be negative";
   return "One of those values isn't allowed — check the amounts and dates";
 }

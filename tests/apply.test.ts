@@ -10,11 +10,11 @@ import {
   openApplicationPage,
   signApplication,
 } from "@/lib/docs/apply";
-import { applyLink } from "@/lib/docs/linkExpiry";
+import { applyLink } from "@/lib/docs/applyLink";
 import { LocalStore } from "@/lib/docs/storage";
 import { createTestDb, insertUser, type TestDb } from "./helpers/db";
 
-// after the deal was opened (a signature older than the open deal is not this deal's signature)
+// a moment from now, so the signature is newer than anything the setup wrote
 const SIGNED = new Date(Math.floor(Date.now() / 1000) * 1000 + 60_000);
 const SIGNED_ISO = `${SIGNED.toISOString().slice(0, 19)}Z`;
 
@@ -62,8 +62,9 @@ describe("the in-app application", () => {
         [rep],
       )
     ).rows[0]!.id;
-    await t.db.withUser(rep, (q) =>
-      q.query("select submit_to_ops($1, 'new', 4000000, 'an oven')", [client]),
+    await t.pool.query(
+      "insert into client_asks (user_id, client_id, wanted_amount_cents) values ($1, $2, 4000000)",
+      [rep, client],
     );
     token = (
       await t.pool.query<{ t: string }>(
@@ -134,16 +135,12 @@ describe("the in-app application", () => {
       kind: string;
       source: string;
       scan: string;
-      deal: string | null;
-    }>("select kind, source, scan_status as scan, deal_id as deal from documents where id = $1", [
-      out.documentId,
-    ]);
+    }>("select kind, source, scan_status as scan from documents where id = $1", [out.documentId]);
     expect(doc.rows[0]).toMatchObject({
       kind: "signed_application",
       source: "upload_link",
       scan: "clean",
     });
-    expect(doc.rows[0]?.deal).not.toBeNull();
     const stip = await t.pool.query<{ received: boolean }>(
       "select received_at is not null as received from stips where client_id = $1 and kind = 'signed_application'",
       [client],
@@ -243,7 +240,7 @@ describe("the in-app application", () => {
     expect(out.applicationId).toBeTruthy();
   });
 
-  it("a second signature on the same deal is refused, and a bad form never writes", async () => {
+  it("a second signature is refused, and a bad form never writes", async () => {
     await expect(
       signApplication(t.db, store, {
         token,

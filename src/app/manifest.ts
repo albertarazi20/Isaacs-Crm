@@ -4,7 +4,7 @@ export default function manifest(): MetadataRoute.Manifest {
   return {
     name: "Selective CRM",
     short_name: "Selective",
-    description: "Selective Capital's deal desk: leads, follow-up, submissions, funding.",
+    description: "Selective Capital's follow-up desk: leads, follow-up, documents.",
     start_url: "/",
     display: "standalone",
     background_color: "#ffffff",

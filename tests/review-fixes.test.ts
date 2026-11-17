@@ -7,8 +7,6 @@ import type { UserContext } from "@/lib/data/types";
 import { ingestLead } from "@/lib/leads/intake";
 import { leadSchema } from "@/lib/leads/schema";
 import { addDays } from "@/lib/mca/dates";
-import { loadCohort } from "@/lib/reports/queries";
-import { buildDeathPoints } from "@/lib/reports/report";
 import { createTestDb, insertClient, insertUser, type TestDb } from "./helpers/db";
 
 let t: TestDb;
@@ -153,7 +151,7 @@ describe("R-3: 'Delete forever' can't overtake a restore", () => {
 });
 
 describe("R-8: a reminder is not a stage move", () => {
-  it("a deal that set a reminder and then died has only the one stage change", async () => {
+  it("a merchant who set a reminder and then died has only the one stage change", async () => {
     const c = await asA((q) =>
       m.createClient(q, newClientSchema.parse({ businessName: "Booked Then Dead" }), ctx),
     );
@@ -164,16 +162,14 @@ describe("R-8: a reminder is not a stage move", () => {
         ctx,
       ),
     );
-    await asA((q) => m.moveClient(q, moveSchema.parse({ clientId: c.id, stage: "lost" }), ctx));
+    await asA((q) => m.moveClient(q, moveSchema.parse({ clientId: c.id, stage: "dead" }), ctx));
     const hist = await rows(
       "select from_stage, to_stage from activities where client_id = $1 and kind = 'stage_change' order by occurred_at, id",
       [c.id],
     );
-    expect(hist).toEqual([{ from_stage: "name_in", to_stage: "lost" }]);
-    const cohort = (await asA((q) => loadCohort(q, null))).filter((x) => x.id === c.id);
-    expect(buildDeathPoints(cohort)).toEqual([{ label: "Never reached the owner", count: 1 }]);
+    expect(hist).toEqual([{ from_stage: "name_in", to_stage: "dead" }]);
   });
-  it("booking a call on a deal that is already past that stage adds no stage change", async () => {
+  it("booking a call on a merchant who is already past that stage adds no stage change", async () => {
     const c = await asA((q) =>
       m.createClient(
         q,
@@ -198,43 +194,6 @@ describe("R-8: a reminder is not a stage move", () => {
   });
 });
 
-describe("R-9: restoring a funded merchant keeps an OVERDUE renewal call", () => {
-  it("brings it back due today; an overdue plain follow-up is replaced by one a week out", async () => {
-    const id = await insertClient(t.db, a, "Overdue Renewal Pizza");
-    await asA((q) =>
-      m.moveClient(
-        q,
-        moveSchema.parse({
-          clientId: id,
-          stage: "funded",
-          funding: {
-            amount: "50k",
-            factorRate: "1.32",
-            payment: "550",
-            frequency: "daily",
-            funderName: "Alpha",
-          },
-        }),
-        ctx,
-      ),
-    );
-    await t.pool.query(
-      "update timers set due_on = current_date - 3 where client_id = $1 and done_at is null and kind in ('renewal','check_in')",
-      [id],
-    );
-    await t.pool.query(
-      "insert into timers (user_id, client_id, kind, due_on) values ($1, $2, 'follow_up', current_date - 4)",
-      [a, id],
-    );
-    await asA((q) => m.trashClient(q, id));
-    await asA((q) => m.restoreClient(q, id));
-    expect((await open(id)).map((x) => [x.kind, x.due_on])).toEqual([
-      ["check_in", t.today],
-      ["renewal", t.today],
-    ]);
-  });
-});
-
 describe("R-10: a trashed merchant can't be given new timers", () => {
   it("every way of adding one is refused, and restoring still works afterwards", async () => {
     const id = await insertClient(t.db, a, "Frozen Pizza");
@@ -248,36 +207,8 @@ describe("R-10: a trashed merchant can't be given new timers", () => {
         [a, id],
       ),
     ).rejects.toThrow(/in the trash/);
-    await expect(
-      asA((q) =>
-        q.query("select * from create_submissions($1, $2::uuid[])", [
-          id,
-          ["00000000-0000-0000-0000-000000000000"],
-        ]),
-      ),
-    ).rejects.toThrow();
     expect(await open(id)).toEqual([]);
     await asA((q) => m.restoreClient(q, id));
     expect((await open(id)).length).toBe(1);
-  });
-});
-
-describe("R-16: trashing a merchant takes its submissions out of the funder scoreboard", () => {
-  it("counts come back when it is restored", async () => {
-    const { funderScoreboard } = await import("@/lib/funders/queries");
-    const id = await insertClient(t.db, a, "Scoreboard Pizza");
-    const f = (
-      await t.pool.query<{ id: string }>(
-        "insert into funders (user_id, name) values ($1, 'Score Fund') returning id",
-        [a],
-      )
-    ).rows[0]!.id;
-    await asA((q) => q.query("select * from create_submissions($1, $2::uuid[])", [id, [f]]));
-    const sent = async () => (await asA((q) => funderScoreboard(q, [f])))[f]?.submissions ?? 0;
-    expect(await sent()).toBe(1);
-    await asA((q) => m.trashClient(q, id));
-    expect(await sent()).toBe(0);
-    await asA((q) => m.restoreClient(q, id));
-    expect(await sent()).toBe(1);
   });
 });

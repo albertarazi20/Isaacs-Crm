@@ -4,7 +4,6 @@
  */
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { openUploadPage, rotateUploadToken } from "@/lib/docs/upload";
-import { sendToFunders } from "@/lib/funders/mutations";
 import { hashToken } from "@/lib/leads/token";
 import { enqueueEmail } from "@/lib/send/enqueue";
 import { drainOutbox, type Deliverer } from "@/lib/send/worker";
@@ -14,114 +13,18 @@ import { createTestDb, insertClient, insertUser, type TestDb } from "./helpers/d
 describe("pass 2 regressions", () => {
   let t: TestDb;
   let rep: string;
-  let ops: string;
+  let rep2: string;
   let manager: string;
-  let funder: string;
 
   beforeAll(async () => {
     t = await createTestDb();
     rep = await insertUser(t.pool, "rep@x.com", "America/New_York");
-    ops = await insertUser(t.pool, "ops@x.com");
+    rep2 = await insertUser(t.pool, "rep2@x.com");
     manager = await insertUser(t.pool, "boss@x.com");
-    await t.pool.query("update app_users set role = 'ops' where id = $1", [ops]);
     await t.pool.query("update app_users set role = 'manager' where id = $1", [manager]);
-    funder = (
-      await t.pool.query<{ id: string }>(
-        "insert into funders (user_id, name, submission_email) values ($1, 'Pearl Capital', 'subs@pearl.test') returning id",
-        [manager],
-      )
-    ).rows[0]!.id;
   });
   afterAll(async () => {
     await t.drop();
-  });
-
-  it("P2-41 / P2-42: ops send a queued file to lenders, record the answer and the offer, as the ops role", async () => {
-    const client = await insertClient(t.db, rep, "Marlin Charters");
-    await t.db.withUser(rep, (q) =>
-      q.query("select submit_to_ops($1, 'new', 4500000, 'engine')", [client]),
-    );
-    const subs = await t.db.withUser(ops, async (q) => {
-      const { rows } = await q.query<{ id: string }>(
-        "select id from create_submissions($1, $2::uuid[], null, 'as ops')",
-        [client, [funder]],
-      );
-      return rows;
-    });
-    expect(subs).toHaveLength(1);
-    const deal = (
-      await t.pool.query<{ ops_status: string; status: string }>(
-        "select ops_status, app.deal_status(d) as status from deals d where client_id = $1",
-        [client],
-      )
-    ).rows[0];
-    expect(deal).toEqual({ ops_status: "sent", status: "pending_lenders" });
-    // a chase timer was written under the rep's user_id by the ops role
-    const chase = await t.pool.query<{ n: number }>(
-      "select count(*)::int as n from timers where submission_id = $1 and kind = 'chase' and done_at is null",
-      [subs[0]!.id],
-    );
-    expect(chase.rows[0]?.n).toBe(1);
-    await t.db.withUser(ops, (q) =>
-      q.query("select set_submission_status($1, 'stips_requested', null, 'voided check')", [
-        subs[0]!.id,
-      ]),
-    );
-    await t.db.withUser(ops, (q) =>
-      q.query("select record_offer($1, $2::jsonb)", [
-        subs[0]!.id,
-        JSON.stringify({
-          amount_cents: 4500000,
-          factor_rate: 1.32,
-          payment_cents: 42000,
-          frequency: "daily",
-        }),
-      ]),
-    );
-    const offers = await t.pool.query<{ n: number }>(
-      "select count(*)::int as n from offers where client_id = $1",
-      [client],
-    );
-    expect(offers.rows[0]?.n).toBe(1);
-  });
-
-  it("P2-27: a confirmed funding's money is frozen for the rep and open to a manager", async () => {
-    const client = await insertClient(t.db, rep, "Blue Door Bistro");
-    const funding = (
-      await t.pool.query<{ id: string }>(
-        `insert into fundings (user_id, client_id, funded_on, funder_name, amount_cents, factor_rate, payment_cents, frequency,
-                               commission_cents, confirmed_by, confirmed_at, ledger_state)
-         values ($1, $2, current_date, 'Pearl Capital', 5000000, 1.3, 50000, 'daily', 500000, $3, now(), 'at_risk') returning id`,
-        [rep, client, manager],
-      )
-    ).rows[0]!.id;
-    await expect(
-      t.db.withUser(rep, (q) =>
-        q.query("update fundings set commission_cents = 900000 where id = $1", [funding]),
-      ),
-    ).rejects.toThrow(/confirmed/);
-    await expect(
-      t.db.withUser(rep, (q) =>
-        q.query(
-          "update fundings set commission_received_cents = 900000, commission_received_on = current_date where id = $1",
-          [funding],
-        ),
-      ),
-    ).rejects.toThrow(/confirmed/);
-    // a note is not money
-    await t.db.withUser(rep, (q) =>
-      q.query("update fundings set note = 'typo fixed' where id = $1", [funding]),
-    );
-    await t.db.withUser(manager, (q) =>
-      q.query("update fundings set commission_cents = 520000 where id = $1", [funding]),
-    );
-    const row = (
-      await t.pool.query<{ commission_cents: number; note: string }>(
-        "select commission_cents::int as commission_cents, note from fundings where id = $1",
-        [funding],
-      )
-    ).rows[0];
-    expect(row).toEqual({ commission_cents: 520000, note: "typo fixed" });
   });
 
   it("P2-25: disabling an account revokes its lead-intake tokens, and a token on an inactive account is invalid", async () => {
@@ -199,42 +102,6 @@ describe("pass 2 regressions", () => {
     expect(sent).toEqual(["Welcome"]);
   });
 
-  it("P2-40: the send dialog's path refuses a shotgun unless forced, and then writes the override on the timeline", async () => {
-    const client = await insertClient(t.db, rep, "Sunset Nails");
-    // its own phone: the double-submission guard (0512) would otherwise see the helper's placeholder number on
-    // another merchant already sent to the same lender
-    await t.pool.query("update clients set phone = '3055550177' where id = $1", [client]);
-    await t.db.withUser(rep, (q) =>
-      q.query("select submit_to_ops($1, 'new', 2000000, 'stock')", [client]),
-    );
-    const more = await t.pool.query<{ id: string }>(
-      "insert into funders (user_id, name, submission_email) values ($1, 'Fox Funding', 'subs@fox.test'), ($1, 'Kalamata', 'subs@kal.test') returning id",
-      [manager],
-    );
-    const three = [funder, ...more.rows.map((r) => r.id)];
-    await t.pool.query("update shop_settings set max_lenders_per_deal = 2");
-    await expect(
-      t.db.withUser(rep, (q) =>
-        sendToFunders(q, { clientId: client, funderIds: three, note: "", force: false }),
-      ),
-    ).rejects.toThrow(/shop limit is 2/);
-    const none = await t.pool.query<{ n: number }>(
-      "select count(*)::int as n from submissions where client_id = $1",
-      [client],
-    );
-    expect(none.rows[0]?.n).toBe(0);
-    const n = await t.db.withUser(rep, (q) =>
-      sendToFunders(q, { clientId: client, funderIds: three, note: "", force: true }),
-    );
-    expect(n).toBe(3);
-    const override = await t.pool.query<{ n: number }>(
-      "select count(*)::int as n from activities where client_id = $1 and body like 'Shotgun override: 3 lenders%'",
-      [client],
-    );
-    expect(override.rows[0]?.n).toBe(1);
-    await t.pool.query("update shop_settings set max_lenders_per_deal = 6");
-  });
-
   it("P2-29: resetting the merchant's permanent upload link kills the old link and the sessions it opened", async () => {
     const client = await insertClient(t.db, rep, "Oak Barbers");
     const tokenOf = async () =>
@@ -258,7 +125,7 @@ describe("pass 2 regressions", () => {
     );
     expect(note.rows[0]?.n).toBe(1);
     // someone else's merchant is not theirs to reset
-    await expect(t.db.withUser(ops, (q) => rotateUploadToken(q, client))).rejects.toThrow(
+    await expect(t.db.withUser(rep2, (q) => rotateUploadToken(q, client))).rejects.toThrow(
       /isn't in your view/,
     );
   });

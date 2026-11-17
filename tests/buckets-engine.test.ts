@@ -107,19 +107,7 @@ describe("enrol and the stips checklist", () => {
     );
     expect(await liveBucketKey(id)).toBe("ready_for_ops");
   });
-  it("submitting to ops stops the chase; opting out stops it and cancels queued mail", async () => {
-    const id = await client("Ops Co", "ops@x.com");
-    await t.db.withUser(rep, async (q) =>
-      q.query("select enroll_in_bucket($1, $2)", [id, await bucket("missing_statements")]),
-    );
-    await t.db.withUser(rep, (q) => q.query("select submit_to_ops($1)", [id]));
-    expect(await liveBucketKey(id)).toBeNull();
-    const reason = await t.pool.query<{ stop_reason: string }>(
-      "select stop_reason from enrollments where client_id = $1",
-      [id],
-    );
-    expect(reason.rows[0]?.stop_reason).toBe("deal_submitted");
-
+  it("opting out stops the chase and cancels queued mail", async () => {
     const id2 = await client("Bye Co", "bye@x.com");
     await t.db.withUser(rep, async (q) =>
       q.query("select enroll_in_bucket($1, $2)", [id2, await bucket("interested")]),

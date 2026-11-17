@@ -123,7 +123,7 @@ export default async function SettingsPage({
       </SettingsCard>
       <SettingsCard
         title="Your data"
-        description="Everything you have put in — merchants, advances, offers, notes, timers — as one file you can keep. It holds no passwords, Gmail access or tokens."
+        description="Everything you have put in — merchants, notes, timers, stips — as one file you can keep. It holds no passwords, Gmail access or tokens."
       >
         <div className="flex flex-wrap gap-x-5 gap-y-1">
           <a href="/api/export/backup" className={LINK} download>

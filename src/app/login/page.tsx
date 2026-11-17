@@ -46,7 +46,7 @@ export default async function LoginPage({
           />
           <h1 className="text-xl font-semibold tracking-tight">Selective CRM</h1>
           <p className="mt-1 text-sm text-muted">
-            Leads, lenders, funded deals and commissions, one place for the whole shop.
+            Leads and follow-up, one place for the whole shop.
           </p>
         </div>
         {error ? (

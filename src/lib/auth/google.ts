@@ -50,7 +50,7 @@ export function buildAuthUrl(args: {
   purpose: OAuthPurpose;
   loginHint?: string;
 }): string {
-  // gmail: send as me. sheets: send + read my lead sheets. mail: send + read lender replies (managers / ops).
+  // gmail: send as me. sheets: send + read my lead sheets. mail: send + read merchants' replies (managers / ops).
   const scopes =
     args.purpose === "gmail"
       ? [...LOGIN_SCOPES, GMAIL_SEND_SCOPE]

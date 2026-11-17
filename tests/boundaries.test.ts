@@ -16,17 +16,12 @@ const rel = (f: string) => relative(SRC, f).split(sep).join("/");
 describe("architecture boundaries", () => {
   it("only api routes and src/lib/system may use the RLS-bypassing connection", () => {
     // The system jobs: each takes a DbAccess and is driven by a cron route or a public token route (upload links,
-    // lender downloads). They run for the shop, not for a signed-in user, so they are the owner connection on purpose.
+    // the application page). They run for the shop, not for a signed-in user, so they are the owner connection on purpose.
     const JOBS = new Set([
       "lib/buckets/engine.ts", // nightly sequence steps and blasts
-      "lib/docs/retention.ts", // stream 3: the nightly purge of documents on dead deals
-      "lib/docs/upload.ts", // merchant uploads, lender downloads, the scan
+      "lib/docs/upload.ts", // merchant uploads, the scan
       "lib/docs/apply.ts", // the merchant signs their application with no login: the token is the key (0530)
-      "lib/inbox/process.ts", // the lender-email reader
-      "lib/inbox/sync.ts", // Gmail history sync
-      "lib/money/close.ts", // stream 3: the month-end close and statements
-      "lib/money/renewals.ts", // stream 3: the renewal warm-up and eligibility emails
-      "lib/money/winback.ts", // winback pools
+      "lib/inbox/sync.ts", // Gmail history sync: merchant replies
       "lib/send/deliver.ts", // the Gmail / Resend sender
       "lib/send/external.ts", // stream 1: Sent mail outside the CRM, counted toward the cap
       "lib/send/worker.ts", // the outbox drain
@@ -48,7 +43,7 @@ describe("architecture boundaries", () => {
   });
   it("client components never value-import a module that reaches Node, pg or next/headers (the server side)", () => {
     // Turbopack refuses `node:fs/promises` in a browser chunk and the whole route dies with a 500 (pass 2: the
-    // Documents panel imported two constants from lib/docs/links.ts, which imports the upload module). A "use server"
+    // Documents panel once imported two constants from a module that imports the upload module). A "use server"
     // file is a boundary and is fine to import; everything else a client file imports must be browser-safe, transitively.
     const byPath = new Map(files.map((f) => [f, readFileSync(f, "utf8")] as const));
     const directive = (src: string, d: string) =>

@@ -1,7 +1,6 @@
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { PDFDocument } from "pdf-lib";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { expectedMonth, freshness } from "@/lib/docs/freshness";
 import { labelFile, periodFromName } from "@/lib/docs/label";
@@ -11,18 +10,14 @@ import {
   addDocument,
   clientFreshness,
   listDocuments,
-  mintDownloadLink,
   mintUploadSession,
   openDocument,
   openUploadPage,
   relabelDocument,
-  resolveDownloadLink,
   scanPending,
   sniff,
   wantedFor,
 } from "@/lib/docs/upload";
-import { listLiveDocumentLinks, mintLenderLink, revokeDocumentLink } from "@/lib/docs/links";
-import { isPdf, watermarkPdf } from "@/lib/docs/watermark";
 import { createTestDb, insertClient, insertUser, type TestDb } from "./helpers/db";
 
 const T = "2026-11-15";
@@ -82,7 +77,7 @@ describe("freshness", () => {
     });
     expect(f.missing).toEqual(["2026-07-01", "2026-10-01"]);
     expect(f.message).toBe(
-      "Newest statement is September 2026. Lenders will ask for October 2026.",
+      "Newest statement is September 2026. The file needs October 2026.",
     );
     expect(
       freshness(["2026-07-01", "2026-08-01", "2026-09-01", "2026-10-01"], "2026-11-15").status,
@@ -111,20 +106,6 @@ describe("the file check", () => {
     expect(sniff(new Uint8Array(0), "application/pdf", "a.pdf").ok).toBe(false);
     expect(safeName("../../etc/passwd")).toBe("passwd");
     expect(safeName('Oct "Stmt".pdf')).toBe("Oct Stmt.pdf");
-  });
-});
-
-describe("watermark", () => {
-  it("stamps every page of a real PDF and leaves other types alone", async () => {
-    const doc = await PDFDocument.create();
-    doc.addPage();
-    doc.addPage();
-    const original = await doc.save();
-    const stamped = await watermarkPdf(original, "rep@x.com · 2026-11-15 · Pizza Palace");
-    expect(stamped.length).toBeGreaterThan(original.length);
-    expect((await PDFDocument.load(stamped)).getPageCount()).toBe(2);
-    expect(isPdf("application/pdf", original)).toBe(true);
-    expect(isPdf("image/jpeg", new Uint8Array([0xff, 0xd8]))).toBe(false);
   });
 });
 
@@ -292,121 +273,5 @@ describe("the document pipeline", () => {
     expect(wanted.some((w) => w.kind === "signed_application")).toBe(false);
     const fresh = await t.db.withUser(rep, (q) => clientFreshness(q, pizza, t.today));
     expect(fresh.newest).toBe(prev);
-  });
-
-  it("an expiring link downloads with a watermark, counts, and dies on time", async () => {
-    const docId = (await t.db.withUser(rep, (q) => listDocuments(q, pizza))).find(
-      (d) => d.kind === "bank_statement",
-    )!.id;
-    const link = await t.db.withUser(rep, (q) =>
-      mintDownloadLink(q, {
-        documentId: docId,
-        createdBy: rep,
-        watermark: "Prepared for Pearl",
-        minutes: 60,
-        maxDownloads: 1,
-      }),
-    );
-    const first = await resolveDownloadLink(t.db, link.token);
-    expect(first?.watermark).toBe("Prepared for Pearl");
-    expect(first?.document.filename).toMatch(/^Chase_Statement_/);
-    expect(await resolveDownloadLink(t.db, link.token)).toBeNull(); // max 1 download
-    const views = await t.pool.query<{ action: string }>(
-      "select action from document_views where document_id = $1 order by at",
-      [docId],
-    );
-    expect(views.rows.map((v) => v.action)).toEqual(["link_minted", "lender_download"]);
-    // a link on a document the user cannot see is refused
-    await expect(
-      t.db.withUser(rep2, (q) =>
-        mintDownloadLink(q, { documentId: docId, createdBy: rep2, watermark: "x" }),
-      ),
-    ).rejects.toThrow(/not found/);
-  });
-
-  it("a lender link minted by id is stamped from the funder's record, is listed live, and dies when revoked (P2-50, P2-34)", async () => {
-    const docId = (await t.db.withUser(rep, (q) => listDocuments(q, pizza))).find(
-      (d) => d.kind === "bank_statement",
-    )!.id;
-    const pearl = (
-      await t.pool.query<{ id: string }>(
-        "insert into funders (user_id, name) values ($1, 'Pearl Capital') returning id",
-        [rep],
-      )
-    ).rows[0]!.id;
-    // the typed name loses to the record
-    const link = await t.db.withUser(rep, (q) =>
-      mintLenderLink(q, {
-        documentId: docId,
-        createdBy: rep,
-        lenderId: pearl,
-        lenderName: "Somebody Else",
-        minutes: 1440,
-      }),
-    );
-    expect(link.lenderName).toBe("Pearl Capital");
-    const stored = (
-      await t.pool.query<{ lender_id: string; watermark: string; revoked_at: string | null }>(
-        "select lender_id, watermark, revoked_at from document_links where token = $1",
-        [link.token],
-      )
-    ).rows[0];
-    expect(stored).toEqual({
-      lender_id: pearl,
-      watermark: "Prepared for Pearl Capital",
-      revoked_at: null,
-    });
-    // a typed name still works for callers without a record
-    const typed = await t.db.withUser(rep, (q) =>
-      mintLenderLink(q, { documentId: docId, createdBy: rep, lenderName: "Fast Money LLC" }),
-    );
-    expect(typed.lenderName).toBe("Fast Money LLC");
-    // an unknown lender id is refused in words
-    await expect(
-      t.db.withUser(rep, (q) =>
-        mintLenderLink(q, {
-          documentId: docId,
-          createdBy: rep,
-          lenderId: "00000000-0000-4000-8000-000000000000",
-        }),
-      ),
-    ).rejects.toThrow(/no longer on the list/);
-
-    const live = await t.db.withUser(rep, (q) => listLiveDocumentLinks(q, pizza));
-    const mine = live.filter((l) => l.document_id === docId && l.downloads < l.max_downloads);
-    expect(mine.map((l) => l.lender_name ?? l.watermark)).toEqual([
-      "Prepared for Fast Money LLC",
-      "Pearl Capital",
-    ]);
-    const pearlLink = mine.find((l) => l.lender_id === pearl)!;
-    expect(pearlLink).toMatchObject({ downloads: 0, max_downloads: 5 });
-    // another rep sees none of them (the document is not theirs)
-    expect(await t.db.withUser(rep2, (q) => listLiveDocumentLinks(q, pizza))).toEqual([]);
-    await expect(t.db.withUser(rep2, (q) => revokeDocumentLink(q, pearlLink.id))).rejects.toThrow(
-      /already gone/,
-    );
-
-    // revoke: the row is stamped, the list drops it, the token stops working, a second revoke says so
-    await t.db.withUser(rep, (q) => revokeDocumentLink(q, pearlLink.id));
-    const after = (
-      await t.pool.query<{ revoked_at: string | null }>(
-        "select revoked_at from document_links where id = $1",
-        [pearlLink.id],
-      )
-    ).rows[0];
-    expect(after?.revoked_at).not.toBeNull();
-    expect(
-      (await t.db.withUser(rep, (q) => listLiveDocumentLinks(q, pizza))).some(
-        (l) => l.id === pearlLink.id,
-      ),
-    ).toBe(false);
-    expect(await resolveDownloadLink(t.db, link.token)).toBeNull();
-    await expect(t.db.withUser(rep, (q) => revokeDocumentLink(q, pearlLink.id))).rejects.toThrow(
-      /already gone/,
-    );
-    // the typed-name link still downloads
-    expect((await resolveDownloadLink(t.db, typed.token))?.watermark).toBe(
-      "Prepared for Fast Money LLC",
-    );
   });
 });

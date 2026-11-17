@@ -6,16 +6,6 @@ import { z } from "zod";
  * older form can never reset a setting it does not know about.
  */
 
-const day = /^\d{4}-\d{2}-\d{2}$/;
-/** A real calendar date, not just the right shape (2026-02-31 is refused here, not by the database). */
-export const isRealDate = (s: string): boolean => {
-  if (!day.test(s)) return false;
-  const d = new Date(`${s}T00:00:00Z`);
-  return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === s;
-};
-
-const blankToUndefined = (v: unknown) => (typeof v === "string" && v.trim() === "" ? undefined : v);
-
 export const shopSchema = z.object({
   shopName: z.string().trim().min(1).max(80),
   postalAddress: z.string().trim().max(300).default(""),

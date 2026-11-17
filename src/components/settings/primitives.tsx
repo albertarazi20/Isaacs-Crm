@@ -3,34 +3,9 @@ import type { ReactNode } from "react";
 import { Card, cn } from "@/components/ui";
 
 /*
- * Page-level pieces the Winback, Funded, Earnings and Settings screens share. Server-safe (no hooks), so a
+ * Page-level pieces the Settings screens share. Server-safe (no hooks), so a
  * server page and a client panel can both use them. Candidates for ui.tsx once the whole app has settled.
  */
-
-/** Title left, one line of context under it, actions right (one primary at most). */
-export function PageHeader({
-  title,
-  context,
-  actions,
-  className,
-}: {
-  title: string;
-  context?: ReactNode;
-  actions?: ReactNode;
-  className?: string;
-}) {
-  return (
-    <div className={cn("flex flex-wrap items-end justify-between gap-x-6 gap-y-3", className)}>
-      <div className="min-w-0 max-w-3xl">
-        <h1 className="text-xl font-semibold tracking-tight sm:text-2xl">{title}</h1>
-        {context ? <p className="mt-0.5 text-sm text-muted">{context}</p> : null}
-      </div>
-      {actions ? (
-        <div className="flex min-w-0 max-w-full flex-wrap items-center gap-2">{actions}</div>
-      ) : null}
-    </div>
-  );
-}
 
 /** A number with its label over it, the dashboard's KPI tile. */
 export function StatTile({

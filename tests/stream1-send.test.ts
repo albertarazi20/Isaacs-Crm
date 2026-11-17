@@ -160,28 +160,23 @@ describe("S1-2: Pause and Delete reach the outbox", () => {
 });
 
 describe("S1-15: the claim checker", () => {
-  it("pure checks: approved needs an offer, guaranteed / no fees / loan are always out, a rate quote to California is held", () => {
+  it("pure checks: approved, guaranteed, no fees and loan are always out, a rate quote to California is held", () => {
     expect(checkClaims("Hi {first_name}, here is the application for {business}.").ok).toBe(true);
     expect(checkClaims("Good news: you are pre-approved for $50,000").ok).toBe(false);
-    expect(
-      checkClaims("Your approval is still open", { approvedOffer: true, state: "FL" }).ok,
-    ).toBe(true);
-    const noOffer = checkClaims("Your approval is still open", {
-      approvedOffer: false,
-      state: "FL",
-    });
-    expect(noOffer.ok).toBe(false);
-    expect(noOffer.reasons[0]).toMatch(/no approved offer/);
+    // with no deals, "approved" is never true, for a template or for one merchant
+    const approved = checkClaims("Your approval is still open", { state: "FL" });
+    expect(approved.ok).toBe(false);
+    expect(approved.reasons[0]).toMatch(/nothing is approved/);
     expect(checkClaims("Guaranteed funding this week").reasons).toEqual([
       'Says "guaranteed": nothing in funding is guaranteed',
     ]);
     expect(checkClaims("No upfront fees, ever").ok).toBe(false);
     expect(checkClaims("A quick business loan").ok).toBe(false);
     expect(
-      checkClaims("Factor rate 1.35 over 8 months", { approvedOffer: true, state: "CA" }).ok,
+      checkClaims("Factor rate 1.35 over 8 months", { state: "CA" }).ok,
     ).toBe(false);
     expect(
-      checkClaims("Factor rate 1.35 over 8 months", { approvedOffer: true, state: "TX" }).ok,
+      checkClaims("Factor rate 1.35 over 8 months", { state: "TX" }).ok,
     ).toBe(true);
     // the seeded wording passes: "before they approve" is not a claim of approval
     expect(
@@ -189,7 +184,7 @@ describe("S1-15: the claim checker", () => {
     ).toBe(true);
   });
 
-  it("the worker holds an automated send that says approved until a lender has approved; one-to-one mail is never checked", async () => {
+  it("the worker holds an automated send that says approved, whatever happens; one-to-one mail is never checked", async () => {
     const id = await client("Claim Co", "claim@x.com");
     const row = await queue(id, "blast:x", "Good news, you are approved for funding", "blast");
     let s = await drain();
@@ -200,7 +195,7 @@ describe("S1-15: the claim checker", () => {
       [id],
     );
     expect(held.rows).toHaveLength(1);
-    expect(held.rows[0]?.body).toMatch(/no approved offer/);
+    expect(held.rows[0]?.body).toMatch(/nothing is approved/);
     // a second pass holds it again without a second timeline line
     await t.pool.query("update outbox set not_before = now() where id = $1", [row]);
     await drain();
@@ -213,22 +208,11 @@ describe("S1-15: the claim checker", () => {
       ).rowCount,
     ).toBe(1);
 
-    // a lender approves on an open deal: the same email may go
-    const funder = (
-      await t.pool.query<{ id: string }>(
-        "insert into funders (user_id, name, submission_email) values ($1, 'Alpha Capital', 'subs@alpha.test') returning id",
-        [rep],
-      )
-    ).rows[0]!.id;
-    await t.db.withUser(rep, (q) => q.query("select submit_to_ops($1)", [id]));
-    await t.pool.query(
-      "insert into submissions (user_id, client_id, funder_id, status) values ($1, $2, $3, 'approved')",
-      [rep, id, funder],
-    );
+    // nothing can make it true now: it stays held
     await t.pool.query("update outbox set not_before = now() where id = $1", [row]);
     s = await drain();
-    expect(s.sent).toBe(1);
-    expect((await outbox(row)).status).toBe("sent");
+    expect(s.sent).toBe(0);
+    expect(await outbox(row)).toMatchObject({ status: "queued", last_error: "claim_check" });
 
     // a person's reply is theirs: no check
     const reply = await queue(id, "manual", "Guaranteed, I will call you at 3", "reply");

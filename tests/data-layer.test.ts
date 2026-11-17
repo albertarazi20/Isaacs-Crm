@@ -2,16 +2,9 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { toActionError } from "@/lib/data/errors";
 import * as m from "@/lib/data/mutations";
 import { findDuplicates, getClientDetail, listCards, userContext } from "@/lib/data/queries";
-import {
-  bucketSchema,
-  fundingInputSchema,
-  moveSchema,
-  newClientSchema,
-  touchSchema,
-} from "@/lib/data/schemas";
+import { bucketSchema, moveSchema, newClientSchema, touchSchema } from "@/lib/data/schemas";
 import type { UserContext } from "@/lib/data/types";
 import { addBusinessDays, addDays, addMonths } from "@/lib/mca/dates";
-import { renewalDate } from "@/lib/mca/funding";
 import { createTestDb, insertUser, type TestDb } from "./helpers/db";
 
 let t: TestDb;
@@ -62,32 +55,11 @@ describe("input schemas", () => {
       stage: "name_in",
     });
   });
-  it("rejects a blank business name, junk money and a client created as funded", () => {
+  it("rejects a blank business name and junk money", () => {
     expect(() => newClientSchema.parse({ businessName: "  " })).toThrow(/Business name/);
     expect(() => newClientSchema.parse({ businessName: "X", wantedAmount: "lots" })).toThrow(
       /amount like 50k/,
     );
-    expect(() => newClientSchema.parse({ businessName: "X", stage: "funded" })).toThrow(/funding/);
-  });
-  it("requires funding terms to mark a client funded, and a sane factor rate", () => {
-    const id = "6f9619ff-8b86-4011-b42d-00c04fc964ff";
-    expect(() => moveSchema.parse({ clientId: id, stage: "funded" })).toThrow(/Funding terms/);
-    expect(() =>
-      fundingInputSchema.parse({
-        amount: "50k",
-        factorRate: "0.8",
-        payment: "550",
-        frequency: "daily",
-      }),
-    ).toThrow(/Factor rate/);
-    expect(
-      fundingInputSchema.parse({
-        amount: "50k",
-        factorRate: "1.32",
-        payment: "550",
-        frequency: "daily",
-      }),
-    ).toMatchObject({ amount: 5_000_000, factorRate: 1.32, payment: 55_000 });
   });
   it("only accepts the follow-up buckets we actually draw", () => {
     const id = "6f9619ff-8b86-4011-b42d-00c04fc964ff";
@@ -215,145 +187,6 @@ describe("moveClient", () => {
     ).toBeNull();
   });
 
-  describe("to Funded", () => {
-    const funding = {
-      amount: "50k",
-      factorRate: "1.32",
-      payment: "550",
-      frequency: "daily",
-      funderName: "Alpha",
-      commission: "4k",
-    };
-    it("records the advance and sets a 30-day check-in AND the 50% renewal call", async () => {
-      const c = await newClient("Funded Pizza");
-      const card = await move(c.id, "funded", { funding });
-      expect(card).toMatchObject({
-        stage: "funded",
-        funding_amount_cents: 5_000_000,
-        funding_payback_cents: 6_600_000,
-        funding_status: "active",
-      });
-      const f = (await rows("select * from fundings where client_id = $1", [c.id]))[0];
-      expect(f).toMatchObject({
-        amount_cents: 5_000_000,
-        payment_cents: 55_000,
-        funder_name: "Alpha",
-        commission_cents: 400_000,
-        funded_on: ctx.today,
-      });
-      const terms = {
-        fundedOn: ctx.today,
-        amountCents: 5_000_000,
-        factorRate: 1.32,
-        paymentCents: 55_000,
-        frequency: "daily" as const,
-      };
-      expect(
-        await rows(
-          "select kind, due_on from timers where client_id = $1 and done_at is null order by due_on",
-          [c.id],
-        ),
-      ).toEqual([
-        { kind: "check_in", due_on: addDays(ctx.today, 30) },
-        { kind: "renewal", due_on: renewalDate(terms, ctx.today) },
-      ]);
-    });
-    it("backfilling an old advance puts the renewal call on today, not in the past", async () => {
-      const c = await newClient("Old Funded Pizza");
-      await move(c.id, "funded", {
-        funding: { ...funding, fundedOn: addMonths(ctx.today, -8).replace(/-\d\d$/, "-01") },
-      });
-      const renewal = (
-        await rows(
-          "select due_on from timers where client_id = $1 and kind = 'renewal' and done_at is null",
-          [c.id],
-        )
-      )[0];
-      expect(renewal.due_on).toBe(ctx.today);
-    });
-  });
-
-  describe("to Lost", () => {
-    it("logs the competitor's offer as won and times the callback off their term", async () => {
-      const c = await newClient("Lost Pizza");
-      const card = await move(c.id, "lost", {
-        competitor: {
-          funderName: "Rival Capital",
-          amount: "60k",
-          factorRate: "1.42",
-          termDays: 180,
-          positionNo: 2,
-        },
-      });
-      expect(card.next_due_on).toBe(addDays(ctx.today, 90));
-      expect(
-        await rows(
-          "select funder_name, amount_cents, factor_rate, position_no, term_days, won from competing_offers where client_id = $1",
-          [c.id],
-        ),
-      ).toEqual([
-        {
-          funder_name: "Rival Capital",
-          amount_cents: 6_000_000,
-          factor_rate: 1.42,
-          position_no: 2,
-          term_days: 180,
-          won: true,
-        },
-      ]);
-    });
-    it("falls back to six months when nothing is known about the competitor", async () => {
-      const c = await newClient("Mystery Pizza");
-      expect((await move(c.id, "lost")).next_due_on).toBe(addMonths(ctx.today, 6));
-    });
-  });
-
-  describe("to a default stage", () => {
-    const funding = { amount: "30k", factorRate: "1.3", payment: "400", frequency: "daily" };
-    it("stamps default date and promise-to-pay in Isaac's timezone", async () => {
-      const c = await newClient("Default Pizza");
-      await move(c.id, "funded", { funding });
-      const promiseLocal = `${addDays(ctx.today, 4)}T14:30`;
-      const card = await move(c.id, "default_workable", {
-        default: { promiseToPayAt: promiseLocal, promiseAmount: "1500", note: "Says Friday" },
-      });
-      expect(card).toMatchObject({
-        stage: "default_workable",
-        funding_status: "defaulted",
-        defaulted_on: ctx.today,
-        promise_amount_cents: 150_000,
-        next_due_on: addBusinessDays(ctx.today, 3),
-      });
-      const local = (
-        await rows(
-          `select to_char(promise_to_pay_at at time zone 'America/New_York', 'YYYY-MM-DD"T"HH24:MI') as l from fundings where client_id = $1`,
-          [c.id],
-        )
-      )[0].l;
-      expect(local).toBe(promiseLocal);
-    });
-    it("a bad default is chased weekly; collections fortnightly; write-off annually", async () => {
-      const c = await newClient("Chase Pizza");
-      await move(c.id, "funded", { funding });
-      expect((await move(c.id, "default_bad")).next_due_on).toBe(addDays(ctx.today, 7));
-      expect((await move(c.id, "legal_collections")).next_due_on).toBe(addDays(ctx.today, 14));
-      expect((await move(c.id, "written_off")).next_due_on).toBe(addMonths(ctx.today, 12));
-    });
-    it("moves a never-funded client into a default stage without inventing an advance", async () => {
-      const c = await newClient("Phantom Pizza");
-      expect((await move(c.id, "default_bad")).stage).toBe("default_bad");
-      expect(await rows("select 1 from fundings where client_id = $1", [c.id])).toEqual([]);
-    });
-    it("marks the advance paid off when the client reaches Paid in full", async () => {
-      const c = await newClient("Paid Pizza");
-      await move(c.id, "funded", { funding });
-      await move(c.id, "paid_in_full");
-      expect(
-        (await rows("select status from fundings where client_id = $1", [c.id]))[0].status,
-      ).toBe("paid_off");
-    });
-  });
-
   it("refuses a move on another user's client and changes nothing", async () => {
     const c = await newClient("Private Pizza");
     await expect(
@@ -451,84 +284,6 @@ describe("client record", () => {
       monthly_revenue_cents: 9_000_000,
       business_name: "Edit Pizza",
     });
-  });
-  it("keeps ask history: newest is current, older ones are 'how much he wanted before'", async () => {
-    const c = await newClient("Ask Pizza");
-    await asA((q) =>
-      m.saveAsk(q, {
-        clientId: c.id,
-        wantedAmount: 3_000_000,
-        wantedTerms: "6 months",
-        estApproval: null,
-        estApprovalNote: "",
-      }),
-    );
-    await new Promise((r) => setTimeout(r, 15));
-    await asA((q) =>
-      m.saveAsk(q, {
-        clientId: c.id,
-        wantedAmount: 7_500_000,
-        wantedTerms: "9 months daily",
-        estApproval: 5_000_000,
-        estApprovalNote: "2nd position, thin statements",
-      }),
-    );
-    const d = await asA((q) => getClientDetail(q, c.id));
-    expect(d?.asks.map((k) => k.wanted_amount_cents)).toEqual([7_500_000, 3_000_000]);
-    expect(d?.card).toMatchObject({
-      wanted_amount_cents: 7_500_000,
-      est_approval_cents: 5_000_000,
-    });
-  });
-  it("stores the position stack and rolls it up on the card", async () => {
-    const c = await newClient("Stack Pizza");
-    const base = {
-      clientId: c.id,
-      funderName: "Alpha",
-      fundedAmount: 3_000_000,
-      payback: 4_200_000,
-      balance: 2_100_000,
-      payment: 30_000,
-      frequency: "daily" as const,
-      note: "",
-    };
-    await asA((q) => m.savePosition(q, { ...base, positionNo: 1 }));
-    await asA((q) =>
-      m.savePosition(q, { ...base, positionNo: 2, funderName: "Beta", balance: 1_400_000 }),
-    );
-    let d = await asA((q) => getClientDetail(q, c.id));
-    expect(d?.card).toMatchObject({ position_count: 2, position_balance_cents: 3_500_000 });
-    const beta = d?.positions.find((p) => p.funder_name === "Beta");
-    await asA((q) =>
-      m.savePosition(q, { ...base, id: beta?.id, positionNo: 2, funderName: "Beta", balance: 0 }),
-    );
-    await asA((q) => m.deletePosition(q, d?.positions[0]?.id ?? ""));
-    d = await asA((q) => getClientDetail(q, c.id));
-    expect(d?.positions).toHaveLength(1);
-    expect(d?.positions[0]).toMatchObject({ funder_name: "Beta", balance_cents: 0 });
-  });
-  it("logs competing offers and lets Isaac edit and remove them", async () => {
-    const c = await newClient("Offer Pizza");
-    const base = {
-      clientId: c.id,
-      funderName: "Rival",
-      amount: 5_000_000,
-      factorRate: 1.42,
-      payment: 40_000,
-      frequency: "daily" as const,
-      positionNo: 2,
-      termDays: 150,
-      won: false,
-      note: "",
-    };
-    await asA((q) => m.saveOffer(q, base));
-    let d = await asA((q) => getClientDetail(q, c.id));
-    expect(d?.offers).toHaveLength(1);
-    await asA((q) => m.saveOffer(q, { ...base, id: d?.offers[0]?.id, won: true, factorRate: 1.4 }));
-    d = await asA((q) => getClientDetail(q, c.id));
-    expect(d?.offers[0]).toMatchObject({ won: true, factor_rate: 1.4 });
-    await asA((q) => m.deleteOffer(q, d?.offers[0]?.id ?? ""));
-    expect((await asA((q) => getClientDetail(q, c.id)))?.offers).toEqual([]);
   });
   it("seeds stips, ticks them, and the card shows 'ready' counts", async () => {
     const c = await newClient("Stip Pizza");

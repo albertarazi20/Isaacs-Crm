@@ -8,7 +8,7 @@ export const BACKUP_VERSION = 1;
  * him; `restore.ts` puts the trash flags last). Row-level security returns only the signed-in user's rows, and nothing
  * here is built from input.
  *
- * ONE statement reads them all. Each statement in a read-committed transaction gets its own snapshot, so thirteen
+ * ONE statement reads them all. Each statement in a read-committed transaction gets its own snapshot, so seven
  * separate selects could catch a merchant created in between: his notes in the file, him not, and a restore that dies
  * on a foreign key the day it is needed (review-4 C-2). One statement is one snapshot.
  *
@@ -19,13 +19,7 @@ export const BACKUP_TABLES: readonly string[] = [
   "clients",
   "trashed_clients",
   "client_asks",
-  "positions",
-  "competing_offers",
-  "fundings",
   "stips",
-  "funders",
-  "submissions",
-  "offers",
   "timers",
   "activities",
   "snippets",
@@ -41,13 +35,7 @@ select jsonb_build_object(
   'clients', (select coalesce(jsonb_agg(to_jsonb(t) order by t.created_at, t.id), '[]') from clients t),
   'trashed_clients', (select coalesce(jsonb_agg(to_jsonb(t) order by t.trashed_at, t.client_id), '[]') from trashed_clients t),
   'client_asks', (select coalesce(jsonb_agg(to_jsonb(t) order by t.created_at, t.id), '[]') from client_asks t),
-  'positions', (select coalesce(jsonb_agg(to_jsonb(t) order by t.created_at, t.id), '[]') from positions t),
-  'competing_offers', (select coalesce(jsonb_agg(to_jsonb(t) order by t.created_at, t.id), '[]') from competing_offers t),
-  'fundings', (select coalesce(jsonb_agg(to_jsonb(t) order by t.funded_on, t.created_at, t.id), '[]') from fundings t),
   'stips', (select coalesce(jsonb_agg(to_jsonb(t) order by t.created_at, t.id), '[]') from stips t),
-  'funders', (select coalesce(jsonb_agg(to_jsonb(t) order by t.created_at, t.id), '[]') from funders t),
-  'submissions', (select coalesce(jsonb_agg(to_jsonb(t) order by t.created_at, t.id), '[]') from submissions t),
-  'offers', (select coalesce(jsonb_agg(to_jsonb(t) order by t.created_at, t.id), '[]') from offers t),
   'timers', (select coalesce(jsonb_agg(to_jsonb(t) order by t.created_at, t.id), '[]') from timers t),
   'activities', (select coalesce(jsonb_agg(to_jsonb(t) order by t.occurred_at, t.id), '[]') from activities t),
   'snippets', (select coalesce(jsonb_agg(to_jsonb(t) order by t.created_at, t.id), '[]') from snippets t)

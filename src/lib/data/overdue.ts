@@ -171,7 +171,7 @@ export async function followUpReasons(
   return Object.fromEntries(rows.map((r) => [r.client_id, { kind: r.kind, note: r.note }]));
 }
 
-/** What the search palette needs to know about a client: no notes, positions or funding. */
+/** What the search palette needs to know about a client: no notes. */
 export interface DirectoryRow {
   id: string;
   business_name: string;

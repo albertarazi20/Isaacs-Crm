@@ -3,16 +3,14 @@
  * Pure, so the manager's template approval and the outbox worker run the same check without a database.
  *
  * Two uses:
- *   * a template, with no merchant in mind (`ctx` omitted): "approved" language can never be true for everyone, so a
- *     template that says it is refused outright; the California rule needs a merchant and is skipped;
- *   * an automated send to one merchant (`ctx` given): "approved" is allowed when that merchant has a real offer on
- *     an open deal; a factor-rate quote to a California merchant is held (California wants the full disclosure first).
+ *   * a template, with no merchant in mind (`ctx` omitted): the California rule needs a merchant and is skipped;
+ *   * an automated send to one merchant (`ctx` given): a factor-rate quote to a California merchant is held
+ *     (California wants the full disclosure first).
+ * "Approved" language is refused in both: nothing in this system approves anyone, so it can never be true.
  * One-to-one mail a person writes is never checked: this is for what the engine sends on its own.
  */
 
 export interface ClaimContext {
-  /** The merchant has a lender approval (an offer) on an open deal right now. */
-  approvedOffer: boolean;
   /** The merchant's state as stored ("CA", "ca", "California"). */
   state: string;
 }
@@ -36,14 +34,8 @@ const isCalifornia = (state: string): boolean => {
 
 export function checkClaims(text: string, ctx?: ClaimContext): ClaimCheck {
   const reasons: string[] = [];
-  if (APPROVED.test(text)) {
-    if (!ctx)
-      reasons.push(
-        'Says "approved": only a merchant with a real offer on an open deal may hear that, so it cannot go in a template',
-      );
-    else if (!ctx.approvedOffer)
-      reasons.push('Says "approved" but this merchant has no approved offer on an open deal');
-  }
+  if (APPROVED.test(text))
+    reasons.push('Says "approved": nothing is approved at this stage, so automated mail cannot say it');
   if (GUARANTEED.test(text)) reasons.push('Says "guaranteed": nothing in funding is guaranteed');
   if (NO_FEES.test(text)) reasons.push("Promises no fees: leave fees out of automated mail");
   if (LOAN.test(text)) reasons.push('Says "loan": an advance is not a loan');

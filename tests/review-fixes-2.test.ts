@@ -157,7 +157,7 @@ describe("B-4: 'reschedule all overdue' keeps each follow-up's reason", () => {
       "update timers set due_on = current_date - 2, note = '' where client_id = $1 and done_at is null",
       [blank],
     );
-    await t.db.withUser(b, (q) => bulkReschedule(q, ctx(), { days: 5, keepUnderwriting: false }));
+    await t.db.withUser(b, (q) => bulkReschedule(q, ctx(), { days: 5, keepApplicationIn: false }));
     const reasons = await t.db.withUser(b, (q) => followUpReasons(q, [withNote, blank]));
     expect(reasons[withNote]?.note).toBe("Call after his tax return is filed");
     expect(reasons[blank]?.note).toBe("Rescheduled in bulk");

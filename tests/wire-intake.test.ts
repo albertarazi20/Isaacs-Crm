@@ -317,35 +317,30 @@ describe("database reads", () => {
       ))!.id;
     });
 
-    it("gives the token behind the link; nothing signed yet, no deal", async () => {
+    it("gives the token behind the link; nothing signed yet", async () => {
       const token = (await one<{ application_token: string }>(
         "select application_token from clients where id = $1",
         [m],
       ))!.application_token;
       const a = await t.db.withUser(mike, (q) => merchantApplication(q, m));
-      expect(a).toEqual({ token, latest: null, deal_id: null });
+      expect(a).toEqual({ token, latest: null });
     });
 
-    it("the newest signed application with its PDF, and the deal whose Documents hold it", async () => {
-      const deal = (await one<{ id: string }>(
-        "insert into deals (user_id, client_id) values ($1, $2) returning id",
+    it("the newest signed application with its PDF", async () => {
+      const doc = (await one<{ id: string }>(
+        `insert into documents (user_id, client_id, kind, filename, content_type, size_bytes, sha256, storage_key, source)
+         values ($1, $2, 'signed_application', 'application.pdf', 'application/pdf', 10, repeat('a', 64), 'k1', 'upload_link') returning id`,
         [mike, m],
       ))!.id;
-      const doc = (await one<{ id: string }>(
-        `insert into documents (user_id, client_id, deal_id, kind, filename, content_type, size_bytes, sha256, storage_key, source)
-         values ($1, $2, $3, 'signed_application', 'application.pdf', 'application/pdf', 10, repeat('a', 64), 'k1', 'upload_link') returning id`,
-        [mike, m, deal],
-      ))!.id;
       await t.pool.query(
-        `insert into applications (client_id, user_id, deal_id, document_id, fields, signer_name, signed_at)
-         values ($1, $2, null, null, '{}', 'Older Signer', now() - interval '3 days'),
-                ($1, $2, $3, $4, '{}', 'Rosa Diaz', now())`,
-        [m, mike, deal, doc],
+        `insert into applications (client_id, user_id, document_id, fields, signer_name, signed_at)
+         values ($1, $2, null, '{}', 'Older Signer', now() - interval '3 days'),
+                ($1, $2, $3, '{}', 'Rosa Diaz', now())`,
+        [m, mike, doc],
       );
       const a = await t.db.withUser(mike, (q) => merchantApplication(q, m));
       expect(a?.latest).toMatchObject({ signer_name: "Rosa Diaz", document_id: doc });
       expect(a?.latest?.signed_at).toMatch(/Z$/);
-      expect(a?.deal_id).toBe(deal);
       // another rep cannot open it
       expect(await t.db.withUser(dana, (q) => merchantApplication(q, m))).toBeNull();
     });

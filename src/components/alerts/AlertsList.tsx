@@ -20,20 +20,9 @@ function when(iso: string, timezone: string): string {
 }
 
 const TONE: Record<string, "good" | "warn" | "bad" | "accent" | "info" | "neutral"> = {
-  approval_landed: "good",
-  funding_proposed: "good",
   application_signed: "good",
-  renewal_eligible: "good",
-  kickback: "bad",
-  trust: "bad",
-  stale_deal: "warn",
-  behind_pace: "warn",
-  late_payout: "warn",
-  registration: "warn",
   template_paused: "warn",
   bounce_spike: "warn",
-  chase_draft: "info",
-  ask_manager: "accent",
 };
 
 export function AlertsList({ rows, timezone }: { rows: AlertFeedRow[]; timezone: string }) {
@@ -44,8 +33,7 @@ export function AlertsList({ rows, timezone }: { rows: AlertFeedRow[]; timezone:
   if (rows.length === 0)
     return (
       <EmptyState title="No alerts yet">
-        Approvals that land, files sitting too long, kickbacks and what the trust checks notice show
-        up here.
+        Signed applications, paused templates and bounce spikes show up here.
       </EmptyState>
     );
   const markAll = async () => {

@@ -4,9 +4,8 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useApp } from "@/components/app-context";
 import { Dialog } from "@/components/overlay";
 import { TimerPicker } from "@/components/TimerPicker";
-import { Button, cn, Input, Select, Textarea } from "@/components/ui";
+import { Button, cn, Input } from "@/components/ui";
 import type { ClientCard } from "@/lib/data/types";
-import { formatDate } from "@/lib/format";
 import { addDays, type ISODate } from "@/lib/mca/dates";
 import { callTimeProblem, clampToToday } from "./forms";
 
@@ -53,14 +52,6 @@ function useFocusFirst() {
     return () => cancelAnimationFrame(id);
   }, []);
   return ref;
-}
-
-function Preview({ children }: { children: ReactNode }) {
-  return (
-    <div className="space-y-1 rounded-lg border border-border bg-surface-2 p-3 text-sm">
-      {children}
-    </div>
-  );
 }
 
 function useBusy(onSubmit: Submit) {

@@ -62,19 +62,6 @@ export function addBusinessDays(s: ISODate, n: number): ISODate {
   return toISODate(d);
 }
 
-/** Business days in the half-open range (from, to]. */
-export function businessDaysBetween(from: ISODate, to: ISODate): number {
-  const total = diffDays(from, to);
-  if (total <= 0) return 0;
-  const d = parseISODate(from);
-  let count = 0;
-  for (let i = 0; i < total; i += 1) {
-    d.setUTCDate(d.getUTCDate() + 1);
-    if (!isWeekend(d)) count += 1;
-  }
-  return count;
-}
-
 export function todayIn(tz: string, now: Date = new Date()): ISODate {
   return new Intl.DateTimeFormat("en-CA", {
     timeZone: tz,
@@ -156,9 +143,4 @@ export function bucketLabel(key: BucketKey): string {
   if (key === "today") return "Today";
   if (key === "later") return "Later (36 mo+)";
   return presetByKey(key).label;
-}
-
-/** Everything parked more than a year out lives in the Long Game view. */
-export function isLongGame(dueOn: ISODate, today: ISODate): boolean {
-  return dueOn > addMonths(today, 12);
 }

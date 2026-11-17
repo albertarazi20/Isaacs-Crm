@@ -1,13 +1,12 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { runBucketSteps } from "@/lib/buckets/engine";
-import { runWinback } from "@/lib/money/winback";
 import { enqueueEmail } from "@/lib/send/enqueue";
 import { inSendWindow, nextSendTime, usFederalHoliday, usFederalHolidays } from "@/lib/send/rules";
 import { createTestDb, insertUser, type TestDb } from "./helpers/db";
 
 /**
- * Stream 1: S1-11 holidays in the send window (send_on_holidays, off by default) and S1-14 one monthly nudger
- * for Cold merchants (the Cold bucket keeps no email steps; the win-back cold pool sends the monthly email).
+ * Stream 1: S1-11 holidays in the send window (send_on_holidays, off by default) and S1-14 the Cold bucket (it keeps
+ * no email steps: a Cold member stays put and the engine sends it nothing).
  */
 
 let t: TestDb;
@@ -82,8 +81,8 @@ describe("S1-11: US federal holidays", () => {
   });
 });
 
-describe("S1-14: one monthly nudger for Cold merchants", () => {
-  it("the Cold bucket has no email steps; a Cold member stays put and gets exactly one win-back email a month", async () => {
+describe("S1-14: the Cold bucket", () => {
+  it("the Cold bucket has no email steps; a Cold member stays put and the engine sends it nothing", async () => {
     const steps = await t.pool.query<{ action: string }>(
       "select s.action from bucket_steps s join buckets b on b.id = s.bucket_id where b.key = 'cold'",
     );
@@ -116,21 +115,5 @@ describe("S1-14: one monthly nudger for Cold merchants", () => {
       [id],
     );
     expect(live.rows).toEqual([{ key: "cold", next_due_on: null }]);
-
-    // the win-back cold pool: one email on entry, one a month after, one more a month later, then quiet
-    for (const n of [0, 1, 15, 29, 30, 31, 59, 60, 61, 90])
-      await runWinback({ db: t.db, now: new Date(day(n)), appUrl: "https://crm.test" });
-    expect(await emails()).toEqual(["winback:cold:1", "winback:cold:2", "winback:cold:3"]);
-    const member = await t.pool.query<{ status: string; steps_sent: number }>(
-      "select status, steps_sent from winback_members where client_id = $1 and pool = 'cold'",
-      [id],
-    );
-    expect(member.rows[0]).toEqual({ status: "stopped", steps_sent: 3 });
-    // and the Cold enrolment ended with the pool's sequence, so the nightly refresh does not start it over
-    const ended = await t.pool.query<{ stop_reason: string | null }>(
-      "select e.stop_reason from enrollments e join buckets b on b.id = e.bucket_id where e.client_id = $1 and b.key = 'cold'",
-      [id],
-    );
-    expect(ended.rows).toEqual([{ stop_reason: "sequence_done" }]);
   });
 });

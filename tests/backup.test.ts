@@ -26,24 +26,12 @@ describe("full backup", () => {
         id,
         timersJson({ kind: "follow_up", due_on: d(2) }),
       ]);
-      await q.query("select * from record_funding($1, $2::jsonb, $3::jsonb)", [
+      await q.query("select add_stips($1, $2::jsonb)", [
         id,
-        JSON.stringify({
-          funded_on: d(-10),
-          funder_name: "Alpha",
-          amount_cents: 5_000_000,
-          factor_rate: 1.32,
-          payment_cents: 55_000,
-          frequency: "daily",
-          position_no: 1,
-        }),
-        timersJson({ kind: "check_in", due_on: d(20) }),
+        JSON.stringify([{ kind: "signed_application" }]),
       ]);
       await q.query(
         "insert into snippets (user_id, title, kind, body, sort) values (app.current_user_id(), 'Hello', 'text', 'Hi {first_name}', 0)",
-      );
-      await q.query(
-        "insert into funders (user_id, name) values (app.current_user_id(), 'Pearl Funding')",
       );
     });
 
@@ -66,9 +54,8 @@ describe("full backup", () => {
       expect(backup.tables[name]?.length, name).toBe(rows[0]?.n);
     }
     expect(backup.counts.clients).toBe(1);
-    expect(backup.counts.fundings).toBe(1);
+    expect(backup.counts.stips).toBe(1);
     expect(backup.counts.snippets).toBe(1);
-    expect(backup.counts.funders).toBe(1);
     expect(backup.counts.timers).toBeGreaterThan(0);
     expect(backup.counts.activities).toBeGreaterThan(0);
 
@@ -101,7 +88,7 @@ describe("full backup", () => {
   it("an empty account still backs up (empty tables, not an error)", async () => {
     const c = await insertUser(t.pool, "empty@x.com", "UTC");
     const backup = await t.db.withUser(c, (q) => buildBackup(q));
-    // the lender list is shop-wide (0300), so a fresh account still sees it; everything else is empty
+    // the funder list is shop-wide (0300) and unused now, but a fresh account still sees its rows; everything else is empty
     expect(
       Object.entries(backup.counts)
         .filter(([table]) => table !== "funders")

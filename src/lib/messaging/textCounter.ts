@@ -48,10 +48,6 @@ export function bumpTextCount(storage: CounterStorage | null, today: string): nu
   return next.n;
 }
 
-export function textCountMessage(n: number): string {
-  return `${n} text${n === 1 ? "" : "s"} today`;
-}
-
 /** The gentle warning, or null while the count is comfortable. */
 export function textCountWarning(n: number): string | null {
   if (n < TEXT_WARN_AT) return null;

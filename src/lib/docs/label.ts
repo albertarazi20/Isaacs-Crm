@@ -13,9 +13,6 @@ export const DOC_KINDS = [
   "tax_return",
   "lease_letter",
   "processing_statement",
-  "signed_contract",
-  "funding_agreement",
-  "offer_sheet",
   "other",
 ] as const;
 export type DocKind = (typeof DOC_KINDS)[number];
@@ -29,23 +26,8 @@ export const DOC_LABELS: Record<DocKind, string> = {
   tax_return: "Tax return",
   lease_letter: "Landlord / lease letter",
   processing_statement: "Processing statement",
-  signed_contract: "Signed contract",
-  funding_agreement: "Funding agreement",
-  offer_sheet: "Offer sheet",
   other: "Other document",
 };
-
-/** The kinds a stip can name; a received one ticks the merchant's checklist. */
-export const STIP_KINDS = new Set<DocKind>([
-  "signed_application",
-  "bank_statement",
-  "drivers_license",
-  "voided_check",
-  "proof_of_ownership",
-  "tax_return",
-  "lease_letter",
-  "processing_statement",
-]);
 
 export interface Label {
   kind: DocKind;
@@ -237,15 +219,6 @@ export function labelFile(filename: string, contentType: string, today: ISODate)
       confidence: 0.7,
       reason: "entity paperwork in the name",
     };
-  if (has("contract", "agreement", "signed", "docusign", "executed"))
-    return {
-      kind: has("funding") ? "funding_agreement" : "signed_contract",
-      period: null,
-      confidence: 0.7,
-      reason: "contract/agreement in the name",
-    };
-  if (has("offer", "approval", "term sheet", "termsheet"))
-    return { kind: "offer_sheet", period: null, confidence: 0.7, reason: "offer in the name" };
   // a bare month in the name is almost always a statement
   if (period)
     return {

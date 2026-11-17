@@ -18,9 +18,6 @@ export function isRole(v: unknown): v is Role {
 export const CAN = {
   manageTeam: (r: Role) => r === "manager",
   seeEveryone: (r: Role) => r === "manager",
-  editOffers: (r: Role) => r === "manager",
-  confirmFunding: (r: Role) => r === "manager",
   exportData: (r: Role) => r === "manager",
   workLeads: (r: Role) => r === "rep" || r === "manager",
-  runOps: (r: Role) => r === "ops" || r === "manager",
 } as const;

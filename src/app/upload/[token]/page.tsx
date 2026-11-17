@@ -83,7 +83,7 @@ export default async function UploadPage({ params }: { params: Promise<{ token: 
       <UploadForm token={s.token} />
       <p className="mt-8 text-xs text-muted">
         This link works for two hours. Everything you send is stored privately and shared only with
-        the lenders reviewing your file.
+        the people working on your file.
       </p>
     </main>
   );

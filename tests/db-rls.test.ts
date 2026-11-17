@@ -2,7 +2,6 @@ import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import pg from "@/lib/db/pg";
 import { migrate } from "@/lib/db/migrate";
-import { paybackCents } from "@/lib/mca/funding";
 import { STAGES } from "@/lib/mca/stages";
 import { createTestDb, insertClient, insertUser, type TestDb } from "./helpers/db";
 
@@ -171,18 +170,10 @@ describe("withUser", () => {
 });
 
 describe("constraints", () => {
-  it("rejects a blank business name and out-of-range factor rates", async () => {
+  it("rejects a blank business name", async () => {
     await expect(
       t.db.withUser(a, (q) =>
         q.query("insert into clients (user_id, business_name) values ($1, '  ')", [a]),
-      ),
-    ).rejects.toThrow(/check constraint/);
-    await expect(
-      t.db.withUser(a, (q) =>
-        q.query(
-          "insert into fundings (user_id, client_id, funded_on, amount_cents, factor_rate, payment_cents, frequency) values ($1,$2,current_date,100000,0.9,1000,'daily')",
-          [a, clientA],
-        ),
       ),
     ).rejects.toThrow(/check constraint/);
   });
@@ -190,22 +181,6 @@ describe("constraints", () => {
     await expect(
       t.pool.query("insert into app_users (email) values ('Mixed@Case.com')"),
     ).rejects.toThrow(/check constraint/);
-  });
-  it("computes payback in the database exactly as the TypeScript does", async () => {
-    const cases: [number, number][] = [
-      [5_000_000, 1.32],
-      [1_234_567, 1.29],
-      [2_500_050, 1.495],
-      [99_999, 1.001],
-      [10_000_000, 1.499],
-    ];
-    for (const [amount, factor] of cases) {
-      const { rows } = await t.pool.query<{ p: number }>(
-        "insert into fundings (user_id, client_id, funded_on, amount_cents, factor_rate, payment_cents, frequency) values ($1,$2,current_date,$3,$4,1000,'daily') returning payback_cents as p",
-        [a, clientA, amount, factor],
-      );
-      expect(rows[0]?.p, `${amount} × ${factor}`).toBe(paybackCents(amount, factor));
-    }
   });
   it("is a pg client with the date parser installed", async () => {
     const c = new pg.Client({ connectionString: t.pool.options.connectionString });

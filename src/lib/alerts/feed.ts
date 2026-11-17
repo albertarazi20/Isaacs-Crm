@@ -16,18 +16,7 @@ export interface AlertFeedRow {
 }
 
 export const ALERT_KIND_LABELS: Record<string, string> = {
-  approval_landed: "Approval",
-  funding_proposed: "Funding to confirm",
-  chase_draft: "Chase draft",
-  stale_deal: "Sitting too long",
-  behind_pace: "Pace",
-  kickback: "Kicked back",
-  late_payout: "Lender payout late",
-  registration: "Registration",
-  trust: "Trust check",
   application_signed: "Application signed",
-  renewal_eligible: "Renewal",
-  ask_manager: "Question for you",
   template_paused: "Template paused",
   bounce_spike: "Bounce spike",
 };

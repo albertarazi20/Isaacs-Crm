@@ -3,11 +3,9 @@ import { toActionError } from "@/lib/data/errors";
 import * as m from "@/lib/data/mutations";
 import { findDuplicates } from "@/lib/data/queries";
 import {
-  askSchema,
   duplicateCheckSchema,
   newClientSchema,
   noteSchema,
-  positionSchema,
   scheduleCallSchema,
 } from "@/lib/data/schemas";
 import type { UserContext } from "@/lib/data/types";
@@ -50,15 +48,6 @@ describe("QA I-17: refusals are in words Isaac can act on", () => {
     );
   });
 
-  it("an ask of $0 is refused before the database sees it", () => {
-    const base = { clientId: crypto.randomUUID(), estApproval: "" };
-    expect(say(() => askSchema.parse({ ...base, wantedAmount: "0" }))).toBe(
-      "Enter an amount above $0",
-    );
-    expect(say(() => askSchema.parse({ ...base, wantedAmount: "50k" }))).toBeNull();
-    expect(say(() => askSchema.parse({ ...base, wantedAmount: "" }))).toBeNull();
-  });
-
   it("a database check that does fire explains itself by name", async () => {
     const c = await newClient("Check Me");
     const err = await asA((q) =>
@@ -85,35 +74,6 @@ describe("QA I-17: refusals are in words Isaac can act on", () => {
     await expect(asA((q) => m.scheduleCall(q, past, ctx))).rejects.toThrow(
       "That call time has already passed — pick a time from now on",
     );
-  });
-});
-
-describe("QA I-16: other advances can't contradict themselves", () => {
-  const base = () => ({
-    clientId: crypto.randomUUID(),
-    positionNo: 2,
-    fundedAmount: "",
-    payback: "",
-    balance: "",
-    payment: "",
-  });
-  it("refuses a payback smaller than the advance", () => {
-    expect(
-      say(() => positionSchema.parse({ ...base(), fundedAmount: "20k", payback: "10k" })),
-    ).toMatch(/payback is less than the advance/i);
-  });
-  it("refuses a balance bigger than the payback", () => {
-    expect(say(() => positionSchema.parse({ ...base(), payback: "10k", balance: "50k" }))).toBe(
-      "The balance can't be more than the payback",
-    );
-  });
-  it("accepts a normal one, and one with only some of the numbers", () => {
-    expect(
-      say(() =>
-        positionSchema.parse({ ...base(), fundedAmount: "20k", payback: "27k", balance: "9k" }),
-      ),
-    ).toBeNull();
-    expect(say(() => positionSchema.parse({ ...base(), balance: "9k" }))).toBeNull();
   });
 });
 

@@ -4,9 +4,8 @@ import { nextSendTime } from "./rules";
 
 export interface EnqueueInput {
   clientId: string;
-  dealId?: string | null;
   lane: Lane;
-  /** 'bucket:<id>:step:<n>' | 'winback:<pool>:<n>' | 'blast:<id>' | 'intake' | 'manual' */
+  /** 'bucket:<id>:step:<n>' | 'blast:<id>' | 'intake' | 'manual' */
   source: string;
   subject: string;
   text: string;
@@ -83,12 +82,11 @@ export async function enqueueEmail(
     ? new Date(notBefore.getTime() + input.expiresInHours * 3_600_000)
     : null;
   const ins = await q.query<{ id: string }>(
-    `insert into outbox (user_id, client_id, deal_id, lane, source, to_address, subject, text_body, not_before, expires_at, template_id)
-     values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) returning id`,
+    `insert into outbox (user_id, client_id, lane, source, to_address, subject, text_body, not_before, expires_at, template_id)
+     values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) returning id`,
     [
       c.user_id,
       input.clientId,
-      input.dealId ?? null,
       input.lane,
       input.source,
       c.email.trim(),
@@ -104,7 +102,7 @@ export async function enqueueEmail(
   return { queued: true, outboxId: id, notBefore: notBefore.toISOString() };
 }
 
-/** Cancel every queued automated email to a merchant (a reply came in, docs arrived, the deal moved). */
+/** Cancel every queued automated email to a merchant (a reply came in, docs arrived, the merchant moved on). */
 export async function cancelQueued(
   q: Db,
   clientId: string,

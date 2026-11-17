@@ -37,7 +37,7 @@ interface Pending {
 }
 
 /**
- * Snooze presets with a guard: pushing a live underwriting deal (Application in ... Contract out) out past a
+ * Snooze presets with a guard: pushing a merchant whose application is in out past a
  * week asks for a one-line reason, saved as a note with the new date. It never blocks: a blank reason still snoozes.
  */
 function useSnooze(card: Target, onDone: () => void) {

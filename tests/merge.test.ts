@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { addDays } from "@/lib/mca/dates";
-import { createTestDb, insertClient, insertUser, timersJson, type TestDb } from "./helpers/db";
+import { createTestDb, insertClient, insertUser, type TestDb } from "./helpers/db";
 
 let t: TestDb;
 let a: string;
@@ -34,14 +34,6 @@ async function merchant(name: string, fields: Record<string, string> = {}) {
   }
   return id;
 }
-async function funder(name: string) {
-  const { rows } = await t.pool.query<{ id: string }>(
-    "insert into funders (user_id, name) values ($1, $2) returning id",
-    [a, `${name} ${(seq += 1)}`],
-  );
-  return rows[0]?.id as string;
-}
-
 describe("merging two cards for one merchant", () => {
   it("moves everything over, fills blanks, and the second card is gone", async () => {
     const keep = await merchant("Mike's Pizza", { phone: "3055550100" });
@@ -61,31 +53,8 @@ describe("merging two cards for one merchant", () => {
       [a, drop],
     );
     await t.pool.query(
-      "insert into positions (user_id, client_id, position_no, funder_name) values ($1, $2, 1, 'Old Funder')",
-      [a, drop],
-    );
-    await t.pool.query(
-      "insert into competing_offers (user_id, client_id, funder_name, amount_cents, factor_rate) values ($1, $2, 'Rival', 3000000, 1.4)",
-      [a, drop],
-    );
-    await t.pool.query(
       "insert into stips (user_id, client_id, kind, period, required, received_at) values ($1, $2, 'bank_statement', '2026-09-01', true, now())",
       [a, drop],
-    );
-    await asA((q) =>
-      q.query("select * from record_funding($1, $2::jsonb, $3::jsonb)", [
-        drop,
-        JSON.stringify({
-          funded_on: d(-30),
-          funder_name: "Alpha",
-          amount_cents: 5_000_000,
-          factor_rate: 1.3,
-          payment_cents: 50_000,
-          frequency: "daily",
-          position_no: 1,
-        }),
-        timersJson({ kind: "check_in", due_on: d(5) }),
-      ]),
     );
     const before = {
       notes: await count(
@@ -99,7 +68,7 @@ describe("merging two cards for one merchant", () => {
 
     // the second card is really gone, and every child now hangs off the first
     expect(await row(drop)).toBeUndefined();
-    for (const table of ["client_asks", "positions", "competing_offers", "fundings", "stips"]) {
+    for (const table of ["client_asks", "stips"]) {
       expect(
         await count(`select count(*) n from ${table} where client_id = $1`, [keep]),
         table,
@@ -128,11 +97,8 @@ describe("merging two cards for one merchant", () => {
       [keep],
     );
     expect(rows[0]?.body).toMatch(
-      /^Merged with Mikes Pizza LLC \d+ \(3055559999\): \d+ notes, 1 advances/,
+      /^Merged with Mikes Pizza LLC \d+ \(3055559999\): \d+ notes, \d+ advances/,
     );
-    // and the advance counts as the merchant's: his funding shows on the card
-    const card = await t.pool.query("select funding_id from client_cards where id = $1", [keep]);
-    expect(card.rows[0]?.funding_id).not.toBeNull();
   });
 
   it("a stop wins: do-not-contact on either card makes the merged card do-not-contact", async () => {
@@ -210,49 +176,6 @@ describe("merging two cards for one merchant", () => {
       { period: "2026-08-01", got: true },
       { period: "2026-09-01", got: false },
     ]);
-  });
-
-  it("submissions and their offers follow; a duplicate submission to the same funder that day is not doubled", async () => {
-    const keep = await merchant("Sub Keep");
-    const drop = await merchant("Sub Drop");
-    const f1 = await funder("F1");
-    const f2 = await funder("F2");
-    // the two cards are one merchant on purpose, so the double-submission guard (0512) would refuse the second
-    // send to the same lender: send it on purpose, which is what a person would do before merging
-    const sendTo = (client: string, funders: string[]) =>
-      asA((q) =>
-        q.query<{ id: string }>(
-          "select * from create_submissions($1, $2::uuid[], $3::date, '', true)",
-          [client, funders, d(-1)],
-        ),
-      );
-    await sendTo(keep, [f1]);
-    const dropSubs = (await sendTo(drop, [f1, f2])).rows; // f1 duplicates the kept card's; f2 is new
-    const offer = await asA((q) =>
-      q.query<{ id: string }>("select * from record_offer($1, $2::jsonb)", [
-        dropSubs[1]?.id,
-        JSON.stringify({ amount_cents: 2_000_000, factor_rate: 1.35 }),
-      ]),
-    );
-    await merge(keep, drop);
-    const { rows } = await t.pool.query<{ funder_id: string }>(
-      "select funder_id from submissions where client_id = $1 order by funder_id",
-      [keep],
-    );
-    expect(rows.map((r) => r.funder_id).sort()).toEqual([f1, f2].sort());
-    expect(
-      await count("select count(*) n from offers where id = $1 and client_id = $2", [
-        offer.rows[0]?.id,
-        keep,
-      ]),
-    ).toBe(1);
-    // the chase for the moved submission is on the kept card now
-    expect(
-      await count(
-        "select count(*) n from timers where client_id = $1 and kind = 'chase' and done_at is null",
-        [keep],
-      ),
-    ).toBeGreaterThanOrEqual(1);
   });
 
   it("a booked call on the second card survives when the kept card has none", async () => {

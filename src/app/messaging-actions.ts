@@ -33,7 +33,7 @@ async function run<T>(
   }
 }
 
-/** Signature, application link, saved snippets and this merchant's ask/offer — what the Text and Email dialogs fill from. */
+/** Signature, application link, saved snippets and this merchant's ask — what the Text and Email dialogs fill from. */
 export async function getMessagingContextAction(
   input: unknown,
 ): Promise<ActionResult<MessagingContext>> {

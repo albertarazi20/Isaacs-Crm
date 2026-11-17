@@ -1,7 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { createTestDb, insertClient, insertUser, type TestDb } from "./helpers/db";
+import { createTestDb, insertUser, type TestDb } from "./helpers/db";
 
 let t: TestDb;
 let a: string;
@@ -35,18 +35,6 @@ describe("shared reference data stays readable when the host forces row-level se
   it("precondition: with RLS on and no policy the app role sees no stages at all", async () => {
     await t.pool.query("drop policy stages_read on stages");
     expect(await stagesSeenByApp()).toBe(0);
-    const id = await insertClient(t.db, a, "Early Deal");
-    const moved = await t.db.withUser(
-      a,
-      async (q) =>
-        (
-          await q.query<{ moved: boolean }>("select app.promote_to_offers_in($1, 'x') as moved", [
-            id,
-          ])
-        ).rows[0]?.moved,
-    );
-    // the silent failure this migration prevents: no error, the deal just never moves
-    expect(moved).toBe(false);
   });
 
   it("the migration gives the app role read access and nothing more", async () => {
@@ -59,24 +47,5 @@ describe("shared reference data stays readable when the host forces row-level se
     await expect(
       t.db.withUser(a, (q) => q.query("update stages set label = 'x' where key = 'lost'")),
     ).rejects.toThrow(/permission denied/);
-  });
-
-  it("a funder's yes still brings an early deal to Offers in", async () => {
-    const id = await insertClient(t.db, a, "Second Deal");
-    const moved = await t.db.withUser(
-      a,
-      async (q) =>
-        (
-          await q.query<{ moved: boolean }>("select app.promote_to_offers_in($1, 'x') as moved", [
-            id,
-          ])
-        ).rows[0]?.moved,
-    );
-    expect(moved).toBe(true);
-    const { rows } = await t.pool.query<{ stage: string }>(
-      "select stage from clients where id = $1",
-      [id],
-    );
-    expect(rows[0]?.stage).toBe("offers_in");
   });
 });

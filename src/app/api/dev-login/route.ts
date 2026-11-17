@@ -2,7 +2,6 @@ import { NextResponse, type NextRequest } from "next/server";
 import { sessionCookie } from "@/lib/auth/server";
 import { devLoginEnabled, env } from "@/lib/env";
 import { isRole } from "@/lib/auth/roles";
-import { db } from "@/lib/db";
 import { upsertDevUser } from "@/lib/system/users";
 
 export const dynamic = "force-dynamic";
@@ -18,10 +17,6 @@ export async function GET(req: NextRequest) {
     // no ?role= keeps a seeded user's role (browser tests seed reps); a brand-new dev user starts as a manager
     isRole(wanted) ? wanted : null,
   );
-  // the first-login policy gate (0520) is accepted for a dev user, so local work and the browser suites land on
-  // the pages; ?policy=0 leaves it unaccepted to try the gate itself
-  if (req.nextUrl.searchParams.get("policy") !== "0")
-    await db.withUser(user.id, (q) => q.query("select accept_policy()"));
   const res = NextResponse.redirect(`${env().APP_URL}/`);
   res.cookies.set(
     await sessionCookie({

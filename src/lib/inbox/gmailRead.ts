@@ -46,7 +46,7 @@ async function call<T>(token: string, path: string, fetchImpl: Fetch): Promise<T
   return (await res.json()) as T;
 }
 
-/** Messages matching a Gmail search, newest first. `q` keeps the read small: after a date, from lender domains. */
+/** Messages matching a Gmail search, newest first. `q` keeps the read small: after a date, in the inbox. */
 export async function listMessages(
   token: string,
   q: string,

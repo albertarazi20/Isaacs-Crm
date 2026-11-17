@@ -61,8 +61,6 @@ interface Job {
   /** The bucket enrolment this step belongs to is paused (a rep's Pause, or a merchant's "not now"). */
   enrollment_paused: boolean;
   client_state: string | null;
-  /** A lender said yes on an open deal: "approved" language is true for this merchant. */
-  has_offer: boolean;
   suppressed: boolean;
   unsubscribe_token: string | null;
   merchant_24h: number;
@@ -133,9 +131,6 @@ export async function drainOutbox(args: {
            exists (select 1 from enrollments e where e.client_id = o.client_id and e.stopped_at is null and e.paused
                       and o.source like 'bucket:' || e.bucket_id::text || ':%') as enrollment_paused,
            (select state from clients c where c.id = o.client_id) as client_state,
-           exists (select 1 from submissions s join deals d on d.id = s.deal_id
-                    where s.client_id = o.client_id and d.outcome = 'open'
-                      and s.status in ('approved', 'revised', 'contracts_out', 'contracts_in', 'funding_call')) as has_offer,
            app.is_suppressed('email', o.to_address) as suppressed,
            (select unsubscribe_token from clients c where c.id = o.client_id) as unsubscribe_token,
            coalesce((select app.merchant_sent(o.client_id, interval '24 hours', $1::timestamptz)), 0) as merchant_24h,
@@ -202,7 +197,6 @@ export async function drainOutbox(args: {
       if (bulk) {
         // the claim checker (S1-15): what the engine says on its own must be true for this merchant
         const claims = checkClaims(`${job.subject}\n${job.text_body}`, {
-          approvedOffer: job.has_offer,
           state: job.client_state ?? "",
         });
         if (!claims.ok) {

@@ -37,8 +37,3 @@ export function formatMoneyCompact(cents: number | null | undefined): string {
   if (Math.abs(d) >= 1_000) return `$${trim(d / 1_000)}k`;
   return `$${Math.round(d)}`;
 }
-
-export function parseFactor(input: string | number | null | undefined): number | null {
-  const n = typeof input === "number" ? input : Number((input ?? "").toString().trim());
-  return Number.isFinite(n) && n >= 1 && n <= 3 ? Math.round(n * 1000) / 1000 : null;
-}

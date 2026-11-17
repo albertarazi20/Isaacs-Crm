@@ -7,12 +7,7 @@ import "@/lib/data/schemas";
 // Production sends a CSP without 'unsafe-eval'. Zod probes `new Function` unless told not to, and the
 // browser reports every probe as a violation. These schema files reach the browser, so each must switch the
 // probe off before it builds a schema.
-const BROWSER_SCHEMAS = [
-  "src/lib/data/schemas.ts",
-  "src/lib/funders/schemas.ts",
-  "src/lib/messaging/schemas.ts",
-  "src/lib/earnings/schemas.ts",
-];
+const BROWSER_SCHEMAS = ["src/lib/data/schemas.ts", "src/lib/messaging/schemas.ts"];
 
 describe("zod never probes eval", () => {
   it("is switched to jitless", () => {

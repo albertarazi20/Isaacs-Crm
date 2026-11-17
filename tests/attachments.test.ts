@@ -5,7 +5,6 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { LocalStore } from "@/lib/docs/storage";
 import { fileEmailAttachment, listDocuments } from "@/lib/docs/upload";
 import { getAttachment, getMessage } from "@/lib/inbox/gmailRead";
-import { submitToLenders, type Sender } from "@/lib/inbox/submit";
 import { createTestDb, insertClient, insertUser, type TestDb } from "./helpers/db";
 
 const b64url = (s: string | Uint8Array) => Buffer.from(s).toString("base64url");
@@ -66,12 +65,11 @@ describe("Gmail attachments", () => {
   });
 });
 
-describe("filing and the shotgun check", () => {
+describe("filing an emailed attachment", () => {
   let t: TestDb;
   let dir: string;
   let store: LocalStore;
   let rep: string;
-  let manager: string;
   let pizza: string;
   let prev: string;
   let prevName: string;
@@ -81,10 +79,6 @@ describe("filing and the shotgun check", () => {
     dir = mkdtempSync(join(tmpdir(), "isaac-att-"));
     store = new LocalStore(dir);
     rep = await insertUser(t.pool, "rep@x.com", "America/New_York");
-    manager = await insertUser(t.pool, "boss@x.com", "America/New_York");
-    await t.pool.query("update app_users set role = 'manager', name = 'Boss' where id = $1", [
-      manager,
-    ]);
     pizza = await insertClient(t.db, rep, "Pizza Palace");
     const d = await t.pool.query<{ p: string; n: string }>(
       "select (date_trunc('month', current_date) - interval '1 month')::date::text as p, to_char(date_trunc('month', current_date) - interval '1 month', 'Mon_YYYY') as n",
@@ -137,52 +131,5 @@ describe("filing and the shotgun check", () => {
         today: t.today,
       }),
     ).toBeNull();
-  });
-
-  it("sending past the shop's lender limit is refused unless done on purpose, and then it is logged", async () => {
-    const ids: string[] = [];
-    for (let i = 1; i <= 7; i++) {
-      ids.push(
-        (
-          await t.pool.query<{ id: string }>(
-            "insert into funders (user_id, name, submission_email) values ($1, $2, $3) returning id",
-            [manager, `Lender ${i}`, `subs${i}@lender.com`],
-          )
-        ).rows[0]!.id,
-      );
-    }
-    await t.db.withUser(rep, (q) => q.query("select submit_to_ops($1)", [pizza]));
-    const sent: string[] = [];
-    const send: Sender = async (m) => {
-      sent.push(m.to);
-      return { id: `g${sent.length}`, threadId: `t${sent.length}` };
-    };
-    const base = {
-      clientId: pizza,
-      senderName: "Josh",
-      senderEmail: "rep@x.com",
-      appUrl: "https://crm.test",
-    };
-    await expect(
-      t.db.withUser(rep, (q) => submitToLenders(q, { ...base, funderIds: ids }, send)),
-    ).rejects.toThrow(/7 lenders; the shop limit is 6/);
-    expect(sent).toEqual([]);
-    const ok = await t.db.withUser(rep, (q) =>
-      submitToLenders(q, { ...base, funderIds: ids.slice(0, 6) }, send),
-    );
-    expect(ok.submissions).toHaveLength(6);
-    // the seventh on top of six already out needs the override; the override is written down
-    await expect(
-      t.db.withUser(rep, (q) => submitToLenders(q, { ...base, funderIds: ids.slice(6) }, send)),
-    ).rejects.toThrow(/shop limit/);
-    const forced = await t.db.withUser(rep, (q) =>
-      submitToLenders(q, { ...base, funderIds: ids.slice(6), force: true }, send),
-    );
-    expect(forced.submissions).toHaveLength(1);
-    const note = await t.pool.query<{ body: string }>(
-      "select body from activities where client_id = $1 and body like 'Shotgun override%'",
-      [pizza],
-    );
-    expect(note.rows[0]?.body).toBe("Shotgun override by Josh: 7 lenders (shop limit 6)");
   });
 });

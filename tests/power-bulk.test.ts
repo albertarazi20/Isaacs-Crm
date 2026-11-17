@@ -34,8 +34,6 @@ interface Seed {
   contactStatus?: string;
   wanted?: number;
   timers: { kind: string; due: string; note?: string }[];
-  /** A funded advance: $50k at 1.32, $550 a business day, funded this many days ago. */
-  fundedDaysAgo?: number;
 }
 
 /** Direct inserts (the owner connection): the test controls dates the app's own functions would refuse. */
@@ -55,13 +53,6 @@ async function seed(s: Seed): Promise<string> {
     await t.pool.query(
       "insert into client_asks (user_id, client_id, wanted_amount_cents) values ($1, $2, $3)",
       [s.user, id, s.wanted],
-    );
-  }
-  if (s.fundedDaysAgo !== undefined) {
-    await t.pool.query(
-      `insert into fundings (user_id, client_id, funded_on, amount_cents, factor_rate, payment_cents, frequency)
-       values ($1, $2, $3, 5000000, 1.32, 55000, 'daily')`,
-      [s.user, id, d(-s.fundedDaysAgo)],
     );
   }
   return id;
@@ -98,17 +89,7 @@ describe("bulk reschedule: the database really moves", () => {
   let otherActivitiesBefore: number;
 
   beforeAll(async () => {
-    // --- A: five clients that should move, ranked by money
-    ids.renewal = await seed({
-      user: a,
-      name: "Renewal Ready",
-      stage: "funded",
-      fundedDaysAgo: 100, // 100 days ago: well past 50% paid down
-      timers: [
-        { kind: "renewal", due: d(-1), note: "50% paid down — renewal call" },
-        { kind: "check_in", due: d(20), note: "Remittances clearing?" },
-      ],
-    });
+    // --- A: three clients that should move, ranked by money
     ids.big = await seed({
       user: a,
       name: "Big Deal",
@@ -120,16 +101,6 @@ describe("bulk reschedule: the database really moves", () => {
       name: "Mid Deal",
       wanted: 4_000_000,
       timers: [{ kind: "follow_up", due: d(-10) }],
-    });
-    ids.checkin = await seed({
-      user: a,
-      name: "Young Advance",
-      stage: "funded",
-      fundedDaysAgo: 30, // about 36% paid down: not renewal-ready
-      timers: [
-        { kind: "check_in", due: d(-2), note: "Remittances clearing?" },
-        { kind: "renewal", due: d(40), note: "50% paid down — renewal call" },
-      ],
     });
     ids.small = await seed({
       user: a,
@@ -193,15 +164,15 @@ describe("bulk reschedule: the database really moves", () => {
 
   it("spreads the overdue clients over the next business days, biggest deal first", async () => {
     const result = await t.db.withUser(a, (q) =>
-      bulkReschedule(q, ctx(), { days: 5, keepUnderwriting: true }),
+      bulkReschedule(q, ctx(), { days: 5, keepApplicationIn: true }),
     );
-    expect(result).toMatchObject({ moved: 5, keptUnderwriting: 1, needHands: 2, overCap: 0 });
+    expect(result).toMatchObject({ moved: 3, keptApplicationIn: 1, needHands: 2, overCap: 0 });
 
     const slots = businessDaySlots(today(), 5);
-    expect(result.perDay).toEqual(slots.map((date) => ({ date, count: 1 })));
+    expect(result.perDay).toEqual(slots.slice(0, 3).map((date) => ({ date, count: 1 })));
 
-    // $50k renewal (x0.8) > $90k interested (x0.35) > $40k > the young advance's check-in > $5k name-in.
-    const order = ["renewal", "big", "mid", "checkin", "small"];
+    // $90k interested > $40k interested > $5k name-in.
+    const order = ["big", "mid", "small"];
     for (const [i, key] of order.entries()) {
       const timers = await openTimers(ids[key] as string);
       expect(
@@ -217,27 +188,13 @@ describe("bulk reschedule: the database really moves", () => {
       [ids.big],
     );
     expect(rows).toEqual([{ done_reason: "replaced" }]);
-    for (const key of ["renewal", "big", "mid", "checkin", "small"]) {
+    for (const key of ["big", "mid", "small"]) {
       const acts = await bulkActivities(ids[key] as string);
       expect(acts, key).toHaveLength(1);
       expect(acts[0]?.body).toMatch(
         /^Follow up set for [A-Z][a-z]{2} \d{1,2}, \d{4} — Rescheduled in bulk$/,
       );
     }
-  });
-
-  it("follows set_follow_up for funded clients: an overdue renewal moves, a later check-in stays", async () => {
-    const slots = businessDaySlots(today(), 5);
-    const renewal = await openTimers(ids.renewal as string);
-    expect(renewal.find((x) => x.kind === "renewal")?.due_on).toBe(slots[0]);
-    expect(renewal.find((x) => x.kind === "check_in")?.due_on).toBe(d(20));
-  });
-
-  it("an overdue check-in moves, a later renewal call is NEVER deleted or pulled in", async () => {
-    const slots = businessDaySlots(today(), 5);
-    const timers = await openTimers(ids.checkin as string);
-    expect(timers.find((x) => x.kind === "check_in")?.due_on).toBe(slots[3]);
-    expect(timers.find((x) => x.kind === "renewal")?.due_on).toBe(d(40));
   });
 
   it("leaves underwriting, do-not-contact, booked-call and untouched clients exactly as they were", async () => {
@@ -276,14 +233,14 @@ describe("bulk reschedule: the database really moves", () => {
 
   it("running it again moves nothing more: the overdue pile is what is left", async () => {
     const again = await t.db.withUser(a, (q) =>
-      bulkReschedule(q, ctx(), { days: 5, keepUnderwriting: true }),
+      bulkReschedule(q, ctx(), { days: 5, keepApplicationIn: true }),
     );
-    expect(again).toMatchObject({ moved: 0, keptUnderwriting: 1, needHands: 2 });
+    expect(again).toMatchObject({ moved: 0, keptApplicationIn: 1, needHands: 2 });
   });
 
   it("with the underwriting switch off it moves the deal that was being kept", async () => {
     const r = await t.db.withUser(a, (q) =>
-      bulkReschedule(q, ctx(), { days: 3, keepUnderwriting: false }),
+      bulkReschedule(q, ctx(), { days: 3, keepApplicationIn: false }),
     );
     expect(r.moved).toBe(1);
     const timers = await openTimers(ids.underwriting as string);
@@ -303,7 +260,7 @@ describe("bulk reschedule: the database really moves", () => {
     const before = await snapshot(a);
     for (const days of [0, -2, 2.5]) {
       await expect(
-        t.db.withUser(a, (q) => bulkReschedule(q, ctx(), { days, keepUnderwriting: false })),
+        t.db.withUser(a, (q) => bulkReschedule(q, ctx(), { days, keepApplicationIn: false })),
       ).rejects.toThrow(RangeError);
     }
     expect(await snapshot(a)).toEqual(before);
@@ -391,7 +348,7 @@ describe("the 200-per-call cap", () => {
       [c],
     );
     const r = await t.db.withUser(c, (q) =>
-      bulkReschedule(q, ctx(), { days: 20, keepUnderwriting: false }),
+      bulkReschedule(q, ctx(), { days: 20, keepApplicationIn: false }),
     );
     expect(r.moved).toBe(MAX_BULK);
     expect(r.overCap).toBe(5);

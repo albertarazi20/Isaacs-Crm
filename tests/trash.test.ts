@@ -2,7 +2,7 @@ import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { importClients } from "@/lib/data/import";
 import { listTrashed, findDuplicates } from "@/lib/data/queries";
 import * as m from "@/lib/data/mutations";
-import { importSchema, moveSchema } from "@/lib/data/schemas";
+import { importSchema } from "@/lib/data/schemas";
 import type { UserContext } from "@/lib/data/types";
 import { addDays, addMonths, todayIn } from "@/lib/mca/dates";
 import { runReminders, type DigestSender } from "@/lib/system/reminders";
@@ -116,32 +116,6 @@ describe("restoring", () => {
       [id],
     );
     expect(last[0]?.body).toBe("Restored from trash");
-  });
-
-  it("a funded merchant keeps its renewal call", async () => {
-    const id = await insertClient(t.db, a, "Funded Back Pizza");
-    await asA((q) =>
-      m.moveClient(
-        q,
-        moveSchema.parse({
-          clientId: id,
-          stage: "funded",
-          funding: {
-            amount: "50k",
-            factorRate: "1.32",
-            payment: "550",
-            frequency: "daily",
-            funderName: "Alpha",
-          },
-        }),
-        ctx,
-      ),
-    );
-    const before = await openTimers(id);
-    expect(before.map((x) => x.kind).sort()).toEqual(["check_in", "renewal"]);
-    await asA((q) => m.trashClient(q, id));
-    await asA((q) => m.restoreClient(q, id));
-    expect(await openTimers(id)).toEqual(before);
   });
 
   it("a timer already past due is not brought back as overdue; a follow-up a week out replaces it", async () => {

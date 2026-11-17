@@ -171,9 +171,8 @@ function BulkDialog({ overdue, onClose }: { overdue: ClientCard[]; onClose: () =
 
         {plan.needHands.length > 0 ? (
           <p className="rounded-lg bg-warn-soft p-3 text-sm text-warn">
-            {plan.needHands.length} booked call{plan.needHands.length === 1 ? "" : "s"} or funder
-            chase{plan.needHands.length === 1 ? "" : "s"} can&apos;t be moved here — they stay
-            overdue until you log or cancel them.
+            {plan.needHands.length} booked call{plan.needHands.length === 1 ? "" : "s"} can&apos;t
+            be moved here — they stay overdue until you log or cancel them.
           </p>
         ) : null}
         {plan.overCap > 0 ? (

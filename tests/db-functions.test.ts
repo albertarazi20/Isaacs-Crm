@@ -1,6 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { addDays, addMonths } from "@/lib/mca/dates";
-import { paybackCents, renewalDate, type FundingTerms } from "@/lib/mca/funding";
+import { addBusinessDays, addDays, addMonths } from "@/lib/mca/dates";
 import { defaultTimers } from "@/lib/mca/stages";
 import { defaultStips } from "@/lib/mca/stips";
 import { createTestDb, insertClient, insertUser, timersJson, type TestDb } from "./helpers/db";
@@ -172,30 +171,6 @@ describe("move_client", () => {
 });
 
 describe("set_follow_up (dragging to a follow-up column)", () => {
-  it("moves the follow-up, pushes an earlier check-in out, and keeps a later renewal call", async () => {
-    const id = await insertClient(t.db, a, "Drag Co");
-    await t.db.withUser(a, (q) =>
-      q.query("select * from move_client($1, 'funded', $2::jsonb)", [
-        id,
-        timersJson(fu(30, "check_in"), fu(80, "renewal")),
-      ]),
-    );
-    expect(await openTimers(id)).toHaveLength(2);
-    const target = addMonths(today(), 2);
-    await t.db.withUser(a, (q) =>
-      q.query("select * from set_follow_up($1, $2, 'busy till then')", [id, target]),
-    );
-    expect(await openTimers(id)).toEqual([
-      { kind: "check_in", due_on: target },
-      { kind: "follow_up", due_on: target },
-      { kind: "renewal", due_on: addDays(today(), 80) },
-    ]);
-    const card = await t.db.withUser(a, (q) =>
-      q.query("select next_due_on from client_cards where id = $1", [id]),
-    );
-    expect(card.rows[0].next_due_on).toBe(target);
-    expect((await activities(id)).at(-1)?.body).toContain("busy till then");
-  });
   it("rejects 37 months and yesterday-and-earlier", async () => {
     const id = await insertClient(t.db, a, "Range Co");
     await expect(
@@ -285,13 +260,16 @@ describe("schedule_call", () => {
     const early = await insertClient(t.db, a, "Early Co");
     const late = await insertClient(t.db, a, "Late Co");
     await t.db.withUser(a, (q) =>
-      q.query("select * from move_client($1, 'offers_in', $2::jsonb)", [late, timersJson(fu(1))]),
+      q.query("select * from move_client($1, 'application_in', $2::jsonb)", [
+        late,
+        timersJson(fu(1)),
+      ]),
     );
     const at = `${addDays(today(), 3)}T15:00:00Z`;
     await t.db.withUser(a, (q) => q.query("select * from schedule_call($1, $2)", [early, at]));
     await t.db.withUser(a, (q) => q.query("select * from schedule_call($1, $2)", [late, at]));
     expect(await stageOf(early)).toBe("name_in");
-    expect(await stageOf(late)).toBe("offers_in");
+    expect(await stageOf(late)).toBe("application_in");
   });
   it("replaces a previously booked call instead of stacking two", async () => {
     const id = await insertClient(t.db, a, "Rebook Co");
@@ -369,190 +347,15 @@ describe("stips", () => {
   });
 });
 
-describe("record_funding", () => {
-  const terms = (): FundingTerms => ({
-    fundedOn: today(),
-    amountCents: 5_000_000,
-    factorRate: 1.32,
-    paymentCents: 55_000,
-    frequency: "daily",
-  });
-  const payload = (f: FundingTerms) => ({
-    funded_on: f.fundedOn,
-    amount_cents: f.amountCents,
-    factor_rate: f.factorRate,
-    payment_cents: f.paymentCents,
-    frequency: f.frequency,
-    funder_name: "Alpha Capital",
-    commission_cents: 400_000,
-  });
-
-  it("stores the advance, moves the card to Funded and starts BOTH timers", async () => {
-    const id = await insertClient(t.db, a, "Funded Co");
-    const f = terms();
-    const timers = defaultTimers("funded", { today: today(), funding: f }).map((x) => ({
-      kind: x.kind,
-      due_on: x.dueOn,
-      note: x.note,
-    }));
-    await t.db.withUser(a, (q) =>
-      q.query("select * from record_funding($1, $2::jsonb, $3::jsonb)", [
-        id,
-        JSON.stringify(payload(f)),
-        JSON.stringify(timers),
-      ]),
-    );
-    const row = (
-      await t.pool.query(
-        "select amount_cents, payback_cents, status, funder_name from fundings where client_id = $1",
-        [id],
-      )
-    ).rows[0];
-    expect(row).toEqual({
-      amount_cents: 5_000_000,
-      payback_cents: paybackCents(5_000_000, 1.32),
-      status: "active",
-      funder_name: "Alpha Capital",
-    });
-    expect(await stageOf(id)).toBe("funded");
-    expect(await openTimers(id)).toEqual([
-      { kind: "check_in", due_on: addDays(today(), 30) },
-      { kind: "renewal", due_on: renewalDate(f, today()) },
-    ]);
-    expect((await activities(id)).map((x) => x.kind)).toEqual([
-      "system",
-      "stage_change",
-      "funding",
-    ]);
-  });
-  it("marks the previous advance renewed when a new one funds", async () => {
-    const id = await insertClient(t.db, a, "Renew Co");
-    const f = terms();
-    const timers = JSON.stringify([fu(30, "check_in")]);
-    await t.db.withUser(a, (q) =>
-      q.query("select * from record_funding($1, $2::jsonb, $3::jsonb)", [
-        id,
-        JSON.stringify(payload(f)),
-        timers,
-      ]),
-    );
-    await t.db.withUser(a, (q) =>
-      q.query("select * from record_funding($1, $2::jsonb, $3::jsonb)", [
-        id,
-        JSON.stringify({ ...payload(f), amount_cents: 8_000_000 }),
-        timers,
-      ]),
-    );
-    const rows = (
-      await t.pool.query(
-        "select amount_cents, status from fundings where client_id = $1 order by amount_cents",
-        [id],
-      )
-    ).rows;
-    expect(rows).toEqual([
-      { amount_cents: 5_000_000, status: "renewed" },
-      { amount_cents: 8_000_000, status: "active" },
-    ]);
-  });
-  it("rolls back the funding if the timers are invalid", async () => {
-    const id = await insertClient(t.db, a, "Rollback Co");
-    await expect(
-      t.db.withUser(a, (q) =>
-        q.query("select * from record_funding($1, $2::jsonb, '[]'::jsonb)", [
-          id,
-          JSON.stringify(payload(terms())),
-        ]),
-      ),
-    ).rejects.toThrow(/at least one timer/);
-    expect(
-      (await t.pool.query("select count(*)::int as n from fundings where client_id = $1", [id]))
-        .rows[0].n,
-    ).toBe(0);
-    expect(await stageOf(id)).toBe("name_in");
-  });
-});
-
-describe("record_default", () => {
-  const funded = async (name: string) => {
-    const id = await insertClient(t.db, a, name);
-    const payload = {
-      funded_on: today(),
-      amount_cents: 3_000_000,
-      factor_rate: 1.3,
-      payment_cents: 40_000,
-      frequency: "daily",
-    };
-    await t.db.withUser(a, (q) =>
-      q.query("select * from record_funding($1, $2::jsonb, $3::jsonb)", [
-        id,
-        JSON.stringify(payload),
-        JSON.stringify([fu(30, "check_in")]),
-      ]),
-    );
-    return id;
-  };
-
-  it("stamps the default date and promise-to-pay on the advance and moves the card", async () => {
-    const id = await funded("Default Co");
-    const promise = `${addDays(today(), 4)}T14:30:00Z`;
-    await t.db.withUser(a, (q) =>
-      q.query(
-        "select * from record_default($1, 'default_workable', $2, $3, 150000, $4::jsonb, 'Says Friday')",
-        [id, today(), promise, JSON.stringify([fu(3)])],
-      ),
-    );
-    const f = (
-      await t.pool.query(
-        "select status, defaulted_on, promise_to_pay_at, promise_amount_cents from fundings where client_id = $1",
-        [id],
-      )
-    ).rows[0];
-    expect(f.status).toBe("defaulted");
-    expect(f.defaulted_on).toBe(today());
-    expect(f.promise_to_pay_at.toISOString()).toBe(new Date(promise).toISOString());
-    expect(f.promise_amount_cents).toBe(150_000);
-    expect(await stageOf(id)).toBe("default_workable");
-    const card = (
-      await t.db.withUser(a, (q) =>
-        q.query("select defaulted_on, promise_amount_cents from client_cards where id = $1", [id]),
-      )
-    ).rows[0];
-    expect(card).toEqual({ defaulted_on: today(), promise_amount_cents: 150_000 });
-  });
-  it("only accepts default stages and only for a client that was funded", async () => {
-    const id = await funded("Wrong Stage Co");
-    await expect(
-      t.db.withUser(a, (q) =>
-        q.query("select * from record_default($1, 'dead', $2, null, null, $3::jsonb)", [
-          id,
-          today(),
-          JSON.stringify([fu(3)]),
-        ]),
-      ),
-    ).rejects.toThrow(/not a default stage/);
-    const never = await insertClient(t.db, a, "Never Funded Co");
-    await expect(
-      t.db.withUser(a, (q) =>
-        q.query("select * from record_default($1, 'default_bad', $2, null, null, $3::jsonb)", [
-          never,
-          today(),
-          JSON.stringify([fu(3)]),
-        ]),
-      ),
-    ).rejects.toThrow(/no funding/);
-    expect(await stageOf(never)).toBe("name_in");
-  });
-});
-
 describe("client_cards", () => {
-  it("surfaces the earliest open timer, the newest ask, the stack and the latest funding", async () => {
+  it("surfaces the earliest open timer and the newest ask", async () => {
     const id = await insertClient(t.db, a, "Card Co", addDays(today(), 20));
     await t.db.withUser(a, async (q) => {
       await q.query("select * from set_follow_up($1, $2)", [id, addDays(today(), 20)]);
-      await q.query(
-        "insert into timers (user_id, client_id, kind, due_on) values ($1, $2, 'renewal', $3)",
-        [a, id, addDays(today(), 6)],
-      );
+      await q.query("select * from schedule_call($1, $2)", [
+        id,
+        `${addDays(today(), 6)}T15:00:00Z`,
+      ]);
       await q.query(
         "insert into client_asks (user_id, client_id, wanted_amount_cents, wanted_terms) values ($1, $2, 3000000, 'old ask')",
         [a, id],
@@ -564,32 +367,23 @@ describe("client_cards", () => {
         "insert into client_asks (user_id, client_id, wanted_amount_cents, wanted_terms, est_approval_cents) values ($1, $2, 7500000, '75k, 9 months, daily', 5000000)",
         [a, id],
       );
-      await q.query(
-        "insert into positions (user_id, client_id, position_no, funder_name, funded_amount_cents, payback_cents, balance_cents) values ($1,$2,1,'Alpha',3000000,4200000,2100000), ($1,$2,2,'Beta',1000000,1400000,1400000)",
-        [a, id],
-      );
     });
     const c = (
       await t.db.withUser(a, (q) => q.query("select * from client_cards where id = $1", [id]))
     ).rows[0];
     expect(c).toMatchObject({
       next_due_on: addDays(today(), 6),
-      next_due_kind: "renewal",
+      next_due_kind: "scheduled_call",
       wanted_amount_cents: 7_500_000,
       wanted_terms: "75k, 9 months, daily",
       est_approval_cents: 5_000_000,
-      position_count: 2,
-      position_balance_cents: 3_500_000,
     });
   });
-  it("sorts by due date so a renewal due next week beats a follow-up due next month", async () => {
+  it("sorts by due date so a call booked for next week beats a follow-up due next month", async () => {
     const later = await insertClient(t.db, a, "Sort Later Co", addDays(today(), 30));
     const sooner = await insertClient(t.db, a, "Sort Sooner Co", addDays(today(), 30));
     await t.db.withUser(a, (q) =>
-      q.query(
-        "insert into timers (user_id, client_id, kind, due_on) values ($1, $2, 'renewal', $3)",
-        [a, sooner, addDays(today(), 6)],
-      ),
+      q.query("select * from schedule_call($1, $2)", [sooner, `${addDays(today(), 6)}T15:00:00Z`]),
     );
     const { rows } = await t.db.withUser(a, (q) =>
       q.query("select id from client_cards where id = any($1) order by next_due_on", [
@@ -597,6 +391,17 @@ describe("client_cards", () => {
       ]),
     );
     expect(rows.map((r) => r.id)).toEqual([sooner, later]);
+  });
+});
+
+describe("app.add_business_days", () => {
+  it("matches addBusinessDays in TypeScript for every start date and span", async () => {
+    const { rows } = await t.pool.query<{ from: string; n: number; got: string }>(
+      `select s::date::text as "from", n, app.add_business_days(s::date, n)::text as got
+         from generate_series(current_date - 20, current_date + 20, interval '1 day') s, generate_series(0, 7) n`,
+    );
+    expect(rows.length).toBe(41 * 8);
+    for (const r of rows) expect(r.got).toBe(addBusinessDays(r.from, r.n));
   });
 });
 
@@ -619,7 +424,7 @@ describe("integrity", () => {
 });
 
 describe("timeline wording and ordering written by the database", () => {
-  it("writes follow-ups, stips and fundings the way Isaac would say them", async () => {
+  it("writes follow-ups and stips the way Isaac would say them", async () => {
     const id = await insertClient(t.db, a, "Wording Co");
     const due = addMonths(today(), 2);
     await t.db.withUser(a, (q) => q.query("select * from set_follow_up($1, $2)", [id, due]));
@@ -653,22 +458,6 @@ describe("timeline wording and ordering written by the database", () => {
     expect((await activities(id)).at(-1)?.body).toBe(
       "Stip marked missing: Jul 2026 bank statement",
     );
-
-    const funding = {
-      funded_on: today(),
-      amount_cents: 5_000_000,
-      factor_rate: 1.32,
-      payment_cents: 55_000,
-      frequency: "daily",
-    };
-    await t.db.withUser(a, (q) =>
-      q.query("select * from record_funding($1, $2::jsonb, $3::jsonb)", [
-        id,
-        JSON.stringify(funding),
-        JSON.stringify([fu(30, "check_in")]),
-      ]),
-    );
-    expect((await activities(id)).at(-1)?.body).toBe("Funded $50,000 at 1.32 factor");
   });
   it("two asks saved in the same transaction still have a clear newest", async () => {
     const id = await insertClient(t.db, a, "Same Tx Ask Co");

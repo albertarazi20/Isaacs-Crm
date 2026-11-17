@@ -42,20 +42,14 @@ export async function restoreBackup(
     targetUserId,
   ]);
   if (user.rowCount === 0) throw new RestoreError("That account does not exist");
-  // Every table has to be empty for this account, not just the merchants: a funder or snippet already there would
+  // Every table has to be empty for this account, not just the merchants: a snippet or timer already there would
   // collide halfway through the work.
   const used = await q.query<{ name: string }>(
     `select name from (values
        ('clients', (select count(*) from clients where user_id = $1)),
        ('trashed_clients', (select count(*) from trashed_clients where user_id = $1)),
        ('client_asks', (select count(*) from client_asks where user_id = $1)),
-       ('positions', (select count(*) from positions where user_id = $1)),
-       ('competing_offers', (select count(*) from competing_offers where user_id = $1)),
-       ('fundings', (select count(*) from fundings where user_id = $1)),
        ('stips', (select count(*) from stips where user_id = $1)),
-       ('funders', (select count(*) from funders where user_id = $1)),
-       ('submissions', (select count(*) from submissions where user_id = $1)),
-       ('offers', (select count(*) from offers where user_id = $1)),
        ('timers', (select count(*) from timers where user_id = $1)),
        ('activities', (select count(*) from activities where user_id = $1)),
        ('snippets', (select count(*) from snippets where user_id = $1))

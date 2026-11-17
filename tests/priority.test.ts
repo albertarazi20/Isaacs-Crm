@@ -595,7 +595,7 @@ describe("planBulk: who the bulk reschedule moves, and where", () => {
         .map((c) => c.business_name)
         .sort(),
     ).toEqual(["Big", "Small"]);
-    const plan = planBulk(cards, CTX, { days: 5, keepUnderwriting: false });
+    const plan = planBulk(cards, CTX, { days: 5, keepApplicationIn: false });
     expect(plan.ordered.map((c) => c.business_name)).toEqual(["Big", "Small"]);
     expect(plan.assignments.map((a) => a.dueOn)).toEqual([TODAY, "2026-10-26"]);
   });
@@ -605,13 +605,13 @@ describe("planBulk: who the bulk reschedule moves, and where", () => {
       overdue("Stips", { stage: "stips" }),
       overdue("Interested"),
     ];
-    const keep = planBulk(cards, CTX, { days: 5, keepUnderwriting: true });
+    const keep = planBulk(cards, CTX, { days: 5, keepApplicationIn: true });
     expect(keep.ordered.map((c) => c.business_name)).toEqual(["Interested"]);
-    expect(keep.keptUnderwriting.map((c) => c.business_name).sort()).toEqual(["Contract", "Stips"]);
-    const all = planBulk(cards, CTX, { days: 5, keepUnderwriting: false });
+    expect(keep.keptApplicationIn.map((c) => c.business_name).sort()).toEqual(["Contract", "Stips"]);
+    const all = planBulk(cards, CTX, { days: 5, keepApplicationIn: false });
     expect(all.ordered).toHaveLength(3);
     expect(all.ordered[0]?.business_name).toBe("Contract");
-    expect(all.keptUnderwriting).toEqual([]);
+    expect(all.keptApplicationIn).toEqual([]);
   });
   it("leaves a passed booked call alone: moving the follow-up would not clear it", () => {
     const cards = [
@@ -621,7 +621,7 @@ describe("planBulk: who the bulk reschedule moves, and where", () => {
     ];
     const plan = planBulk(cards, CTX, {
       days: 5,
-      keepUnderwriting: false,
+      keepApplicationIn: false,
       blockedIds: new Set([cards[2]?.id ?? ""]),
     });
     expect(plan.ordered.map((c) => c.business_name)).toEqual(["Normal"]);
@@ -640,13 +640,13 @@ describe("planBulk: who the bulk reschedule moves, and where", () => {
         next_due_kind: "renewal",
       }),
     ];
-    expect(planBulk(cards, CTX, { days: 3, keepUnderwriting: true }).ordered).toHaveLength(2);
+    expect(planBulk(cards, CTX, { days: 3, keepApplicationIn: true }).ordered).toHaveLength(2);
   });
   it("honours stars, and moves at most 200 in one go, highest priority first", () => {
     const many = Array.from({ length: 230 }, (_, i) =>
       overdue(`N${String(i).padStart(3, "0")}`, { wanted_amount_cents: 1_000_000 + i * 10_000 }),
     );
-    const plan = planBulk(many, CTX, { days: 20, keepUnderwriting: false });
+    const plan = planBulk(many, CTX, { days: 20, keepApplicationIn: false });
     expect(plan.ordered).toHaveLength(MAX_BULK);
     expect(plan.overCap).toBe(30);
     expect(plan.assignments).toHaveLength(MAX_BULK);
@@ -658,12 +658,12 @@ describe("planBulk: who the bulk reschedule moves, and where", () => {
     const starred = planBulk(
       many,
       { ...CTX, hotIds: new Set([smallest.id]) },
-      { days: 20, keepUnderwriting: false },
+      { days: 20, keepApplicationIn: false },
     );
     expect(starred.ordered[0]?.business_name).toBe("N000");
   });
   it("is a no-op with nothing overdue", () => {
-    const plan = planBulk([card()], CTX, { days: 5, keepUnderwriting: true });
+    const plan = planBulk([card()], CTX, { days: 5, keepApplicationIn: true });
     expect(plan.assignments).toEqual([]);
     expect(plan.perDay).toEqual([]);
   });

@@ -120,7 +120,7 @@ export function ContactActions({
 }: {
   client: ContactTarget;
   size?: "sm" | "md";
-  /** A ready-made message for the Text dialog to start from (win-back uses a reason-aware one). */
+  /** A ready-made message for the Text dialog to start from. */
   suggestedText?: string;
   /**
    * Say in words, under the buttons, why Call and Text are greyed out for a phone number that cannot
