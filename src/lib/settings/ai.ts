@@ -2,14 +2,8 @@ import type { Db } from "../db";
 
 /** What each AI purpose is, in words. A purpose not listed here still shows, humanised from its key. */
 export const AI_PURPOSE_LABELS: Record<string, string> = {
-  read_lender_email: "Reading lender email",
   classify_reply: "Tagging merchant replies",
-  draft_winback: "Win-back opening lines",
   split_lead_line: "Splitting a pasted lead line",
-  ask_deal: "Questions about a deal",
-  transcribe_offer_image: "Reading an offer screenshot",
-  read_pasted_offer: "Reading a pasted offer",
-  summarise_deal: "Deal summaries",
 };
 
 export const aiPurposeLabel = (purpose: string): string =>

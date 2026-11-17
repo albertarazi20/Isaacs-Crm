@@ -16,7 +16,7 @@ import { Button, Card, cn, SectionTitle } from "../ui";
 
 /**
  * Like useCall, but resolves true/false. useCall returns null for a failure AND for an action
- * whose data is null (notes, positions, offers…), so those can't tell "saved" from "failed".
+ * whose data is null (notes, stips…), so those can't tell "saved" from "failed".
  */
 export function useRun() {
   const call = useCall();

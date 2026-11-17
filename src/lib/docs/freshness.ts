@@ -1,11 +1,11 @@
 /**
- * Statement freshness. Lenders want the newest complete months; a file that was "complete" in October is stale by
+ * Statement freshness. A file needs the newest complete months; one that was "complete" in October is stale by
  * mid-November. All dates are 'YYYY-MM-01' (the statement month) or 'YYYY-MM-DD' (today).
  */
 import type { ISODate } from "../mca/dates";
 import { monthName } from "./label";
 
-/** How many complete months lenders usually want. */
+/** How many complete months a file needs. */
 export const WANTED_MONTHS = 4;
 /** Banks post the statement a few days after month end; before this day the previous month is not expected yet. */
 const STATEMENT_READY_DAY = 5;
@@ -13,11 +13,11 @@ const STATEMENT_READY_DAY = 5;
 export interface Freshness {
   /** The newest statement month on file, or null. */
   newest: ISODate | null;
-  /** The newest month lenders expect right now. */
+  /** The newest month a file needs right now. */
   expected: ISODate;
   /** Months between newest and expected (0 = fresh). */
   monthsBehind: number;
-  /** The months lenders expect that are not on file, oldest first. */
+  /** The months a file needs that are not on file, oldest first. */
   missing: ISODate[];
   /** One sentence for the rep. */
   message: string;
@@ -32,7 +32,7 @@ function shiftMonth(period: ISODate, n: number): ISODate {
   return monthStart(y + Math.floor(m / 12), (((m % 12) + 12) % 12) + 1);
 }
 
-/** The newest complete statement month a lender expects on `today`. */
+/** The newest complete statement month a file needs on `today`. */
 export function expectedMonth(today: ISODate): ISODate {
   const y = Number(today.slice(0, 4));
   const m = Number(today.slice(5, 7));
@@ -59,7 +59,7 @@ export function freshness(
       expected,
       monthsBehind: wanted,
       missing,
-      message: `No statements yet. Lenders will ask for ${monthName(window[0]!)} through ${monthName(expected)}.`,
+      message: `No statements yet. The file needs ${monthName(window[0]!)} through ${monthName(expected)}.`,
       status: "none",
     };
   }
@@ -80,7 +80,7 @@ export function freshness(
   }
   const message =
     behind > 0
-      ? `Newest statement is ${monthName(newestP)}. Lenders will ask for ${monthName(expected)}.`
+      ? `Newest statement is ${monthName(newestP)}. The file needs ${monthName(expected)}.`
       : `Statements run through ${monthName(newestP)} but ${missing.map(monthName).join(", ")} ${missing.length === 1 ? "is" : "are"} missing.`;
   return { newest: newestP, expected, monthsBehind: behind, missing, message, status: "stale" };
 }

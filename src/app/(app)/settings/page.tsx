@@ -5,7 +5,7 @@ import { ICON, Icon, Note, SettingsCard } from "@/components/settings/primitives
 import { SettingsHeader } from "@/components/settings/SettingsNav";
 import { SettingsPanels } from "@/components/SettingsPanels";
 import { ThemeSwitch } from "@/components/ThemeSwitch";
-import { MessagesCard } from "@/components/winback/MessagesCard";
+import { MessagesCard } from "@/components/messaging/MessagesCard";
 import { requireSession } from "@/lib/auth/server";
 import { db } from "@/lib/db";
 import { env, googleConfigured } from "@/lib/env";

@@ -13,18 +13,17 @@ export const maxDuration = 60;
 
 const UUID = /^[0-9a-f-]{36}$/;
 
-/** Staff drag-and-drop: multipart with clientId, optional dealId / kind / period, and one or more `file`s. */
+/** Staff drag-and-drop: multipart with clientId, optional kind / period, and one or more `file`s. */
 export async function POST(req: Request) {
   const session = await getSession();
   if (!session) return NextResponse.json({ error: "Sign in first" }, { status: 401 });
   const form = await req.formData().catch(() => null);
   if (!form) return NextResponse.json({ error: "Send the files as form data" }, { status: 400 });
   const clientId = String(form.get("clientId") ?? "");
-  const dealId = String(form.get("dealId") ?? "") || null;
   const kindRaw = String(form.get("kind") ?? "");
   const period = String(form.get("period") ?? "") || null;
-  if (!UUID.test(clientId) || (dealId && !UUID.test(dealId)))
-    return NextResponse.json({ error: "Bad merchant or deal id" }, { status: 400 });
+  if (!UUID.test(clientId))
+    return NextResponse.json({ error: "Bad merchant id" }, { status: 400 });
   const kind =
     kindRaw && (DOC_KINDS as readonly string[]).includes(kindRaw)
       ? (kindRaw as DocKind)
@@ -41,7 +40,6 @@ export async function POST(req: Request) {
       try {
         const r = await addDocument(q, store, {
           clientId,
-          dealId,
           kind,
           period: period && /^\d{4}-\d{2}-01$/.test(period) ? period : null,
           filename: f.name,

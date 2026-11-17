@@ -5,8 +5,8 @@ import { todayIn } from "../mca/dates";
 import { isStopMessage } from "../messaging/stop";
 import { env } from "../env";
 import { googleAccessTokenFor } from "../system/gmail";
-import { authResults, matchEmail, type Candidate } from "./match";
 import {
+  authResults,
   getAttachment,
   getMessage,
   listHistory,
@@ -17,8 +17,9 @@ import {
 } from "./gmailRead";
 
 /**
- * Pull new mail from each connected mailbox that may be read (managers / ops with the 'mail' grant), store it,
- * and match it to a deal by code. Reading the email with the AI is the next step (processInbox), so a sync never
+ * Pull new mail from each connected mailbox that may be read (managers / ops with the 'mail' grant) and keep what a
+ * merchant wrote: the reply stops their sequence and tells the rep, an attachment becomes a document. Mail from
+ * anyone else is not stored. Tagging a reply with the AI is a later step (tagMerchantReplies), so a sync never
  * waits on the model and a model outage never loses mail.
  */
 
@@ -26,7 +27,6 @@ export interface InboxSyncSummary {
   mailboxes: number;
   fetched: number;
   stored: number;
-  matched: number;
   failed: { userId: string; error: string }[];
   /** Merchants who wrote back this run, for the rep alert. */
   merchantReplies: string[];
@@ -68,21 +68,6 @@ export async function mailboxSyncStatus(q: Db): Promise<MailboxSyncRow[]> {
   return rows;
 }
 
-export async function loadCandidates(q: Db): Promise<Candidate[]> {
-  const { rows } = await q.query<Candidate>(
-    `select s.id as "submissionId", d.id as "dealId", c.id as "clientId", f.id as "funderId",
-            s.gmail_thread_id as "threadId", s.gmail_message_id as "messageId", d.number as "dealNumber",
-            c.business_name as "businessName", c.dba,
-            lower(split_part(f.submission_email, '@', 2)) as "funderDomain"
-       from submissions s
-       join deals d on d.id = s.deal_id
-       join clients c on c.id = s.client_id
-       join funders f on f.id = s.funder_id
-      where d.outcome = 'open' or d.closed_at > now() - interval '60 days'`,
-  );
-  return rows;
-}
-
 export async function syncInbox(args: {
   db: DbAccess;
   tokenFor: TokenFor;
@@ -96,7 +81,6 @@ export async function syncInbox(args: {
     mailboxes: 0,
     fetched: 0,
     stored: 0,
-    matched: 0,
     failed: [],
     merchantReplies: [],
     unverified: 0,
@@ -113,8 +97,6 @@ export async function syncInbox(args: {
       ).rows,
   );
   summary.mailboxes = mailboxes.length;
-  const candidates = await args.db.withSystem(loadCandidates);
-  const funderDomains = new Set(candidates.map((c) => c.funderDomain).filter(Boolean));
 
   for (const mb of mailboxes) {
     try {
@@ -129,11 +111,14 @@ export async function syncInbox(args: {
         }
       }
       if (!mb.history_id || (metas.length === 0 && newHistoryId === null)) {
-        // first sync or an expired cursor: a bounded search (lender domains + the deal token), newest first
+        // first sync or an expired cursor: a bounded search of the inbox, newest first
         const days = args.lookbackDays ?? 14;
-        const doms = [...funderDomains].slice(0, 30).map((d) => `from:${d}`);
-        const q = `newer_than:${days}d (${[...doms, 'subject:"[D-"'].join(" OR ")})`;
-        metas = await listMessages(token, q, args.fetchImpl, args.maxPerMailbox ?? 200);
+        metas = await listMessages(
+          token,
+          `newer_than:${days}d in:inbox`,
+          args.fetchImpl,
+          args.maxPerMailbox ?? 200,
+        );
       }
       summary.fetched += metas.length;
       for (const meta of metas) {
@@ -151,38 +136,25 @@ export async function syncInbox(args: {
         if (!newHistoryId || BigInt(m.historyId) > BigInt(newHistoryId)) newHistoryId = m.historyId;
         const from = parseAddress(m.headers["from"]);
         const auth = authResults(m.headers["authentication-results"] ?? null);
-        const match = matchEmail(
-          {
-            threadId: m.threadId,
-            inReplyTo: m.headers["in-reply-to"] ?? null,
-            references: splitMessageIds(m.headers["references"]),
-            fromAddress: from.address,
-            subject: m.headers["subject"] ?? "",
-            text: m.text,
-          },
-          candidates,
-        );
-        // a merchant replying on a sequence thread: match by the outbox we sent (same thread) → stop the chase.
-        // A From header is forgeable; the sender counts as the merchant only when SPF and DKIM both pass, so one
-        // spoofed email cannot stop a sequence, suppress an address shop-wide or tick a statement as received.
-        const sameAddress = match
-          ? null
-          : await args.db.withSystem(async (q) => {
-              const { rows } = await q.query<{ client_id: string }>(
-                `select c.id as client_id from clients c where lower(c.email) = $1 and c.email <> '' limit 1`,
-                [from.address],
-              );
-              return rows[0]?.client_id ?? null;
-            });
-        const merchant =
-          sameAddress && auth.spf === true && auth.dkim === true ? sameAddress : null;
-        if (sameAddress && !merchant) summary.unverified += 1;
+        // Only a merchant's mail is kept; anything else in the mailbox is none of the CRM's business. A From header
+        // is forgeable: the sender counts as the merchant only when SPF and DKIM both pass, so one spoofed email
+        // cannot stop a sequence, suppress an address shop-wide or tick a statement as received.
+        const sameAddress = await args.db.withSystem(async (q) => {
+          const { rows } = await q.query<{ client_id: string }>(
+            `select c.id as client_id from clients c where lower(c.email) = $1 and c.email <> '' limit 1`,
+            [from.address],
+          );
+          return rows[0]?.client_id ?? null;
+        });
+        if (!sameAddress) continue;
+        const merchant = auth.spf === true && auth.dkim === true ? sameAddress : null;
+        if (!merchant) summary.unverified += 1;
         await args.db.withSystem(async (q) => {
           await q.query(
             `insert into inbound_emails (mailbox_user_id, gmail_id, gmail_thread_id, message_id, in_reply_to, references_ids, from_address, from_name,
                                          to_addresses, subject, snippet, text_body, attachment_names, received_at, spf_pass, dkim_pass,
-                                         deal_id, submission_id, client_id, funder_id, matched_by, kind)
-             values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22)
+                                         client_id, matched_by, kind)
+             values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
              on conflict (mailbox_user_id, gmail_id) do nothing`,
             [
               mb.user_id,
@@ -204,18 +176,9 @@ export async function syncInbox(args: {
               new Date(m.internalDate).toISOString(),
               auth.spf,
               auth.dkim,
-              match?.candidate.dealId ?? null,
-              match?.candidate.submissionId ?? null,
-              match?.candidate.clientId ?? sameAddress,
-              match?.candidate.funderId ?? null,
-              match ? match.by : merchant ? "merchant_reply" : "none",
-              match
-                ? "lender"
-                : merchant
-                  ? "merchant"
-                  : funderDomains.has(from.address.split("@")[1] ?? "")
-                    ? "lender"
-                    : "unknown",
+              sameAddress,
+              merchant ? "merchant_reply" : "none",
+              merchant ? "merchant" : "unknown",
             ],
           );
           if (merchant) {
@@ -229,17 +192,15 @@ export async function syncInbox(args: {
             summary.merchantReplies.push(merchant);
           }
         });
-        // attachments on a matched email are documents: statements a merchant forwards, contracts a lender sends
-        const owner = match?.candidate.clientId ?? merchant;
-        if (owner && m.attachments.length > 0) {
+        // attachments on a merchant's email are documents: the statements they forward
+        if (merchant && m.attachments.length > 0) {
           const store = documentStore(env());
           for (const a of m.attachments.slice(0, 10)) {
             if (a.size > 25 * 1024 * 1024) continue;
             try {
               const bytes = await getAttachment(token, m.id, a.attachmentId, args.fetchImpl);
               const filed = await fileEmailAttachment(args.db, store, {
-                clientId: owner,
-                dealId: match?.candidate.dealId ?? null,
+                clientId: merchant,
                 filename: a.filename,
                 contentType: a.mimeType,
                 bytes,
@@ -255,7 +216,6 @@ export async function syncInbox(args: {
           }
         }
         summary.stored += 1;
-        if (match) summary.matched += 1;
       }
       await args.db.withSystem((q) =>
         q.query(

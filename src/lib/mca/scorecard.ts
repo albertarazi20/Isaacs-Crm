@@ -1,8 +1,8 @@
-import type { Discipline } from "../reports/report";
+import type { Discipline } from "./discipline";
 import { formatMoneyCompact } from "../money";
 import type { Digest } from "./digest";
 
-export interface OverdueDeal {
+export interface OverdueMerchant {
   clientId: string;
   businessName: string;
   wantedCents: number | null;
@@ -14,10 +14,8 @@ export interface ScorecardInput {
   weekLabel: string;
   discipline: Discipline;
   added: number;
-  funded: { count: number; cents: number };
-  commissionReceivedCents: number;
-  /** The biggest overdue deals right now, most valuable first (already limited). */
-  overdue: OverdueDeal[];
+  /** The biggest overdue merchants right now, biggest ask first (already limited). */
+  overdue: OverdueMerchant[];
   overdueTotal: number;
 }
 
@@ -32,7 +30,7 @@ const esc = (s: string): string =>
 
 const oneLine = (s: string): string => s.replace(/\p{Cc}+/gu, " ").trim();
 
-/** Facts only: what happened, and the few deals to start with. No scolding, no invented targets. */
+/** Facts only: what happened, and the few merchants to start with. No scolding, no invented targets. */
 export function buildScorecard(i: ScorecardInput, appUrl: string): Omit<Digest, "count"> {
   const d = i.discipline;
   const lines: string[] = [];
@@ -44,17 +42,10 @@ export function buildScorecard(i: ScorecardInput, appUrl: string): Omit<Digest, 
     );
     if (d.pushed > d.onTime && d.pushed >= 5)
       lines.push(
-        "More were pushed back than done on the day — pushing the same merchants again is how deals go cold.",
+        "More were pushed back than done on the day — pushing the same merchants again is how they go cold.",
       );
   }
   lines.push(`${plural(i.added, "new merchant")} added.`);
-  lines.push(
-    i.funded.count > 0
-      ? `${plural(i.funded.count, "advance")} funded — ${formatMoneyCompact(i.funded.cents)}.`
-      : "Nothing funded.",
-  );
-  if (i.commissionReceivedCents > 0)
-    lines.push(`Commission received: ${formatMoneyCompact(i.commissionReceivedCents)}.`);
 
   const startHere = i.overdue.map((o) => {
     const wants = o.wantedCents ? `, wants ${formatMoneyCompact(o.wantedCents)}` : "";
@@ -67,9 +58,7 @@ export function buildScorecard(i: ScorecardInput, appUrl: string): Omit<Digest, 
   const more = i.overdueTotal - startHere.length;
 
   const headline = d.onTimeRate === null ? "Your week" : `Your week: ${d.onTimeRate}% on time`;
-  const subject = oneLine(
-    `${headline}${i.funded.count > 0 ? ` · ${i.funded.count} funded` : ""} · ${i.weekLabel}`,
-  );
+  const subject = oneLine(`${headline} · ${i.weekLabel}`);
   const text = [
     `Your week — ${i.weekLabel}`,
     "",
@@ -83,7 +72,7 @@ export function buildScorecard(i: ScorecardInput, appUrl: string): Omit<Digest, 
         ]
       : ["", "Nothing is overdue. Keep it that way."]),
     "",
-    `${appUrl}/reports`,
+    `${appUrl}/`,
     "",
   ].join("\n");
   const html = `<div style="font-family:system-ui,sans-serif"><h3>Your week — ${esc(i.weekLabel)}</h3><ul>${lines
@@ -94,6 +83,6 @@ export function buildScorecard(i: ScorecardInput, appUrl: string): Omit<Digest, 
           .map((s) => `<li><a href="${esc(s.href)}">${esc(s.text)}</a></li>`)
           .join("")}</ul>${more > 0 ? `<p>…and ${more} more overdue.</p>` : ""}`
       : "<p>Nothing is overdue. Keep it that way.</p>"
-  }<p><a href="${esc(appUrl)}/reports">See the full reports</a></p></div>`;
+  }<p><a href="${esc(appUrl)}/">Open your list</a></p></div>`;
   return { subject, text, html };
 }

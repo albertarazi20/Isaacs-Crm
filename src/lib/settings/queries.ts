@@ -15,75 +15,28 @@ export interface ShopSettingsRow {
   per_merchant_weekly: number;
   automation_from: string;
   automation_reply_to_rep: boolean;
-  lender_chase_days: number;
-  lender_chase_mode: "send" | "draft" | "off";
-  lender_chase_max: number;
-  max_lenders_per_deal: number;
   ai_enabled: boolean;
   ai_model: string;
   ai_daily_cap_cents: number;
-  ai_auto_apply_low_stakes: boolean;
   /** US federal holidays are send days (0507). */
   send_on_holidays: boolean;
-  /** How long a lender's approval stands when the lender names no days of its own (0510). */
-  approval_valid_days: number;
-  /** The address lenders reply to when a file is sent from the CRM (Route B, 0510). */
-  deals_inbox_address: string;
-  /** The same merchant, the same lender, inside this many days is a double submission (0512). */
-  resubmit_block_days: number;
   /** The DNS gate (0503): the last stored check of the automation domain. */
   dns_ok: boolean;
   dns_checked_at: string | null;
   dns_result: Partial<DnsCheck>;
-  /** Documents on a dead deal are purged after this many days (0520). */
-  document_retention_days: number;
-  /** The win-back first line Claude drafts: merged as drafted, or held for a manager (0520). */
-  winback_opener_mode: "auto" | "review";
 }
 
 export async function getShopSettings(q: Db): Promise<ShopSettingsRow> {
   const { rows } = await q.query<ShopSettingsRow>(
     `select shop_name, postal_address, daily_cap, amber_at, reserved_for_intake, sequences_enabled, send_window_start, send_window_end,
-            send_on_weekends, per_merchant_daily, per_merchant_weekly, automation_from, automation_reply_to_rep, lender_chase_days,
-            lender_chase_mode, lender_chase_max, max_lenders_per_deal, ai_enabled, ai_model, ai_daily_cap_cents, ai_auto_apply_low_stakes,
-            send_on_holidays, approval_valid_days, deals_inbox_address, resubmit_block_days, dns_ok, dns_checked_at::text as dns_checked_at,
-            dns_result, document_retention_days, winback_opener_mode
+            send_on_weekends, per_merchant_daily, per_merchant_weekly, automation_from, automation_reply_to_rep,
+            ai_enabled, ai_model, ai_daily_cap_cents, send_on_holidays, dns_ok, dns_checked_at::text as dns_checked_at,
+            dns_result
        from shop_settings`,
   );
   const r = rows[0];
   if (!r) throw new Error("shop_settings row missing");
   return r;
-}
-
-export interface PlanRow {
-  id: string;
-  user_id: string | null;
-  user_name: string | null;
-  effective_from: string;
-  split_pct: number;
-  self_gen_split_pct: number | null;
-  psf_share_pct: number;
-  renewal_split_pct: number | null;
-  tiers: { from_cents: number; split_pct: number }[];
-  manager_override_pct: number;
-  clawback_borne_by: string;
-  note: string;
-  /** True for the row app.plan_for() picks today for that person (or the shop). */
-  current: boolean;
-}
-
-export async function listCommissionPlans(q: Db): Promise<PlanRow[]> {
-  const { rows } = await q.query<{ j: PlanRow }>(
-    `select to_jsonb(x) as j from (
-       select p.id, p.user_id, u.name as user_name, p.effective_from::text as effective_from, p.split_pct::float as split_pct,
-              p.self_gen_split_pct::float as self_gen_split_pct, p.psf_share_pct::float as psf_share_pct, p.renewal_split_pct::float as renewal_split_pct,
-              p.tiers, p.manager_override_pct::float as manager_override_pct, p.clawback_borne_by, p.note,
-              p.id = (select id from commission_plans c where c.user_id is not distinct from p.user_id and c.effective_from <= current_date order by c.effective_from desc limit 1) as current
-         from commission_plans p left join app_users u on u.id = p.user_id
-        order by p.user_id nulls first, p.effective_from desc
-     ) x`,
-  );
-  return rows.map((r) => r.j);
 }
 
 export interface SheetSourceRow {
@@ -126,7 +79,6 @@ export interface AiStatus {
     cost_cents: number | null;
     error: string | null;
     created_at: string;
-    business_name: string | null;
   }[];
 }
 
@@ -137,9 +89,8 @@ export async function aiStatus(q: Db): Promise<AiStatus> {
             (select count(*)::int from ai_runs where created_at > date_trunc('day', now()) and error is not null) as errors`,
   );
   const runs = await q.query<AiStatus["runs"][number]>(
-    `select r.id, r.purpose, r.model, r.cost_cents::float as cost_cents, r.error, r.created_at::text as created_at, c.business_name
-       from ai_runs r left join deals d on d.id = r.deal_id left join clients c on c.id = d.client_id
-      order by r.created_at desc limit 25`,
+    `select r.id, r.purpose, r.model, r.cost_cents::float as cost_cents, r.error, r.created_at::text as created_at
+       from ai_runs r order by r.created_at desc limit 25`,
   );
   return {
     spent_today_cents: Number(head.rows[0]?.spent ?? 0),

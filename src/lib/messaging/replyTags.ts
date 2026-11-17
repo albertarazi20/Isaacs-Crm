@@ -6,12 +6,12 @@ import {
   type ClassifyOutcome,
   type ReplyTag,
 } from "../ai/classifyReply";
-import { costCents } from "../ai/readLenderEmail";
+import { costCents } from "../ai/cost";
 
 /**
  * Tag the merchant replies the inbox sync stored (S1-6). Runs after the sync on the owner connection: every reply
  * with no reply_tags row yet goes to the classifier, the result is logged in ai_runs with its cost, and
- * apply_reply_tag (0505) turns the tag into state. The same kill switch and daily spend cap as the lender reader
+ * apply_reply_tag (0505) turns the tag into state. The AI kill switch and daily spend cap
  * (shop_settings.ai_enabled, ai_daily_cap_cents) apply. The classifier is injected so tests use a fake.
  */
 

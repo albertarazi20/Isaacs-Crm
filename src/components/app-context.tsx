@@ -14,8 +14,6 @@ export interface AppInfo {
   hotIds: readonly string[];
   /** Server's clock at render. Relative times (\"5 min ago\") must use this, or server and browser disagree and React logs a hydration mismatch. */
   nowMs: number;
-  /** The shop's shotgun limit: how many lenders one file may be with before the send dialog warns. */
-  maxLendersPerDeal: number;
 }
 
 const AppContext = createContext<AppInfo | null>(null);

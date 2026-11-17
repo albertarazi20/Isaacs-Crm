@@ -1,4 +1,4 @@
-import { applyLink } from "../docs/linkExpiry";
+import { applyLink } from "../docs/applyLink";
 import type { Db, DbAccess } from "../db";
 import { addDays, todayIn, type ISODate } from "../mca/dates";
 import { effectiveSignature, mergeValues, resolveMergeFields } from "../messaging/merge";
@@ -224,7 +224,6 @@ export async function runBucketSteps(args: {
         senderName: row.sender_name,
         applicationLink: row.application_link || applyLink(args.appUrl, row.application_token),
         wantedAmountCents: row.wanted_amount_cents,
-        bestOffer: null,
         uploadLink: `${args.appUrl}/upload/${row.upload_token}`,
       });
       const body = resolveMergeFields(wording.body, values);
@@ -321,7 +320,6 @@ export async function queueBlast(
       senderName: row.sender_name,
       applicationLink: row.application_link || applyLink(args.appUrl, row.application_token),
       wantedAmountCents: row.wanted_amount_cents,
-      bestOffer: null,
       uploadLink: `${args.appUrl}/upload/${row.upload_token}`,
     });
     const body = resolveMergeFields(tpl.body, values);

@@ -8,7 +8,6 @@ import { loadStreak } from "@/lib/data/streak";
 import { buildToday } from "@/lib/data/views";
 import { db } from "@/lib/db";
 import { formatDate } from "@/lib/format";
-import { formatMoneyCompact } from "@/lib/money";
 import { parseISODate } from "@/lib/mca/dates";
 
 const WEEKDAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
@@ -91,7 +90,7 @@ export default async function TodayPage() {
         <StreakBadge streak={streak} />
       </div>
 
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
         <Kpi label="Overdue" value={kpis.overdue} tone={kpis.overdue > 0 ? "bad" : undefined} />
         <Kpi
           label="Due today"
@@ -99,13 +98,6 @@ export default async function TodayPage() {
           tone={kpis.dueToday > 0 ? "warn" : undefined}
         />
         <Kpi label="Next 7 days" value={kpis.next7} />
-        <Kpi
-          label="Ready to renew (50%+)"
-          value={kpis.renewalReady}
-          tone={kpis.renewalReady > 0 ? "good" : undefined}
-        />
-        <Kpi label="Active advances" value={kpis.fundedActive} />
-        <Kpi label="Payback outstanding" value={formatMoneyCompact(kpis.outstandingCents)} />
       </div>
 
       {cards.length === 0 ? (

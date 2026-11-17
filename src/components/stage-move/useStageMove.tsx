@@ -7,32 +7,18 @@ import { useCall } from "@/components/overlay";
 import type { ClientCard } from "@/lib/data/types";
 import { formatDate } from "@/lib/format";
 import { stageDef, type StageKey } from "@/lib/mca/stages";
-import {
-  CallDialog,
-  ChangeFollowUpDialog,
-  CompetitorDialog,
-  DefaultDialog,
-  FundingDialog,
-  type Submit,
-} from "./dialogs";
-import { isDefaultStage, needsInput, undoInput, wroteRecord, type FundingPrefill } from "./forms";
+import { CallDialog, ChangeFollowUpDialog, type Submit } from "./dialogs";
+import { needsInput, undoInput, wroteRecord } from "./forms";
 import { MoveToasts, type RecentMove } from "./MoveToasts";
 
-export interface MoveOptions {
-  /** Funded only: start the dialog with these terms (an accepted offer) instead of the last advance's. */
-  fundingPrefill?: FundingPrefill;
-}
-
 /**
- * CONTRACT shared by the Board and the Client page.
- *
  * Moving a client between stages is ONE flow wherever it starts: instant for most stages, a short
- * dialog when the move needs data (funded → advance terms, lost → competitor, default stages →
- * default date and promise-to-pay), then a toast showing the new follow-up date with Change / Undo.
+ * dialog when the move needs data (a booked call needs its time), then a toast showing the new follow-up date
+ * with Change / Undo.
  */
 export interface StageMove {
   /** Resolves with the updated card, or null if the user cancelled or it failed (error already toasted). */
-  requestMove(card: ClientCard, stage: StageKey, options?: MoveOptions): Promise<ClientCard | null>;
+  requestMove(card: ClientCard, stage: StageKey): Promise<ClientCard | null>;
   /** Render this once next to the component that calls requestMove — it holds the dialogs. */
   dialogs: ReactNode;
 }
@@ -47,13 +33,12 @@ interface Ask {
   card: ClientCard;
   stage: StageKey;
   settle: Settle;
-  fundingPrefill?: FundingPrefill | undefined;
 }
 
 const TOAST_MS = 10_000;
 
 export function useStageMove(): StageMove {
-  const { today, timezone } = useApp();
+  const { today } = useApp();
   const call = useCall();
   const [ask, setAsk] = useState<Ask | null>(null);
   const askRef = useRef<Ask | null>(null);
@@ -80,10 +65,7 @@ export function useStageMove(): StageMove {
       const updated = await call(moveClientAction({ clientId: card.id, stage, ...extra }));
       if (!updated) return null;
       const key = nextKey.current++;
-      const undo = undoInput(card, stage, wroteRecord(extra), {
-        today,
-        timezone,
-      });
+      const undo = undoInput(card, stage, wroteRecord(extra), { today });
       setRecent((cur) => [
         ...cur.slice(-2),
         { key, from: card, card: updated, canUndo: undo !== null },
@@ -91,18 +73,18 @@ export function useStageMove(): StageMove {
       timeouts.current.add(setTimeout(() => dismiss(key), TOAST_MS));
       return updated;
     },
-    [call, dismiss, today, timezone],
+    [call, dismiss, today],
   );
 
   const requestMove = useCallback(
-    (card: ClientCard, stage: StageKey, options?: MoveOptions): Promise<ClientCard | null> => {
+    (card: ClientCard, stage: StageKey): Promise<ClientCard | null> => {
       if (!stageNeedsInput(card, stage)) {
         if (card.stage === stage) return Promise.resolve(card);
         return perform(card, stage, {});
       }
       return new Promise<ClientCard | null>((resolve) => {
         askRef.current?.settle(null);
-        const next: Ask = { card, stage, settle: resolve, fundingPrefill: options?.fundingPrefill };
+        const next: Ask = { card, stage, settle: resolve };
         askRef.current = next;
         setAsk(next);
       });
@@ -126,14 +108,14 @@ export function useStageMove(): StageMove {
   const undo = useCallback(
     async (r: RecentMove) => {
       dismiss(r.key);
-      const input = undoInput(r.from, r.card.stage, false, { today, timezone });
+      const input = undoInput(r.from, r.card.stage, false, { today });
       if (!input) return;
       await call(
         moveClientAction(input),
         `Undone — ${r.from.business_name} is back in ${stageDef(r.from.stage).label}`,
       );
     },
-    [call, dismiss, today, timezone],
+    [call, dismiss, today],
   );
 
   const saveFollowUp = async (dueOn: string): Promise<boolean> => {
@@ -151,34 +133,8 @@ export function useStageMove(): StageMove {
 
   const dialogs = (
     <>
-      {ask?.stage === "funded" ? (
-        <FundingDialog
-          key="funded"
-          card={ask.card}
-          prefill={ask.fundingPrefill}
-          onSubmit={submit}
-          onCancel={() => close(null)}
-        />
-      ) : null}
       {ask?.stage === "call_scheduled" ? (
         <CallDialog key="call" card={ask.card} onSubmit={submit} onCancel={() => close(null)} />
-      ) : null}
-      {ask?.stage === "lost" ? (
-        <CompetitorDialog
-          key="lost"
-          card={ask.card}
-          onSubmit={submit}
-          onCancel={() => close(null)}
-        />
-      ) : null}
-      {ask && isDefaultStage(ask.stage) ? (
-        <DefaultDialog
-          key="default"
-          card={ask.card}
-          stage={ask.stage}
-          onSubmit={submit}
-          onCancel={() => close(null)}
-        />
       ) : null}
       {changing ? (
         <ChangeFollowUpDialog

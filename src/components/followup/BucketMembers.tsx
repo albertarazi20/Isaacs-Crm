@@ -10,7 +10,7 @@ import {
   removeFromBucketAction,
 } from "@/app/buckets-actions";
 import { useApp } from "@/components/app-context";
-import { UploadLinkButton } from "@/components/deals/UploadLinkButton";
+import { UploadLinkButton } from "@/components/client/UploadLinkButton";
 import { useRun, FormDialog } from "@/components/client/parts";
 import { useToast } from "@/components/overlay";
 import { Badge, Button, buttonClass, Card, EmptyState, Input, Select, cn } from "@/components/ui";
@@ -122,7 +122,6 @@ export function BucketMembers({
             senderName,
             applicationLink: "[application link]",
             wantedAmountCents: blastFirst.wanted_amount_cents,
-            bestOffer: null,
             uploadLink: "[upload link]",
           });
           return {

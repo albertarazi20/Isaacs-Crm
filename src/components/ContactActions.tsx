@@ -35,10 +35,10 @@ import { Icon } from "./client/icons";
 import { Dialog, useCall, useToast } from "./overlay";
 import { TimerPicker } from "./TimerPicker";
 import { Badge, Button, buttonClass, cn, Field, Input, Textarea } from "./ui";
-import { HintChips } from "./winback/HintChips";
-import { SnippetPicker, type PickedSnippet } from "./winback/SnippetPicker";
-import { useMessagingContext } from "./winback/useMessagingContext";
-import { recordTextSent, useTextCount } from "./winback/useTextCount";
+import { HintChips } from "./messaging/HintChips";
+import { SnippetPicker, type PickedSnippet } from "./messaging/SnippetPicker";
+import { useMessagingContext } from "./messaging/useMessagingContext";
+import { recordTextSent, useTextCount } from "./messaging/useTextCount";
 import {
   appendSignature,
   describeLeftovers,
@@ -287,7 +287,6 @@ function TextDialogBody({
     senderName,
     applicationLink: ctx?.applicationLink ?? "",
     wantedAmountCents: ctx?.wantedAmountCents ?? null,
-    bestOffer: ctx?.bestOffer ?? null,
   });
   const leftover = describeLeftovers(message, {
     applicationLinkSet: Boolean(ctx?.applicationLink),
@@ -469,7 +468,6 @@ function EmailDialogBody({
     senderName,
     applicationLink: ctx?.applicationLink ?? "",
     wantedAmountCents: ctx?.wantedAmountCents ?? null,
-    bestOffer: ctx?.bestOffer ?? null,
   });
   const signature = effectiveSignature(ctx?.signature ?? "", senderName);
   // What actually goes out: the message with the signature on the end, once.

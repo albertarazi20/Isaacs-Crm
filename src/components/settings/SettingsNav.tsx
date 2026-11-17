@@ -5,12 +5,9 @@ const ITEMS: { href: string; label: string; manager?: boolean }[] = [
   { href: "/settings", label: "Me" },
   { href: "/settings/buckets", label: "Buckets & templates" },
   { href: "/settings/sheets", label: "Google Sheets" },
-  { href: "/settings/team", label: "Team & trust", manager: true },
-  { href: "/settings/email", label: "Email & lenders", manager: true },
-  { href: "/settings/plan", label: "Commission plan", manager: true },
-  { href: "/settings/states", label: "State rules", manager: true },
+  { href: "/settings/team", label: "Team", manager: true },
+  { href: "/settings/email", label: "Email", manager: true },
   { href: "/settings/ai", label: "AI", manager: true },
-  { href: "/funders", label: "Lender list", manager: true },
 ];
 
 /** The pill nav over every settings page. One row that scrolls on a phone, wraps on a desktop. */

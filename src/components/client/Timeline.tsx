@@ -9,7 +9,7 @@ import { stageDef } from "@/lib/mca/stages";
 import { outcomeLabel } from "@/lib/mca/touch";
 import { useApp } from "../app-context";
 import { Badge, Button, cn, EmptyState, Textarea } from "../ui";
-import { HintChips } from "../winback/HintChips";
+import { HintChips } from "../messaging/HintChips";
 import { Icon, type IconName } from "./icons";
 import { Chip } from "./primitives";
 import {
@@ -31,7 +31,6 @@ const KIND_META: Record<ActivityRow["kind"], { icon: IconName; label: string }> 
   email: { icon: "mail", label: "Email" },
   stage_change: { icon: "shuffle", label: "Stage change" },
   timer: { icon: "bell", label: "Follow-up" },
-  funding: { icon: "banknote", label: "Funding" },
   system: { icon: "info", label: "Update" },
 };
 
@@ -220,7 +219,7 @@ function NoteComposer({ card }: { card: ClientCard }) {
             void save();
           }
         }}
-        placeholder="Write a note — what he said, what he wants, which funders he's with, when to call back…"
+        placeholder="Write a note — what he said, what he wants, when to call back…"
       />
       <div className="mt-2 flex items-center justify-between gap-3">
         <Muted>Ctrl+Enter (⌘+Enter on Mac) saves</Muted>

@@ -1,45 +1,17 @@
-import { addDays, addMonths, isLongGame, type ISODate } from "../mca/dates";
+import { addDays, type ISODate } from "../mca/dates";
 import { bookedToday } from "../mca/booked";
-import { balanceCents, paydownPct, renewalDate, type FundingTerms } from "../mca/funding";
 import { stageDef, type StageGroup, type TimerKind } from "../mca/stages";
-import { formatDate } from "../format";
 import type { ClientCard } from "./types";
-
-/** The latest advance as pure terms, or null when the card has none (or is missing a number). */
-export function cardFundingTerms(c: ClientCard): FundingTerms | null {
-  if (
-    c.funded_on === null ||
-    c.funding_amount_cents === null ||
-    c.factor_rate === null ||
-    c.funding_payment_cents === null ||
-    c.funding_frequency === null
-  ) {
-    return null;
-  }
-  return {
-    fundedOn: c.funded_on,
-    amountCents: c.funding_amount_cents,
-    factorRate: c.factor_rate,
-    paymentCents: c.funding_payment_cents,
-    frequency: c.funding_frequency,
-    paidBackOverrideCents: c.paid_back_override_cents,
-  };
-}
 
 const KIND_RANK: Record<TimerKind, number> = {
   scheduled_call: 0,
-  renewal: 1,
-  chase: 2,
-  check_in: 3,
-  follow_up: 4,
+  follow_up: 1,
 };
-// Deals closest to funding first, then accounts that need chasing, then the rest.
+// Merchants whose application is in first (their documents are what is left), then the rest.
 const GROUP_RANK: Record<StageGroup, number> = {
-  underwriting: 0,
-  trouble: 1,
-  funded: 2,
-  prospecting: 3,
-  exit: 4,
+  application: 0,
+  prospecting: 1,
+  exit: 2,
 };
 
 function byPriority(a: ClientCard, b: ClientCard): number {
@@ -66,9 +38,6 @@ export interface TodayView {
     overdue: number;
     dueToday: number;
     next7: number;
-    renewalReady: number;
-    fundedActive: number;
-    outstandingCents: number;
   };
 }
 
@@ -99,16 +68,6 @@ export function buildToday(
     .filter((c) => c.next_due_on > today && c.next_due_on <= weekOut && !booked(c))
     .sort((a, b) => a.next_due_on.localeCompare(b.next_due_on) || byPriority(a, b));
 
-  let renewalReady = 0;
-  let fundedActive = 0;
-  let outstandingCents = 0;
-  for (const c of cards) {
-    const terms = cardFundingTerms(c);
-    if (!terms || c.funding_status !== "active") continue;
-    fundedActive += 1;
-    outstandingCents += balanceCents(terms, today);
-    if (paydownPct(terms, today) >= 50) renewalReady += 1;
-  }
   return {
     scheduled,
     overdue,
@@ -118,84 +77,6 @@ export function buildToday(
       overdue: overdue.length,
       dueToday: dueToday.length + scheduled.length,
       next7: upcoming.length,
-      renewalReady,
-      fundedActive,
-      outstandingCents,
     },
   };
-}
-
-export interface RenewalRow {
-  card: ClientCard;
-  pct: number;
-  balanceCents: number;
-  /** The day the merchant crosses 50% (or today if they already have). */
-  renewalOn: ISODate | null;
-}
-
-export interface RenewalsView {
-  /** Active advances at or above the threshold, most paid down first. */
-  ready: RenewalRow[];
-  /** Paid in full — the hottest leads Isaac owns. */
-  paidOff: ClientCard[];
-}
-
-export function buildRenewals(
-  cards: readonly ClientCard[],
-  today: ISODate,
-  minPct: number,
-): RenewalsView {
-  const ready: RenewalRow[] = [];
-  for (const card of cards) {
-    const terms = cardFundingTerms(card);
-    if (!terms || card.funding_status !== "active") continue;
-    const pct = paydownPct(terms, today);
-    if (pct < minPct) continue;
-    ready.push({
-      card,
-      pct,
-      balanceCents: balanceCents(terms, today),
-      renewalOn: renewalDate(terms, today),
-    });
-  }
-  ready.sort((a, b) => b.pct - a.pct || a.card.business_name.localeCompare(b.card.business_name));
-  const paidOff = cards
-    .filter((c) => c.stage === "paid_in_full")
-    .sort(
-      (a, b) =>
-        (a.next_due_on ?? "").localeCompare(b.next_due_on ?? "") ||
-        a.business_name.localeCompare(b.business_name),
-    );
-  return { ready, paidOff };
-}
-
-export interface LongGameGroup {
-  key: string;
-  label: string;
-  cards: ClientCard[];
-}
-
-/** Everyone parked more than a year out, grouped by the month they come back. */
-export function groupLongGame(cards: readonly ClientCard[], today: ISODate): LongGameGroup[] {
-  const groups = new Map<string, ClientCard[]>();
-  for (const c of cards) {
-    if (c.next_due_on === null || !isLongGame(c.next_due_on, today)) continue;
-    const key = c.next_due_on.slice(0, 7);
-    groups.set(key, [...(groups.get(key) ?? []), c]);
-  }
-  return [...groups.entries()]
-    .sort(([a], [b]) => a.localeCompare(b))
-    .map(([key, list]) => ({
-      key,
-      label: formatDate(`${key}-01`).split(" ")[0] + " " + key.slice(0, 4),
-      cards: list.sort(
-        (a, b) =>
-          (a.next_due_on ?? "").localeCompare(b.next_due_on ?? "") ||
-          a.business_name.localeCompare(b.business_name),
-      ),
-    }));
-}
-
-export function longGameCutoff(today: ISODate): ISODate {
-  return addMonths(today, 12);
 }

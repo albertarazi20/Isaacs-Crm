@@ -1,25 +1,6 @@
-import type {
-  ActivityRow,
-  AskRow,
-  ClientCard,
-  FundingRow,
-  OfferRow,
-  PositionRow,
-  StipRow,
-} from "@/lib/data/types";
+import type { ActivityRow, ClientCard, StipRow } from "@/lib/data/types";
 import type { ISODate } from "@/lib/mca/dates";
 import { diffDays } from "@/lib/mca/dates";
-import {
-  paidToDateCents,
-  paybackCents,
-  paydownPct,
-  payoffDate,
-  RENEWAL_PAYDOWN_PCT,
-  renewalDate,
-  type Frequency,
-  type FundingTerms,
-} from "@/lib/mca/funding";
-import { stackRollup, type StackRollup } from "@/lib/mca/positions";
 import {
   STIP_LABELS,
   stipRollup,
@@ -28,7 +9,6 @@ import {
   type StipRollup,
 } from "@/lib/mca/stips";
 import { formatDate, timeAgo, toLocalInput } from "@/lib/format";
-import { formatMoney } from "@/lib/money";
 
 // ---------------------------------------------------------------------------------------------
 // timeline
@@ -88,12 +68,6 @@ export function activityBody(a: Pick<ActivityRow, "kind" | "body">, today?: ISOD
         return d;
       }
     });
-  }
-  if (a.kind === "funding") {
-    const m = /^Funded \$(\d+) at ([\d.]+)$/.exec(a.body);
-    return m
-      ? `Funded ${formatMoney(Number(m[1]) * 100)} at ${formatFactor(Number(m[2]))} factor`
-      : a.body;
   }
   if (a.kind !== "system") return a.body;
   const m = /^(Received|Marked missing): ([a-z_]+)(?: ([A-Z][a-z]{2} \d{4}))?$/.exec(a.body);
@@ -182,114 +156,6 @@ export function intToInput(n: number | null | undefined): string {
   return n === null || n === undefined ? "" : String(n);
 }
 
-/** 1.31 → "1.31", 1.315 → "1.315" — two decimals unless a third is real. */
-export function formatFactor(f: number | null | undefined): string {
-  if (f === null || f === undefined) return "—";
-  const s = f.toFixed(3);
-  return s.endsWith("0") ? s.slice(0, -1) : s;
-}
-
-const FREQ_UNIT: Record<Frequency, string> = {
-  daily: "/day",
-  weekly: "/week",
-  biweekly: " every 2 weeks",
-  monthly: "/month",
-};
-
-export const FREQUENCY_LABELS: Record<Frequency, string> = {
-  daily: "Daily",
-  weekly: "Weekly",
-  biweekly: "Every 2 weeks",
-  monthly: "Monthly",
-};
-
-/** "$550/day". `money` is passed in so this stays free of Intl in tests. */
-export function remittanceLabel(
-  cents: number | null | undefined,
-  frequency: Frequency | null | undefined,
-  money: (c: number) => string,
-): string {
-  if (cents === null || cents === undefined) return "—";
-  return `${money(cents)}${frequency ? FREQ_UNIT[frequency] : ""}`;
-}
-
-// ---------------------------------------------------------------------------------------------
-// positions
-
-export function ordinal(n: number): string {
-  const mod100 = n % 100;
-  if (mod100 >= 11 && mod100 <= 13) return `${n}th`;
-  switch (n % 10) {
-    case 1:
-      return `${n}st`;
-    case 2:
-      return `${n}nd`;
-    case 3:
-      return `${n}rd`;
-    default:
-      return `${n}th`;
-  }
-}
-
-export const MAX_POSITION = 20;
-
-/** What the position field starts as for a new row: one deeper than the stack so far (schema caps at 20). */
-export function nextPositionNo(positions: readonly Pick<PositionRow, "position_no">[]): number {
-  const deepest = positions.reduce((mx, p) => Math.max(mx, p.position_no), 0);
-  return Math.min(MAX_POSITION, deepest + 1);
-}
-
-export function positionRollup(positions: readonly PositionRow[]): StackRollup {
-  return stackRollup(
-    positions.map((p) => ({
-      positionNo: p.position_no,
-      funderName: p.funder_name,
-      fundedAmountCents: p.funded_amount_cents,
-      balanceCents: p.balance_cents,
-      paybackCents: p.payback_cents,
-    })),
-  );
-}
-
-/** One position's own progress; null without a payback figure (never guess). */
-export function positionPaidDownPct(p: Pick<PositionRow, "payback_cents" | "balance_cents">) {
-  if (!p.payback_cents || p.payback_cents <= 0) return null;
-  const pct = (1 - p.balance_cents / p.payback_cents) * 100;
-  return Math.round(Math.min(100, Math.max(0, pct)) * 10) / 10;
-}
-
-// ---------------------------------------------------------------------------------------------
-// competing offers
-
-export interface OfferInsight {
-  /** Mean factor rate across the offers that list one, to three decimals. */
-  average: number;
-  low: number;
-  high: number;
-  /** Offers that list a factor. */
-  counted: number;
-  total: number;
-}
-
-export function offerInsight(
-  offers: readonly Pick<OfferRow, "factor_rate">[],
-): OfferInsight | null {
-  if (offers.length < 2) return null;
-  const thousandths = offers
-    .map((o) => o.factor_rate)
-    .filter((f): f is number => f !== null && Number.isFinite(f))
-    .map((f) => Math.round(f * 1000));
-  if (thousandths.length === 0) return null;
-  const sum = thousandths.reduce((s, n) => s + n, 0);
-  return {
-    average: Math.round(sum / thousandths.length) / 1000,
-    low: Math.min(...thousandths) / 1000,
-    high: Math.max(...thousandths) / 1000,
-    counted: thousandths.length,
-    total: offers.length,
-  };
-}
-
 // ---------------------------------------------------------------------------------------------
 // stips
 
@@ -351,67 +217,6 @@ export function setStipReceived(
 }
 
 // ---------------------------------------------------------------------------------------------
-// funding
-
-export const FUNDING_STATUS_LABELS: Record<FundingRow["status"], string> = {
-  active: "Active",
-  paid_off: "Paid off",
-  defaulted: "Defaulted",
-  renewed: "Renewed",
-};
-
-export function fundingTerms(f: FundingRow): FundingTerms {
-  return {
-    fundedOn: f.funded_on,
-    amountCents: f.amount_cents,
-    factorRate: f.factor_rate,
-    paymentCents: f.payment_cents,
-    frequency: f.frequency,
-    paidBackOverrideCents: f.paid_back_override_cents,
-  };
-}
-
-export interface FundingSnapshot {
-  paybackCents: number;
-  paidCents: number;
-  balanceCents: number;
-  /** 0–100, one decimal. */
-  pct: number;
-  /** True when Isaac typed the collected amount instead of us estimating from payments elapsed. */
-  overridden: boolean;
-  /** The day the merchant crosses 50% (today if already past it). Null when the payment is unusable. */
-  renewalOn: ISODate | null;
-  pastHalfway: boolean;
-  payoffOn: ISODate | null;
-}
-
-export function fundingSnapshot(f: FundingRow, today: ISODate): FundingSnapshot {
-  const terms = fundingTerms(f);
-  const payback = paybackCents(terms.amountCents, terms.factorRate);
-  const paid = paidToDateCents(terms, today);
-  const pct = paydownPct(terms, today);
-  return {
-    paybackCents: payback,
-    paidCents: paid,
-    balanceCents: payback - paid,
-    pct,
-    overridden: f.paid_back_override_cents !== null,
-    renewalOn: renewalDate(terms, today),
-    pastHalfway: pct >= RENEWAL_PAYDOWN_PCT,
-    payoffOn: payoffDate(terms),
-  };
-}
-
-/** Broker commission in points of the advance ($2,500 on $50,000 = 5 points), one decimal. */
-export function commissionPoints(
-  commissionCents: number | null | undefined,
-  amountCents: number,
-): number | null {
-  if (commissionCents === null || commissionCents === undefined || amountCents <= 0) return null;
-  return Math.round((commissionCents / amountCents) * 1000) / 10;
-}
-
-// ---------------------------------------------------------------------------------------------
 // forms: what the dialogs start with, and what they send
 
 export interface ClientForm {
@@ -446,156 +251,4 @@ export function clientForm(c: ClientCard): ClientForm {
 
 export function clientFieldsPayload(f: ClientForm) {
   return { ...f, applicationReceivedOn: f.applicationReceivedOn || null };
-}
-
-export interface AskForm {
-  wantedAmount: string;
-  wantedTerms: string;
-  estApproval: string;
-  estApprovalNote: string;
-}
-
-export function askForm(a: AskRow | undefined): AskForm {
-  return {
-    wantedAmount: centsToInput(a?.wanted_amount_cents),
-    wantedTerms: a?.wanted_terms ?? "",
-    estApproval: centsToInput(a?.est_approval_cents),
-    estApprovalNote: a?.est_approval_note ?? "",
-  };
-}
-
-export interface PositionForm {
-  positionNo: string;
-  funderName: string;
-  fundedAmount: string;
-  payback: string;
-  balance: string;
-  payment: string;
-  frequency: Frequency | "";
-  fundedOn: string;
-  note: string;
-}
-
-export function positionForm(p: PositionRow | undefined, nextNo: number): PositionForm {
-  if (!p) {
-    return {
-      positionNo: String(nextNo),
-      funderName: "",
-      fundedAmount: "",
-      payback: "",
-      balance: "",
-      payment: "",
-      frequency: "",
-      fundedOn: "",
-      note: "",
-    };
-  }
-  return {
-    positionNo: String(p.position_no),
-    funderName: p.funder_name,
-    fundedAmount: centsToInput(p.funded_amount_cents),
-    payback: centsToInput(p.payback_cents),
-    balance: centsToInput(p.balance_cents),
-    payment: centsToInput(p.payment_cents),
-    frequency: p.frequency ?? "",
-    fundedOn: p.funded_on ?? "",
-    note: p.note,
-  };
-}
-
-/** Client-side check for the one field whose server message is an unhelpful "Too small". */
-export function positionError(f: PositionForm): string | null {
-  const n = Number(f.positionNo);
-  return Number.isInteger(n) && n >= 1 && n <= MAX_POSITION
-    ? null
-    : `Position must be a number from 1 to ${MAX_POSITION}`;
-}
-
-export function positionPayload(clientId: string, f: PositionForm, id?: string) {
-  return {
-    clientId,
-    ...(id ? { id } : {}),
-    ...f,
-    frequency: f.frequency || null,
-    fundedOn: f.fundedOn || null,
-  };
-}
-
-export interface OfferForm {
-  funderName: string;
-  amount: string;
-  factorRate: string;
-  payment: string;
-  frequency: Frequency | "";
-  positionNo: string;
-  termDays: string;
-  offeredOn: string;
-  won: boolean;
-  note: string;
-}
-
-export function offerForm(o: OfferRow | undefined, today: ISODate): OfferForm {
-  if (!o) {
-    return {
-      funderName: "",
-      amount: "",
-      factorRate: "",
-      payment: "",
-      frequency: "",
-      positionNo: "",
-      termDays: "",
-      offeredOn: today,
-      won: false,
-      note: "",
-    };
-  }
-  return {
-    funderName: o.funder_name,
-    amount: centsToInput(o.amount_cents),
-    factorRate: o.factor_rate === null ? "" : formatFactor(o.factor_rate),
-    payment: centsToInput(o.payment_cents),
-    frequency: o.frequency ?? "",
-    positionNo: intToInput(o.position_no),
-    termDays: intToInput(o.term_days),
-    offeredOn: o.offered_on,
-    won: o.won,
-    note: o.note,
-  };
-}
-
-export function offerPayload(clientId: string, f: OfferForm, id?: string) {
-  return {
-    clientId,
-    ...(id ? { id } : {}),
-    ...f,
-    frequency: f.frequency || null,
-    offeredOn: f.offeredOn || undefined,
-  };
-}
-
-export interface FundingForm {
-  paidBackOverride: string;
-  lastPaymentOn: string;
-  promiseToPayAt: string;
-  promiseAmount: string;
-  note: string;
-}
-
-export function fundingForm(f: FundingRow, timezone: string): FundingForm {
-  return {
-    paidBackOverride: centsToInput(f.paid_back_override_cents),
-    lastPaymentOn: f.last_payment_on ?? "",
-    promiseToPayAt: f.promise_to_pay_at ? toLocalInput(f.promise_to_pay_at, timezone) : "",
-    promiseAmount: centsToInput(f.promise_amount_cents),
-    note: f.note,
-  };
-}
-
-export function fundingPayload(fundingId: string, f: FundingForm) {
-  return {
-    fundingId,
-    ...f,
-    lastPaymentOn: f.lastPaymentOn || null,
-    promiseToPayAt: f.promiseToPayAt || null,
-  };
 }

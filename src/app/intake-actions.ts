@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { costCents } from "@/lib/ai/readLenderEmail";
+import { costCents } from "@/lib/ai/cost";
 import {
   PROMPT_VERSION as SPLIT_PROMPT_VERSION,
   splitLeadLine,

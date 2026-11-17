@@ -220,3 +220,12 @@ export function parseAddress(v: string | undefined): { name: string; address: st
   if (m) return { name: (m[1] ?? "").trim(), address: (m[2] ?? "").trim().toLowerCase() };
   return { name: "", address: s.trim().toLowerCase() };
 }
+
+/** Decode a Gmail Authentication-Results header into pass/fail for SPF and DKIM. */
+export function authResults(header: string | null): { spf: boolean | null; dkim: boolean | null } {
+  if (!header) return { spf: null, dkim: null };
+  const h = header.toLowerCase();
+  const spf = /spf=pass/.test(h) ? true : /spf=(fail|softfail|none|neutral)/.test(h) ? false : null;
+  const dkim = /dkim=pass/.test(h) ? true : /dkim=(fail|none|neutral)/.test(h) ? false : null;
+  return { spf, dkim };
+}

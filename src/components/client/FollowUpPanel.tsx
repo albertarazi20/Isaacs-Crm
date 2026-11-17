@@ -18,7 +18,7 @@ import { useApp } from "../app-context";
 import { TimeSelect } from "../TimeSelect";
 import { TimerPicker } from "../TimerPicker";
 import { Badge, Button, cn, Field, Input } from "../ui";
-import { AddToCalendar } from "../winback/AddToCalendar";
+import { AddToCalendar } from "../messaging/AddToCalendar";
 import { dateInTz, dueTone } from "./logic";
 import { ReminderTag } from "@/components/ReminderTag";
 import { Muted, Panel, useRun } from "./parts";
@@ -294,7 +294,7 @@ function ScheduleCall({ clientId }: { clientId: string }) {
         <Input
           value={note}
           onChange={(e) => setNote(e.target.value)}
-          placeholder="Review offers, get statements…"
+          placeholder="Get statements, go over the application…"
         />
       </Field>
       <Button type="submit" disabled={busy || !at}>

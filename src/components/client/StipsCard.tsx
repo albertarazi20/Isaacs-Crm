@@ -81,7 +81,7 @@ export function StipsCard({
       <Checklist items={required} onToggle={toggle} />
       {optional.length > 0 ? (
         <>
-          <p className="mt-3 mb-1 text-[12px] font-medium text-text-2">When the funder asks</p>
+          <p className="mt-3 mb-1 text-[12px] font-medium text-text-2">Also useful</p>
           <Checklist items={optional} onToggle={toggle} />
         </>
       ) : null}

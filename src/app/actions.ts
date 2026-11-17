@@ -99,36 +99,6 @@ export async function purgeClientAction(input: unknown): Promise<ActionResult<nu
     return null;
   });
 }
-export async function saveAskAction(input: unknown): Promise<ActionResult<null>> {
-  return run(async (q) => {
-    await m.saveAsk(q, s.askSchema.parse(input));
-    return null;
-  });
-}
-export async function savePositionAction(input: unknown): Promise<ActionResult<null>> {
-  return run(async (q) => {
-    await m.savePosition(q, s.positionSchema.parse(input));
-    return null;
-  });
-}
-export async function deletePositionAction(input: unknown): Promise<ActionResult<null>> {
-  return run(async (q) => {
-    await m.deletePosition(q, s.idSchema.parse(input).id);
-    return null;
-  });
-}
-export async function saveOfferAction(input: unknown): Promise<ActionResult<null>> {
-  return run(async (q) => {
-    await m.saveOffer(q, s.offerSchema.parse(input));
-    return null;
-  });
-}
-export async function deleteOfferAction(input: unknown): Promise<ActionResult<null>> {
-  return run(async (q) => {
-    await m.deleteOffer(q, s.idSchema.parse(input).id);
-    return null;
-  });
-}
 export async function seedStipsAction(input: unknown): Promise<ActionResult<number>> {
   return run((q, ctx) => m.seedStips(q, s.clientIdSchema.parse(input).clientId, ctx));
 }

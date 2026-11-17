@@ -1,4 +1,4 @@
-import { applyLink } from "../docs/linkExpiry";
+import { applyLink } from "../docs/applyLink";
 import type { Db, DbAccess } from "../db";
 import { toActionError } from "../data/errors";
 import { createClient, stampClientTimezone } from "../data/mutations";
@@ -330,7 +330,6 @@ export async function sendWelcome(
     senderName: r.sender_name,
     applicationLink: r.application_link || applyLink(appUrl, r.application_token),
     wantedAmountCents: null,
-    bestOffer: null,
     uploadLink: `${appUrl}/upload/${r.token}`,
   });
   const body = resolveMergeFields(r.body, values);

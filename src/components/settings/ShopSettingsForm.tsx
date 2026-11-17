@@ -3,7 +3,7 @@
 import { useId, useState, type ReactNode } from "react";
 import { saveShopSettingsAction } from "@/app/settings-actions";
 import { useFormState, useRun } from "@/components/client/parts";
-import { Button, Field, Input, Select } from "@/components/ui";
+import { Button, Field, Input } from "@/components/ui";
 import type { ShopSettingsRow } from "@/lib/settings/queries";
 import { SettingsCard } from "./primitives";
 import { Toggle } from "./Toggle";
@@ -34,13 +34,6 @@ export function ShopSettingsForm({
     perMerchantWeekly: String(s.per_merchant_weekly),
     automationFrom: s.automation_from,
     automationReplyToRep: s.automation_reply_to_rep,
-    lenderChaseDays: String(s.lender_chase_days),
-    lenderChaseMode: s.lender_chase_mode,
-    lenderChaseMax: String(s.lender_chase_max),
-    maxLendersPerDeal: String(s.max_lenders_per_deal),
-    approvalValidDays: String(s.approval_valid_days),
-    resubmitBlockDays: String(s.resubmit_block_days),
-    dealsInboxAddress: s.deals_inbox_address,
   }));
   const save = (
     <Button type="submit" form={formId} variant="primary" disabled={busy}>
@@ -80,16 +73,6 @@ export function ShopSettingsForm({
               onChange={(x) => set("automationReplyToRep", x)}
             />
           </div>
-          <Field
-            label="Deals inbox (lenders reply here)"
-            hint="Empty means lenders reply to the rep who sent the file"
-          >
-            <Input
-              {...bind("dealsInboxAddress")}
-              type="email"
-              placeholder="deals@mail.selectivecap.com"
-            />
-          </Field>
         </div>
       </SettingsCard>
       {afterShop}
@@ -115,7 +98,7 @@ export function ShopSettingsForm({
           </Field>
         </div>
       </SettingsCard>
-      <SettingsCard title="When emails go out">
+      <SettingsCard title="When emails go out" footer={save}>
         <div className="grid gap-3 sm:grid-cols-3">
           <Field label="Window starts (merchant's local hour)">
             <Input {...bind("sendWindowStart")} inputMode="numeric" />
@@ -142,38 +125,6 @@ export function ShopSettingsForm({
               onChange={(x) => set("sequencesEnabled", x)}
             />
           </div>
-        </div>
-      </SettingsCard>
-      <SettingsCard title="Lenders" footer={save}>
-        <div className="grid gap-3 sm:grid-cols-2">
-          <Field label="Chase a quiet lender after (days)">
-            <Input {...bind("lenderChaseDays")} inputMode="numeric" />
-          </Field>
-          <Field label="Chases per lender, max">
-            <Input {...bind("lenderChaseMax")} inputMode="numeric" />
-          </Field>
-          <Field label="Auto-chase">
-            <Select {...bind("lenderChaseMode")}>
-              <option value="send">Send from the rep&apos;s Gmail</option>
-              <option value="draft">Write the chase for a person to send</option>
-              <option value="off">Off</option>
-            </Select>
-          </Field>
-          <Field label="Shotgun limit (lenders per file)">
-            <Input {...bind("maxLendersPerDeal")} inputMode="numeric" />
-          </Field>
-          <Field
-            label="Approval stays good for (days)"
-            hint="Used when a lender names no number of its own"
-          >
-            <Input {...bind("approvalValidDays")} inputMode="numeric" />
-          </Field>
-          <Field
-            label="Block a double submission for (days)"
-            hint="Same merchant, same lender. 0 turns the block off"
-          >
-            <Input {...bind("resubmitBlockDays")} inputMode="numeric" />
-          </Field>
         </div>
       </SettingsCard>
     </form>

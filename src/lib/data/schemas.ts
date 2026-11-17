@@ -3,7 +3,7 @@ import { z } from "zod";
 import { findSensitive } from "./sensitive";
 import { isRealDate } from "../mca/dates";
 import { STAGE_KEYS } from "../mca/stages";
-import { parseFactor, parseMoney } from "../money";
+import { parseMoney } from "../money";
 
 const isoDate = z
   .string()
@@ -44,8 +44,6 @@ const emailField = line(200).refine(
   (v) => v === "" || EMAIL.test(v),
   "Enter one valid email address",
 );
-const frequency = z.enum(["daily", "weekly", "biweekly", "monthly"]);
-
 export const money = z.union([z.string(), z.number()]).transform((v, ctx) => {
   const cents = parseMoney(v);
   if (cents === null) {
@@ -68,25 +66,6 @@ export const optMoney = z
     return cents;
   });
 
-const factor = z.union([z.string(), z.number()]).transform((v, ctx) => {
-  const f = parseFactor(v);
-  if (f === null) {
-    ctx.addIssue({ code: "custom", message: "Factor rate must be between 1.00 and 3.00" });
-    return z.NEVER;
-  }
-  return f;
-});
-const optFactor = z
-  .union([z.string(), z.number(), z.null(), z.undefined()])
-  .transform((v, ctx): number | null => {
-    if (v === null || v === undefined || (typeof v === "string" && v.trim() === "")) return null;
-    const f = parseFactor(v);
-    if (f === null) {
-      ctx.addIssue({ code: "custom", message: "Factor rate must be between 1.00 and 3.00" });
-      return z.NEVER;
-    }
-    return f;
-  });
 const optInt = z
   .union([z.string(), z.number(), z.null(), z.undefined()])
   .transform((v, ctx): number | null => {
@@ -107,47 +86,12 @@ export const newClientSchema = z.object({
   industry: line(100).default(""),
   state: line(40).default(""),
   source: line(100).default(""),
-  stage: z
-    .enum(STAGE_KEYS)
-    .refine((s) => s !== "funded", "Add the client first, then record the funding")
-    .default("name_in"),
+  stage: z.enum(STAGE_KEYS).default("name_in"),
   followUpOn: isoDate.optional(),
   wantedAmount: optMoney.optional(),
   monthlyRevenue: optMoney.optional(),
 });
 export type NewClientInput = z.output<typeof newClientSchema>;
-
-export const fundingInputSchema = z.object({
-  fundedOn: isoDate.optional(),
-  amount: money,
-  factorRate: factor,
-  payment: money,
-  frequency,
-  funderName: line(200).default(""),
-  positionNo: optInt.optional(),
-  termDays: optInt.optional(),
-  commission: optMoney.optional(),
-});
-
-export const competitorInputSchema = z.object({
-  funderName: line(200).min(1, "Who was the competitor?"),
-  amount: optMoney.optional(),
-  factorRate: optFactor.optional(),
-  payment: optMoney.optional(),
-  frequency: frequency.optional(),
-  positionNo: optInt.optional(),
-  termDays: optInt.optional(),
-  offeredOn: isoDate.optional(),
-  won: z.boolean().default(false),
-  note: text().default(""),
-});
-
-export const defaultInputSchema = z.object({
-  defaultedOn: isoDate.optional(),
-  promiseToPayAt: localDateTime.optional(),
-  promiseAmount: optMoney.optional(),
-  note: text().default(""),
-});
 
 export const moveSchema = z
   .object({
@@ -155,19 +99,12 @@ export const moveSchema = z
     stage: z.enum(STAGE_KEYS),
     followUpOn: isoDate.optional(),
     reason: text().default(""),
-    funding: fundingInputSchema.optional(),
-    competitor: competitorInputSchema.optional(),
-    default: defaultInputSchema.optional(),
     /** "Phone call scheduled" only: when the call is, as typed (local date and time). */
     callAt: localDateTime.optional(),
-  })
-  .refine((v) => v.stage !== "funded" || v.funding, {
-    message: "Funding terms are required to mark a client funded",
-    path: ["funding"],
   });
 export type MoveInput = z.output<typeof moveSchema>;
 
-/** keepCalls: leave a funded merchant's check-in and renewal call on their own dates (a drag does; Snooze doesn't). */
+/** keepCalls: leave a booked call on its own date (a drag does; Snooze doesn't). */
 export const followUpSchema = z.object({
   clientId: id,
   dueOn: isoDate,
@@ -216,59 +153,6 @@ export const clientFieldsSchema = z
 export const updateClientSchema = z.object({ clientId: id, fields: clientFieldsSchema });
 export type ClientFieldsInput = z.output<typeof clientFieldsSchema>;
 
-export const askSchema = z.object({
-  clientId: id,
-  wantedAmount: optMoney.refine((v) => v === null || v > 0, "Enter an amount above $0"),
-  wantedTerms: line(500).default(""),
-  estApproval: optMoney,
-  estApprovalNote: text().default(""),
-});
-
-export const positionSchema = z
-  .object({
-    clientId: id,
-    id: id.optional(),
-    positionNo: z.coerce.number().int().min(1).max(20),
-    funderName: line(200).default(""),
-    fundedAmount: optMoney,
-    payback: optMoney,
-    balance: optMoney,
-    payment: optMoney,
-    frequency: frequency.nullable().optional(),
-    fundedOn: isoDate.nullable().optional(),
-    note: text().default(""),
-  })
-  // An advance pays back more than it funded (factor 1.00 and up), and what is still owed can't exceed the payback.
-  .superRefine((v, ctx) => {
-    if (v.payback !== null && v.fundedAmount !== null && v.payback < v.fundedAmount)
-      ctx.addIssue({
-        code: "custom",
-        path: ["payback"],
-        message: "The payback is less than the advance — an advance pays back more than it funded",
-      });
-    if (v.balance !== null && v.payback !== null && v.balance > v.payback)
-      ctx.addIssue({
-        code: "custom",
-        path: ["balance"],
-        message: "The balance can't be more than the payback",
-      });
-  });
-
-export const offerSchema = z.object({
-  clientId: id,
-  id: id.optional(),
-  funderName: line(200).min(1, "Who made the offer?"),
-  amount: optMoney,
-  factorRate: optFactor,
-  payment: optMoney,
-  frequency: frequency.nullable().optional(),
-  positionNo: optInt,
-  termDays: optInt,
-  offeredOn: isoDate.optional(),
-  won: z.boolean().default(false),
-  note: text().default(""),
-});
-
 export const idSchema = z.object({ id });
 export const clientIdSchema = z.object({ clientId: id });
 /** Two cards for one merchant: everything on `dropId` moves to `keepId`, and `dropId` is deleted. */
@@ -305,9 +189,7 @@ export const importRowSchema = z.object({
   industry: line(100).default(""),
   state: line(40).default(""),
   notes: text(5000).default(""),
-  stage: z
-    .enum(STAGE_KEYS)
-    .refine((s) => s !== "funded", "Funded clients can't be imported without terms"),
+  stage: z.enum(STAGE_KEYS),
   followUpOn: isoDate,
   source: line(100).default(""),
   statusNote: line(200).default(""),

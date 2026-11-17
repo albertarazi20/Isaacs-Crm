@@ -4,14 +4,14 @@ import type { MailboxSyncRow } from "@/lib/inbox/sync";
 import { SettingsCard } from "./primitives";
 
 /**
- * Last synced per mailbox (S2-18): when each connected Gmail was last read for lender replies, what it saw, and the
+ * Last synced per mailbox (S2-18): when each connected Gmail was last read for merchant replies, what it saw, and the
  * error if the last read failed. A server component: the page loads mailbox_sync_status() and passes the rows.
  */
 export function MailboxSync({ rows, nowMs }: { rows: MailboxSyncRow[]; nowMs: number }) {
   return (
     <SettingsCard
       title="Mailbox sync"
-      description="When each connected Gmail was last read for lender replies. A mailbox that stops syncing stops feeding the board."
+      description="When each connected Gmail was last read for merchant replies. A mailbox that stops syncing stops feeding the reply alerts."
       aside={
         <Badge tone="neutral" className="tabular-nums">
           {rows.length}

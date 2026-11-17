@@ -1,35 +1,18 @@
 import Link from "next/link";
-import { GoalEditor } from "@/components/dashboard/GoalEditor";
 import { Card, EmptyState, LinkButton, SectionTitle, cn } from "@/components/ui";
 import { requireSession } from "@/lib/auth/server";
 import { CAN } from "@/lib/auth/roles";
-import {
-  biggestLeak,
-  funnel,
-  pace,
-  type NowItem,
-  type NowKind,
-  type Pace,
-} from "@/lib/dashboard/metrics";
+import type { NowItem, NowKind } from "@/lib/dashboard/metrics";
 import {
   emailMeters,
-  funnelCounts,
-  lenderScorecard,
-  listGoals,
-  moneyOnTable,
   monthOf,
   monthScoreboard,
   nowItems,
   repScorecard,
   type EmailMeter,
-  type LenderScore,
-  type MoneyOnTable,
   type RepScore,
-  type Scoreboard,
 } from "@/lib/dashboard/queries";
-import { speedNumbers, type SpeedNumbers } from "@/lib/dashboard/speed";
 import { dueCount, userContext } from "@/lib/data/queries";
-import { dealStatusCounts } from "@/lib/deals/queries";
 import { db } from "@/lib/db";
 import { formatDate } from "@/lib/format";
 import { formatMoneyCompact } from "@/lib/money";
@@ -55,31 +38,11 @@ const MONTHS = [
 
 const KIND_LABEL: Record<NowKind, string> = {
   merchant_replied: "Reply",
-  decision: "Decide",
-  kicked_back: "Kicked back",
-  offer_unpresented: "Offer in",
-  approval_aging: "Close",
-  renewal_ready: "Renewal",
   overdue: "Overdue",
-  stale_submission: "Chase",
-  late_payout: "Late payout",
-  stale_deal: "Sitting",
-  registration: "Registration",
-  trust: "Trust",
 };
 const KIND_TONE: Record<NowKind, string> = {
   merchant_replied: "bg-bad-soft text-bad",
-  decision: "bg-accent-soft text-accent",
-  kicked_back: "bg-bad-soft text-bad",
-  offer_unpresented: "bg-good-soft text-good",
-  approval_aging: "bg-warn-soft text-warn",
-  renewal_ready: "bg-good-soft text-good",
   overdue: "bg-warn-soft text-warn",
-  stale_submission: "bg-surface-2 text-muted",
-  late_payout: "bg-warn-soft text-warn",
-  stale_deal: "bg-warn-soft text-warn",
-  registration: "bg-warn-soft text-warn",
-  trust: "bg-bad-soft text-bad",
 };
 
 function Kpi({
@@ -117,76 +80,6 @@ function Kpi({
   );
 }
 
-function PaceBar({
-  p,
-  label,
-  month,
-  userId,
-  canEdit,
-}: {
-  p: Pace;
-  label: string;
-  month: string;
-  userId: string | null;
-  canEdit: boolean;
-}) {
-  const tone =
-    p.status === "behind"
-      ? "bg-bad"
-      : p.status === "ahead" || p.status === "done"
-        ? "bg-good"
-        : "bg-accent";
-  const expectedPct =
-    p.goalCents > 0 ? Math.min(100, Math.round((100 * p.expectedByNowCents) / p.goalCents)) : 0;
-  const words =
-    p.status === "no_goal"
-      ? "No goal set for this month."
-      : p.status === "done"
-        ? "Goal hit."
-        : p.status === "behind"
-          ? `${formatMoneyCompact(-p.deltaCents)} behind pace · ${formatMoneyCompact(p.neededPerDayCents)} a day for the next ${p.weekdaysLeft} weekdays`
-          : p.status === "ahead"
-            ? `${formatMoneyCompact(p.deltaCents)} ahead of pace`
-            : `On pace · ${formatMoneyCompact(p.neededPerDayCents)} a day to finish`;
-  return (
-    <div className="rounded-xl border border-border bg-surface px-4 py-3.5">
-      <div className="flex items-baseline justify-between gap-3">
-        <p className="text-sm font-medium">{label}</p>
-        <p className="text-sm tabular-nums">
-          <span className="font-semibold">{formatMoneyCompact(p.fundedCents)}</span>
-          {p.goalCents > 0 ? (
-            <span className="text-muted"> of {formatMoneyCompact(p.goalCents)}</span>
-          ) : null}
-        </p>
-      </div>
-      <div className="relative mt-2 h-2.5 overflow-hidden rounded-full bg-surface-2">
-        <div
-          className={cn("h-full rounded-full transition-all", tone)}
-          style={{ width: `${p.pct}%` }}
-        />
-        {p.goalCents > 0 ? (
-          <div
-            className="absolute top-0 h-full w-px bg-text/60"
-            style={{ left: `${expectedPct}%` }}
-            title="Where a straight line to the goal says you should be today"
-          />
-        ) : null}
-      </div>
-      <div className="mt-1.5 flex items-center justify-between gap-3 text-xs text-muted">
-        <span>{words}</span>
-        {canEdit ? (
-          <GoalEditor
-            month={month}
-            userId={userId}
-            fundedCents={p.goalCents}
-            label={label.toLowerCase()}
-          />
-        ) : null}
-      </div>
-    </div>
-  );
-}
-
 function NowList({
   items,
   total,
@@ -199,15 +92,14 @@ function NowList({
   if (items.length === 0)
     return (
       <EmptyState title="Nothing is waiting on you">
-        New replies, kickbacks, offers and overdue calls land here, ranked by what loses money
-        fastest.
+        New replies and overdue follow-ups land here, ranked by what is most likely to go cold.
       </EmptyState>
     );
   return (
     <Card className="p-0">
       <ol className="divide-y divide-border">
         {items.map((n, i) => (
-          <li key={`${n.kind}-${n.client_id ?? ""}-${n.deal_id ?? ""}-${i}`}>
+          <li key={`${n.kind}-${n.client_id}-${i}`}>
             <Link
               href={n.href}
               className="flex items-start gap-3 px-4 py-2.5 transition hover:bg-surface-3"
@@ -221,7 +113,7 @@ function NowList({
                 {KIND_LABEL[n.kind]}
               </span>
               <span className="min-w-0 flex-1">
-                {n.client_id && owners?.[n.client_id] ? (
+                {owners?.[n.client_id] ? (
                   <span className="float-right ml-2 text-xs text-muted">{owners[n.client_id]}</span>
                 ) : null}
                 <span className="block truncate text-sm font-semibold">
@@ -255,167 +147,12 @@ function NowList({
   );
 }
 
-function FunnelBlock({ counts, month }: { counts: Parameters<typeof funnel>[0]; month: string }) {
-  const steps = funnel(counts);
-  const leak = biggestLeak(steps);
-  const max = Math.max(1, ...steps.map((s) => s.count));
-  return (
-    <Card className="p-4">
-      <SectionTitle aside={<span className="text-xs text-muted">{month}</span>}>
-        Funnel
-      </SectionTitle>
-      <ol className="mt-3 space-y-2">
-        {steps.map((s) => (
-          <li key={s.key} className="grid grid-cols-[110px_1fr_auto] items-center gap-3 text-sm">
-            <span className="text-muted">{s.label}</span>
-            <span className="h-5 overflow-hidden rounded bg-surface-2">
-              <span
-                className="block h-full rounded bg-accent/80"
-                style={{ width: `${Math.max(2, Math.round((100 * s.count) / max))}%` }}
-              />
-            </span>
-            <span className="w-28 text-right tabular-nums">
-              <span className="font-semibold">{s.count}</span>
-              {s.fromPrevPct !== null ? (
-                <span className="text-muted"> · {s.fromPrevPct}%</span>
-              ) : null}
-            </span>
-          </li>
-        ))}
-      </ol>
-      {leak ? (
-        <p className="mt-3 text-xs text-muted">
-          Biggest leak: <span className="font-semibold text-text">{leak.lost}</span> lost between{" "}
-          {leak.from.label.toLowerCase()} and {leak.to.label.toLowerCase()}.
-        </p>
-      ) : null}
-    </Card>
-  );
-}
-
-function MoneyBlock({ m }: { m: MoneyOnTable }) {
-  return (
-    <Card className="p-4">
-      <SectionTitle
-        aside={
-          <span className="text-sm font-semibold tabular-nums">
-            {formatMoneyCompact(m.approved_unfunded_cents + m.renewals_ready_cents)}
-          </span>
-        }
-      >
-        Money on the table
-      </SectionTitle>
-      <dl className="mt-3 grid grid-cols-3 gap-3 text-sm">
-        <div>
-          <dt className="text-xs text-muted">Approved, not funded</dt>
-          <dd className="font-semibold tabular-nums">
-            {formatMoneyCompact(m.approved_unfunded_cents)}
-          </dd>
-          <dd className="text-xs text-muted">{m.approved_unfunded.length} offers</dd>
-        </div>
-        <div>
-          <dt className="text-xs text-muted">Renewals ready</dt>
-          <dd className="font-semibold tabular-nums">
-            {formatMoneyCompact(m.renewals_ready_cents)}
-          </dd>
-          <dd className="text-xs text-muted">{m.renewals_ready.length} advances</dd>
-        </div>
-        <div>
-          <dt className="text-xs text-muted">Commission owed to us</dt>
-          <dd className="font-semibold tabular-nums">
-            {formatMoneyCompact(m.expected_commission_cents)}
-          </dd>
-          <dd className="text-xs text-muted">confirmed, not yet paid</dd>
-        </div>
-      </dl>
-      {m.approved_unfunded.length > 0 ? (
-        <ul className="mt-3 divide-y divide-border border-t border-border text-sm">
-          {m.approved_unfunded.slice(0, 6).map((a) => (
-            <li key={a.client_id} className="flex items-center justify-between gap-3 py-2">
-              <Link
-                href={a.deal_id ? `/deals/${a.deal_id}` : `/clients/${a.client_id}`}
-                className="min-w-0 truncate font-medium hover:underline"
-              >
-                {a.business_name}
-              </Link>
-              <span className="shrink-0 text-xs text-muted">
-                {a.funder_name} · {formatMoneyCompact(a.amount_cents)} at {a.factor_rate} · {a.days}
-                d
-              </span>
-            </li>
-          ))}
-        </ul>
-      ) : null}
-    </Card>
-  );
-}
-
-const days = (n: number | null): string => (n === null ? "—" : `${n}d`);
-
-/** The speed numbers as medians in days, plus the kickback rate: the shop's for a manager, the rep's own for a rep. */
-function SpeedBlock({
-  speed,
-  reps,
-  month,
-  mine,
-}: {
-  speed: SpeedNumbers;
-  reps: RepScore[];
-  month: string;
-  mine: boolean;
-}) {
-  const kicked = reps.reduce((n, r) => n + r.kickbacks, 0);
-  const filed = reps.reduce((n, r) => n + r.submitted_to_ops, 0);
-  const sample = (n: number) => (n === 0 ? "no deals yet" : `${n} deal${n === 1 ? "" : "s"}`);
-  const cells: { label: string; value: string; sub: string }[] = [
-    {
-      label: "Lead to sub",
-      value: days(speed.lead_to_sub_days),
-      sub: sample(speed.sample.lead_to_sub),
-    },
-    {
-      label: "Sub to first offer",
-      value: days(speed.sub_to_offer_days),
-      sub: sample(speed.sample.sub_to_offer),
-    },
-    {
-      label: "Approval to funded",
-      value: days(speed.approval_to_funded_days),
-      sub: sample(speed.sample.approval_to_funded),
-    },
-    {
-      label: "Kicked back",
-      value: filed === 0 ? "—" : `${Math.round((100 * kicked) / filed)}%`,
-      sub: filed === 0 ? "no files yet" : `${kicked} of ${filed} files`,
-    },
-  ];
-  return (
-    <Card className="p-4">
-      <SectionTitle aside={<span className="text-xs text-muted">{month}</span>}>
-        {mine ? "My speed" : "Speed"}
-      </SectionTitle>
-      <p className="mt-1 text-xs text-muted">Median days, this month.</p>
-      <dl className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4 xl:grid-cols-2">
-        {cells.map((c) => (
-          <div key={c.label} className="min-w-0">
-            <dt className="truncate text-xs text-muted">{c.label}</dt>
-            <dd className="text-[22px] leading-7 font-semibold tracking-tight tabular-nums">
-              {c.value}
-            </dd>
-            <dd className="truncate text-xs text-muted">{c.sub}</dd>
-          </div>
-        ))}
-      </dl>
-    </Card>
-  );
-}
-
-function RepTable({ rows, month }: { rows: RepScore[]; month: string }) {
+function RepTable({ rows, month, mine }: { rows: RepScore[]; month: string; mine: boolean }) {
   return (
     <Card className="min-w-0 overflow-x-auto p-0">
       <div className="px-4 pt-4">
         <SectionTitle aside={<span className="text-xs text-muted">{month}</span>}>
-          Team
+          {mine ? "My month" : "Team"}
         </SectionTitle>
       </div>
       <table className="mt-3 w-full text-[13px]">
@@ -423,37 +160,8 @@ function RepTable({ rows, month }: { rows: RepScore[]; month: string }) {
           <tr>
             <th className="px-4 py-2 font-semibold">Rep</th>
             <th className="px-2 py-2 text-right font-semibold">Leads</th>
-            <th className="px-2 py-2 text-right font-semibold">Submitted</th>
-            <th className="px-2 py-2 text-right font-semibold">Approved</th>
-            <th className="px-2 py-2 text-right font-semibold">Funded</th>
-            <th className="px-2 py-2 text-right font-semibold">Volume</th>
-            <th className="px-2 py-2 text-right font-semibold">Commission</th>
             <th className="px-2 py-2 text-right font-semibold">Overdue</th>
-            <th className="px-2 py-2 text-right font-semibold">Speed to lead</th>
-            <th
-              className="px-2 py-2 text-right font-semibold"
-              title="Median days from a lead landing to the file going to lenders"
-            >
-              Lead to sub
-            </th>
-            <th
-              className="px-2 py-2 text-right font-semibold"
-              title="Median days from the file going to lenders to the first offer"
-            >
-              Sub to offer
-            </th>
-            <th
-              className="px-2 py-2 text-right font-semibold"
-              title="Median days from the first approval to the funding"
-            >
-              Approval to funded
-            </th>
-            <th
-              className="px-4 py-2 text-right font-semibold"
-              title="Files ops sent back, of the files submitted to ops this month"
-            >
-              Kickbacks
-            </th>
+            <th className="px-4 py-2 text-right font-semibold">Speed to lead</th>
           </tr>
         </thead>
         <tbody className="divide-y divide-border">
@@ -466,96 +174,16 @@ function RepTable({ rows, month }: { rows: RepScore[]; month: string }) {
                 ) : null}
               </td>
               <td className="px-2 py-2 text-right tabular-nums">{r.new_leads}</td>
-              <td className="px-2 py-2 text-right tabular-nums">{r.submitted}</td>
-              <td className="px-2 py-2 text-right tabular-nums">{r.approved}</td>
-              <td className="px-2 py-2 text-right tabular-nums">{r.funded_count}</td>
-              <td className="px-2 py-2 text-right tabular-nums">
-                {formatMoneyCompact(Number(r.funded_cents))}
-              </td>
-              <td className="px-2 py-2 text-right tabular-nums">
-                {formatMoneyCompact(Number(r.commission_cents))}
-              </td>
               <td className={cn("px-2 py-2 text-right tabular-nums", r.overdue > 0 && "text-bad")}>
                 {r.overdue}
               </td>
-              <td className="px-2 py-2 text-right tabular-nums">
+              <td className="px-4 py-2 text-right tabular-nums">
                 {r.speed_to_lead_hours === null ? "—" : `${r.speed_to_lead_hours}h`}
-              </td>
-              <td className="px-2 py-2 text-right tabular-nums">{days(r.lead_to_sub_days)}</td>
-              <td className="px-2 py-2 text-right tabular-nums">{days(r.sub_to_offer_days)}</td>
-              <td className="px-2 py-2 text-right tabular-nums">
-                {days(r.approval_to_funded_days)}
-              </td>
-              <td
-                className={cn(
-                  "px-4 py-2 text-right tabular-nums",
-                  (r.kickback_rate_pct ?? 0) >= 25 && "text-bad",
-                )}
-                title={`${r.kickbacks} of ${r.submitted_to_ops} files`}
-              >
-                {r.kickback_rate_pct === null ? "—" : `${r.kickback_rate_pct}%`}
-                {r.submitted_to_ops > 0 ? (
-                  <span className="ml-1 text-xs font-normal text-muted">
-                    {r.kickbacks}/{r.submitted_to_ops}
-                  </span>
-                ) : null}
               </td>
             </tr>
           ))}
         </tbody>
       </table>
-    </Card>
-  );
-}
-
-function LenderTable({ rows }: { rows: LenderScore[] }) {
-  return (
-    <Card className="min-w-0 overflow-x-auto p-0">
-      <div className="px-4 pt-4">
-        <SectionTitle
-          aside={
-            <Link href="/funders" className="text-xs text-accent hover:underline">
-              All lenders
-            </Link>
-          }
-        >
-          Lenders
-        </SectionTitle>
-      </div>
-      {rows.length === 0 ? (
-        <p className="px-4 pb-4 pt-2 text-sm text-muted">Nothing sent yet.</p>
-      ) : (
-        <table className="mt-3 w-full text-[13px]">
-          <thead className="bg-surface-2/60 text-left text-[11px] font-semibold tracking-wide text-muted uppercase">
-            <tr>
-              <th className="px-4 py-2 font-semibold">Lender</th>
-              <th className="px-2 py-2 text-right font-semibold">Sent</th>
-              <th className="px-2 py-2 text-right font-semibold">Approved</th>
-              <th className="px-2 py-2 text-right font-semibold">Rate</th>
-              <th className="px-2 py-2 text-right font-semibold">Avg factor</th>
-              <th className="px-4 py-2 text-right font-semibold">Answers in</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-border">
-            {rows.slice(0, 8).map((r) => (
-              <tr key={r.funderId} className="transition hover:bg-surface-3">
-                <td className="px-4 py-2 font-medium">{r.name}</td>
-                <td className="px-2 py-2 text-right tabular-nums">{r.submissions}</td>
-                <td className="px-2 py-2 text-right tabular-nums">{r.approvals}</td>
-                <td className="px-2 py-2 text-right tabular-nums">
-                  {r.approvalRate === null ? "—" : `${Math.round(r.approvalRate * 100)}%`}
-                </td>
-                <td className="px-2 py-2 text-right tabular-nums">
-                  {r.avgFactor === null ? "—" : r.avgFactor.toFixed(2)}
-                </td>
-                <td className="px-4 py-2 text-right tabular-nums">
-                  {r.avgDaysToRespond === null ? "—" : `${r.avgDaysToRespond}d`}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      )}
     </Card>
   );
 }
@@ -607,62 +235,32 @@ export default async function DashboardPage({
   const { denied } = await searchParams;
   const session = await requireSession();
   const manager = CAN.seeEveryone(session.role);
-  const ops = session.role === "ops";
   const data = await db.withUser(session.userId, async (q) => {
     const ctx = await userContext(q);
     const month = monthOf(ctx.today);
     // one connection, one query at a time (pg serialises anyway and warns about overlap)
     const score = await monthScoreboard(q, month);
-    const money = await moneyOnTable(q, ctx.today);
-    const counts = await funnelCounts(q, month);
-    const now = await nowItems(q, ctx.today, { manager });
-    // the queue tiles for ops (their Dashboard is the board's front door, not a commission sheet)
-    const queue = ops ? await dealStatusCounts(q) : null;
-    // whose merchant each line is, for anyone who sees more than their own book (P2-2)
+    const now = await nowItems(q, ctx.today);
+    // whose merchant each line is, for a manager who sees more than their own book
     const owners: Record<string, string> =
-      (manager || ops) && now.length > 0
+      manager && now.length > 0
         ? Object.fromEntries(
             (
               await q.query<{ id: string; name: string }>(
                 `select c.id, coalesce(nullif(u.name, ''), u.email) as name
                    from clients c join app_users u on u.id = c.user_id where c.id = any($1::uuid[])`,
-                [
-                  Array.from(
-                    new Set(now.map((n) => n.client_id).filter((c): c is string => c !== null)),
-                  ),
-                ],
+                [Array.from(new Set(now.map((n) => n.client_id)))],
               )
             ).rows.map((r) => [r.id, r.name]),
           )
         : {};
-    const goals = await listGoals(q, month);
     const due = await dueCount(q, ctx.today);
-    // a rep's scorecard is one row (RLS): their own kickback rate; a manager's is the whole team
-    const reps = ops ? [] : await repScorecard(q, month, ctx.today);
-    const speed = ops ? null : await speedNumbers(q, month, manager ? null : session.userId);
-    const extra = manager
-      ? ([
-          reps,
-          await lenderScorecard(q),
-          await emailMeters(q),
-          (
-            await q.query<{ n: number }>(
-              "select count(*)::int as n from proposed_updates where status = 'proposed'",
-            )
-          ).rows[0]?.n ?? 0,
-        ] as const)
-      : null;
-    return { ctx, month, score, money, counts, now, goals, due, extra, queue, owners, reps, speed };
+    const reps = await repScorecard(q, month, ctx.today);
+    const meters = manager ? await emailMeters(q) : [];
+    return { ctx, month, score, now, due, owners, reps, meters };
   });
-  const { ctx, month, score, money, counts, now, goals, due, extra, queue, owners, reps, speed } =
-    data;
+  const { ctx, month, score, now, due, owners, reps, meters } = data;
   const monthName = `${MONTHS[Number(month.slice(5, 7)) - 1]} ${month.slice(0, 4)}`;
-  const shopGoal = goals.find((g) => g.user_id === null)?.funded_cents ?? 0;
-  const myGoal = goals.find((g) => g.user_id === session.userId)?.funded_cents ?? 0;
-  const myFunded = extra
-    ? Number(extra[0].find((r) => r.user_id === session.userId)?.funded_cents ?? 0)
-    : score.funded_cents;
-  const scoreboard: Scoreboard = score;
 
   return (
     <div className="space-y-6">
@@ -671,7 +269,7 @@ export default async function DashboardPage({
           role="status"
           className="rounded-lg border border-border bg-surface-2 px-3 py-2 text-sm text-muted"
         >
-          That page isn&apos;t part of your role, so you&apos;re back on the Dashboard.
+          That page isn&apos;t available, so you&apos;re back on the Dashboard.
         </p>
       ) : null}
       <div className="flex flex-wrap items-end justify-between gap-3">
@@ -687,71 +285,13 @@ export default async function DashboardPage({
               {due} follow-up{due === 1 ? "" : "s"} due
             </LinkButton>
           ) : null}
-          {extra && extra[3] > 0 ? (
-            <LinkButton href="/board?tab=review">Review tray ({extra[3]})</LinkButton>
-          ) : null}
         </div>
       </div>
 
-      {ops && queue ? (
-        <OpsQueue queue={queue} />
-      ) : (
-        <>
-          <div className={cn("grid gap-3", manager ? "md:grid-cols-2" : "")}>
-            {manager ? (
-              <PaceBar
-                p={pace(scoreboard.funded_cents, shopGoal, ctx.today)}
-                label="Shop"
-                month={month}
-                userId={null}
-                canEdit
-              />
-            ) : null}
-            <PaceBar
-              p={pace(myFunded, myGoal, ctx.today)}
-              label={manager ? "My own book" : "My month"}
-              month={month}
-              userId={session.userId}
-              canEdit={manager}
-            />
-          </div>
-
-          <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
-            <Kpi
-              label="Funded"
-              value={formatMoneyCompact(scoreboard.funded_cents)}
-              sub={`${scoreboard.funded_count} deal${scoreboard.funded_count === 1 ? "" : "s"}`}
-              tone={scoreboard.funded_count > 0 ? "good" : undefined}
-            />
-            <Kpi
-              label={manager ? "Commission" : "My cut"}
-              value={formatMoneyCompact(
-                manager ? scoreboard.commission_cents : scoreboard.rep_cut_cents,
-              )}
-              sub={scoreboard.avg_points !== null ? `${scoreboard.avg_points} pts avg` : undefined}
-            />
-            <Kpi label="Submitted" value={scoreboard.submitted} />
-            <Kpi
-              label="Approved"
-              value={scoreboard.approved}
-              sub={`${scoreboard.offers_in} offers in`}
-            />
-            <Kpi
-              label="New leads"
-              value={scoreboard.new_leads}
-              sub={`${scoreboard.apps_in} applications in`}
-            />
-            <Kpi
-              label="Avg deal"
-              value={
-                scoreboard.avg_deal_cents === null
-                  ? "—"
-                  : formatMoneyCompact(scoreboard.avg_deal_cents)
-              }
-            />
-          </div>
-        </>
-      )}
+      <div className="grid grid-cols-2 gap-3">
+        <Kpi label="New leads" value={score.new_leads} sub={monthName} />
+        <Kpi label="Applications in" value={score.apps_in} sub={monthName} />
+      </div>
 
       <div className="grid grid-cols-[minmax(0,1fr)] gap-6 xl:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
         <section className="min-w-0 space-y-3">
@@ -767,53 +307,10 @@ export default async function DashboardPage({
           <NowList items={now.slice(0, 12)} total={now.length} owners={owners} />
         </section>
         <aside className="min-w-0 space-y-6">
-          <MoneyBlock m={money} />
-          <FunnelBlock counts={counts} month={monthName} />
-          {speed ? (
-            <SpeedBlock speed={speed} reps={reps} month={monthName} mine={!manager} />
-          ) : null}
+          <RepTable rows={reps} month={monthName} mine={!manager} />
+          <Meters meters={meters} />
         </aside>
       </div>
-
-      {extra ? (
-        <div className="space-y-6">
-          <RepTable rows={extra[0]} month={monthName} />
-          <div
-            className={cn(
-              "grid grid-cols-[minmax(0,1fr)] gap-6",
-              extra[2].length > 0 && "xl:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]",
-            )}
-          >
-            <LenderTable rows={extra[1]} />
-            <Meters meters={extra[2]} />
-          </div>
-        </div>
-      ) : null}
-    </div>
-  );
-}
-
-/** Ops see what is waiting on them, by lane, instead of a rep's money tiles (P2-4). */
-function OpsQueue({ queue }: { queue: Record<string, number> }) {
-  const tiles: { key: string; label: string; lane: string | null; tone?: "warn" | "good" }[] = [
-    { key: "working_ops", label: "Waiting on you", lane: null, tone: "warn" },
-    { key: "kicked_back", label: "Back with the rep", lane: "kicked_back" },
-    { key: "pending_lenders", label: "With lenders", lane: "pending_lenders" },
-    { key: "stips_needed", label: "A lender asked for more", lane: "stips_needed" },
-    { key: "needs_pitch", label: "Approved, not presented", lane: "needs_pitch", tone: "good" },
-    { key: "contracts_out", label: "Contracts out", lane: "contracts_out" },
-  ];
-  return (
-    <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
-      {tiles.map((t) => (
-        <Link key={t.key} href={t.lane ? `/board?lane=${t.lane}` : "/board"} className="block">
-          <Kpi
-            label={t.label}
-            value={queue[t.key] ?? 0}
-            tone={(queue[t.key] ?? 0) > 0 ? t.tone : undefined}
-          />
-        </Link>
-      ))}
     </div>
   );
 }

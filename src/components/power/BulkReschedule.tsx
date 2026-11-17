@@ -45,7 +45,7 @@ function BulkDialog({ overdue, onClose }: { overdue: ClientCard[]; onClose: () =
 
   const ctx = useMemo(() => ({ today, timezone, hotIds: hot }), [today, timezone, hot]);
   const plan = useMemo(
-    () => planBulk(overdue, ctx, { days, keepUnderwriting: keep }),
+    () => planBulk(overdue, ctx, { days, keepApplicationIn: keep }),
     [overdue, ctx, days, keep],
   );
   const n = plan.ordered.length;
@@ -56,7 +56,7 @@ function BulkDialog({ overdue, onClose }: { overdue: ClientCard[]; onClose: () =
     const res = await call(
       bulkRescheduleAction({
         days,
-        keepUnderwriting: keep,
+        keepApplicationIn: keep,
         hotIds: [...hot].slice(0, 1000),
       }),
     );
@@ -126,9 +126,9 @@ function BulkDialog({ overdue, onClose }: { overdue: ClientCard[]; onClose: () =
             onChange={(e) => setKeep(e.target.checked)}
           />
           <span>
-            Keep underwriting deals overdue — they need a call
+            Keep merchants with the application in overdue — they need a call
             <span className="block text-xs text-muted">
-              Application in through Contract out are left alone ({plan.keptUnderwriting.length}{" "}
+              Merchants in Application in are left alone ({plan.keptApplicationIn.length}{" "}
               right now).
             </span>
           </span>
@@ -140,7 +140,7 @@ function BulkDialog({ overdue, onClose }: { overdue: ClientCard[]; onClose: () =
           ) : (
             <>
               <p className="text-sm font-medium">
-                {n} client{n === 1 ? "" : "s"}, biggest deals first
+                {n} client{n === 1 ? "" : "s"}, biggest asks first
               </p>
               <ul className="mt-2 space-y-1 text-sm" aria-label="How many land on each day">
                 {plan.perDay.map((d) => (

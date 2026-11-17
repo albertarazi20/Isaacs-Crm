@@ -17,7 +17,7 @@ export async function userContext(q: Db, now: Date = new Date()): Promise<UserCo
 const json = async <T>(q: Db, sql: string, params: unknown[] = []): Promise<T[]> =>
   (await q.query<{ j: T }>(sql, params)).rows.map((r) => r.j);
 
-/** Every client, soonest follow-up first. One query feeds the board, call list, renewals and long game. */
+/** Every client, soonest follow-up first. One query feeds the lists. */
 export async function listCards(q: Db): Promise<ClientCard[]> {
   return json<ClientCard>(
     q,
@@ -42,29 +42,9 @@ export async function getClientDetail(q: Db, id: string): Promise<ClientDetail |
     "select to_jsonb(a) as j from activities a where a.client_id = $1 order by a.occurred_at desc, a.id desc limit 300",
     [id],
   );
-  const positions = await json(
-    q,
-    "select to_jsonb(p) as j from positions p where p.client_id = $1 order by p.position_no, p.created_at",
-    [id],
-  );
-  const offers = await json(
-    q,
-    "select to_jsonb(o) as j from competing_offers o where o.client_id = $1 order by o.offered_on desc, o.created_at desc",
-    [id],
-  );
-  const asks = await json(
-    q,
-    "select to_jsonb(k) as j from client_asks k where k.client_id = $1 order by k.created_at desc",
-    [id],
-  );
   const stips = await json(
     q,
     "select to_jsonb(s) as j from stips s where s.client_id = $1 order by s.required desc, s.kind, s.period nulls first",
-    [id],
-  );
-  const fundings = await json(
-    q,
-    "select to_jsonb(f) as j from fundings f where f.client_id = $1 order by f.funded_on desc, f.created_at desc",
     [id],
   );
   const timers = await json(
@@ -72,7 +52,7 @@ export async function getClientDetail(q: Db, id: string): Promise<ClientDetail |
     "select to_jsonb(t) as j from timers t where t.client_id = $1 and t.done_at is null order by t.due_on",
     [id],
   );
-  return { card, activities, positions, offers, asks, stips, fundings, timers } as ClientDetail;
+  return { card, activities, stips, timers } as ClientDetail;
 }
 
 /** Clients with at least one open timer due today or earlier — the number on the Today tab. */

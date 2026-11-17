@@ -1,8 +1,7 @@
 import type { Db, DbAccess } from "../db";
 import { addDays, parseISODate, todayIn, type ISODate } from "../mca/dates";
+import { buildDiscipline, type TimerHistory } from "../mca/discipline";
 import { buildScorecard, type ScorecardInput } from "../mca/scorecard";
-import { loadTimerHistory } from "../reports/queries";
-import { buildDiscipline } from "../reports/report";
 import type { DigestSender } from "./reminders";
 
 export interface WeeklySummary {
@@ -35,6 +34,31 @@ const short = (d: ISODate) => {
   return `${MONTHS[p.getUTCMonth()]} ${p.getUTCDate()}`;
 };
 
+interface TimerRow {
+  due_on: ISODate;
+  done_on: ISODate | null;
+  done_reason: TimerHistory["doneReason"];
+}
+
+/** Timers that came due in the window, with the day each was closed in the user's own time zone. */
+export async function loadTimerHistory(
+  q: Db,
+  today: ISODate,
+  days: number | null,
+  timezone: string,
+): Promise<TimerHistory[]> {
+  const from = days === null ? null : addDays(today, -days);
+  const { rows } = await q.query<TimerRow>(
+    `select t.due_on, (t.done_at at time zone $3)::date as done_on, t.done_reason
+       from timers t
+      where t.due_on <= $1::date
+        and ($2::date is null or t.due_on >= $2::date)
+        and not exists (select 1 from trashed_clients tc where tc.client_id = t.client_id)`,
+    [today, from, timezone],
+  );
+  return rows.map((r) => ({ dueOn: r.due_on, doneOn: r.done_on, doneReason: r.done_reason }));
+}
+
 /** Last week's numbers for one user. Runs through RLS (`withUser`), so it can only ever see that user's rows. */
 export async function loadScorecard(
   q: Db,
@@ -52,18 +76,6 @@ export async function loadScorecard(
       where c.created_at >= ($1::date::timestamp at time zone $3) and c.created_at < ($2::date::timestamp at time zone $3)
         and not exists (select 1 from trashed_clients t where t.client_id = c.id)`,
     [from, today, timezone],
-  );
-  const { rows: funded } = await q.query<{ n: number; cents: number }>(
-    `select count(*)::int as n, coalesce(sum(f.amount_cents), 0)::bigint as cents from fundings f
-      where f.funded_on between $1::date and $2::date
-        and not exists (select 1 from trashed_clients t where t.client_id = f.client_id)`,
-    [from, to],
-  );
-  const commission = await one<number>(
-    `select coalesce(sum(f.commission_received_cents), 0)::bigint as v from fundings f
-      where f.commission_received_on between $1::date and $2::date
-        and not exists (select 1 from trashed_clients t where t.client_id = f.client_id)`,
-    [from, to],
   );
   const { rows: overdue } = await q.query<{
     id: string;
@@ -86,8 +98,6 @@ export async function loadScorecard(
     weekLabel: `${short(from)} – ${short(to)}`,
     discipline: buildDiscipline(timers, today),
     added,
-    funded: { count: funded[0]?.n ?? 0, cents: Number(funded[0]?.cents ?? 0) },
-    commissionReceivedCents: Number(commission),
     overdue: overdue.map((o) => ({
       clientId: o.id,
       businessName: o.business_name,

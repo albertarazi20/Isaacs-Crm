@@ -23,8 +23,6 @@ import { parseTheme, THEME_COOKIE } from "@/lib/theme";
 
 export const dynamic = "force-dynamic";
 
-// the main nav depends on the role: ops see the Submission Board, reps their deals and buckets, managers everything
-
 /** "(12) Selective CRM" in the tab. Set here, on the server, because Next re-applies page metadata after hydration. */
 export async function generateMetadata(): Promise<Metadata> {
   const session = await requireSession();
@@ -36,8 +34,6 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const session = await requireSession();
   const me = await loadShell(session.userId);
   if (!me.user) redirect("/login?error=session_expired");
-  // the first-login gate (plan §14.7): nothing opens until the policy is accepted once
-  if (!me.user.policy_accepted_at) redirect("/policy");
   const [gmail, reminders, store] = await Promise.all([
     gmailStatus(session.userId),
     // The banner is a safety net: if the heartbeat can't be read, the page still renders.
@@ -59,7 +55,6 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         gmailNeedsReconnect: gmail.needsReconnect,
         hotIds: me.hotIds,
         nowMs: requestTimeMs(),
-        maxLendersPerDeal: me.maxLendersPerDeal,
       }}
     >
       <ToastProvider>
@@ -111,7 +106,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
               aria-label="Main"
               className="hidden min-w-0 flex-1 gap-0.5 overflow-x-auto sm:flex"
             >
-              {navFor(session.role).map((n) => (
+              {navFor().map((n) => (
                 <NavLink key={n.href} href={n.href} badge={n.href === "/" ? me.due : undefined}>
                   {n.label}
                 </NavLink>
@@ -178,7 +173,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         <main className="mx-auto max-w-[1600px] px-4 py-5 pb-24 sm:px-6 sm:py-6 sm:pb-8">
           {children}
         </main>
-        <MobileTabBar due={me.due} email={me.user.email} role={session.role} />
+        <MobileTabBar due={me.due} email={me.user.email} />
         <PendingTouchPrompt />
         <HotImport />
       </ToastProvider>

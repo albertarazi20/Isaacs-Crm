@@ -1,6 +1,12 @@
-/** The three account types. Reps are all identical; managers have everything a rep and ops has, plus the team. */
+/**
+ * The account types the database knows. Reps are all identical; managers have everything a rep has, plus the team.
+ * Ops has no work left: the role stays in the database (an old account may hold it) but is not offered.
+ */
 export const ROLES = ["rep", "ops", "manager"] as const;
 export type Role = (typeof ROLES)[number];
+
+/** What the Team settings offer when adding someone or changing a role. */
+export const OFFERED_ROLES = ["rep", "manager"] as const;
 
 export const ROLE_LABEL: Record<Role, string> = { rep: "Rep", ops: "Ops", manager: "Manager" };
 

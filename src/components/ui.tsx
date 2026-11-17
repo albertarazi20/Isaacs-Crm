@@ -14,9 +14,7 @@ export function cn(...parts: (string | false | null | undefined)[]): string {
 
 export const GROUP_COLOR: Record<StageGroup, string> = {
   prospecting: "var(--g-prospecting)",
-  underwriting: "var(--g-underwriting)",
-  funded: "var(--g-funded)",
-  trouble: "var(--g-trouble)",
+  application: "var(--g-underwriting)",
   exit: "var(--g-exit)",
 };
 

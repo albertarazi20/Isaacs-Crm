@@ -23,13 +23,13 @@ export default async function AiSettingsPage() {
     <div className="mx-auto max-w-3xl space-y-5">
       <SettingsHeader role={session.role} current="/settings/ai" />
       <p className="text-sm text-muted">
-        The AI reads lender emails and proposes the update with a quote as evidence. Money and
-        merchant-facing status always wait for a manager&apos;s click. Every run is logged with its
-        cost.
+        The AI tags merchants&apos; replies and splits pasted lead lines. It never sends mail or
+        decides anything by itself: it fills in a form and the code checks it. Every run is logged
+        with its cost.
       </p>
       {!keySet ? (
         <Note tone="warn">
-          ANTHROPIC_API_KEY is not set on the server — nothing is read until it is.
+          ANTHROPIC_API_KEY is not set on the server — nothing is tagged or split until it is.
         </Note>
       ) : null}
       <div className="grid grid-cols-3 gap-3">
@@ -59,9 +59,6 @@ export default async function AiSettingsPage() {
               >
                 <span className="min-w-0 truncate">
                   <span className="font-medium">{r.purpose.replace(/_/g, " ")}</span>
-                  {r.business_name ? (
-                    <span className="text-muted"> · {r.business_name}</span>
-                  ) : null}
                   {r.error ? (
                     <span className="block truncate text-xs text-bad">{r.error}</span>
                   ) : null}

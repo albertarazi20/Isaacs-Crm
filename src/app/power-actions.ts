@@ -34,12 +34,12 @@ async function run<T>(
 
 const bulkSchema = z.object({
   days: z.number().int().min(1).max(MAX_BULK_DAYS),
-  keepUnderwriting: z.boolean(),
+  keepApplicationIn: z.boolean(),
   hotIds: z.array(z.string().uuid()).max(1000).optional(),
 });
 
 /**
- * "Reschedule all overdue": spread the overdue pile over the next few business days, biggest deals first.
+ * "Reschedule all overdue": spread the overdue pile over the next few business days, biggest asks first.
  * One transaction through the existing set_follow_up() function, so it is all or nothing.
  */
 export async function bulkRescheduleAction(input: unknown): Promise<ActionResult<BulkResult>> {
@@ -71,7 +71,7 @@ const snoozeSchema = z.object({
     .regex(/^[^\p{Cc}]*$/u, "The reason can't contain line breaks"),
 });
 
-/** Snooze a live deal and say why, in one transaction: the reason lands on the timeline as a note. */
+/** Snooze a merchant and say why, in one transaction: the reason lands on the timeline as a note. */
 export async function snoozeWithReasonAction(input: unknown): Promise<ActionResult<ClientCard>> {
   return run((q, ctx) => snoozeWithReason(q, ctx, snoozeSchema.parse(input)));
 }

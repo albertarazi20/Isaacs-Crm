@@ -3,12 +3,12 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { CAN, requireRole } from "@/lib/auth/server";
-import { ROLES } from "@/lib/auth/roles";
+import { OFFERED_ROLES, ROLES } from "@/lib/auth/roles";
 import { toActionError } from "@/lib/data/errors";
 import { id } from "@/lib/data/schemas";
 import type { ActionResult } from "@/lib/data/types";
 import { db } from "@/lib/db";
-import { listTeam, type TeamMember } from "@/lib/trust/queries";
+import { listTeam, type TeamMember } from "@/lib/settings/team";
 
 export async function listTeamAction(): Promise<ActionResult<TeamMember[]>> {
   const session = await requireRole(CAN.manageTeam);
@@ -28,7 +28,7 @@ export async function addTeamMemberAction(input: unknown): Promise<ActionResult<
       .object({
         email: z.string().trim().email(),
         name: z.string().trim().min(1).max(80),
-        role: z.enum(ROLES),
+        role: z.enum(OFFERED_ROLES),
       })
       .parse(input);
     const row = await db.withUser(session.userId, async (q) => {
@@ -47,7 +47,7 @@ export async function addTeamMemberAction(input: unknown): Promise<ActionResult<
   }
 }
 
-/** Change a role, or switch a login off and on. Offboarding (moving the book) is its own action. */
+/** Change a role, or switch a login off and on. */
 export async function setTeamMemberAction(input: unknown): Promise<ActionResult<null>> {
   const session = await requireRole(CAN.manageTeam);
   try {

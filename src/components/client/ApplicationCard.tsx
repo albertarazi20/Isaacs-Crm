@@ -1,12 +1,11 @@
 "use client";
 
-import Link from "next/link";
 import { useState } from "react";
 import { sendEmailAction } from "@/app/actions";
 import type { ClientDetail } from "@/lib/data/types";
 import { applicationEmail } from "@/lib/leads/applicationEmail";
 import type { MerchantApplication } from "@/lib/leads/application";
-import { applyLink } from "@/lib/docs/linkExpiry";
+import { applyLink } from "@/lib/docs/applyLink";
 import { formatDate } from "@/lib/format";
 import { contactAllowed } from "@/lib/mca/contact";
 import { suggestAfterEmail } from "@/lib/mca/touch";
@@ -16,7 +15,7 @@ import { useApp } from "../app-context";
 import { Dialog, useCall, useToast } from "../overlay";
 import { TimerPicker } from "../TimerPicker";
 import { Badge, Button, buttonClass, Field, Input, Textarea } from "../ui";
-import { useMessagingContext } from "../winback/useMessagingContext";
+import { useMessagingContext } from "../messaging/useMessagingContext";
 import { Icon } from "./icons";
 import { dateInTz } from "./logic";
 import { copyText, Muted, Panel } from "./parts";
@@ -80,14 +79,6 @@ export function ApplicationCard({
               ) : (
                 <span className="text-xs text-muted">The PDF was deleted</span>
               )}
-              {application.deal_id ? (
-                <Link
-                  href={`/deals/${application.deal_id}?tab=documents`}
-                  className={buttonClass("ghost", "sm")}
-                >
-                  In Documents →
-                </Link>
-              ) : null}
             </div>
           </div>
         ) : (

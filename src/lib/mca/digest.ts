@@ -21,13 +21,10 @@ export interface DigestGroups {
 
 const KIND_RANK: Record<TimerKind, number> = {
   scheduled_call: 0,
-  renewal: 1,
-  chase: 2,
-  check_in: 3,
-  follow_up: 4,
+  follow_up: 1,
 };
 
-/** One line per client — two timers landing on the same day (a snoozed check-in beside a follow-up) are one phone call. */
+/** One line per client — two timers landing on the same day (a booked call beside a follow-up) are one phone call. */
 function onePerClient(timers: readonly DueTimer[]): DueTimer[] {
   const best = new Map<string, DueTimer>();
   for (const t of timers) {
@@ -83,41 +80,11 @@ export interface Digest {
   count: number;
 }
 
-/** Yesterday's numbers (plan §3; audit S3-3): the shop's for a manager, the rep's own for a rep. */
-export interface YesterdayNumbers {
-  /** The local date the numbers are for. */
-  date: ISODate;
-  submitted: number;
-  approvals: number;
-  funded_count: number;
-  funded_cents: number;
-  commission_cents: number;
-  /** "the shop" or "you". */
-  scope: "shop" | "you";
-}
-
-function money(cents: number): string {
-  return `$${Math.round(cents / 100).toLocaleString("en-US")}`;
-}
-
-/** One line: "Yesterday (the shop): 3 submitted · 2 approvals · 1 funded ($50,000) · $3,500 commission". */
-export function yesterdayLine(y: YesterdayNumbers): string {
-  const who = y.scope === "shop" ? "the shop" : "you";
-  const bits = [
-    `${y.submitted} submitted`,
-    `${y.approvals} approval${y.approvals === 1 ? "" : "s"}`,
-    `${y.funded_count} funded${y.funded_count > 0 ? ` (${money(y.funded_cents)})` : ""}`,
-    `${money(y.commission_cents)} commission`,
-  ];
-  return `Yesterday (${who}): ${bits.join(" · ")}`;
-}
-
-/** Null when there is nothing to do — never send an empty digest. Yesterday's numbers ride above today's list. */
+/** Null when there is nothing to do — never send an empty digest. */
 export function buildDigest(
   timers: readonly DueTimer[],
   today: ISODate,
   appUrl: string,
-  yesterday: YesterdayNumbers | null = null,
 ): Digest | null {
   const { overdue, dueToday } = groupDue(timers, today);
   const count = overdue.length + dueToday.length;
@@ -139,12 +106,11 @@ export function buildDigest(
   };
   const a = section("OVERDUE", overdue);
   const b = section("DUE TODAY", dueToday);
-  const y = yesterday ? yesterdayLine(yesterday) : "";
   return {
     subject,
     count,
-    text: `${y ? `${y}\n\n` : ""}${a.text}${b.text}Open your list: ${appUrl}/\n`,
-    html: `<div style="font-family:system-ui,sans-serif">${y ? `<p><strong>${esc(y)}</strong></p>` : ""}${a.html}${b.html}<p><a href="${esc(appUrl)}/">Open your list</a></p></div>`,
+    text: `${a.text}${b.text}Open your list: ${appUrl}/\n`,
+    html: `<div style="font-family:system-ui,sans-serif">${a.html}${b.html}<p><a href="${esc(appUrl)}/">Open your list</a></p></div>`,
   };
 }
 
@@ -159,7 +125,6 @@ export interface CallReminderInput {
   channel?: "call" | "text" | "email" | null;
   wantedAmount: string | null;
   lastCallNote: string | null;
-  positionCount: number;
 }
 
 /** A short "get ready" email an hour or so before a booked call, with what he needs to say hello properly. */
@@ -172,9 +137,6 @@ export function buildCallReminder(c: CallReminderInput, appUrl: string): Omit<Di
   const what = c.channel === "text" ? "Text" : c.channel === "email" ? "Email" : "Call";
   const facts = [
     c.wantedAmount ? `Wants ${c.wantedAmount}` : "",
-    c.positionCount > 0
-      ? `${c.positionCount} other advance${c.positionCount === 1 ? "" : "s"}`
-      : "",
     c.lastCallNote ? `Last call: ${c.lastCallNote}` : "",
   ].filter(Boolean);
   return {

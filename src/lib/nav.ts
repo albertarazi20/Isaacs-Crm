@@ -1,5 +1,4 @@
-/** The main navigation, by role. Pure, shared by the header, the phone tab bar and the tests. */
-import type { Role } from "./auth/roles";
+/** The main navigation. Pure, shared by the header, the phone tab bar and the tests. */
 
 export interface NavItem {
   href: string;
@@ -8,40 +7,33 @@ export interface NavItem {
   short?: string;
 }
 
-const ALL: (NavItem & { roles: readonly Role[] })[] = [
-  { href: "/", label: "Dashboard", short: "Home", roles: ["rep", "ops", "manager"] },
-  { href: "/lead-intake", label: "Lead Intake", short: "Intake", roles: ["rep", "manager"] },
-  { href: "/follow-up", label: "Follow Up", short: "Follow", roles: ["rep", "manager"] },
-  { href: "/board", label: "Submission Board", short: "Board", roles: ["ops", "manager"] },
-  { href: "/deals", label: "My Deals", short: "Deals", roles: ["rep", "ops", "manager"] },
-  { href: "/winback", label: "Winback", short: "Winback", roles: ["rep", "manager"] },
-  { href: "/funded", label: "Funded", short: "Funded", roles: ["rep", "manager"] },
-  { href: "/settings", label: "Settings", short: "Settings", roles: ["rep", "ops", "manager"] },
+/** Reps and managers see the same pages; an ops account (the role stays in the database) is shown them too. */
+const ITEMS: readonly NavItem[] = [
+  { href: "/", label: "Dashboard", short: "Home" },
+  { href: "/lead-intake", label: "Lead Intake", short: "Intake" },
+  { href: "/follow-up", label: "Follow Up", short: "Follow" },
+  { href: "/clients", label: "Merchants", short: "Merchants" },
+  { href: "/settings", label: "Settings", short: "Settings" },
 ];
 
-/** Whether a role owns a top-level page (the nav is the source of truth). */
-export function pageAllowed(role: Role, href: string): boolean {
-  return ALL.some((n) => n.href === href && n.roles.includes(role));
+/** Whether a path is a top-level page of the nav (the nav is the source of truth). */
+export function pageAllowed(href: string): boolean {
+  return ITEMS.some((n) => n.href === href);
 }
 
-export function navFor(role: Role): NavItem[] {
-  return ALL.filter((n) => n.roles.includes(role)).map(({ href, label, short }) => ({
-    href,
-    label,
-    short,
-  }));
+export function navFor(): NavItem[] {
+  return ITEMS.map(({ href, label, short }) => ({ href, label, short }));
 }
 
 /** The four that fit a phone's tab bar; the rest go under "More". */
-export function phoneTabsFor(role: Role): { tabs: NavItem[]; more: NavItem[] } {
-  const items = navFor(role);
+export function phoneTabsFor(): { tabs: NavItem[]; more: NavItem[] } {
+  const items = navFor();
   const primary = items.filter((n) => n.href !== "/settings").slice(0, 4);
   const more = [
     ...items.filter((n) => !primary.includes(n)),
     { href: "/alerts", label: "Alerts" },
     { href: "/today", label: "Today's calls" },
     { href: "/dial", label: "Power dial" },
-    { href: "/clients", label: "All merchants" },
     { href: "/trash", label: "Trash" },
   ];
   return { tabs: primary, more };

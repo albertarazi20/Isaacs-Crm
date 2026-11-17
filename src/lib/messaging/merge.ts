@@ -1,4 +1,4 @@
-import { firstName, greetingName, tidy, factorText } from "../mca/templates";
+import { firstName, greetingName, tidy } from "../mca/templates";
 import { formatMoney } from "../money";
 
 /**
@@ -11,7 +11,6 @@ export const MERGE_FIELDS = [
   "sender",
   "application_link",
   "amount_wanted",
-  "funder_best_offer",
   "upload_link",
 ] as const;
 export type MergeField = (typeof MERGE_FIELDS)[number];
@@ -22,7 +21,6 @@ export const MERGE_FIELD_HELP: Record<MergeField, string> = {
   sender: "Your first name",
   application_link: "Your application link from Settings",
   amount_wanted: "What they asked for, like $60,000",
-  funder_best_offer: "The best competing offer on file, like $50,000 at 1.42 from Rival Capital",
   upload_link: "This merchant's personal link to upload statements and documents",
 };
 
@@ -91,49 +89,12 @@ export function describeLeftovers(
   return parts.join(" ");
 }
 
-export interface OfferSummary {
-  funderName: string;
-  amountCents: number | null;
-  factorRate: number | null;
-  termDays: number | null;
-  offeredOn: string | null;
-  won: boolean;
-}
-
-/** The offer a merchant would call best: the most money, then the lowest factor rate. Offers with no amount come last. */
-export function pickBestOffer<T extends { amountCents: number | null; factorRate: number | null }>(
-  offers: readonly T[],
-): T | null {
-  let best: T | null = null;
-  for (const o of offers) {
-    if (best === null) {
-      best = o;
-      continue;
-    }
-    const a = o.amountCents ?? -1;
-    const b = best.amountCents ?? -1;
-    if (a > b || (a === b && (o.factorRate ?? Infinity) < (best.factorRate ?? Infinity))) best = o;
-  }
-  return best;
-}
-
-/** "$50,000 at 1.42 from Rival Capital". Only says what was logged. */
-export function describeOffer(o: OfferSummary): string {
-  const money = o.amountCents ? formatMoney(o.amountCents) : "";
-  const rate = o.factorRate ? factorText(o.factorRate) : "";
-  if (money && rate) return `${money} at ${rate} from ${o.funderName}`;
-  if (money) return `${money} from ${o.funderName}`;
-  if (rate) return `${rate} from ${o.funderName}`;
-  return `an offer from ${o.funderName}`;
-}
-
 export interface MergeContext {
   contactName: string;
   businessName: string;
   senderName: string;
   applicationLink: string;
   wantedAmountCents: number | null;
-  bestOffer: OfferSummary | null;
   uploadLink?: string;
 }
 
@@ -145,7 +106,6 @@ export function mergeValues(c: MergeContext): Record<MergeField, string> {
     sender: tidy(firstName(c.senderName)) || "Selective Capital",
     application_link: c.applicationLink.trim(),
     amount_wanted: c.wantedAmountCents ? formatMoney(c.wantedAmountCents) : "",
-    funder_best_offer: c.bestOffer ? describeOffer(c.bestOffer) : "",
     upload_link: (c.uploadLink ?? "").trim(),
   };
 }

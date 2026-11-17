@@ -2,12 +2,12 @@ import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { svixHeaders, verifySvix } from "@/lib/email/svix";
 import { env } from "@/lib/env";
-import { handleResendEvent, resendInboundFetcher, type ResendEvent } from "@/lib/system/replies";
+import { handleResendEvent, type ResendEvent } from "@/lib/system/replies";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 30;
 
-/** Resend → us: delivered, bounced, complained, and inbound mail on the automation domain. Signed by Svix. */
+/** Resend → us: delivered, bounced, complained, and merchants' replies on the automation domain. Signed by Svix. */
 export async function POST(req: Request) {
   const secret = env().RESEND_WEBHOOK_SECRET;
   if (!secret)
@@ -24,13 +24,9 @@ export async function POST(req: Request) {
   }
   if (!evt || typeof evt.type !== "string")
     return NextResponse.json({ error: "no type" }, { status: 400 });
-  const apiKey = env().RESEND_API_KEY;
-  const { result } = await handleResendEvent(
-    db,
-    h.id as string,
-    { ...evt, data: (evt.data ?? {}) as Record<string, unknown> },
-    // a lender's inbound message without a body in the payload is fetched from Resend by id
-    apiKey ? { fetchInbound: resendInboundFetcher(apiKey) } : {},
-  );
+  const { result } = await handleResendEvent(db, h.id as string, {
+    ...evt,
+    data: (evt.data ?? {}) as Record<string, unknown>,
+  });
   return NextResponse.json({ result });
 }

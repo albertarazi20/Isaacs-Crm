@@ -11,7 +11,6 @@ const TOOLS = [
   { href: "/api/export/activity", label: "Download notes (CSV)" },
   { href: "/import", label: "Import from spreadsheet" },
   { href: "/lead-intake", label: "Lead intake" },
-  { href: "/reports", label: "Reports" },
   { href: "/trash", label: "Trash" },
 ];
 
@@ -34,7 +33,7 @@ export default async function ClientsPage() {
   return (
     <div className="space-y-5">
       <div className="flex items-end justify-between gap-3">
-        <h1 className="text-xl font-semibold tracking-tight sm:text-2xl">Clients</h1>
+        <h1 className="text-xl font-semibold tracking-tight sm:text-2xl">Merchants</h1>
         {/* Wide screens: every action is a button. A phone folds them into one "…" menu so the list starts near the top. */}
         <div className="hidden flex-wrap justify-end gap-2 sm:flex">
           {TOOLS.map((t) => (

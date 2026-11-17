@@ -17,7 +17,7 @@ import type { ClientCard, UserContext } from "./types";
 
 export interface BulkInput {
   days: number;
-  keepUnderwriting: boolean;
+  keepApplicationIn: boolean;
   /** Starred clients (they are remembered in the browser, so the browser tells us). */
   hotIds?: string[];
 }
@@ -25,12 +25,12 @@ export interface BulkInput {
 export interface BulkResult {
   moved: number;
   perDay: { date: ISODate; count: number }[];
-  keptUnderwriting: number;
+  keptApplicationIn: number;
   needHands: number;
   overCap: number;
 }
 
-/** Overdue clients with an open timer `set_follow_up` would leave behind (a passed booked call, a funder chase). */
+/** Overdue clients with an open timer `set_follow_up` would leave behind (a passed booked call). */
 export async function blockedByOtherTimers(
   q: Db,
   ids: readonly string[],
@@ -40,7 +40,7 @@ export async function blockedByOtherTimers(
   const { rows } = await q.query<{ client_id: string }>(
     `select distinct client_id from timers
       where done_at is null and due_on < $2::date
-        and kind not in ('follow_up', 'check_in', 'renewal')
+        and kind not in ('follow_up')
         and client_id = any($1::uuid[])`,
     [ids, today],
   );
@@ -94,14 +94,14 @@ export async function bulkReschedule(
   const blockedIds = await blockedByOtherTimers(q, overdueIds, ctx.today);
   const plan = planBulk(
     cards,
-    { today: ctx.today, timezone: ctx.timezone, hotIds: new Set(input.hotIds ?? []) },
-    { days: input.days, keepUnderwriting: input.keepUnderwriting, blockedIds },
+    { today: ctx.today, hotIds: new Set(input.hotIds ?? []) },
+    { days: input.days, keepApplicationIn: input.keepApplicationIn, blockedIds },
   );
   const moved = await applyMoves(q, plan.assignments);
   return {
     moved,
     perDay: plan.perDay,
-    keptUnderwriting: plan.keptUnderwriting.length,
+    keptApplicationIn: plan.keptApplicationIn.length,
     needHands: plan.needHands.length,
     overCap: plan.overCap,
   };

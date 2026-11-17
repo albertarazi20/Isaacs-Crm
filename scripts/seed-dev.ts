@@ -1,6 +1,6 @@
 /**
- * Demo data for a LOCAL dev database: ~45 merchants spread across every stage, with positions,
- * asks, competing offers, stips, fundings, defaults and call notes — some overdue, some due today.
+ * Demo data for a LOCAL dev database: merchants being brought in, across the stages the app works, with asks,
+ * stips and call notes — some overdue, some due today.
  *
  *   DATABASE_URL=postgres://postgres@localhost:5433/isaac_dev pnpm tsx scripts/seed-dev.ts isaac@example.com
  *
@@ -10,9 +10,7 @@ import pg from "../src/lib/db/pg";
 import { makeDb, type Db } from "../src/lib/db";
 import * as m from "../src/lib/data/mutations";
 import { getClientDetail, userContext } from "../src/lib/data/queries";
-import { moveSchema, newClientSchema } from "../src/lib/data/schemas";
-import { addDays } from "../src/lib/mca/dates";
-import { parseMoney } from "../src/lib/money";
+import { newClientSchema } from "../src/lib/data/schemas";
 import { foldStage, type StageKey } from "../src/lib/mca/stages";
 
 const url = process.env.DATABASE_URL ?? "";
@@ -47,13 +45,9 @@ interface Seed {
   /** days from today for the next follow-up; negative = overdue */
   due: number;
   want?: string;
-  approve?: string;
-  terms?: string;
   industry?: string;
   note?: string;
-  positions?: [number, string, string, string, string][]; // no, funder, funded, payback, balance
   stips?: number; // how many required stips are ticked
-  fundedDaysAgo?: number;
   email?: string;
 }
 
@@ -118,14 +112,8 @@ const S: Seed[] = [
     stage: "interested",
     due: 0,
     want: "60k",
-    approve: "35k",
-    terms: "6 months, daily",
     industry: "Auto repair",
-    note: "Has two other advances. Slammed with daily remittances. Wants fresh money to cover payroll.",
-    positions: [
-      [1, "Libertas", "40k", "54.8k", "21k"],
-      [2, "Cobalt Capital", "25k", "35.5k", "30k"],
-    ],
+    note: "Slammed with daily payments. Wants fresh money to cover payroll.",
   },
   {
     biz: "Oak & Iron Fitness",
@@ -134,10 +122,7 @@ const S: Seed[] = [
     stage: "interested",
     due: 1,
     want: "50k",
-    approve: "50k",
-    terms: "9 months, weekly",
     industry: "Fitness",
-    positions: [],
   },
   {
     biz: "Patel Convenience",
@@ -146,10 +131,8 @@ const S: Seed[] = [
     stage: "interested",
     due: -3,
     want: "35k",
-    approve: "20k",
     industry: "Retail",
     note: "First position. Statements look thin in August.",
-    positions: [],
   },
   {
     biz: "Coastal HVAC",
@@ -158,10 +141,7 @@ const S: Seed[] = [
     stage: "interested",
     due: 3,
     want: "150k",
-    approve: "90k",
-    terms: "12 months",
     industry: "HVAC",
-    positions: [[1, "Pearl Funding", "70k", "98k", "61k"]],
   },
   {
     biz: "Lakeview Bakery",
@@ -250,224 +230,6 @@ const S: Seed[] = [
     stips: 2,
   },
   {
-    biz: "Verde Landscaping",
-    who: "Sam Ortega",
-    phone: "(786) 555-0171",
-    stage: "submitted",
-    due: 0,
-    want: "75k",
-    industry: "Landscaping",
-    stips: 7,
-    note: "Out to Libertas, Pearl, Cobalt, Nova.",
-  },
-  {
-    biz: "Crescent Pharmacy",
-    who: "Neil Shah",
-    phone: "(646) 555-0172",
-    stage: "submitted",
-    due: 1,
-    want: "110k",
-    industry: "Pharmacy",
-    stips: 7,
-  },
-  {
-    biz: "Atlas Moving",
-    who: "Jerome Pike",
-    phone: "(404) 555-0181",
-    stage: "offers_in",
-    due: 0,
-    want: "60k",
-    approve: "48k",
-    industry: "Moving",
-    stips: 7,
-    note: "Pearl at 1.34 for 45k daily. Libertas at 1.31 for 40k.",
-  },
-  {
-    biz: "Golden Wok",
-    who: "David Chen",
-    phone: "(212) 555-0182",
-    stage: "offers_in",
-    due: -1,
-    want: "80k",
-    approve: "65k",
-    industry: "Restaurant",
-    stips: 7,
-  },
-  {
-    biz: "Sparks Electric",
-    who: "Will Sparks",
-    phone: "(954) 555-0191",
-    stage: "offer_presented",
-    due: 1,
-    want: "95k",
-    approve: "80k",
-    industry: "Construction",
-    stips: 7,
-    note: "Presented 80k @ 1.33. Wants to sleep on it.",
-  },
-  {
-    biz: "Bayou Boats",
-    who: "Remy Landry",
-    phone: "(504) 555-0192",
-    stage: "offer_presented",
-    due: 0,
-    want: "130k",
-    approve: "100k",
-    industry: "Retail",
-    stips: 7,
-  },
-  {
-    biz: "Marlin Marine Supply",
-    who: "Ken Marlin",
-    phone: "(954) 555-0193",
-    stage: "contract_out",
-    due: 0,
-    want: "85k",
-    approve: "85k",
-    industry: "Retail",
-    stips: 7,
-    note: "DocuSign sent 10am.",
-  },
-  {
-    biz: "Summit Roofing",
-    who: "Pete Gallo",
-    phone: "(305) 555-0201",
-    stage: "funded",
-    due: 12,
-    industry: "Construction",
-    fundedDaysAgo: 18,
-  },
-  {
-    biz: "Blue Door Bistro",
-    who: "Elise Moreau",
-    phone: "(212) 555-0202",
-    stage: "funded",
-    due: 0,
-    industry: "Restaurant",
-    fundedDaysAgo: 30,
-  },
-  {
-    biz: "Apex Dental Lab",
-    who: "Dr. Raj Menon",
-    phone: "(646) 555-0203",
-    stage: "funded",
-    due: 34,
-    industry: "Medical",
-    fundedDaysAgo: 96,
-  },
-  {
-    biz: "Iron Ridge Gym",
-    who: "Marcus Webb",
-    phone: "(404) 555-0204",
-    stage: "funded",
-    due: -2,
-    industry: "Fitness",
-    fundedDaysAgo: 125,
-  },
-  {
-    biz: "Sol Y Mar Grill",
-    who: "Ana Reyes",
-    phone: "(305) 555-0205",
-    stage: "funded",
-    due: 20,
-    industry: "Restaurant",
-    fundedDaysAgo: 60,
-  },
-  {
-    biz: "Prime Cuts Barbers",
-    who: "Andre Hill",
-    phone: "(404) 555-0211",
-    stage: "paying_off_soon",
-    due: 0,
-    industry: "Salon",
-    fundedDaysAgo: 150,
-    note: "At 85%. Wants to renew for more.",
-  },
-  {
-    biz: "Eastside Towing",
-    who: "Lou Bianchi",
-    phone: "(973) 555-0212",
-    stage: "paying_off_soon",
-    due: 5,
-    industry: "Auto repair",
-    fundedDaysAgo: 140,
-  },
-  {
-    biz: "Cedar Print Shop",
-    who: "Holly Vance",
-    phone: "(617) 555-0221",
-    stage: "paid_in_full",
-    due: 0,
-    industry: "Retail",
-    fundedDaysAgo: 220,
-    note: "Paid off early. Great client. Hot renewal.",
-  },
-  {
-    biz: "Duke's Detailing",
-    who: "Duke Alvarez",
-    phone: "(305) 555-0222",
-    stage: "paid_in_full",
-    due: 9,
-    industry: "Auto repair",
-    fundedDaysAgo: 200,
-  },
-  {
-    biz: "Fresh Start Laundry",
-    who: "Bao Nguyen",
-    phone: "(714) 555-0231",
-    stage: "default_workable",
-    due: 0,
-    industry: "Retail",
-    fundedDaysAgo: 75,
-    note: "Missed 4 remittances — slow season. Promised $1,500 Friday.",
-  },
-  {
-    biz: "Kingfisher Charters",
-    who: "Matt Roy",
-    phone: "(954) 555-0232",
-    stage: "default_workable",
-    due: -1,
-    industry: "Tourism",
-    fundedDaysAgo: 80,
-  },
-  {
-    biz: "Rapid Courier",
-    who: "Zed Carter",
-    phone: "(404) 555-0241",
-    stage: "default_bad",
-    due: 0,
-    industry: "Trucking",
-    fundedDaysAgo: 110,
-    note: "Not answering. ACH stopped 3 weeks ago.",
-  },
-  {
-    biz: "Lucky Star Diner",
-    who: "Gus Pappas",
-    phone: "(212) 555-0242",
-    stage: "default_bad",
-    due: 4,
-    industry: "Restaurant",
-    fundedDaysAgo: 100,
-  },
-  {
-    biz: "Omega Builders",
-    who: "Rick Stone",
-    phone: "(305) 555-0251",
-    stage: "legal_collections",
-    due: 6,
-    industry: "Construction",
-    fundedDaysAgo: 160,
-  },
-  {
-    biz: "Wavy Surf Shop",
-    who: "Kai Lopes",
-    phone: "(954) 555-0261",
-    stage: "written_off",
-    due: 300,
-    industry: "Retail",
-    fundedDaysAgo: 400,
-  },
-  {
     biz: "Orchid Day Spa",
     who: "Mei Lin",
     phone: "(305) 555-0271",
@@ -485,34 +247,6 @@ const S: Seed[] = [
     due: 20,
     want: "90k",
     industry: "Agriculture",
-  },
-  {
-    biz: "Nova Tech Repair",
-    who: "Eli Park",
-    phone: "(212) 555-0281",
-    stage: "lost",
-    due: 95,
-    want: "50k",
-    industry: "Retail",
-    note: "Went with Rival Capital. 1.42, 6 months.",
-  },
-  {
-    biz: "Park Place Parking",
-    who: "Ron Ellis",
-    phone: "(617) 555-0282",
-    stage: "lost",
-    due: -5,
-    want: "70k",
-    industry: "Parking",
-  },
-  {
-    biz: "Sweet Tooth Candy",
-    who: "Gina Rossi",
-    phone: "(305) 555-0283",
-    stage: "lost",
-    due: 40,
-    want: "30k",
-    industry: "Retail",
   },
   {
     biz: "Quick Fix Phones",
@@ -562,30 +296,10 @@ const S: Seed[] = [
   },
 ];
 
-const FUNDING = {
-  amount: "50k",
-  factorRate: "1.32",
-  payment: "550",
-  frequency: "daily" as const,
-  funderName: "Alpha Capital",
-};
-
 await db.withUser(userId, async (q: Db) => {
   const ctx = await userContext(q);
   // Only the short stage list: retired stages fold into the ones the pickers offer.
   for (const s of S.map((x) => ({ ...x, stage: foldStage(x.stage) }))) {
-    const start: StageKey =
-      s.stage === "funded" ||
-      [
-        "paying_off_soon",
-        "paid_in_full",
-        "default_workable",
-        "default_bad",
-        "legal_collections",
-        "written_off",
-      ].includes(s.stage)
-        ? "name_in"
-        : s.stage;
     const card = await m.createClient(
       q,
       newClientSchema.parse({
@@ -594,85 +308,11 @@ await db.withUser(userId, async (q: Db) => {
         phone: s.phone,
         industry: s.industry ?? "",
         email: s.email ?? `${s.who.split(" ").pop()?.toLowerCase().replace(/\W/g, "")}@example.com`,
-        stage: start,
+        stage: s.stage,
         wantedAmount: s.want,
       }),
       ctx,
     );
-    if (s.want || s.approve || s.terms) {
-      await m.saveAsk(q, {
-        clientId: card.id,
-        wantedAmount: s.want ? parseMoney(s.want) : null,
-        wantedTerms: s.terms ?? "",
-        estApproval: s.approve ? parseMoney(s.approve) : null,
-        estApprovalNote: s.approve ? "Based on the last 4 months of deposits" : "",
-      });
-    }
-    for (const [no, funder, funded, payback, balance] of s.positions ?? []) {
-      await m.savePosition(q, {
-        clientId: card.id,
-        positionNo: no,
-        funderName: funder,
-        fundedAmount: parseMoney(funded),
-        payback: parseMoney(payback),
-        balance: parseMoney(balance),
-        payment: null,
-        frequency: "daily",
-        fundedOn: null,
-        note: "",
-      });
-    }
-    if (s.fundedDaysAgo !== undefined) {
-      await m.moveClient(
-        q,
-        moveSchema.parse({
-          clientId: card.id,
-          stage: "funded",
-          funding: {
-            ...FUNDING,
-            fundedOn: addDays(ctx.today, -s.fundedDaysAgo),
-            factorRate: String(1.28 + (s.biz.length % 6) / 100),
-          },
-        }),
-        ctx,
-      );
-      if (s.stage !== "funded")
-        await m.moveClient(
-          q,
-          moveSchema.parse({
-            clientId: card.id,
-            stage: s.stage,
-            default:
-              s.stage.startsWith("default") || s.stage === "legal_collections"
-                ? {
-                    defaultedOn: addDays(ctx.today, -12),
-                    promiseToPayAt:
-                      s.biz === "Fresh Start Laundry"
-                        ? `${addDays(ctx.today, 3)}T14:30`
-                        : undefined,
-                    promiseAmount: s.biz === "Fresh Start Laundry" ? "1500" : undefined,
-                  }
-                : undefined,
-          }),
-          ctx,
-        );
-    } else if (s.stage === "lost") {
-      await m.moveClient(
-        q,
-        moveSchema.parse({
-          clientId: card.id,
-          stage: "lost",
-          competitor: {
-            funderName: "Rival Capital",
-            amount: s.want,
-            factorRate: "1.42",
-            termDays: 180,
-            positionNo: 1,
-          },
-        }),
-        ctx,
-      );
-    }
     if (s.stips !== undefined) {
       await m.seedStips(q, card.id, ctx);
       const d = await getClientDetail(q, card.id);
@@ -703,7 +343,7 @@ for (const c of cards.rows) {
   const s = S.find((x) => x.biz === c.business_name);
   if (!s) continue;
   await pool.query(
-    `update timers set due_on = ($2::date + $3::int) where client_id = $1 and done_at is null and kind in ('follow_up', 'check_in')`,
+    `update timers set due_on = ($2::date + $3::int) where client_id = $1 and done_at is null and kind = 'follow_up'`,
     [c.id, today, s.due],
   );
 }

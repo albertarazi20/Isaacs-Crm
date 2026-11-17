@@ -4,8 +4,8 @@ import { centsText } from "@/lib/settings/format";
 import { SettingsCard, SHEET } from "./primitives";
 
 /**
- * What each kind of AI work cost: reading lender email, tagging replies, win-back lines, the pasted lead line, deal
- * questions, offer screenshots. A server component; the page passes the rows.
+ * What each kind of AI work cost: tagging replies and splitting the pasted lead line. A server component; the page
+ * passes the rows.
  */
 export function AiSpendCard({ rows }: { rows: AiSpendRow[] }) {
   return (

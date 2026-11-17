@@ -4,9 +4,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { Priority } from "@/lib/data/priority";
 import type { ClientCard } from "@/lib/data/types";
-import { cardFundingTerms } from "@/lib/data/views";
 import { formatDateTime, relativeDay, timeAgo } from "@/lib/format";
-import { balanceCents, paydownPct } from "@/lib/mca/funding";
 import { formatUS } from "@/lib/mca/phone";
 import { TIMER_LABELS, type TimerKind } from "@/lib/mca/stages";
 import { formatMoney, formatMoneyCompact } from "@/lib/money";
@@ -259,15 +257,8 @@ function DialCard({
   const due = card.next_due_on;
   const overdue = due !== null && due < today;
   const kind = card.next_due_kind as TimerKind | null;
-  const terms = cardFundingTerms(card);
-  const pct = terms && card.funding_status === "active" ? paydownPct(terms, today) : null;
 
-  const wants = [
-    card.wanted_amount_cents ? formatMoney(card.wanted_amount_cents) : null,
-    card.wanted_terms,
-  ]
-    .filter(Boolean)
-    .join(" · ");
+  const wants = card.wanted_amount_cents ? formatMoney(card.wanted_amount_cents) : "";
 
   return (
     <div ref={cardRef} className="space-y-4">
@@ -308,30 +299,6 @@ function DialCard({
 
         <dl className="divide-y divide-border border-t border-border">
           <Row label="Wants">{wants || <span className="text-muted">Not recorded</span>}</Row>
-          <Row label="Funders would approve">
-            {card.est_approval_cents ? (
-              <>
-                {formatMoney(card.est_approval_cents)}
-                {card.est_approval_note ? (
-                  <span className="text-muted"> — {card.est_approval_note}</span>
-                ) : null}
-              </>
-            ) : (
-              <span className="text-muted">Not recorded</span>
-            )}
-          </Row>
-          <Row label="Other advances">
-            {card.position_count > 0 ? (
-              `${card.position_count} · ${formatMoneyCompact(card.position_balance_cents)} balance`
-            ) : (
-              <span className="text-muted">None recorded</span>
-            )}
-          </Row>
-          {pct !== null && terms ? (
-            <Row label="This advance">
-              {pct}% paid down · {formatMoney(balanceCents(terms, today))} left
-            </Row>
-          ) : null}
           {card.stips_required > 0 ? (
             <Row label="Stips">
               {card.stips_received} of {card.stips_required} received

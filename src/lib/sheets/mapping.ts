@@ -1,6 +1,6 @@
 import { parseMoney } from "../money";
 import { normalizeUS } from "../mca/phone";
-import { normalizeState } from "../funders/states";
+import { normalizeState } from "../mca/states";
 
 /**
  * Turning a sheet's rows into lead fields. Pure: no Google, no database. The mapping is guessed from the header

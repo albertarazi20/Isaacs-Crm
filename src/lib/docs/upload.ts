@@ -108,7 +108,7 @@ export interface Wanted {
   label: string;
 }
 
-/** Open required stips plus the statement months lenders expect that are not on file. */
+/** Open required stips plus the statement months still expected that are not on file. */
 export async function wantedFor(q: Db, clientId: string, today: ISODate): Promise<Wanted[]> {
   const { rows } = await q.query<{ kind: DocKind; period: string | null }>(
     `select kind, period::text as period from stips where client_id = $1 and required and received_at is null
@@ -148,7 +148,6 @@ export interface UploadSession {
   id: string;
   token: string;
   client_id: string;
-  deal_id: string | null;
   purpose: string;
   wanted: Wanted[];
   expires_at: string;
@@ -162,8 +161,7 @@ export interface UploadSession {
 
 export interface MintArgs {
   clientId: string;
-  dealId?: string | null;
-  purpose?: "documents" | "statements" | "stips" | "application" | "renewal";
+  purpose?: "documents" | "statements" | "stips" | "application";
   wanted?: Wanted[];
   createdBy?: string | null;
   hours?: number;
@@ -176,12 +174,11 @@ export async function mintUploadSession(
 ): Promise<{ token: string; expiresAt: string }> {
   const token = newToken();
   const { rows } = await q.query<{ expires_at: string }>(
-    `insert into upload_sessions (token, client_id, deal_id, purpose, wanted, created_by, expires_at)
-     values ($1, $2, $3, $4, $5::jsonb, $6, now() + ($7 || ' hours')::interval) returning expires_at::text`,
+    `insert into upload_sessions (token, client_id, purpose, wanted, created_by, expires_at)
+     values ($1, $2, $3, $4::jsonb, $5, now() + ($6 || ' hours')::interval) returning expires_at::text`,
     [
       token,
       a.clientId,
-      a.dealId ?? null,
       a.purpose ?? "documents",
       JSON.stringify(a.wanted ?? []),
       a.createdBy ?? null,
@@ -193,7 +190,7 @@ export async function mintUploadSession(
 
 async function loadSession(q: Db, token: string): Promise<UploadSession | null> {
   const { rows } = await q.query<UploadSession>(
-    `select s.id, s.token, s.client_id, s.deal_id, s.purpose, s.wanted, s.expires_at::text as expires_at, s.max_files, s.files_received,
+    `select s.id, s.token, s.client_id, s.purpose, s.wanted, s.expires_at::text as expires_at, s.max_files, s.files_received,
             c.business_name, c.contact_name, u.name as rep_name, (select shop_name from shop_settings) as shop_name
        from upload_sessions s join clients c on c.id = s.client_id join app_users u on u.id = c.user_id
       where s.token = $1 and s.expires_at > now()
@@ -282,7 +279,6 @@ async function writeDocument(
   a: FileIn & {
     clientId: string;
     userId: string;
-    dealId: string | null;
     source: "upload_link" | "staff" | "email" | "sheet";
     uploadedBy: string | null;
     kind?: DocKind;
@@ -331,14 +327,13 @@ async function writeDocument(
   await store.put(key, a.bytes, s.contentType);
   try {
     await q.query(
-      `insert into documents (id, user_id, client_id, deal_id, kind, period, filename, content_type, size_bytes, sha256, storage_key,
+      `insert into documents (id, user_id, client_id, kind, period, filename, content_type, size_bytes, sha256, storage_key,
                               source, uploaded_by, label_by, label_confidence, label_reason, scan_status, scanned_at)
-       values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, case when $17 = 'clean' then now() end)`,
+       values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, case when $16 = 'clean' then now() end)`,
       [
         id,
         a.userId,
         a.clientId,
-        a.dealId,
         kind,
         period,
         safeName(a.filename),
@@ -391,7 +386,6 @@ export async function acceptUpload(
       ...a,
       clientId: s.client_id,
       userId,
-      dealId: s.deal_id,
       source: "upload_link",
       uploadedBy: null,
       scan: "pending",
@@ -407,14 +401,14 @@ export async function acceptUpload(
 }
 
 /**
- * An attachment on an email the inbox matched to a merchant: statements a merchant forwards, contracts a lender sends.
+ * An attachment on an email a merchant sent: the statements they forward.
  * System connection (the sync has no user); the row belongs to the merchant's rep; it waits for the scan like any
  * outside file. Files that are not documents (signatures, logos, tiny images) are skipped, not errors.
  */
 export async function fileEmailAttachment(
   db: DbAccess,
   store: BlobStore,
-  a: FileIn & { clientId: string; dealId?: string | null; today: ISODate },
+  a: FileIn & { clientId: string; today: ISODate },
 ): Promise<Accepted | null> {
   if (a.bytes.length < 2048 && /^image\//.test(a.contentType)) return null; // an email signature logo
   if (!sniff(a.bytes, a.contentType, a.filename).ok) return null;
@@ -428,7 +422,6 @@ export async function fileEmailAttachment(
     return writeDocument(q, store, {
       ...a,
       userId,
-      dealId: a.dealId ?? null,
       source: "email",
       uploadedBy: null,
       scan: "pending",
@@ -436,13 +429,12 @@ export async function fileEmailAttachment(
   });
 }
 
-/** A rep's or ops' upload (drag and drop), or an attachment the inbox filed. Runs as the user under RLS. */
+/** A rep's upload (drag and drop), or an attachment the inbox filed. Runs as the user under RLS. */
 export async function addDocument(
   q: Db,
   store: BlobStore,
   a: FileIn & {
     clientId: string;
-    dealId?: string | null;
     kind?: DocKind;
     period?: ISODate | null;
     source?: "staff" | "email" | "sheet";
@@ -459,7 +451,6 @@ export async function addDocument(
   return writeDocument(q, store, {
     ...a,
     userId,
-    dealId: a.dealId ?? null,
     source: a.source ?? "staff",
     uploadedBy: a.uploadedBy,
     scan: "clean",
@@ -475,7 +466,6 @@ export async function fileGeneratedDocument(
   store: BlobStore,
   a: {
     clientId: string;
-    dealId: string | null;
     kind: DocKind;
     filename: string;
     bytes: Uint8Array;
@@ -493,7 +483,6 @@ export async function fileGeneratedDocument(
     bytes: a.bytes,
     clientId: a.clientId,
     userId,
-    dealId: a.dealId,
     kind: a.kind,
     source: "upload_link",
     uploadedBy: null,
@@ -507,7 +496,6 @@ export async function fileGeneratedDocument(
 export interface DocumentRow {
   id: string;
   client_id: string;
-  deal_id: string | null;
   kind: DocKind;
   period: ISODate | null;
   label: string;
@@ -521,16 +509,14 @@ export interface DocumentRow {
   label_reason: string;
   scan_status: string;
   created_at: string;
-  views: number;
 }
 
 export async function listDocuments(q: Db, clientId: string): Promise<DocumentRow[]> {
   const { rows } = await q.query<{ j: DocumentRow }>(
     `select to_jsonb(x) as j from (
-       select d.id, d.client_id, d.deal_id, d.kind, d.period::text as period, app.document_label(d.kind, d.period) as label,
+       select d.id, d.client_id, d.kind, d.period::text as period, app.document_label(d.kind, d.period) as label,
               d.filename, d.content_type, d.size_bytes, d.source, u.name as uploaded_by_name, d.label_by, d.label_confidence,
-              d.label_reason, d.scan_status, d.created_at,
-              (select count(*)::int from document_views v where v.document_id = d.id and v.action in ('view', 'download', 'lender_download')) as views
+              d.label_reason, d.scan_status, d.created_at
          from documents d left join app_users u on u.id = d.uploaded_by
         where d.client_id = $1 and d.deleted_at is null
         order by d.kind = 'bank_statement' desc, d.period desc nulls last, d.created_at desc
@@ -544,49 +530,19 @@ export async function listDocuments(q: Db, clientId: string): Promise<DocumentRo
   }));
 }
 
-export interface ViewMeta {
-  ip?: string;
-  userAgent?: string;
-  linkId?: string | null;
-  lenderId?: string | null;
-}
-
-export async function recordView(
-  q: Db,
-  documentId: string,
-  action: "view" | "download" | "link_minted" | "lender_download" | "relabel" | "delete",
-  viewerUserId: string | null,
-  meta: ViewMeta = {},
-): Promise<void> {
-  await q.query(
-    `insert into document_views (document_id, action, viewer_user_id, link_id, lender_id, ip, user_agent)
-     values ($1, $2, $3, $4, $5, $6, $7)`,
-    [
-      documentId,
-      action,
-      viewerUserId,
-      meta.linkId ?? null,
-      meta.lenderId ?? null,
-      (meta.ip ?? "").slice(0, 64),
-      (meta.userAgent ?? "").slice(0, 300),
-    ],
-  );
-}
-
 export interface OpenedDocument {
   id: string;
   filename: string;
   content_type: string;
   storage_key: string;
   scan_status: string;
-  business_name: string;
 }
 
 /** The row behind a download, under RLS. Throws a UserError when the file is not clean yet. */
 export async function openDocument(q: Db, documentId: string): Promise<OpenedDocument> {
   const { rows } = await q.query<OpenedDocument>(
-    `select d.id, d.filename, d.content_type, d.storage_key, d.scan_status, c.business_name
-       from documents d join clients c on c.id = d.client_id where d.id = $1 and d.deleted_at is null`,
+    `select d.id, d.filename, d.content_type, d.storage_key, d.scan_status
+       from documents d where d.id = $1 and d.deleted_at is null`,
     [documentId],
   );
   const d = rows[0];
@@ -605,7 +561,6 @@ export async function relabelDocument(
   documentId: string,
   kind: DocKind,
   period: ISODate | null,
-  by: string,
 ): Promise<void> {
   if (!DOC_KINDS.includes(kind)) throw new UserError("Unknown document type");
   await q.query("select relabel_document($1, $2, $3)", [
@@ -613,7 +568,6 @@ export async function relabelDocument(
     kind,
     kind === "bank_statement" ? period : null,
   ]);
-  await recordView(q, documentId, "relabel", by);
 }
 
 export async function deleteDocument(
@@ -628,81 +582,7 @@ export async function deleteDocument(
   );
   const key = rows[0]?.storage_key;
   if (!key) throw new UserError("Document not found");
-  await recordView(q, documentId, "delete", by);
   await store.delete(key).catch(() => undefined);
-}
-
-// ---------- expiring links ----------
-
-export async function mintDownloadLink(
-  q: Db,
-  a: {
-    documentId: string;
-    createdBy: string;
-    lenderId?: string | null;
-    watermark: string;
-    minutes?: number;
-    maxDownloads?: number;
-  },
-): Promise<{ token: string; expiresAt: string }> {
-  await openDocument(q, a.documentId); // visible, and clean
-  const token = newToken();
-  const { rows } = await q.query<{ id: string; expires_at: string }>(
-    `insert into document_links (token, document_id, created_by, lender_id, watermark, expires_at, max_downloads)
-     values ($1, $2, $3, $4, $5, now() + ($6 || ' minutes')::interval, $7) returning id, expires_at::text`,
-    [
-      token,
-      a.documentId,
-      a.createdBy,
-      a.lenderId ?? null,
-      a.watermark.slice(0, 120),
-      String(a.minutes ?? 120),
-      a.maxDownloads ?? 5,
-    ],
-  );
-  await recordView(q, a.documentId, "link_minted", a.createdBy, {
-    linkId: rows[0]?.id,
-    lenderId: a.lenderId ?? null,
-  });
-  return { token, expiresAt: rows[0]?.expires_at ?? "" };
-}
-
-export interface ResolvedLink {
-  linkId: string;
-  lenderId: string | null;
-  watermark: string;
-  document: OpenedDocument;
-}
-
-/** The outside world's download. System connection; counts the download; null when the link is dead. */
-export async function resolveDownloadLink(
-  db: DbAccess,
-  token: string,
-  meta: ViewMeta = {},
-): Promise<ResolvedLink | null> {
-  if (!/^[A-Za-z0-9]{20,80}$/.test(token)) return null;
-  return db.withSystem(async (q) => {
-    const { rows } = await q.query<{
-      id: string;
-      document_id: string;
-      lender_id: string | null;
-      watermark: string;
-    }>(
-      `update document_links set downloads = downloads + 1
-        where token = $1 and expires_at > now() and revoked_at is null and downloads < max_downloads
-        returning id, document_id, lender_id, watermark`,
-      [token],
-    );
-    const l = rows[0];
-    if (!l) return null;
-    const document = await openDocument(q, l.document_id);
-    await recordView(q, document.id, "lender_download", null, {
-      ...meta,
-      linkId: l.id,
-      lenderId: l.lender_id,
-    });
-    return { linkId: l.id, lenderId: l.lender_id, watermark: l.watermark, document };
-  });
 }
 
 // ---------- the scan ----------

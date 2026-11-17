@@ -11,7 +11,6 @@ import {
 import type { DuplicateMatch } from "@/lib/data/queries";
 import type { ClientDetail } from "@/lib/data/types";
 import { formatDate, relativeDay } from "@/lib/format";
-import { logAccessAction } from "@/app/trust-actions";
 import { formatUS, normalizeUS } from "@/lib/mca/phone";
 import {
   CORE_STAGES,
@@ -72,27 +71,22 @@ export function StickyBar({ card }: { card: ClientDetail["card"] }) {
   );
 }
 
-/** The value is the button: click copies it and writes the access-log line the trust panel counts (P2-51). */
+/** The value is the button: click copies it. */
 function CopyValue({
   value,
   shown,
   label,
-  clientId,
 }: {
   value: string;
   shown: string;
   label: "phone" | "email";
-  clientId: string;
 }) {
   const copy = useCopy();
   return (
     <button
       type="button"
       title="Click to copy"
-      onClick={() => {
-        void copy(value, label);
-        void logAccessAction({ action: label === "phone" ? "copy_phone" : "copy_email", clientId });
-      }}
+      onClick={() => void copy(value, label)}
       className="max-w-full truncate rounded text-left text-sm font-medium underline decoration-border-strong decoration-dotted underline-offset-4 transition hover:text-accent hover:decoration-accent max-sm:py-3"
     >
       {shown}
@@ -145,19 +139,14 @@ export function ClientDetails({ detail, className }: { detail: ClientDetail; cla
           </Stat>
           <Stat label="Phone">
             {card.phone ? (
-              <CopyValue
-                value={card.phone}
-                shown={formatUS(card.phone)}
-                label="phone"
-                clientId={card.id}
-              />
+              <CopyValue value={card.phone} shown={formatUS(card.phone)} label="phone" />
             ) : (
               addLink("phone")
             )}
           </Stat>
           <Stat label="Email" className="col-span-2 sm:col-span-1">
             {card.email ? (
-              <CopyValue value={card.email} shown={card.email} label="email" clientId={card.id} />
+              <CopyValue value={card.email} shown={card.email} label="email" />
             ) : (
               addLink("email")
             )}
@@ -326,7 +315,7 @@ function EditClientDialog({ card, onClose }: { card: ClientDetail["card"]; onClo
                 {d.trashed ? null : merging?.id === d.id ? (
                   <div className="space-y-2 rounded-lg border border-border bg-surface p-3">
                     <p>
-                      This moves every note, advance, stip and offer from{" "}
+                      This moves every note, stip and document from{" "}
                       <strong>{d.business_name}</strong> onto <strong>{card.business_name}</strong>,
                       then removes the other card. It can&apos;t be undone.
                     </p>
@@ -375,10 +364,7 @@ function DeleteClientDialog({ detail, onClose }: { detail: ClientDetail; onClose
   const [busy, setBusy] = useState(false);
   const attached = [
     count(detail.activities.length, "note or history entry", "notes and history entries"),
-    count(detail.positions.length, "other advance", "other advances"),
-    count(detail.offers.length, "competing offer", "competing offers"),
     count(detail.stips.length, "stip", "stips"),
-    count(detail.fundings.length, "funded advance", "funded advances"),
   ].filter(Boolean);
 
   async function remove() {
@@ -403,10 +389,7 @@ function DeleteClientDialog({ detail, onClose }: { detail: ClientDetail; onClose
       <p className="text-sm">
         <strong>{card.business_name}</strong> disappears from your lists and every reminder stops.
         {attached.length > 0 ? ` Kept in the trash: ${attached.join(", ")}.` : ""} You can restore
-        it any time from <em>Clients → Trash</em>.
-        {detail.fundings.length > 0
-          ? " Its funded advances and commission also drop out of Earnings and Renewals until you restore it."
-          : ""}
+        it any time from <em>Merchants → Trash</em>.
       </p>
       <p className="rounded-lg border border-border bg-surface-2 p-3 text-sm text-muted">
         Not ready to lose the notes? Close this and use <em>Move to…</em> instead (Trash). The

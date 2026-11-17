@@ -35,7 +35,7 @@ export const DOC_LABELS: Record<DocKind, string> = {
   other: "Other document",
 };
 
-/** The kinds a lender's stip list can name; a received one ticks the merchant's checklist. */
+/** The kinds a stip can name; a received one ticks the merchant's checklist. */
 export const STIP_KINDS = new Set<DocKind>([
   "signed_application",
   "bank_statement",

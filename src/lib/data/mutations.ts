@@ -1,16 +1,7 @@
 import type { Db } from "../db";
 import { dueFromPreset, validateFollowUpDate, type ISODate } from "../mca/dates";
-import type { FundingTerms } from "../mca/funding";
 import { contactAllowed } from "../mca/contact";
-import {
-  defaultTimers,
-  stageDef,
-  type PlannedTimer,
-  type StageGroup,
-  type StageKey,
-} from "../mca/stages";
-
-const APPLICATION_IN_GROUPS = new Set<StageGroup>(["underwriting", "funded"]);
+import { defaultTimers, stageDef, type PlannedTimer } from "../mca/stages";
 import { defaultStips } from "../mca/stips";
 import { suggestNextFollowUp } from "../mca/touch";
 import { describeEdit } from "./audit";
@@ -18,7 +9,6 @@ import { getCard } from "./queries";
 import type { ClientCard, UserContext } from "./types";
 import type { z } from "zod";
 import type {
-  askSchema,
   mergeSchema,
   bucketSchema,
   contactStatusSchema,
@@ -26,8 +16,6 @@ import type {
   MoveInput,
   NewClientInput,
   noteSchema,
-  offerSchema,
-  positionSchema,
   scheduleCallSchema,
   settingsSchema,
   stipSchema,
@@ -37,13 +25,6 @@ import type {
 
 /** A message safe to show Isaac as-is. Anything else is logged and shown generically. */
 export class UserError extends Error {}
-
-const DEFAULT_STAGES: readonly StageKey[] = [
-  "default_workable",
-  "default_bad",
-  "legal_collections",
-  "written_off",
-];
 
 const sqlTimers = (timers: PlannedTimer[]) =>
   JSON.stringify(timers.map((t) => ({ kind: t.kind, due_on: t.dueOn, note: t.note })));
@@ -135,95 +116,20 @@ export async function moveClient(q: Db, input: MoveInput, ctx: UserContext): Pro
     ? [{ kind: "follow_up", dueOn: input.followUpOn, note: "" }]
     : null;
 
-  if (stage === "funded") {
-    const f = input.funding;
-    if (!f) throw new UserError("Funding terms are required to mark a client funded");
-    const terms: FundingTerms = {
-      fundedOn: f.fundedOn ?? ctx.today,
-      amountCents: f.amount,
-      factorRate: f.factorRate,
-      paymentCents: f.payment,
-      frequency: f.frequency,
-    };
-    const timers = defaultTimers("funded", { today: ctx.today, funding: terms });
-    await q.query("select * from record_funding($1, $2::jsonb, $3::jsonb)", [
-      clientId,
-      JSON.stringify({
-        funded_on: terms.fundedOn,
-        funder_name: f.funderName,
-        amount_cents: f.amount,
-        factor_rate: f.factorRate,
-        payment_cents: f.payment,
-        frequency: f.frequency,
-        position_no: f.positionNo ?? 1,
-        term_days: f.termDays ?? null,
-        commission_cents: f.commission ?? null,
-        note: input.reason,
-      }),
-      sqlTimers(timers),
-    ]);
-  } else if (
-    DEFAULT_STAGES.includes(stage) &&
-    (await q.query("select 1 from fundings where client_id = $1 limit 1", [clientId])).rowCount
-  ) {
-    const d = input.default ?? { note: "" };
-    const promiseAt = d.promiseToPayAt
-      ? await localToInstant(q, d.promiseToPayAt, ctx.timezone)
-      : null;
-    await q.query("select * from record_default($1, $2, $3, $4, $5, $6::jsonb, $7)", [
-      clientId,
-      stage,
-      d.defaultedOn ?? ctx.today,
-      promiseAt,
-      d.promiseAmount ?? null,
-      sqlTimers(override ?? defaultTimers(stage, { today: ctx.today })),
-      d.note || input.reason,
-    ]);
-  } else {
-    const c = stage === "lost" ? input.competitor : undefined;
-    if (c) {
-      await q.query(
-        `insert into competing_offers (user_id, client_id, funder_name, amount_cents, factor_rate, payment_cents,
-                                       frequency, position_no, term_days, offered_on, won, note)
-         select user_id, id, $2, $3, $4, $5, $6, $7, $8, coalesce($9::date, app.local_today()), true, $10 from clients where id = $1`,
-        [
-          clientId,
-          c.funderName,
-          c.amount ?? null,
-          c.factorRate ?? null,
-          c.payment ?? null,
-          c.frequency ?? null,
-          c.positionNo ?? null,
-          c.termDays ?? null,
-          c.offeredOn ?? null,
-          c.note,
-        ],
-      );
-    }
-    const timers =
-      override ??
-      defaultTimers(stage, { today: ctx.today, competitorTermDays: c?.termDays ?? undefined });
-    await q.query("select * from move_client($1, $2, $3::jsonb, $4)", [
-      clientId,
-      stage,
-      sqlTimers(timers),
-      input.reason,
-    ]);
-    if (stage === "paid_in_full") {
-      await q.query(
-        "update fundings set status = 'paid_off' where client_id = $1 and status in ('active', 'defaulted')",
-        [clientId],
-      );
-    }
-  }
+  await q.query("select * from move_client($1, $2, $3::jsonb, $4)", [
+    clientId,
+    stage,
+    sqlTimers(override ?? defaultTimers(stage, { today: ctx.today })),
+    input.reason,
+  ]);
   if (stage === "call_scheduled" && input.callAt) {
     if (input.callAt.slice(0, 10) < ctx.today)
       throw new UserError("That call time has already passed — pick a time from now on");
     const at = await localToInstant(q, input.callAt, ctx.timezone);
     await q.query("select * from schedule_call($1, $2, $3)", [clientId, at, input.reason]);
   }
-  // However he got there (skipping "Application in" included), a deal in underwriting or funded had an application.
-  if (APPLICATION_IN_GROUPS.has(stageDef(stage).group)) {
+  // However he got there (skipping "Application in" included), a merchant in Application in had an application.
+  if (stageDef(stage).group === "application") {
     await q.query(
       "update clients set application_received_on = coalesce(application_received_on, $2::date) where id = $1",
       [clientId, ctx.today],
@@ -437,88 +343,6 @@ async function trashCall(q: Db, fn: string, clientId: string, missing: string): 
     if (code === "22023" && e instanceof Error) throw new UserError(e.message);
     throw e;
   }
-}
-
-export async function saveAsk(q: Db, input: z.output<typeof askSchema>): Promise<void> {
-  await q.query(
-    `insert into client_asks (user_id, client_id, wanted_amount_cents, wanted_terms, est_approval_cents, est_approval_note)
-     select user_id, id, $2, $3, $4, $5 from clients where id = $1`,
-    [
-      input.clientId,
-      input.wantedAmount,
-      input.wantedTerms,
-      input.estApproval,
-      input.estApprovalNote,
-    ],
-  );
-}
-
-export async function savePosition(q: Db, input: z.output<typeof positionSchema>): Promise<void> {
-  const v = [
-    input.positionNo,
-    input.funderName,
-    input.fundedAmount ?? 0,
-    input.payback,
-    input.balance ?? 0,
-    input.payment,
-    input.frequency ?? null,
-    input.fundedOn ?? null,
-    input.note,
-  ];
-  if (input.id) {
-    const res = await q.query(
-      `update positions set position_no = $2, funder_name = $3, funded_amount_cents = $4, payback_cents = $5,
-              balance_cents = $6, payment_cents = $7, frequency = $8, funded_on = $9, note = $10 where id = $1`,
-      [input.id, ...v],
-    );
-    if (res.rowCount === 0) throw new UserError("That position no longer exists");
-    return;
-  }
-  await q.query(
-    `insert into positions (user_id, client_id, position_no, funder_name, funded_amount_cents, payback_cents,
-                            balance_cents, payment_cents, frequency, funded_on, note)
-     select user_id, id, $2, $3, $4, $5, $6, $7, $8, $9, $10 from clients where id = $1`,
-    [input.clientId, ...v],
-  );
-}
-
-export async function deletePosition(q: Db, id: string): Promise<void> {
-  await q.query("delete from positions where id = $1", [id]);
-}
-
-export async function saveOffer(q: Db, input: z.output<typeof offerSchema>): Promise<void> {
-  const v = [
-    input.funderName,
-    input.amount,
-    input.factorRate,
-    input.payment,
-    input.frequency ?? null,
-    input.positionNo,
-    input.termDays,
-    input.offeredOn ?? null,
-    input.won,
-    input.note,
-  ];
-  if (input.id) {
-    const res = await q.query(
-      `update competing_offers set funder_name = $2, amount_cents = $3, factor_rate = $4, payment_cents = $5,
-              frequency = $6, position_no = $7, term_days = $8, offered_on = coalesce($9::date, offered_on), won = $10, note = $11
-        where id = $1`,
-      [input.id, ...v],
-    );
-    if (res.rowCount === 0) throw new UserError("That offer no longer exists");
-    return;
-  }
-  await q.query(
-    `insert into competing_offers (user_id, client_id, funder_name, amount_cents, factor_rate, payment_cents,
-                                   frequency, position_no, term_days, offered_on, won, note)
-     select user_id, id, $2, $3, $4, $5, $6, $7, $8, coalesce($9::date, app.local_today()), $10, $11 from clients where id = $1`,
-    [input.clientId, ...v],
-  );
-}
-
-export async function deleteOffer(q: Db, id: string): Promise<void> {
-  await q.query("delete from competing_offers where id = $1", [id]);
 }
 
 export async function seedStips(q: Db, clientId: string, ctx: UserContext): Promise<number> {

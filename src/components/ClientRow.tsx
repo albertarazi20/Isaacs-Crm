@@ -4,14 +4,12 @@ import Link from "next/link";
 import { memo, useState } from "react";
 import type { Priority } from "@/lib/data/priority";
 import type { ClientCard } from "@/lib/data/types";
-import { cardFundingTerms } from "@/lib/data/views";
 import { relativeDay, timeAgo } from "@/lib/format";
 import { bookedToday } from "@/lib/mca/booked";
 import { reminderText } from "@/lib/mca/reminder";
-import { balanceCents, paydownPct } from "@/lib/mca/funding";
 import { formatUS } from "@/lib/mca/phone";
 import { TIMER_LABELS } from "@/lib/mca/stages";
-import { formatMoney, formatMoneyCompact } from "@/lib/money";
+import { formatMoneyCompact } from "@/lib/money";
 import { useApp } from "./app-context";
 import { Icon } from "./client/icons";
 import { IconButton } from "./client/primitives";
@@ -49,14 +47,12 @@ function Stake({ priority }: { priority: Priority }) {
 
 export const ClientRow = memo(function ClientRow({
   card,
-  showPaydown = false,
   priority,
   hot = false,
   snoozeCount = 0,
 }: {
   card: ClientCard;
-  showPaydown?: boolean;
-  /** Today only: the money-first score, shown as "$ at stake". */
+  /** Today only: the score, shown as "$ at stake". */
   priority?: Priority;
   /** Today only: starred clients go to the top. Kept on the merchant, so every device agrees. */
   hot?: boolean;
@@ -68,8 +64,6 @@ export const ClientRow = memo(function ClientRow({
   const due = card.next_due_on;
   const overdue = due !== null && due < today;
   const isToday = due === today;
-  const terms = showPaydown ? cardFundingTerms(card) : null;
-  const pct = terms ? paydownPct(terms, today) : null;
 
   return (
     <article
@@ -118,12 +112,6 @@ export const ClientRow = memo(function ClientRow({
                 · wants {formatMoneyCompact(card.wanted_amount_cents)}
               </span>
             ) : null}
-            {card.position_count > 0 ? (
-              <span>
-                {" "}
-                · {card.position_count} other advance{card.position_count === 1 ? "" : "s"}
-              </span>
-            ) : null}
           </p>
         </div>
         <div className="flex shrink-0 items-center gap-0.5">
@@ -166,26 +154,6 @@ export const ClientRow = memo(function ClientRow({
       ) : (
         <p className="mt-2 text-[13px] text-muted">Never called.</p>
       )}
-
-      {pct !== null && terms ? (
-        <div className="mt-2.5 space-y-1">
-          <div
-            className="relative h-1.5 overflow-hidden rounded-full bg-surface-2"
-            role="img"
-            aria-label={`${pct}% paid down`}
-          >
-            <div
-              className="h-full rounded-full bg-good"
-              style={{ width: `${Math.min(100, pct)}%` }}
-            />
-            <div className="absolute inset-y-0 left-1/2 w-px bg-text/40" aria-hidden />
-          </div>
-          <p className="text-xs text-muted tabular-nums">
-            {pct}% paid down · {formatMoney(balanceCents(terms, today))} left ·{" "}
-            {formatMoney(terms.paymentCents)} {terms.frequency} remittance
-          </p>
-        </div>
-      ) : null}
 
       <div className="mt-2.5">
         <ContactActions client={card} />

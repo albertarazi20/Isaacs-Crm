@@ -52,11 +52,11 @@ export async function sessionCookie(claims: SessionClaims) {
 }
 
 /**
- * A page outside the role's nav sends the user home with a one-line notice instead of rendering an empty shell
- * (a rep opening /board, ops opening /lead-intake). Row security still guards the data; this guards the door.
+ * A page outside the nav sends the user home with a one-line notice instead of rendering an empty shell
+ * (anyone opening a page that no longer exists). Row security still guards the data; this guards the door.
  */
 export async function requirePage(href: string): Promise<SessionClaims> {
   const session = await requireSession();
-  if (!pageAllowed(session.role, href)) redirect(`/?denied=${encodeURIComponent(href.slice(1))}`);
+  if (!pageAllowed(href)) redirect(`/?denied=${encodeURIComponent(href.slice(1))}`);
   return session;
 }

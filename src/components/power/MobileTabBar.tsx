@@ -5,7 +5,6 @@ import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { LogoutButton } from "../LogoutButton";
 import { cn } from "../ui";
-import type { Role } from "@/lib/auth/roles";
 import { phoneTabsFor } from "@/lib/nav";
 
 const svg = (d: string) => (
@@ -27,10 +26,7 @@ const ICONS: Record<string, ReactNode> = {
   "/": svg("M4 5h16v15H4zM4 10h16M9 3v4M15 3v4"),
   "/lead-intake": svg("M12 5v14M5 12h14"),
   "/follow-up": svg("M4 6h16M4 12h10M4 18h7M18 15l3 3-3 3"),
-  "/board": svg("M4 4h5v16H4zM10 4h5v10h-5zM16 4h4v13h-4z"),
-  "/deals": svg("M3 7h18v12H3zM3 11h18M8 7V5h8v2"),
-  "/winback": svg("M20 11a8 8 0 1 0-2.3 5.7M20 4v7h-7"),
-  "/funded": svg("M12 3v18M7 8h7a3 3 0 0 1 0 6H8a3 3 0 0 0 0 6h8"),
+  "/clients": svg("M16 20v-1.5a3.5 3.5 0 0 0-3.5-3.5h-5A3.5 3.5 0 0 0 4 18.5V20M10 11a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7zM20 20v-1.5a3.5 3.5 0 0 0-2.5-3.35"),
 };
 const fallbackIcon = svg("M4 6h16M4 12h16M4 18h16");
 
@@ -41,12 +37,12 @@ const tabClass = (active: boolean) =>
   );
 
 /**
- * Phone navigation (under 640px): Today, Board, Clients, Renewals and a More sheet, fixed to the bottom with
+ * Phone navigation (under 640px): Home, Intake, Follow and Merchants plus a More sheet, fixed to the bottom with
  * the safe-area inset. The top links are hidden at this width. Hidden in power-dial mode, which is full screen.
  */
-export function MobileTabBar({ due, email, role }: { due: number; email: string; role: Role }) {
+export function MobileTabBar({ due, email }: { due: number; email: string }) {
   const path = usePathname();
-  const { tabs, more } = phoneTabsFor(role);
+  const { tabs, more } = phoneTabsFor();
   const [moreOpen, setMoreOpen] = useState(false);
   if (path === "/dial") return null;
   const isActive = (href: string) => (href === "/" ? path === "/" : path.startsWith(href));

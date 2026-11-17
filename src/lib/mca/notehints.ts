@@ -707,10 +707,6 @@ function paceWords(stage: StageKey): string {
       return `${rule.days} days`;
     case "months":
       return `${rule.months} months`;
-    case "funded":
-      return "30 days";
-    case "lost":
-      return "6 months";
   }
 }
 
@@ -725,10 +721,6 @@ function paceDate(stage: StageKey | undefined, today: ISODate): { dueOn: ISODate
       return { dueOn: addDays(today, rule.days), words: paceWords(stage) };
     case "months":
       return { dueOn: addMonths(today, rule.months), words: paceWords(stage) };
-    case "funded":
-      return { dueOn: addDays(today, 30), words: paceWords(stage) };
-    case "lost":
-      return { dueOn: addMonths(today, 6), words: paceWords(stage) };
   }
 }
 

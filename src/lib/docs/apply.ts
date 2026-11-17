@@ -90,12 +90,11 @@ export async function openApplicationPage(
     }>(
       `select c.business_name, c.contact_name, c.phone, c.email, coalesce(c.state, '') as state, coalesce(c.industry, '') as industry,
               c.monthly_revenue_cents::text as monthly_revenue_cents,
-              coalesce((select wanted_amount_cents from client_asks k where k.client_id = c.id order by k.created_at desc limit 1),
-                       (select d.requested_cents from deals d where d.client_id = c.id and d.outcome = 'open' order by d.created_at desc limit 1))::text as wanted_amount_cents,
+              (select wanted_amount_cents from client_asks k where k.client_id = c.id order by k.created_at desc limit 1)::text as wanted_amount_cents,
               (select shop_name from shop_settings) as shop_name,
               coalesce(nullif(u.name, ''), u.email) as rep_name,
               (select to_char(a.signed_at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') from applications a
-                 where a.client_id = c.id and a.signed_at > coalesce((select max(d.created_at) from deals d where d.client_id = c.id and d.outcome = 'open'), a.signed_at - interval '1 second')
+                 where a.client_id = c.id
                  order by a.signed_at desc limit 1) as signed_at
          from clients c join app_users u on u.id = c.user_id
         where c.application_token = $1 and not exists (select 1 from trashed_clients t where t.client_id = c.id)`,
@@ -264,12 +263,10 @@ export async function signApplication(
       await q.query<{
         id: string;
         user_id: string;
-        deal_id: string | null;
         shop_name: string;
         has_ask: boolean;
       }>(
         `select c.id, c.user_id,
-                (select d.id from deals d where d.client_id = c.id and d.outcome = 'open' order by d.created_at desc limit 1) as deal_id,
                 (select shop_name from shop_settings) as shop_name,
                 exists (select 1 from client_asks k where k.client_id = c.id) as has_ask
            from clients c where c.application_token = $1`,
@@ -286,7 +283,6 @@ export async function signApplication(
     });
     const doc = await fileGeneratedDocument(q, store, {
       clientId: c.id,
-      dealId: c.deal_id,
       kind: "signed_application",
       filename: `application-${now.toISOString().slice(0, 10)}.pdf`,
       bytes,
@@ -296,12 +292,11 @@ export async function signApplication(
     void _omit;
     const app = (
       await q.query<{ id: string }>(
-        `insert into applications (client_id, user_id, deal_id, document_id, fields, signer_name, signed_at, ip, user_agent, consent_email, consent_sms)
-         values ($1, $2, $3, $4, $5::jsonb, $6, $7, $8, $9, $10, $11) returning id`,
+        `insert into applications (client_id, user_id, document_id, fields, signer_name, signed_at, ip, user_agent, consent_email, consent_sms)
+         values ($1, $2, $3, $4::jsonb, $5, $6, $7, $8, $9, $10) returning id`,
         [
           c.id,
           c.user_id,
-          c.deal_id,
           doc.documentId,
           JSON.stringify({ ...rest, agree: undefined, signer_name: undefined }),
           f.signer_name,
@@ -361,10 +356,10 @@ export async function signApplication(
     await q.query("select app.alert($1, 'application_signed', $2, $3, $4, $5, $6, $7)", [
       c.user_id,
       c.id,
-      c.deal_id,
+      null,
       `${f.legal_business_name} signed the application`,
       `${f.signer_name} signed in the app${f.amount_requested_dollars > 0 ? `, asking for ${money(f.amount_requested_dollars)}` : ""}.`,
-      c.deal_id ? `/deals/${c.deal_id}` : `/clients/${c.id}`,
+      `/clients/${c.id}`,
       `application_signed:${app.id}`,
     ]);
     await enqueueEmail(

@@ -1,10 +1,9 @@
 import type { Db, DbAccess } from "../db";
-import { addDays, todayIn, type ISODate } from "../mca/dates";
+import { todayIn } from "../mca/dates";
 import {
   buildCallReminder,
   buildDigest,
   type DueTimer,
-  type YesterdayNumbers,
 } from "../mca/digest";
 import { formatMoneyCompact } from "../money";
 import type { StageKey, TimerKind } from "../mca/stages";
@@ -44,7 +43,6 @@ interface UserRow {
   notify_email: string | null;
   timezone: string;
   digest_hour: number;
-  role: string;
 }
 
 interface DueRow {
@@ -78,7 +76,7 @@ export async function runReminders(args: {
     async (q) =>
       (
         await q.query<UserRow>(
-          "select id, email, notify_email, timezone, digest_hour, role from app_users where digest_enabled and active order by created_at",
+          "select id, email, notify_email, timezone, digest_hour from app_users where digest_enabled and active order by created_at",
         )
       ).rows,
   );
@@ -102,8 +100,7 @@ export async function runReminders(args: {
         );
         if (claim.rowCount === 0) return false;
         const due = await loadDueTimers(q, user.id, today, user.timezone);
-        const yesterday = await loadYesterday(q, user, today);
-        const digest = buildDigest(due, today, args.appUrl, yesterday);
+        const digest = buildDigest(due, today, args.appUrl);
         if (!digest) throw new NothingDue();
         const providerId = await args.send(user.notify_email ?? user.email, digest);
         await q.query(
@@ -159,47 +156,6 @@ async function loadDueTimers(
   }));
 }
 
-/**
- * Yesterday's numbers for the brief (audit S3-3): a manager reads the shop, a rep reads their own. Yesterday is the
- * user's own local day; timestamps are cut at its bounds in their zone, dates (funded_on) compared as dates.
- */
-export async function loadYesterday(
-  q: Db,
-  user: { id: string; timezone: string; role: string },
-  today: ISODate,
-): Promise<YesterdayNumbers> {
-  const date = addDays(today, -1);
-  const shop = user.role === "manager";
-  const rep = shop ? null : user.id;
-  const { rows } = await q.query<{
-    submitted: number;
-    approvals: number;
-    funded_count: number;
-    funded_cents: string;
-    commission_cents: string;
-  }>(
-    `with b as (select ($1::date::timestamp at time zone $2) as from_at, ($3::date::timestamp at time zone $2) as to_at)
-     select
-       (select count(*)::int from deals d, b where d.sent_at >= b.from_at and d.sent_at < b.to_at and ($4::uuid is null or d.user_id = $4)) as submitted,
-       (select count(*)::int from submissions s, b where s.status in ('approved', 'revised') and s.responded_at >= b.from_at and s.responded_at < b.to_at
-          and ($4::uuid is null or s.user_id = $4)) as approvals,
-       (select count(*)::int from fundings f where f.confirmed_at is not null and f.funded_on = $1::date and ($4::uuid is null or f.user_id = $4)) as funded_count,
-       (select coalesce(sum(f.amount_cents), 0)::text from fundings f where f.confirmed_at is not null and f.funded_on = $1::date and ($4::uuid is null or f.user_id = $4)) as funded_cents,
-       (select coalesce(sum(f.commission_cents), 0)::text from fundings f where f.confirmed_at is not null and f.funded_on = $1::date and ($4::uuid is null or f.user_id = $4)) as commission_cents`,
-    [date, user.timezone, today, rep],
-  );
-  const r = rows[0];
-  return {
-    date,
-    submitted: r?.submitted ?? 0,
-    approvals: r?.approvals ?? 0,
-    funded_count: r?.funded_count ?? 0,
-    funded_cents: Number(r?.funded_cents ?? 0),
-    commission_cents: Number(r?.commission_cents ?? 0),
-    scope: shop ? "shop" : "you",
-  };
-}
-
 /** Sends the digest right now so Isaac can see what it looks like and prove Resend works. Never claims a send it didn't make. */
 export async function sendTestDigest(args: {
   db: DbAccess;
@@ -210,7 +166,7 @@ export async function sendTestDigest(args: {
 }): Promise<{ to: string; usedSample: boolean; count: number }> {
   const user = await args.db.withSystem(async (q) => {
     const { rows } = await q.query<UserRow>(
-      "select id, email, notify_email, timezone, digest_hour, role from app_users where id = $1",
+      "select id, email, notify_email, timezone, digest_hour from app_users where id = $1",
       [args.userId],
     );
     return rows[0];
@@ -262,7 +218,6 @@ interface CallRow {
   to_email: string;
   wanted_amount_cents: number | null;
   last_call_note: string | null;
-  position_count: number;
 }
 
 /** How far ahead the hourly job looks. 90 minutes means a 3:30 call is caught by the 2:00 run. */
@@ -289,8 +244,7 @@ export async function runCallReminders(args: {
                   order by t.created_at desc limit 1) as channel,
                 u.timezone, u.email as login_email, coalesce(u.notify_email, u.email) as to_email,
                 (select k.wanted_amount_cents from client_asks k where k.client_id = c.id order by k.created_at desc limit 1) as wanted_amount_cents,
-                (select a.body from activities a where a.client_id = c.id and a.kind = 'call' and a.body <> '' order by a.occurred_at desc limit 1) as last_call_note,
-                (select count(*) from positions p where p.client_id = c.id)::int as position_count
+                (select a.body from activities a where a.client_id = c.id and a.kind = 'call' and a.body <> '' order by a.occurred_at desc limit 1) as last_call_note
            from clients c join app_users u on u.id = c.user_id
           where u.digest_enabled and u.active and c.scheduled_call_at > $1
             and c.scheduled_call_at <= $1::timestamptz + make_interval(mins => $2)
@@ -321,7 +275,6 @@ export async function runCallReminders(args: {
             channel: c.channel,
             wantedAmount: c.wanted_amount_cents ? formatMoneyCompact(c.wanted_amount_cents) : null,
             lastCallNote: c.last_call_note,
-            positionCount: c.position_count,
           },
           args.appUrl,
         );

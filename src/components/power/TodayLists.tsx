@@ -85,11 +85,9 @@ export function TodayLists({ scheduled, overdue, dueToday, upcoming, snoozeCount
               <Icon name="chevronDown" className="size-3.5 transition group-open:rotate-180" />
             </summary>
             <p className="mt-1 max-w-xl text-sm">
-              Dollars at stake (what he wants, or what funders would approve, or the payback still
-              outstanding on a default) times how close the stage is to funding times a small bonus
-              for every day overdue. A renewal call on an advance 50% paid down, or a default that
-              promised to pay today, counts as high. A starred ★ client always goes first. Tap “at
-              stake” on any row for its working.
+              Dollars at stake (what he wants) times how close the file is to complete times a small
+              bonus for every day overdue. A starred ★ client always goes first. Tap “at stake” on
+              any row for its working.
             </p>
           </details>
         </div>
