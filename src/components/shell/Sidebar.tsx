@@ -444,7 +444,11 @@ export function Sidebar(props: SidebarProps) {
         >
           <Glyph name="menu" className="size-5" />
         </button>
-        <Link href="/" aria-label="Selective CRM home" className="flex items-center">
+        <Link
+          href="/"
+          aria-label="Selective CRM home"
+          className="flex size-10 items-center justify-center"
+        >
           <Image
             src="/brand/SC-logomark-light-web.png"
             alt=""

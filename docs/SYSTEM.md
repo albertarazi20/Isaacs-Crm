@@ -84,21 +84,20 @@ in its own transaction.
 
 ## 6. The screens
 
-Rep, ops and manager each see their own set (`src/lib/nav.ts`). The same screen is the same component at every
-width; a phone gets a bottom tab bar and bottom-sheet dialogs.
+Rebuilt on 2026-11-16 for the follow-up scope (the look is `docs/DESIGN.md`). Reps and managers see the same four
+places in the left sidebar (`src/lib/nav.ts`), each a dropdown; a phone gets a top bar whose menu button slides the
+same sidebar in, and bottom-sheet dialogs.
 
-| Screen                     | For                    | What it is for                                                                                       |
-| -------------------------- | ---------------------- | ---------------------------------------------------------------------------------------------------- |
-| Dashboard                  | all                    | The month, the goal, "do this now" ranked by money, the funnel, the floor and the lenders (managers) |
-| Lead Intake                | rep, manager           | Phone first, sheet lookup fills the line, paste a lead line, bulk intake                             |
-| Follow Up                  | rep, manager           | The buckets, the lead lines, the blast, the cap gauge                                                |
-| Submission Board           | ops, manager           | Deals with lenders, offers side by side, the Review tray of AI proposals                             |
-| My Deals and the deal page | all                    | Overview, Documents, Activity (with questions in plain words), lenders and offers, FUND              |
-| Winback                    | rep, manager           | The pools, the opener review, recovered money                                                        |
-| Funded                     | rep, manager           | The sheet, statements, corrections, renewals                                                         |
-| Settings                   | all, managers see more | Me, buckets and templates, sheets, team and trust, email and lenders, plan, AI                       |
-| Alerts                     | all                    | What the automations wrote for you; the bell in the header                                           |
-| Public pages               | merchants              | Upload link, application, unsubscribe (token is the key, no sign-in)                                 |
+| Screen       | For                    | What it is for                                                                                                                               |
+| ------------ | ---------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| Overview     | all                    | Brought in, new leads, replies and docs this month; what needs a person now, ranked; the funnel; the buckets; 8 weeks; the team (managers)   |
+| New lead     | all                    | Not a page: a sheet any "New lead" button (or the N key) opens over the page. Phone first, sheet lookup, paste a lead line, rows from sheets |
+| Follow Up    | all                    | The all-buckets board; a bucket's workspace (its sequence, its members, search, bulk actions, a merchant sheet, Hand off)                    |
+| Merchants    | all                    | The whole book with filters; the call list; power dial; import a file; trash                                                                 |
+| A merchant   | all                    | The hero, the "bringing them in" strip with Hand off, notes and timeline, next follow-up, documents, application                             |
+| Settings     | all, managers see more | My account, buckets and templates, lead sources (Google Sheets and web lead connections), email, team, AI assistant                          |
+| Alerts       | all                    | What the automations wrote for you, by day                                                                                                   |
+| Public pages | merchants              | Upload link, application, unsubscribe (the token is the key, no sign-in)                                                                     |
 
 ## 7. How to run it
 

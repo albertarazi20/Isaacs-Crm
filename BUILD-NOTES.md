@@ -293,3 +293,36 @@ Capital brand, top bar") and then for everything to be finished. What landed, al
   sender. Ops cannot read AI proposals (row security from 0340: proposals are the manager's tray), so an ops user sees
   chase drafts but an empty proposals list; changing that is a decision and a migration, so it is left as it is.
   Lenders saved before the "blank approval days = shop default" change still carry an explicit 30.
+
+## Follow-up scope and the Obsidian rebuild (2026-11-16, night): branch scope/redesign
+
+The owner changed the product twice in one evening. First the scope: deals, lenders, money, win-back and trust come
+out; the CRM only brings interested merchants in (`docs/FOLLOW-UP-SYSTEM.md`). Then the look: the first redesign and
+ten mockups were rejected as cheap. The instruction was to rebuild the real app so it feels expensive: everything on
+a dropdown sidebar, lead intake as a button and never a page, compact pages with a lot in each, every page redone.
+
+- **Removal** (`scope/follow-up`, 417 files, about 52,000 lines out): pages, automations, library code, tests and
+  browser suites for the removed features. The schema is untouched. Old stage keys fold into Interested,
+  Application in and Trash on screen.
+- **The finish line** (`scope/handoff`): `0540_hand_off.sql` adds `clients.brought_in_at/by`, `hand_off` and
+  `undo_hand_off` (definer functions, checked by `app.can_touch_client`), a trigger that cancels automated mail to a
+  brought-in merchant, "Ready to hand off" as the last bucket's name, and Cold's 30/60/90 nudge. `loadOverview`
+  (`src/lib/followup/overview.ts`) feeds the Overview. Tests read the database back
+  (`tests/followup-handoff.test.ts`, `tests/followup-overview.test.ts`).
+- **The design system** ("Obsidian", `docs/DESIGN.md`): dark by default, tokens still `light-dark()` so light is the
+  same system; glass panels, pill buttons, one gradient primary per view; new primitives (PageHeader, StatCard,
+  Sparkline, ProgressRing, Meter, Segmented, Avatar, Kbd, Skeleton), a `Drawer`, `CountUp`, a line-icon set.
+- **The shell**: `src/components/shell/Sidebar.tsx` (Overview, Follow Up with every bucket and its count, Merchants,
+  Settings, each a dropdown; alerts and the account at the foot; a top bar and slide-in menu on a phone) and
+  `shell/NewLead.tsx` (one sheet for adding a lead, opened by any New lead button, the N key or `/?new-lead=1`;
+  `/lead-intake` redirects). Search became a command palette (⌘K: merchants, jump-to, New lead). The top bar, the
+  phone tab bar, the quick-add dialog and the user menu are gone.
+- **Every page rebuilt**: Overview, Follow Up (board and bucket workspace with a merchant sheet and Hand off), the
+  merchant page (hero, the bringing-them-in strip, timeline), Merchants, call list, power dial, import, trash, all
+  six Settings pages (web lead connections moved to Settings, Lead sources), alerts, sign-in, and the three pages a
+  merchant sees (upload, application, unsubscribe).
+- **A bug the new browser suite found**: in Chrome the dialog's native `close` event can arrive half a second after
+  Escape. Until then the app believed the dialog was still open, so opening it again did nothing. `useModal` now
+  closes on the Escape key press itself, counts its own closes and ignores a close event that arrives while the
+  dialog is open. The search palette and the phone menu use the same hook.
+- **Supabase `aztoxzcmnvqaypjuuuwj`**: 0540 applied by hand in one transaction; 80 migrations, matching local.

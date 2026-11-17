@@ -64,3 +64,18 @@ merchant acts, tell the rep the moment something needs them, and show the manage
 5. **The dashboard measures bringing merchants in**: new leads, contacted, replied, docs requested, docs received,
    brought in, overdue follow-ups, speed to lead, per rep, the "do this now" list, the email meter.
 6. **Texting and calling stay parked.**
+
+## Status (2026-11-16, night)
+
+Built on branch `scope/redesign`, in three parts that were merged there:
+
+1. **Removal** (`scope/follow-up`): the deal, lender, money, win-back and trust pages, automations, code and tests are
+   gone; the schema is untouched.
+2. **The finish line and the numbers** (`scope/handoff`): migration `0540_hand_off.sql` (`clients.brought_in_at`,
+   `hand_off`, `undo_hand_off`, no automated mail after a hand-off, "Ready to hand off", Cold's nudge), the Hand off
+   action, and `loadOverview` behind the Overview.
+3. **The interface** (`scope/redesign`): the whole app rebuilt in the look in `docs/DESIGN.md`: a dropdown sidebar,
+   New lead as a sheet instead of a page, and every page redone.
+
+Decision 1 as built: Hand off is on the merchant page, on each row and in the merchant sheet in Follow Up, and in
+bulk; it can be undone. It is the rep's press, not automatic.
