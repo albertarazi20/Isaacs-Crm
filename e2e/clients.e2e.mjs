@@ -31,7 +31,7 @@ export default async function clientsFlow({ email }) {
   // The stage groups are pills in the bar; the rest of the filters sit behind the Filters button.
   await page
     .getByRole("group", { name: "Filter by group" })
-    .getByRole("button", { name: /^Trash/ })
+    .getByRole("button", { name: /^Not interested/ })
     .click();
   check(
     "a group pill agrees with the database",

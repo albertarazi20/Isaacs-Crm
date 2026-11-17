@@ -1045,9 +1045,9 @@ export default async function clientFlow({ email }) {
     );
     const offered = await sel.locator("option:not([value=''])").allInnerTexts();
     check(
-      "the picker offers Interested, Application in and Trash, and nothing else",
+      "the picker offers Interested, Application in and Not interested, and nothing else",
       JSON.stringify(offered.map((x) => x.replace(" (current)", ""))) ===
-        JSON.stringify(["Interested", "Application in", "Trash"]),
+        JSON.stringify(["Interested", "Application in", "Not interested"]),
       JSON.stringify(offered),
     );
     await sel.selectOption({ label: "Interested" });
@@ -1087,9 +1087,13 @@ export default async function clientFlow({ email }) {
       !!ok2 && received?.d === today && (await dialogOf(page).count()) === 0,
       JSON.stringify(received),
     );
-    await sel.selectOption({ label: "Trash" });
+    await sel.selectOption({ label: "Not interested" });
     const ok3 = await until(async () => (await clientById(c.id)).stage === "dead");
-    check("DB: picking 'Trash' moves him to the dead stage", !!ok3, (await clientById(c.id)).stage);
+    check(
+      "DB: picking 'Not interested' moves him to the dead stage",
+      !!ok3,
+      (await clientById(c.id)).stage,
+    );
     await shot(page, "client-stage-moves");
   });
 

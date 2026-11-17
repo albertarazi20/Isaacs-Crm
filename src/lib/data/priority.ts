@@ -45,7 +45,9 @@ export interface Priority {
   stageReason: string;
   daysOverdue: number;
   ageFactor: number;
-  /** One plain-words sentence, for a tooltip. */
+  /** Why it is in the line, in plain words: the stage and the due day ("Application in, due today."). */
+  summary: string;
+  /** The amount and the summary in plain words, for a tooltip and the list's note. No working is shown. */
   explanation: string;
 }
 
@@ -87,10 +89,12 @@ function stageWeightFor(card: ClientCard): { weight: number; reason: string } {
   };
 }
 
-const BASIS_WORDS: Record<StakeBasis, string> = {
-  ask: "what he wants",
-  unknown: "no amount on file, so the minimum is counted",
-};
+/** When it is due, in words. */
+function dueWords(card: Pick<ClientCard, "next_due_on">, overdue: number, today: ISODate): string {
+  if (card.next_due_on === null) return "no follow-up date";
+  if (overdue > 0) return `${overdue} day${overdue === 1 ? "" : "s"} overdue`;
+  return card.next_due_on === today ? "due today" : "not due yet";
+}
 
 /** The score for one client, with the working shown. */
 export function priorityOf(card: ClientCard, ctx: PriorityCtx): Priority {
@@ -106,14 +110,14 @@ export function priorityOf(card: ClientCard, ctx: PriorityCtx): Priority {
   const hot = ctx.hotIds?.has(card.id) ?? false;
   const score = (atStakeCents / 100) * weight * age;
 
-  const explanation =
-    `${formatMoneyCompact(atStakeCents)} at stake (${BASIS_WORDS[stake.basis]}). ` +
-    `${reason} counts x ${weight}. ` +
-    (overdue > 0
-      ? `${overdue} day${overdue === 1 ? "" : "s"} overdue adds x ${age.toFixed(2)}. `
-      : "Due on time, x 1. ") +
-    `That makes priority ${Math.round(score).toLocaleString("en-US")}.` +
+  // what a rep reads: no weights, no score, only the facts the order comes from
+  const summary =
+    `${stageDef(foldStage(card.stage)).label}, ${dueWords(card, overdue, ctx.today)}.` +
     (hot ? " Starred, so it goes first." : "");
+  const explanation =
+    (stake.basis === "ask"
+      ? `${formatMoneyCompact(atStakeCents)} at stake (what they want). `
+      : "No amount on file yet. ") + summary;
   return {
     score,
     hot,
@@ -123,6 +127,7 @@ export function priorityOf(card: ClientCard, ctx: PriorityCtx): Priority {
     stageReason: reason,
     daysOverdue: overdue,
     ageFactor: age,
+    summary,
     explanation,
   };
 }

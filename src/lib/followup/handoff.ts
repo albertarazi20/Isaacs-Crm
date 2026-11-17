@@ -27,17 +27,32 @@ export async function handOff(q: Db, clientId: string): Promise<string> {
   }
 }
 
+export interface UndoneHandOff {
+  /** The hand-off time that was cleared, or null when the merchant was not handed off. */
+  undone: string | null;
+  /** The bucket the merchant went back into, at the step where the chase stopped; null when there was none to
+   * re-open (the bucket is gone, or the chase closed meanwhile), so a follow-up for tomorrow was set instead. */
+  bucket: string | null;
+}
+
 /**
- * Takes a hand-off back: the merchant returns to the rep's list with a follow-up for tomorrow (not re-enrolled).
- * Returns the hand-off time that was cleared, or null when the merchant was not handed off.
+ * Takes a hand-off back: the merchant goes back into the bucket the hand-off took them out of, at the same next step
+ * (0546). With no bucket to go back to, they return to the rep's list with a follow-up for tomorrow.
  */
-export async function undoHandOff(q: Db, clientId: string): Promise<string | null> {
+export async function undoHandOff(q: Db, clientId: string): Promise<UndoneHandOff> {
   try {
     const { rows } = await q.query<{ at: Date | string | null }>("select undo_hand_off($1) as at", [
       clientId,
     ]);
     const at = rows[0]?.at;
-    return at ? iso(at) : null;
+    if (!at) return { undone: null, bucket: null };
+    const live = await q.query<{ name: string }>(
+      `select b.name from enrollments e join buckets b on b.id = e.bucket_id
+        where e.client_id = $1 and e.stopped_at is null
+        order by e.entered_at desc limit 1`,
+      [clientId],
+    );
+    return { undone: iso(at), bucket: live.rows[0]?.name ?? null };
   } catch (e) {
     if (code(e) === "P0002")
       throw new UserError("That merchant is not on your list, so you cannot undo its hand-off");

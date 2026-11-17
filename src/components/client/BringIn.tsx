@@ -7,7 +7,7 @@ import type { DocumentRow } from "@/lib/docs/upload";
 import { formatDate, timeAgo } from "@/lib/format";
 import type { MerchantApplication } from "@/lib/leads/application";
 import { useApp } from "../app-context";
-import { Dialog, useCall } from "../overlay";
+import { Dialog, useCall, useToast } from "../overlay";
 import { Button, cn, ProgressRing } from "../ui";
 import { Icon, type IconName } from "./icons";
 import { dateInTz, fullDateTime, rollupOf } from "./logic";
@@ -76,6 +76,7 @@ export function BringInStrip({
   const { today, timezone } = useApp();
   const nowMs = useNowMs();
   const call = useCall();
+  const toast = useToast();
   const [busy, setBusy] = useState(false);
   const [confirming, setConfirming] = useState(false);
 
@@ -109,13 +110,19 @@ export function BringInStrip({
     if (res) setConfirming(false);
   }
 
+  // Undo puts the merchant back in the bucket the hand-off took them out of, at the same step; with no bucket to go
+  // back to, a follow-up for tomorrow is set instead. The toast says which happened.
   async function undo() {
     setBusy(true);
-    await call(
-      undoHandOffAction({ clientId: card.id }),
-      "Hand-off undone. A follow-up is set for tomorrow.",
-    );
+    const res = await call(undoHandOffAction({ clientId: card.id }));
     setBusy(false);
+    if (!res?.undone) return;
+    toast({
+      message: res.bucket
+        ? `Hand-off undone. ${card.business_name} is back in ${res.bucket}, at the step it stopped on.`
+        : "Hand-off undone. There was no bucket to go back to, so a follow-up is set for tomorrow.",
+      tone: "success",
+    });
   }
 
   return (

@@ -165,7 +165,7 @@ describe("the 'Calling you' line", () => {
   });
   it("the detail line shows merchant, DBA, formatted phone and stage", () => {
     expect(detailLine(mike)).toBe("Mike Ross · dba Pizza Kings · (305) 555-0101 · Interested");
-    expect(detailLine(row({ business_name: "X", stage: "dead" }))).toBe("Trash");
+    expect(detailLine(row({ business_name: "X", stage: "dead" }))).toBe("Not interested");
   });
 });
 

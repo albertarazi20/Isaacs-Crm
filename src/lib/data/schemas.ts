@@ -38,6 +38,9 @@ export const line = (max = 200) =>
       if (hit) ctx.addIssue({ code: "custom", message: hit.message });
     });
 
+/** A state, trimmed and in capitals: "ny" and "NY" are one state. */
+const stateField = line(40).toUpperCase();
+
 const EMAIL = /^[^\s@,;<>"]+@[^\s@,;<>"]+\.[^\s@,;<>"]+$/;
 /** Blank, or exactly one plain address — never "a@b.com,c@d.com". */
 const emailField = line(200).refine(
@@ -84,7 +87,7 @@ export const newClientSchema = z.object({
   phone: line(40).default(""),
   email: emailField.default(""),
   industry: line(100).default(""),
-  state: line(40).default(""),
+  state: stateField.default(""),
   source: line(100).default(""),
   stage: z.enum(STAGE_KEYS).default("name_in"),
   followUpOn: isoDate.optional(),
@@ -142,7 +145,7 @@ export const clientFieldsSchema = z
     phone: line(40),
     email: emailField,
     industry: line(100),
-    state: line(40),
+    state: stateField,
     source: line(100),
     monthlyRevenue: optMoney,
     timeInBusinessMonths: optInt,
@@ -186,7 +189,7 @@ export const importRowSchema = z.object({
   email: emailField.default(""),
   wantedAmount: line(40).default(""),
   industry: line(100).default(""),
-  state: line(40).default(""),
+  state: stateField.default(""),
   notes: text(5000).default(""),
   stage: z
     .enum(STAGE_KEYS)
@@ -202,6 +205,19 @@ export const importSchema = z.object({
     .array(importRowSchema)
     .min(1, "Nothing to import")
     .max(2000, "Import up to 2,000 clients at a time"),
+});
+
+/** The review step's look-ahead (checkImportRows): only what it needs to match a row. */
+export const importCheckSchema = z.object({
+  rows: z
+    .array(
+      z.object({
+        line: z.number().int().min(1),
+        phone: line(40).default(""),
+        businessName: line(200).min(1),
+      }),
+    )
+    .max(2000, "Check up to 2,000 rows at a time"),
 });
 
 export const duplicateCheckSchema = z.object({

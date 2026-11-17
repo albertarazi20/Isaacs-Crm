@@ -30,7 +30,7 @@ export const intakeSchema = z.object({
   phone2: line(40).default(""),
   email2: email.default(""),
   industry: line(100).default(""),
-  state: line(40).default(""),
+  state: line(40).toUpperCase().default(""),
   lookingFor: line(1000).default(""),
   wantedAmount: optMoney.optional(),
   bucketId: id.nullable().default(null),

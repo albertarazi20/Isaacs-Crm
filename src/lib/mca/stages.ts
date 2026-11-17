@@ -70,9 +70,10 @@ export const STAGES: readonly StageDef[] = [
   },
   {
     key: "dead",
-    label: "Trash",
+    // the stage of a merchant who said no; "Trash" is only the page of deleted merchants
+    label: "Not interested",
     group: "exit",
-    hint: "Dead, killed, declined or not interested",
+    hint: "Said no: dead, killed, declined or not interested",
     followUp: m(9),
   },
 ];
@@ -80,7 +81,7 @@ export const STAGES: readonly StageDef[] = [
 export const STAGE_GROUPS: readonly { key: StageGroup; label: string }[] = [
   { key: "prospecting", label: "Following up" },
   { key: "application", label: "Application in" },
-  { key: "exit", label: "Trash" },
+  { key: "exit", label: "Not interested" },
 ];
 
 /**

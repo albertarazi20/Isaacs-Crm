@@ -143,10 +143,34 @@ describe("building import rows", () => {
     expect(rows).toEqual([]);
     expect(problems).toEqual([{ line: 2, message: "No business name" }]);
   });
-  it("keeps a row whose phone is unusable but drops the number, and warns", () => {
-    const { rows, problems } = buildRows([["A", "", "555-1234", "", "", "", ""]], map, opts);
-    expect(rows[0]?.phone).toBe("");
-    expect(problems[0]?.message).toMatch(/isn't a US phone number/);
+  it("keeps a row whose phone is unusable but drops the number, and warns, when it has an email", () => {
+    const m = guessMapping(["Business", "Phone", "Email"]);
+    const { rows, problems } = buildRows([["A", "555-1234", "a@x.com"]], m, opts);
+    expect(rows[0]).toMatchObject({ phone: "", email: "a@x.com" });
+    expect(problems[0]?.message).toMatch(/isn't a US phone number — imported without it/);
+  });
+  it("holds back a row with neither a phone nor an email, under To look at", () => {
+    const { rows, unreachable, problems } = buildRows(
+      [
+        ["A", "", "555-1234", "", "", "", ""],
+        ["B", "", "", "", "", "", ""],
+        ["C", "", "3055550001", "", "", "", ""],
+      ],
+      map,
+      opts,
+    );
+    expect(rows.map((r) => r.businessName)).toEqual(["C"]);
+    expect(unreachable.map((r) => [r.line, r.businessName])).toEqual([
+      [2, "A"],
+      [3, "B"],
+    ]);
+    expect(problems).toEqual([
+      {
+        line: 2,
+        message: `"555-1234" isn't a US phone number and there is no email: no way to reach A, so it is held back`,
+      },
+      { line: 3, message: "No phone or email: no way to reach B, so it is held back" },
+    ]);
   });
   it("drops a repeated phone number within the file and counts it", () => {
     const { rows, duplicatesInFile } = buildRows(

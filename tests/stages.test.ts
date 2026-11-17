@@ -14,9 +14,13 @@ import {
 const TODAY = "2026-10-23";
 
 describe("stage catalogue", () => {
-  it("works three stages: Interested, Application in and Trash", () => {
+  it("works three stages: Interested, Application in and Not interested", () => {
     expect(STAGES.map((s) => s.key)).toEqual(["interested", "application_in", "dead"]);
-    expect(CORE_STAGES.map((s) => s.label)).toEqual(["Interested", "Application in", "Trash"]);
+    expect(CORE_STAGES.map((s) => s.label)).toEqual([
+      "Interested",
+      "Application in",
+      "Not interested",
+    ]);
   });
   it("puts every stage in a known group", () => {
     const groups = new Set(STAGE_GROUPS.map((g) => g.key));

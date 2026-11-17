@@ -80,4 +80,6 @@ Built on branch `scope/redesign`, in three parts that were merged there:
 Decision 1 as built: Hand off is on the merchant page, on each row and in the merchant sheet in Follow Up, and in
 bulk; it can be undone. It is the rep's press, not automatic. Reaching "Ready to hand off" sends the rep one "File
 complete" alert (`0543_engine_fixes.sql`); a handed-off merchant cannot be put back in a bucket until the hand-off is
-undone, and a "not now" reply does not re-open their chase.
+undone, and a "not now" reply does not re-open their chase. Undo puts the merchant back in the bucket the hand-off took
+them out of, at the same next step; only a merchant with no bucket to go back to gets a follow-up for tomorrow instead
+(`0546_ui_fixes.sql`).

@@ -18,14 +18,11 @@ export interface ImportResult {
 }
 
 /**
- * Creates one client per row, each in its own savepoint: a bad row is reported and skipped, the rest
- * still import. Safe to run twice with the same file.
+ * What the person's book already holds, the way an import judges a row (read under row security, so a rep is
+ * matched against their own merchants): live phones and names, and the phones and names of trashed merchants who
+ * are do-not-contact or limited.
  */
-export async function importClients(
-  q: Db,
-  rows: readonly ImportRowInput[],
-  ctx: UserContext,
-): Promise<ImportResult> {
+async function loadKnown(q: Db) {
   // Live merchants, plus trashed ones that are do-not-contact or limited: a "stop" must survive a clean-up.
   const all = (
     await q.query<{ phone: string; business_name: string; trashed: boolean }>(
@@ -47,6 +44,54 @@ export async function importClients(
   const existingNames = namesOf(live);
   const heldPhones = phonesOf(held);
   const heldNames = namesOf(held);
+  return { existing, existingNames, heldPhones, heldNames };
+}
+
+export interface ImportCheck {
+  /** File lines whose merchant is already in the person's CRM: the import skips them. */
+  existing: number[];
+  /** File lines that match a do-not-contact merchant in the trash: never re-added. */
+  doNotContact: number[];
+}
+
+/**
+ * The review step's look-ahead: which rows the import would skip, judged exactly as importClients judges them (by
+ * phone, or by business name when a row has no phone), so "Ready to import" counts only rows that will land.
+ */
+export async function checkImportRows(
+  q: Db,
+  rows: readonly { line: number; phone: string; businessName: string }[],
+): Promise<ImportCheck> {
+  const { existing, existingNames, heldPhones, heldNames } = await loadKnown(q);
+  const out: ImportCheck = { existing: [], doNotContact: [] };
+  for (const row of rows) {
+    const e164 = row.phone ? normalizeUS(row.phone) : null;
+    const name = nameKey(row.businessName);
+    if ((e164 && heldPhones.has(e164)) || (!e164 && heldNames.has(name))) {
+      out.doNotContact.push(row.line);
+      continue;
+    }
+    if ((e164 && existing.has(e164)) || (!e164 && existingNames.has(name))) {
+      out.existing.push(row.line);
+      continue;
+    }
+    // a later row of the same file with the same name and no phone is skipped once this one lands
+    if (e164) existing.add(e164);
+    else existingNames.add(name);
+  }
+  return out;
+}
+
+/**
+ * Creates one client per row, each in its own savepoint: a bad row is reported and skipped, the rest
+ * still import. Safe to run twice with the same file.
+ */
+export async function importClients(
+  q: Db,
+  rows: readonly ImportRowInput[],
+  ctx: UserContext,
+): Promise<ImportResult> {
+  const { existing, existingNames, heldPhones, heldNames } = await loadKnown(q);
   const result: ImportResult = {
     created: 0,
     skippedExisting: 0,

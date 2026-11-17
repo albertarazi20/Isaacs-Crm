@@ -57,23 +57,34 @@ export default async function importFlow({ email }) {
   await page.getByLabel("Where is this list from?").fill("E2E lead vendor");
   await page.getByRole("button", { name: /^Review 4 rows/ }).click();
   await page.getByRole("heading", { name: "Review and import" }).waitFor();
+  await page.getByRole("button", { name: /^Import 3 merchants/ }).waitFor({ timeout: 8000 });
   const preview = {
     ready: await figure("Ready to import"),
+    already: await figure("Already in your CRM"),
     repeated: await figure("Repeated phones"),
     look: await figure("To look at"),
   };
   await page.getByText(/^Things to look at/).click();
   const problems = await page.locator("details ul li").allInnerTexts();
   check(
-    "preview drops the repeated phone and the nameless row",
-    preview.ready === 4 &&
+    "preview drops the repeated phone and the nameless row, and holds back the row with no phone and no email",
+    preview.ready === 3 &&
+      preview.already === 0 &&
       preview.repeated === 1 &&
       problems.some((p) => p.startsWith("Line 6:")) &&
-      (await page.locator("tbody tr").count()) === 4,
+      problems.some((p) => p.startsWith("Line 7:") && /no way to reach Zero Phone Co/.test(p)) &&
+      (await page.locator("tbody tr").count()) === 3,
     `${JSON.stringify(preview)} ${problems.join(" | ")}`,
   );
+  // held back by default; the person may still choose to bring it in
+  await page.getByRole("checkbox", { name: /with no phone or email anyway/ }).check();
+  await page.getByRole("button", { name: /^Import 4 merchants/ }).waitFor({ timeout: 8000 });
+  check(
+    "ticking 'import anyway' adds it to the rows that will land",
+    (await figure("Ready to import")) === 4 && (await page.locator("tbody tr").count()) === 4,
+  );
 
-  await page.getByRole("button", { name: /^Import 4 clients/ }).click();
+  await page.getByRole("button", { name: /^Import 4 merchants/ }).click();
   // A finished import stays on the page and says what happened; it no longer jumps to the list.
   await page.getByRole("heading", { name: "Import finished" }).waitFor({ timeout: 15000 });
   check(
@@ -91,7 +102,7 @@ export default async function importFlow({ email }) {
     ),
   ).then((r) => r.rows);
   check(
-    "four clients created",
+    "four merchants created",
     rows.length === 4,
     rows.map((r) => `${r.business_name}:${r.stage}`).join(", "),
   );
@@ -111,7 +122,7 @@ export default async function importFlow({ email }) {
     rows.find((r) => r.business_name === "Zulu Auto")?.stage === "name_in",
   );
   check(
-    "a sheet's follow-up date is kept, and Declined lands in Trash",
+    "a sheet's follow-up date is kept, and Declined lands in Not interested",
     rows.find((r) => r.business_name === "Zeta Nails")?.stage === "dead" &&
       rows.find((r) => r.business_name === "Zeta Nails")?.d > 100,
     JSON.stringify(rows.find((r) => r.business_name === "Zeta Nails")),
@@ -127,23 +138,25 @@ export default async function importFlow({ email }) {
     notes.some((n) => n.body.includes("Wants it for payroll")) &&
       notes.some((n) => n.body === "Imported status: Funded"),
   );
+  await page.getByRole("link", { name: /^View merchants/ }).click();
+  await page.waitForURL("**/clients", { timeout: 10000 });
+  check("View merchants opens the list", /\/clients$/.test(page.url()), page.url());
 
   await page.goto(`${BASE}/import`, { waitUntil: "networkidle" });
   await page.setInputFiles("input[type=file]", file);
   await page.getByRole("button", { name: /^Review 4 rows/ }).click();
-  await page.getByRole("button", { name: /^Import 4 clients/ }).click();
-  await page.getByRole("heading", { name: "Import finished" }).waitFor({ timeout: 15000 });
+  await page.getByRole("checkbox", { name: /with no phone or email anyway/ }).check();
+  const importAgain = page.getByRole("button", { name: /^Import 0 merchants/ });
+  await importAgain.waitFor({ timeout: 8000 });
   const again = {
-    imported: await figure("Imported"),
+    ready: await figure("Ready to import"),
     already: await figure("Already in your CRM"),
   };
   check(
-    "importing the same file again adds nothing",
-    (await count()) === 4 && again.imported === 0 && again.already === 4,
-    `${await count()} clients ${JSON.stringify(again)}`,
+    "the same file again: the review counts all four as already in the CRM, nothing is ready, and Import is off",
+    again.ready === 0 && again.already === 4 && (await importAgain.isDisabled()),
+    JSON.stringify(again),
   );
-  await page.getByRole("link", { name: /^View merchants/ }).click();
-  await page.waitForURL("**/clients", { timeout: 10000 });
-  check("View merchants opens the list", /\/clients$/.test(page.url()), page.url());
+  check("…and nothing was added", (await count()) === 4, `${await count()} merchants`);
   await browser.close();
 }

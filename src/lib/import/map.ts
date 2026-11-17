@@ -158,7 +158,8 @@ const STAGE_WORDS: [RegExp, StageKey][] = [
     /declined|denied|rejected|killed|withdrew|pulled|^lost|went (with|elsewhere)|competitor/,
     "dead",
   ],
-  [/dead|no response|ghost/, "dead"],
+  // "Trash" was this stage's old label: a sheet exported then still says it
+  [/dead|no response|ghost|^trash$/, "dead"],
   [/not interested|no thanks/, "not_interested"],
 ];
 
@@ -172,10 +173,11 @@ export function parseStageWord(raw: string): { stage: StageKey | null; unsupport
   const w = norm(raw);
   if (!w) return { stage: null, unsupported: false };
   const key = w.replace(/ /g, "_");
-  const byKey = STAGES.find((s) => s.key === key || norm(s.label) === w);
+  // a stage's own key first ("not_interested" is a stage of its own), then the label a sheet copied from the app
   const hit =
-    byKey?.key ??
+    STAGES.find((s) => s.key === key)?.key ??
     (isStageKey(key) && IMPORTABLE.has(key) ? key : null) ??
+    STAGES.find((s) => norm(s.label) === w)?.key ??
     STAGE_WORDS.find(([re]) => re.test(w))?.[1] ??
     null;
   if (hit && IMPORTABLE.has(hit) && !WORKED_ELSEWHERE.test(w))
@@ -240,6 +242,11 @@ export interface RowProblem {
 
 export interface BuildResult {
   rows: ImportRow[];
+  /**
+   * Rows with neither a phone nor an email: nobody could reach the merchant, so they are listed under "To look at"
+   * and held back unless the person chooses to import them anyway.
+   */
+  unreachable: ImportRow[];
   problems: RowProblem[];
   /** Rows dropped because the same phone appeared earlier in the file. */
   duplicatesInFile: number;
@@ -262,6 +269,7 @@ export function buildRows(
   opts: BuildOptions,
 ): BuildResult {
   const rows: ImportRow[] = [];
+  const unreachable: ImportRow[] = [];
   const problems: RowProblem[] = [];
   const seenPhones = new Set<string>();
   let duplicatesInFile = 0;
@@ -325,12 +333,21 @@ export function buildRows(
     }
     const phoneRaw = get(r, "phone");
     const e164 = phoneRaw ? normalizeUS(phoneRaw) : null;
-    if (phoneRaw && !e164) {
+    const email = get(r, "email");
+    const reachable = Boolean(e164 || email);
+    if (phoneRaw && !e164 && reachable) {
       problems.push({
         line,
         message: `"${phoneRaw}" isn't a US phone number — imported without it`,
       });
     }
+    if (!reachable)
+      problems.push({
+        line,
+        message: phoneRaw
+          ? `"${phoneRaw}" isn't a US phone number and there is no email: no way to reach ${businessName}, so it is held back`
+          : `No phone or email: no way to reach ${businessName}, so it is held back`,
+      });
     if (e164) {
       if (seenPhones.has(e164)) {
         duplicatesInFile += 1;
@@ -365,12 +382,12 @@ export function buildRows(
       } else followUpOn = parsed < opts.today ? opts.today : parsed;
     }
 
-    rows.push({
+    (reachable ? rows : unreachable).push({
       line,
       businessName,
       contactName: get(r, "contactName"),
       phone: e164 ?? "",
-      email: get(r, "email"),
+      email,
       wantedAmount: parseMoney(amount) === null ? "" : amount,
       industry: get(r, "industry"),
       state: get(r, "state"),
@@ -381,5 +398,5 @@ export function buildRows(
       statusNote,
     });
   });
-  return { rows, problems, duplicatesInFile, doNotContact };
+  return { rows, unreachable, problems, duplicatesInFile, doNotContact };
 }
