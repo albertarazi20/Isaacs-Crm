@@ -147,7 +147,7 @@ describe("building import rows", () => {
     const m = guessMapping(["Business", "Phone", "Email"]);
     const { rows, problems } = buildRows([["A", "555-1234", "a@x.com"]], m, opts);
     expect(rows[0]).toMatchObject({ phone: "", email: "a@x.com" });
-    expect(problems[0]?.message).toMatch(/isn't a US phone number — imported without it/);
+    expect(problems[0]?.message).toMatch(/isn't a US phone number, so it was imported without it/);
   });
   it("holds back a row with neither a phone nor an email, under To look at", () => {
     const { rows, unreachable, problems } = buildRows(
