@@ -10,7 +10,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { addNoteAction, setFollowUpAction } from "@/app/actions";
+import { addNoteAction, sendEmailAction, setFollowUpAction } from "@/app/actions";
 import {
   deleteThreadAction,
   listThreadsAction,
@@ -23,9 +23,20 @@ import {
 } from "@/app/buckets-actions";
 import { handOffAction } from "@/app/followup-actions";
 import { useApp } from "@/components/app-context";
-import { Drawer, useCall, useToast } from "@/components/overlay";
+import { Dialog, Drawer, useCall, useToast } from "@/components/overlay";
 import { Glyph, type GlyphName } from "@/components/shell/icons";
-import { cn, IconButton, Kbd, Skeleton } from "@/components/ui";
+import {
+  Button,
+  buttonClass,
+  cn,
+  Field,
+  IconButton,
+  Input,
+  Kbd,
+  Skeleton,
+  Textarea,
+} from "@/components/ui";
+import { gmailComposeHref } from "@/lib/mca/phone";
 import { formatDate, timeAgo } from "@/lib/format";
 import type { ISODate } from "@/lib/mca/dates";
 import { PLAN_MY_DAY, STARTERS } from "@/lib/assistant/prompts";
@@ -72,6 +83,7 @@ const ACTION_ICON: Record<ShownAction["type"], GlyphName | "pause" | "copy"> = {
   add_note: "file",
   pause: "pause",
   move_to_bucket: "bucket",
+  send_email: "mail",
   copy: "copy",
 };
 
@@ -140,6 +152,8 @@ function actionDetail(a: ShownAction, today: string): string {
       return `${a.merchant_name}: pause emails${a.until ? ` until ${day(a.until)}` : ""}`;
     case "move_to_bucket":
       return `${a.merchant_name}: move to ${a.bucket_name}`;
+    case "send_email":
+      return `To ${a.to ?? a.merchant_name}: ${a.subject}`;
     case "copy":
       return a.text.length > 70 ? `${a.text.slice(0, 70)}…` : a.text;
   }
@@ -210,7 +224,9 @@ function ActionCard({
           {done
             ? action.type === "copy"
               ? "Copied"
-              : "Done"
+              : action.type === "send_email"
+                ? "Sent"
+                : "Done"
             : status === "running"
               ? "Working…"
               : status === "failed"
@@ -219,10 +235,90 @@ function ActionCard({
                   ? "Copy"
                   : action.type === "open"
                     ? "Open"
-                    : "Do it"}
+                    : action.type === "send_email"
+                      ? "Review"
+                      : "Do it"}
         </span>
       </button>
     </li>
+  );
+}
+
+/**
+ * The email the assistant wrote, in full and editable, before anything goes out. Send goes from the person's own
+ * Gmail through the app's normal send (contact rules, the daily cap, the touch logged); without Gmail it opens there.
+ */
+function EmailReview({
+  action,
+  gmailConnected,
+  onClose,
+  onSent,
+}: {
+  action: Extract<ShownAction, { type: "send_email" }>;
+  gmailConnected: boolean;
+  onClose: () => void;
+  onSent: () => void;
+}) {
+  const call = useCall();
+  const [subject, setSubject] = useState(action.subject);
+  const [body, setBody] = useState(action.body);
+  const [busy, setBusy] = useState(false);
+  const to = action.to ?? "";
+  return (
+    <Dialog
+      open
+      wide
+      onClose={onClose}
+      title={`Email ${action.merchant_name ?? "the merchant"}`}
+      footer={
+        <>
+          <a
+            className={buttonClass("ghost", "md", "mr-auto")}
+            href={gmailComposeHref({ to, subject, body })}
+            target="_blank"
+            rel="noreferrer"
+          >
+            Open in Gmail instead
+          </a>
+          {gmailConnected ? (
+            <Button
+              variant="primary"
+              disabled={busy || !subject.trim() || !body.trim()}
+              onClick={async () => {
+                setBusy(true);
+                const sent = await call(
+                  sendEmailAction({ clientId: action.merchant_id, subject, body }),
+                  "Sent from your Gmail",
+                );
+                setBusy(false);
+                if (sent) onSent();
+              }}
+            >
+              {busy ? "Sending…" : "Send from my Gmail"}
+            </Button>
+          ) : (
+            <a className={buttonClass("primary", "md")} href="/api/auth/google?purpose=gmail">
+              Connect Gmail to send
+            </a>
+          )}
+        </>
+      }
+    >
+      <div className="space-y-3">
+        <Field label="To">
+          <Input value={to} readOnly />
+        </Field>
+        <Field label="Subject">
+          <Input value={subject} onChange={(e) => setSubject(e.target.value)} />
+        </Field>
+        <Field label="Message">
+          <Textarea rows={12} value={body} onChange={(e) => setBody(e.target.value)} />
+        </Field>
+        <p className="text-xs text-muted">
+          Written by the assistant. Read it, change anything, and send it yourself.
+        </p>
+      </div>
+    </Dialog>
   );
 }
 
@@ -281,7 +377,7 @@ export function AssistantProvider({
   const router = useRouter();
   const call = useCall();
   const toast = useToast();
-  const { nowMs, today } = useApp();
+  const { nowMs, today, gmailConnected } = useApp();
   const [open, setOpen] = useState(false);
   const [view, setView] = useState<"chat" | "history">("chat");
   const [threadId, setThreadId] = useState<string | null>(null);
@@ -289,6 +385,9 @@ export function AssistantProvider({
   const [draft, setDraft] = useState("");
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState<Record<string, Status>>({});
+  const [reviewing, setReviewing] = useState<Extract<ShownAction, { type: "send_email" }> | null>(
+    null,
+  );
   const [recs, setRecs] = useState<Recommendation[] | null>(null);
   const [threads, setThreads] = useState<ThreadSummary[] | null>(null);
   const abort = useRef<AbortController | null>(null);
@@ -476,6 +575,10 @@ export function AssistantProvider({
     if (a.type === "open") {
       setOpen(false);
       router.push(a.href);
+      return;
+    }
+    if (a.type === "send_email") {
+      setReviewing(a);
       return;
     }
     setStatus((s) => ({ ...s, [a.id]: "running" }));
@@ -822,6 +925,18 @@ export function AssistantProvider({
           )}
         </div>
       </Drawer>
+      {reviewing ? (
+        <EmailReview
+          action={reviewing}
+          gmailConnected={gmailConnected}
+          onClose={() => setReviewing(null)}
+          onSent={() => {
+            setStatus((st) => ({ ...st, [reviewing.id]: "done" }));
+            setReviewing(null);
+            router.refresh();
+          }}
+        />
+      ) : null}
     </AssistantContext.Provider>
   );
 }

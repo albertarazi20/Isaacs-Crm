@@ -127,6 +127,30 @@ export default async function assistantFlow({ email }) {
       ),
     );
     check("Note the plan writes the note on the merchant's timeline (database)", noted);
+    // the email: reviewed in full (with the rep's sign-off) before anything is sent
+    await panel.getByRole("button", { name: /^Email .+Review$/ }).click();
+    const review = page.getByRole("dialog", { name: /^Email / });
+    await review.waitFor();
+    const message = await review.getByRole("textbox", { name: "Message" }).inputValue();
+    check(
+      "an email opens for review with its subject, the merchant's address and the rep's sign-off",
+      (await review.getByRole("textbox", { name: "Subject" }).inputValue()) ===
+        "Your application" &&
+        (await review.getByRole("textbox", { name: "To" }).inputValue()).includes("@") &&
+        message.startsWith("Hi, here is where we are.") &&
+        message.length > "Hi, here is where we are. Could you finish the application today?".length,
+    );
+    check(
+      "it can always be opened in Gmail instead",
+      (
+        await review.getByRole("link", { name: "Open in Gmail instead" }).getAttribute("href")
+      ).startsWith("https://mail.google.com/"),
+    );
+    await page.keyboard.press("Escape");
+    check(
+      "Escape closes the review and leaves the assistant open",
+      (await until(async () => !(await review.isVisible()))) && (await panel.isVisible()),
+    );
     await panel.getByRole("button", { name: /^Copy a text to send/ }).click();
     check(
       "Copy puts the message on the clipboard",

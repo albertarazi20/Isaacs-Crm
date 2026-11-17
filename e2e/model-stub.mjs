@@ -65,6 +65,13 @@ function nextTurn(body) {
                 note: "Plan from the assistant: call, ask for the application today.",
               },
               {
+                type: "send_email",
+                label: `Email ${first.business}`,
+                merchant_id: first.merchant_id,
+                subject: "Your application",
+                body: "Hi, here is where we are. Could you finish the application today?",
+              },
+              {
                 type: "copy",
                 label: "Copy a text to send",
                 text: `Hi, it's me from Selective Capital. Got a minute today?`,

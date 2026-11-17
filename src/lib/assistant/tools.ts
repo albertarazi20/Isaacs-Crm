@@ -11,6 +11,8 @@ import type { Db } from "../db";
 import { addDays, type ISODate } from "../mca/dates";
 import { stageDef } from "../mca/stages";
 import { stipLabel } from "../mca/stips";
+import { contactAllowed, type ContactStatus } from "../mca/contact";
+import { appendSignature, effectiveSignature } from "../messaging/merge";
 import { monthOf } from "../dashboard/queries";
 import { loadOverview } from "../followup/overview";
 
@@ -74,7 +76,7 @@ export const ASSISTANT_TOOLS: AssistantTool[] = [
   {
     name: "propose_actions",
     description:
-      "Put buttons under your answer for the things you can do for the person. Nothing happens until they click one. Use it whenever your answer leads to concrete steps. Types: open (go to a page: href starting with /), hand_off (merchant_id), set_follow_up (merchant_id, date YYYY-MM-DD), add_note (merchant_id, note), pause (merchant_id, optional until YYYY-MM-DD), move_to_bucket (merchant_id, bucket_id), copy (text: an email or text message for the person to send). Each action needs a short label in the person's words, like 'Hand off Harbor Tacos'. At most 12.",
+      "Put buttons under your answer for the things you can do for the person. Nothing happens until they click one. Use it whenever your answer leads to concrete steps. Types: open (go to a page: href starting with /), hand_off (merchant_id), set_follow_up (merchant_id, date YYYY-MM-DD), add_note (merchant_id, note), pause (merchant_id, optional until YYYY-MM-DD), move_to_bucket (merchant_id, bucket_id), send_email (merchant_id, subject, body: an email to the merchant that the person reviews, can edit, and sends from their own Gmail; write the body without a sign-off or signature, theirs is added), copy (text: a text message or anything else for the person to paste). Each action needs a short label in the person's words, like 'Hand off Harbor Tacos' or 'Email Rosa the upload link'. At most 12.",
     input_schema: obj(
       {
         actions: {
@@ -90,6 +92,7 @@ export const ASSISTANT_TOOLS: AssistantTool[] = [
                   "add_note",
                   "pause",
                   "move_to_bucket",
+                  "send_email",
                   "copy",
                 ],
               },
@@ -100,6 +103,8 @@ export const ASSISTANT_TOOLS: AssistantTool[] = [
               note: { type: "string" },
               bucket_id: { type: "string" },
               href: { type: "string" },
+              subject: { type: "string" },
+              body: { type: "string" },
               text: { type: "string" },
             },
             ["type", "label"],
@@ -188,6 +193,13 @@ export const actionSchema = z.discriminatedUnion("type", [
   }),
   z.object({ type: z.literal("pause"), label, merchant_id: uuid, until: day.optional() }),
   z.object({ type: z.literal("move_to_bucket"), label, merchant_id: uuid, bucket_id: uuid }),
+  z.object({
+    type: z.literal("send_email"),
+    label,
+    merchant_id: uuid,
+    subject: z.string().trim().min(1).max(200),
+    body: z.string().trim().min(1).max(5000),
+  }),
   z.object({ type: z.literal("copy"), label, text: z.string().trim().min(1).max(4000) }),
 ]);
 export type AssistantAction = z.infer<typeof actionSchema>;
@@ -197,12 +209,23 @@ export type ShownAction = AssistantAction & {
   id: string;
   merchant_name?: string;
   bucket_name?: string;
+  /** send_email: the merchant's address the email goes to. */
+  to?: string;
 };
 
 export interface ProposeResult {
   shown: ShownAction[];
   /** Why each refused action was refused, in words, so the model can correct itself. */
   refused: string[];
+}
+
+/** The person's own sign-off, as their emails from the CRM end. */
+async function signature(q: Db): Promise<string> {
+  const { rows } = await q.query<{ signature: string; name: string; email: string }>(
+    "select coalesce(signature, '') as signature, name, email from app_users where id = app.current_user_id()",
+  );
+  const me = rows[0];
+  return effectiveSignature(me?.signature ?? "", me?.name || me?.email.split("@")[0] || "");
 }
 
 /** Check every proposed action against what the person can see and what the app allows. */
@@ -223,10 +246,16 @@ export async function checkActions(
       continue;
     }
     const a = parsed.data;
-    const extra: { merchant_name?: string; bucket_name?: string } = {};
+    const extra: { merchant_name?: string; bucket_name?: string; to?: string } = {};
     if ("merchant_id" in a) {
-      const m = await q.query<{ business_name: string; trashed: boolean }>(
-        `select c.business_name, exists (select 1 from trashed_clients t where t.client_id = c.id) as trashed
+      const m = await q.query<{
+        business_name: string;
+        trashed: boolean;
+        email: string;
+        contact_status: ContactStatus;
+      }>(
+        `select c.business_name, c.email, c.contact_status,
+                exists (select 1 from trashed_clients t where t.client_id = c.id) as trashed
            from clients c where c.id = $1`,
         [a.merchant_id],
       );
@@ -240,6 +269,18 @@ export async function checkActions(
         continue;
       }
       extra.merchant_name = row.business_name;
+      if (a.type === "send_email") {
+        const allowed = contactAllowed(row.contact_status, "email");
+        if (!allowed.ok) {
+          refused.push(`action ${i + 1}: ${row.business_name}: ${allowed.reason}`);
+          continue;
+        }
+        if (!row.email.trim()) {
+          refused.push(`action ${i + 1}: ${row.business_name} has no email address`);
+          continue;
+        }
+        extra.to = row.email.trim();
+      }
     }
     if (a.type === "set_follow_up" && (a.date < today || a.date > addDays(today, 365))) {
       refused.push(
@@ -262,7 +303,9 @@ export async function checkActions(
       }
       extra.bucket_name = b.rows[0].name;
     }
-    shown.push({ ...a, ...extra, id: `${callId}:${i}` });
+    const final =
+      a.type === "send_email" ? { ...a, body: appendSignature(a.body, await signature(q)) } : a;
+    shown.push({ ...final, ...extra, id: `${callId}:${i}` });
   }
   return { shown, refused };
 }

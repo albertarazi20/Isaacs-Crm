@@ -291,6 +291,67 @@ describe("tools", () => {
   });
 });
 
+describe("an email the assistant writes", () => {
+  it("is shown with the merchant's address and the rep's own signature, and refused for do-not-contact or no address", async () => {
+    await t.pool.query(
+      "update app_users set signature = 'Rita Rep\nSelective Capital' where id = $1",
+      [rita],
+    );
+    const noEmail = (await one<{ id: string }>(
+      "insert into clients (user_id, business_name, contact_name, phone, email, state) values ($1, 'No Mail Co', 'Al', '3105550188', '', 'CA') returning id",
+      [rita],
+    ))!.id;
+    const dnc = (await one<{ id: string }>(
+      "insert into clients (user_id, business_name, contact_name, phone, email, state, contact_status) values ($1, 'Stop Co', 'Bo', '3105550177', 'bo@stop.com', 'CA', 'dnc') returning id",
+      [rita],
+    ))!.id;
+    const r = await t.db.withUser(rita, (q) =>
+      tools.checkActions(
+        q,
+        {
+          actions: [
+            {
+              type: "send_email",
+              label: "Email Rosa",
+              merchant_id: ritaMerchant,
+              subject: "Your statements",
+              body: "Hi Rosa, here is the link.",
+            },
+            {
+              type: "send_email",
+              label: "Email Al",
+              merchant_id: noEmail,
+              subject: "Hi",
+              body: "Hello",
+            },
+            {
+              type: "send_email",
+              label: "Email Bo",
+              merchant_id: dnc,
+              subject: "Hi",
+              body: "Hello",
+            },
+          ],
+        },
+        t.today,
+        "mail1",
+      ),
+    );
+    expect(r.shown).toHaveLength(1);
+    expect(r.shown[0]).toMatchObject({
+      type: "send_email",
+      to: "rosa@harbortacos.com",
+      merchant_name: "Harbor Tacos",
+      subject: "Your statements",
+    });
+    expect((r.shown[0] as { body: string }).body).toBe(
+      "Hi Rosa, here is the link.\n\nRita Rep\nSelective Capital",
+    );
+    expect(r.refused.join(" ")).toMatch(/No Mail Co has no email address/);
+    expect(r.refused.join(" ")).toMatch(/Stop Co: Marked do-not-contact/);
+  });
+});
+
 describe("a turn", () => {
   it("reads with a tool, answers, offers checked actions, logs every call against the cap and saves the conversation exactly", async () => {
     const before = await one<{ n: number }>(
