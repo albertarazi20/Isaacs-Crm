@@ -179,6 +179,18 @@ describe("loadOverview for a rep", () => {
     expect(mine.kpis.speedToLeadMinutes).toBe(4);
   });
 
+  it("the median days to bring a merchant in is computed from the database's own dates", async () => {
+    const { rows } = await t.pool.query<{ days: number | null }>(
+      `select round((percentile_cont(0.5) within group (
+                order by greatest(0, extract(epoch from (brought_in_at - created_at)) / 86400)))::numeric, 1)::float as days
+         from clients c where user_id = $1 and to_char(brought_in_at, 'YYYY-MM') = $2
+          and not exists (select 1 from trashed_clients t where t.client_id = c.id)`,
+      [repA, month],
+    );
+    expect(mine.kpis.daysToBringIn).toBe(rows[0]!.days);
+    expect(mine.kpis.daysToBringIn).not.toBeNull();
+  });
+
   it("the numbers are what the database holds", async () => {
     const { rows } = await t.pool.query<{ brought: number; overdue: number }>(
       `select (select count(*)::int from clients where user_id = $1 and brought_in_at is not null and to_char(brought_in_at, 'YYYY-MM') = $2) as brought,

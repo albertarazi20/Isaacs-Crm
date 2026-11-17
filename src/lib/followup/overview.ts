@@ -34,6 +34,8 @@ export interface OverviewKpis {
   readyToHandOff: number;
   /** Median minutes from a lead landing to the first call or sent email, this month's leads. Null when none. */
   speedToLeadMinutes: number | null;
+  /** Median days from a lead landing to its hand-off, over the merchants brought in this month. Null when none. */
+  daysToBringIn: number | null;
 }
 export interface WeekPoint {
   /** The Monday the week starts on. */
@@ -159,6 +161,9 @@ const NOW_SQL = `${BASE}, cohort as (
        from cohort c
        join lateral (select min(t.at) as first_at from touch t where t.client_id = c.id) f on f.first_at is not null
     ) as speed,
+    (select round((percentile_cont(0.5) within group (
+              order by greatest(0, extract(epoch from (c.brought_in_at - c.created_at)) / 86400)))::numeric, 1)::float
+       from live c where to_char(c.brought_in_at, 'YYYY-MM') = $1) as days_to_bring_in,
     (select count(*)::int from cohort) as f_leads,
     (select count(*)::int from cohort c where exists (select 1 from touch t where t.client_id = c.id)) as f_contacted,
     (select count(*)::int from cohort c where exists (select 1 from reply r where r.client_id = c.id)) as f_replied,
@@ -321,6 +326,7 @@ export async function loadOverview(
       f_replied: number;
       f_docs: number;
       f_brought: number;
+      days_to_bring_in: number | null;
     }>(NOW_SQL, [month, today])
   ).rows[0];
   if (!now) throw new Error("overview query returned nothing");
@@ -409,6 +415,7 @@ export async function loadOverview(
       replyWaiting: now.reply_waiting,
       readyToHandOff: now.ready,
       speedToLeadMinutes: now.speed,
+      daysToBringIn: now.days_to_bring_in,
     },
     series,
     funnel: [

@@ -112,6 +112,8 @@ function HeroStat({
   spark,
   hero,
   tone,
+  extra,
+  href,
 }: {
   label: string;
   value: number;
@@ -120,14 +122,17 @@ function HeroStat({
   spark?: number[];
   hero?: boolean;
   tone: "accent" | "info" | "good";
+  /** A second fact under the comparison line. */
+  extra?: string;
+  /** The card opens this page (the merchants it counts). */
+  href?: string;
 }) {
-  return (
-    <div
-      className={cn(
-        "rounded-2xl border border-border bg-surface p-4 sm:p-5",
-        hero && "ring-brand bg-brand-soft",
-      )}
-    >
+  const cls = cn(
+    "block rounded-2xl border border-border bg-surface p-4 sm:p-5",
+    hero && "ring-brand bg-brand-soft",
+  );
+  const inner = (
+    <>
       <div className="flex items-center justify-between gap-2">
         <p className="eyebrow">{label}</p>
         {value === 0 && before === 0 ? null : <Delta value={change(value, before)} />}
@@ -149,8 +154,21 @@ function HeroStat({
       </div>
       <p className="mt-2.5 text-xs text-muted">
         <span className="tabular-nums">{before}</span> in {beforeLabel}
+        {extra ? (
+          <>
+            <span aria-hidden> · </span>
+            {extra}
+          </>
+        ) : null}
       </p>
-    </div>
+    </>
+  );
+  return href ? (
+    <Link href={href} className={cls}>
+      {inner}
+    </Link>
+  ) : (
+    <div className={cls}>{inner}</div>
   );
 }
 
@@ -392,6 +410,12 @@ function body(o: Overview, now: Date, manager: boolean) {
           spark={wins}
           tone="accent"
           hero
+          href="/clients?brought=1"
+          extra={
+            kpis.daysToBringIn !== null
+              ? `${kpis.daysToBringIn} ${kpis.daysToBringIn === 1 ? "day" : "days"} to bring in`
+              : undefined
+          }
         />
         <HeroStat
           label="New leads"
