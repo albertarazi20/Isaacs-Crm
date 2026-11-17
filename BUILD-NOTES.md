@@ -359,6 +359,17 @@ for the night to be spent finding bugs, fixing designs and adding ideas that mak
   that came in meanwhile; re-bucketing re-opened closed chases and dropped pauses; a scan-rejected file kept its box
   ticked; the statement checklist never let an old month go; blasts were keyed to the UTC day; do-not-contact
   merchants showed on the call-now, opened and overdue lists; placeholder emails matched unrelated merchants.
-- **Gates**: typecheck, lint, format clean; unit 102 files / 1,389 tests; `pnpm build` passes; browser suites run
+- **Later the same night**: `{missing_docs}` (emails name what is still owed; 0550 rewrote three stock checklist
+  emails), an Active mark and a Most active sort (the merchant's own last move), the phone Overview puts Do this now
+  before the numbers, `docs/SYSTEM.md` and `docs/OWNER-TODO.md` rewritten for the follow-up system.
+- **Bug hunt 3** (two fresh reviewers on everything after round 2; 0551, 0552): the assistant's 54 s stop re-ran the
+  same paid call forever and under-counted its cost (now: effort steps down, then a "shorter answer" notice; cost
+  counts the time a call ran; late tools run first in the next request); a queued nudge could still go after the
+  merchant replied (the worker now cancels it, `app.nudge_overtaken`); the nudge ignored the checklist, rep emails
+  and Resend replies, and counted opens from before it was switched on; `{missing_docs}` blocked the welcome for a
+  lead with no checklist (now falls back to the bucket's ask); a closed chase never reached Ready (and its alert);
+  the Most active sort crashed (pg Date vs text); `inbound_emails` had no client index.
+  Known and left: a queued email's `{missing_docs}` is the list when it was queued.
+- **Gates**: typecheck, lint, format clean; unit 104 files / 1,408 tests; `pnpm build` passes; browser suites run
   locally against the stand-in model.
-- **Supabase `aztoxzcmnvqaypjuuuwj`**: 0541–0549 applied by hand, one transaction each (no 0545); 88 migrations.
+- **Supabase `aztoxzcmnvqaypjuuuwj`**: 0541–0552 applied by hand, one transaction each (no 0545); 91 migrations.
