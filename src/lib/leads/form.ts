@@ -124,7 +124,12 @@ export async function intakeLead(
   }
 
   const business = i.businessName || contact || "New lead";
-  const existing = opts.allowDuplicate ? [] : await findDuplicates(q, { phone: i.phone });
+  const existing = opts.allowDuplicate
+    ? []
+    : // the same phone or email in this rep's own book (main or second) is the same merchant
+      (await findDuplicates(q, { phone: i.phone, email: i.email })).filter(
+        (m) => m.reason !== "same business name",
+      );
   if (existing[0]) {
     return {
       clientId: existing[0].id,

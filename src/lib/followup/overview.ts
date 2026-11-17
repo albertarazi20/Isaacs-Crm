@@ -26,7 +26,7 @@ export interface MonthKpis {
 export interface OverviewKpis {
   thisMonth: MonthKpis;
   lastMonth: MonthKpis;
-  /** Open follow-up timers past due, as of today. */
+  /** Merchants past their follow-up date, counted as the call list counts them. */
   overdue: number;
   /** Merchants who wrote back and have not been answered. */
   replyWaiting: number;
@@ -149,8 +149,11 @@ const NOW_SQL = `${BASE}, cohort as (
     select c.* from live c where to_char(c.created_at, 'YYYY-MM') = $1
   )
   select
-    (select count(*)::int from timers t join live c on c.id = t.client_id
-      where t.done_at is null and t.due_on < $2::date) as overdue,
+    -- the call list's own rule: merchants (not timers) past their date, never do-not-contact or handed off, and not
+    -- booked for a call today (those are on today's list); the session runs in the person's time zone
+    (select count(*)::int from client_cards cc join live c on c.id = cc.id
+      where cc.next_due_on < $2::date and cc.contact_status <> 'dnc' and c.brought_in_at is null
+        and not (cc.scheduled_call_at is not null and cc.scheduled_call_at::date = $2::date)) as overdue,
     (select count(*)::int from live c where c.reply_waiting_since is not null) as reply_waiting,
     (select count(distinct c.id)::int from live c
        join enrollments e on e.client_id = c.id and e.stopped_at is null
@@ -275,8 +278,9 @@ const REPS_SQL = `${BASE}
     (select count(distinct d.client_id)::int from doc d join live c on c.id = d.client_id
       where c.user_id = u.id and to_char(d.at, 'YYYY-MM') = $1) as docs_in,
     (select count(*)::int from live c where c.user_id = u.id and to_char(c.brought_in_at, 'YYYY-MM') = $1) as brought_in,
-    (select count(*)::int from timers t join live c on c.id = t.client_id
-      where c.user_id = u.id and t.done_at is null and t.due_on < $2::date) as overdue,
+    (select count(*)::int from client_cards cc join live c on c.id = cc.id
+      where c.user_id = u.id and cc.next_due_on < $2::date and cc.contact_status <> 'dnc' and c.brought_in_at is null
+        and not (cc.scheduled_call_at is not null and cc.scheduled_call_at::date = $2::date)) as overdue,
     (select round((percentile_cont(0.5) within group (
               order by greatest(0, extract(epoch from (f.first_at - c.created_at)) / 60)))::numeric)::int
        from live c

@@ -15,7 +15,7 @@ export interface IntakeResult {
   /** Duplicate only: the existing merchant is marked do-not-contact, so nothing was scheduled. */
   doNotContact?: boolean;
   /** Duplicate only: what matched. */
-  matchedOn?: "phone" | "name";
+  matchedOn?: "phone" | "email" | "name";
 }
 
 /** The token has already added its day's worth of new merchants. */
@@ -74,8 +74,14 @@ export async function ingestLead(
 ): Promise<IntakeResult> {
   const input = toNewClient(lead, ctx.today);
   await serialise(q, input.phone, input.businessName);
-  const matches = await findDuplicates(q, { phone: input.phone, businessName: input.businessName });
-  const dupe = matches.find((m) => m.reason === "same phone" || !input.phone || !m.phone);
+  const matches = await findDuplicates(q, {
+    phone: input.phone,
+    email: input.email,
+    businessName: input.businessName,
+  });
+  const dupe = matches.find(
+    (m) => m.reason === "same phone" || m.reason === "same email" || !input.phone || !m.phone,
+  );
 
   if (dupe) {
     const { rows } = await q.query<{ contact_status: ContactStatus }>(
@@ -100,7 +106,8 @@ export async function ingestLead(
     return {
       status: "duplicate",
       clientId: dupe.id,
-      matchedOn: dupe.reason === "same phone" ? "phone" : "name",
+      matchedOn:
+        dupe.reason === "same phone" ? "phone" : dupe.reason === "same email" ? "email" : "name",
       ...(blocked ? { doNotContact: true } : {}),
     };
   }

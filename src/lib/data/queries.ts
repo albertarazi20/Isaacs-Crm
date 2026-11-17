@@ -97,7 +97,7 @@ export interface DuplicateMatch {
   contact_name: string;
   stage: StageKey;
   /** Why it matched, in words Isaac can check at a glance. */
-  reason: "same phone" | "same business name";
+  reason: "same phone" | "same email" | "same business name";
   /** The matched merchant's phone as stored ("" when none) — name matches only count when one side has no phone. */
   phone: string;
   /** Whose merchant it is (the rep's name), so two reps don't work the same lead by accident. */
@@ -116,14 +116,19 @@ export interface DuplicateMatch {
  * business name ignoring case and punctuation. The same merchant comes back under a slightly
  * different name constantly — this is how a second card never quietly appears.
  */
+/**
+ * The merchants (visible to the caller) a new lead would duplicate: the same phone (main or second), the same email
+ * (main or second, any case), or the same business name. Phone and email matches come first.
+ */
 export async function findDuplicates(
   q: Db,
-  input: { phone?: string; businessName?: string; excludeId?: string },
+  input: { phone?: string; email?: string; businessName?: string; excludeId?: string },
 ): Promise<DuplicateMatch[]> {
   const e164 = input.phone ? normalizeUS(input.phone) : null;
   const digits = e164 ? e164.slice(2) : null;
   const name = nameKey(input.businessName ?? "");
-  if (!digits && !name) return [];
+  const email = (input.email ?? "").trim().toLowerCase();
+  if (!digits && !name && !email) return [];
   const { rows } = await q.query<{
     id: string;
     business_name: string;
@@ -131,12 +136,15 @@ export async function findDuplicates(
     stage: StageKey;
     phone: string;
     by_phone: boolean;
+    by_email: boolean;
     trashed: boolean;
     owner_name: string;
     bucket_name: string | null;
   }>(
     `select id, business_name, contact_name, stage, phone,
-            ($1::text is not null and right(regexp_replace(phone, '[^0-9]', '', 'g'), 10) = $1) as by_phone,
+            ($1::text is not null and (right(regexp_replace(phone, '[^0-9]', '', 'g'), 10) = $1
+                                       or right(regexp_replace(coalesce(phone2, ''), '[^0-9]', '', 'g'), 10) = $1)) as by_phone,
+            ($4 <> '' and (lower(btrim(email)) = $4 or lower(btrim(coalesce(email2, ''))) = $4)) as by_email,
             exists (select 1 from trashed_clients t where t.client_id = clients.id) as trashed,
             coalesce((select u.name from app_users u where u.id = clients.user_id), '') as owner_name,
             (select b.name from enrollments e join buckets b on b.id = e.bucket_id
@@ -144,18 +152,20 @@ export async function findDuplicates(
        from clients
       where (contact_status <> 'ok' or not exists (select 1 from trashed_clients t where t.client_id = clients.id))
         and ($3::uuid is null or id <> $3::uuid)
-        and (($1::text is not null and right(regexp_replace(phone, '[^0-9]', '', 'g'), 10) = $1)
+        and (($1::text is not null and (right(regexp_replace(phone, '[^0-9]', '', 'g'), 10) = $1
+                                         or right(regexp_replace(coalesce(phone2, ''), '[^0-9]', '', 'g'), 10) = $1))
+         or ($4 <> '' and (lower(btrim(email)) = $4 or lower(btrim(coalesce(email2, ''))) = $4))
          or ($2 <> '' and ${NAME_KEY_SQL("business_name")} = $2))
-      order by by_phone desc, business_name
+      order by by_phone desc, by_email desc, business_name
       limit 5`,
-    [digits, name, input.excludeId ?? null],
+    [digits, name, input.excludeId ?? null, email],
   );
   return rows.map((r) => ({
     id: r.id,
     business_name: r.business_name,
     contact_name: r.contact_name,
     stage: r.stage,
-    reason: r.by_phone ? "same phone" : "same business name",
+    reason: r.by_phone ? "same phone" : r.by_email ? "same email" : "same business name",
     phone: r.phone,
     trashed: r.trashed,
     owner_name: r.owner_name,

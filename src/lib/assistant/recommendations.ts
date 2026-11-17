@@ -214,8 +214,21 @@ export async function loadRecommendationFacts(
     month: monthOf(args.today),
     manager: args.manager,
   });
-  const queue: Partial<Record<QueueKind, number>> = {};
-  for (const item of o.queue) queue[item.kind] = (queue[item.kind] ?? 0) + 1;
+  // counted on their own: the "do this now" list is capped at 25 and shows one reason per merchant
+  const counts = await q.query<{ new_leads: number; bounced: number }>(
+    `select
+       (select count(*)::int from clients c
+         where c.brought_in_at is null and c.created_at > now() - interval '24 hours'
+           and not exists (select 1 from activities a where a.client_id = c.id and a.kind = 'call')
+           and not exists (select 1 from trashed_clients t where t.client_id = c.id)) as new_leads,
+       (select count(*)::int from clients c
+         where c.email_bounced_at is not null and c.brought_in_at is null
+           and not exists (select 1 from trashed_clients t where t.client_id = c.id)) as bounced`,
+  );
+  const queue: Partial<Record<QueueKind, number>> = {
+    call_now: counts.rows[0]?.new_leads ?? 0,
+    bounced: counts.rows[0]?.bounced ?? 0,
+  };
 
   const quiet = await q.query<{ n: number }>(
     `select count(*)::int as n
