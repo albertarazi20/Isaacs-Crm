@@ -73,7 +73,7 @@ export function NewLeadProvider({
       if (res.ok) setStaged(res.data);
       else setStagedError(res.error);
     } catch {
-      setStagedError("Couldn't reach the server — check your connection");
+      setStagedError("Couldn't reach the server. Check your connection");
     }
   }, []);
 

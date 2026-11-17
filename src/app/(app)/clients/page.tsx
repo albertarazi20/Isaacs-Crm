@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { ClientsTable } from "@/components/ClientsTable";
 import { OverflowMenu } from "@/components/OverflowMenu";
@@ -8,6 +9,8 @@ import { requireSession } from "@/lib/auth/server";
 import { listCardMeta } from "@/lib/data/cardMeta";
 import { listCards, userContext } from "@/lib/data/queries";
 import { db } from "@/lib/db";
+
+export const metadata: Metadata = { title: "Merchants" };
 
 export default async function ClientsPage() {
   const session = await requireSession();

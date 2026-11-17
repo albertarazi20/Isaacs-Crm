@@ -432,7 +432,7 @@ describe("error messages", () => {
           code: "08006",
         }),
       ),
-    ).toBe("Something went wrong — try again");
+    ).toBe("Something went wrong. Try again");
   });
 });
 

@@ -62,6 +62,10 @@ describe("activity bodies", () => {
       "Marked missing: Voided check",
     );
   });
+  it("says merchant where the database trigger wrote client", () => {
+    expect(activityBody({ kind: "system", body: "Client added" })).toBe("Merchant added");
+    expect(activityBody({ kind: "note", body: "Client added" })).toBe("Client added");
+  });
   it("leaves other system and note text alone", () => {
     expect(activityBody({ kind: "system", body: "Added" })).toBe("Added");
     expect(activityBody({ kind: "note", body: "Received: bank_statement Jul 2026" })).toBe(

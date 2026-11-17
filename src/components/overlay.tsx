@@ -329,7 +329,7 @@ export function useCall() {
       try {
         res = await promise;
       } catch {
-        toast({ message: "Couldn't reach the server — check your connection", tone: "error" });
+        toast({ message: "Couldn't reach the server. Check your connection", tone: "error" });
         return null;
       }
       if (!res.ok) {

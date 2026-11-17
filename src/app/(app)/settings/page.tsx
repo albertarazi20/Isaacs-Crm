@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { cookies } from "next/headers";
 import { SecurityPanel } from "@/components/SecurityPanel";
 import {
@@ -72,6 +73,8 @@ const EXPORTS = [
     hint: "Every note and call you logged, oldest first.",
   },
 ] as const;
+
+export const metadata: Metadata = { title: "Settings" };
 
 export default async function AccountSettingsPage({
   searchParams,

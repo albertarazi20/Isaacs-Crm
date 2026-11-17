@@ -10,45 +10,55 @@ import { isReadyBucket, sequenceSummary, stepNote, stepTitle } from "./bucketCop
 /** The sequence as a rail: what goes out, and on which day after a merchant lands in the bucket. */
 function SequenceRail({ steps }: { steps: readonly SequenceStep[] }) {
   return (
-    <ol className="-mx-1 flex overflow-x-auto px-1 pb-1">
-      {steps.map((s, i) => (
-        <li key={s.step_no} className="relative w-44 shrink-0 pr-5 sm:w-auto sm:min-w-36 sm:flex-1">
-          <div className="flex items-center gap-2">
-            <span
+    <div
+      tabIndex={0}
+      role="region"
+      aria-label="Sequence steps"
+      className="-mx-1 overflow-x-auto px-1 pb-1 focus-visible:outline-offset-[-2px]"
+    >
+      <ol className="flex">
+        {steps.map((s, i) => (
+          <li
+            key={s.step_no}
+            className="relative w-44 shrink-0 pr-5 sm:w-auto sm:min-w-36 sm:flex-1"
+          >
+            <div className="flex items-center gap-2">
+              <span
+                className={cn(
+                  "flex size-6 shrink-0 items-center justify-center rounded-full text-[11px] font-semibold tabular-nums ring-1",
+                  s.action === "email"
+                    ? "bg-accent-soft text-accent ring-accent/30"
+                    : "bg-surface-2 text-text-2 ring-border-strong",
+                )}
+              >
+                {s.step_no}
+              </span>
+              <span
+                aria-hidden
+                className={cn(
+                  "h-px flex-1 bg-border-strong/70",
+                  i === steps.length - 1 && "opacity-0",
+                )}
+              />
+            </div>
+            <p className="eyebrow mt-2.5">Day {s.day_offset}</p>
+            <p className="mt-0.5 truncate text-[13px] font-medium text-text" title={stepTitle(s)}>
+              {stepTitle(s)}
+            </p>
+            <p
               className={cn(
-                "flex size-6 shrink-0 items-center justify-center rounded-full text-[11px] font-semibold tabular-nums ring-1",
-                s.action === "email"
-                  ? "bg-accent-soft text-accent ring-accent/30"
-                  : "bg-surface-2 text-text-2 ring-border-strong",
+                "truncate text-xs",
+                s.action === "email" && (s.template_approved === false || !s.template_name)
+                  ? "text-warn"
+                  : "text-muted",
               )}
             >
-              {s.step_no}
-            </span>
-            <span
-              aria-hidden
-              className={cn(
-                "h-px flex-1 bg-border-strong/70",
-                i === steps.length - 1 && "opacity-0",
-              )}
-            />
-          </div>
-          <p className="eyebrow mt-2.5">Day {s.day_offset}</p>
-          <p className="mt-0.5 truncate text-[13px] font-medium text-text" title={stepTitle(s)}>
-            {stepTitle(s)}
-          </p>
-          <p
-            className={cn(
-              "truncate text-xs",
-              s.action === "email" && (s.template_approved === false || !s.template_name)
-                ? "text-warn"
-                : "text-muted",
-            )}
-          >
-            {stepNote(s)}
-          </p>
-        </li>
-      ))}
-    </ol>
+              {stepNote(s)}
+            </p>
+          </li>
+        ))}
+      </ol>
+    </div>
   );
 }
 
@@ -86,7 +96,7 @@ export function BucketBrief({
         </div>
         <Link
           href={`/settings/buckets?b=${bucket.id}`}
-          className="inline-flex shrink-0 items-center gap-1 rounded-full text-xs font-medium text-accent transition hover:text-accent-strong"
+          className="inline-flex shrink-0 items-center gap-1 rounded-full text-xs font-medium text-accent transition hover:text-accent-strong max-sm:min-h-10"
         >
           Edit sequence
           <Glyph name="arrowUpRight" className="size-3.5" />

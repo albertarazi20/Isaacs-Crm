@@ -95,7 +95,7 @@ function Editor({
         }}
       >
         <Field label="Name">
-          <Input {...bind("name")} placeholder="Interested — follow up" required />
+          <Input {...bind("name")} placeholder="Interested, follow up" required />
         </Field>
         <Field label="Subject">
           <Input {...bind("subject")} placeholder="{first_name}, your statements for {business}" />
@@ -273,7 +273,7 @@ export function TemplateEditor({
                   {t.owner_id ? <Badge tone="accent">mine</Badge> : null}
                   {t.archived ? <Badge>archived</Badge> : null}
                   {pausedBy.has(t.id) ? (
-                    <Badge tone="warn">paused automatically — bounce spike</Badge>
+                    <Badge tone="warn">paused automatically: bounce spike</Badge>
                   ) : null}
                 </p>
                 <p className="mt-0.5 truncate text-[13px] text-text-2">
@@ -328,7 +328,7 @@ export function TemplateEditor({
                     size="sm"
                     variant="secondary"
                     disabled={busy}
-                    onClick={() => void approve(t, true, "Approved again — it may send")}
+                    onClick={() => void approve(t, true, "Approved again. It may send")}
                   >
                     Approve again
                   </Button>

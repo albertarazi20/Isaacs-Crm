@@ -245,7 +245,7 @@ export async function rotateUploadToken(q: Db, clientId: string): Promise<void> 
     [clientId],
   );
   await q.query(
-    "insert into activities (user_id, client_id, kind, body) select user_id, id, 'system', 'Upload link reset — the old link no longer works' from clients where id = $1",
+    "insert into activities (user_id, client_id, kind, body) select user_id, id, 'system', 'Upload link reset. The old link no longer works' from clients where id = $1",
     [clientId],
   );
 }

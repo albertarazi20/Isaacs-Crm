@@ -51,5 +51,5 @@ export function bumpTextCount(storage: CounterStorage | null, today: string): nu
 /** The gentle warning, or null while the count is comfortable. */
 export function textCountWarning(n: number): string | null {
   if (n < TEXT_WARN_AT) return null;
-  return `That's ${n} texts today. Google Voice may slow down or flag a long run of texts that looks like a bulk send — consider pausing and picking this up tomorrow.`;
+  return `That's ${n} texts today. Google Voice may slow down or flag a long run of texts that looks like a bulk send. Consider pausing and picking this up tomorrow.`;
 }

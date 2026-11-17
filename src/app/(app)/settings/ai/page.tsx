@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { AiSettingsForm } from "@/components/settings/AiSettingsForm";
 import { AiSpendCard } from "@/components/settings/AiSpendCard";
 import { Note, SettingsCard, StatusChip } from "@/components/settings/primitives";
@@ -15,6 +16,8 @@ import { aiStatus, getShopSettings } from "@/lib/settings/queries";
 export const dynamic = "force-dynamic";
 
 const usd = (cents: number) => `$${(cents / 100).toFixed(2)}`;
+
+export const metadata: Metadata = { title: "AI assistant" };
 
 export default async function AiSettingsPage() {
   const session = await requireRole(CAN.manageTeam);
@@ -125,41 +128,51 @@ export default async function AiSettingsPage() {
         {status.runs.length === 0 ? (
           <p className="px-4 py-4 text-[13px] text-muted sm:px-5">None yet.</p>
         ) : (
-          <ul className="max-h-[30rem] divide-y divide-border overflow-y-auto text-[13px]">
-            {status.runs.map((r) => (
-              <li
-                key={r.id}
-                className="flex min-h-12 items-center justify-between gap-3 px-4 py-2 transition-colors duration-150 hover:bg-surface-2/50 sm:px-5"
-              >
-                <span className="flex min-w-0 items-center gap-3">
-                  <span
-                    aria-hidden
-                    className={cn("size-2 shrink-0 rounded-full", r.error ? "bg-bad" : "bg-good")}
-                  />
-                  <span className="min-w-0">
-                    <span className="block truncate font-medium first-letter:uppercase">
-                      {r.purpose.replace(/_/g, " ")}
-                    </span>
+          <div
+            tabIndex={0}
+            role="region"
+            aria-label="Recent AI runs"
+            className="max-h-[30rem] overflow-y-auto focus-visible:outline-offset-[-2px]"
+          >
+            <ul className="divide-y divide-border text-[13px]">
+              {status.runs.map((r) => (
+                <li
+                  key={r.id}
+                  className="flex min-h-12 items-center justify-between gap-3 px-4 py-2 transition-colors duration-150 hover:bg-surface-2/50 sm:px-5"
+                >
+                  <span className="flex min-w-0 items-center gap-3">
                     <span
-                      className={cn("block truncate text-xs", r.error ? "text-bad" : "text-muted")}
-                    >
-                      {r.error ?? r.model}
+                      aria-hidden
+                      className={cn("size-2 shrink-0 rounded-full", r.error ? "bg-bad" : "bg-good")}
+                    />
+                    <span className="min-w-0">
+                      <span className="block truncate font-medium first-letter:uppercase">
+                        {r.purpose.replace(/_/g, " ")}
+                      </span>
+                      <span
+                        className={cn(
+                          "block truncate text-xs",
+                          r.error ? "text-bad" : "text-muted",
+                        )}
+                      >
+                        {r.error ?? r.model}
+                      </span>
                     </span>
                   </span>
-                </span>
-                <span className="shrink-0 text-right text-xs whitespace-nowrap text-muted tabular-nums">
-                  {r.cost_cents !== null ? (
-                    <span className="block font-medium text-text-2">
-                      {r.cost_cents.toFixed(2)}¢
+                  <span className="shrink-0 text-right text-xs whitespace-nowrap text-muted tabular-nums">
+                    {r.cost_cents !== null ? (
+                      <span className="block font-medium text-text-2">
+                        {r.cost_cents.toFixed(2)}¢
+                      </span>
+                    ) : null}
+                    <span title={r.created_at.slice(0, 16).replace("T", " ")}>
+                      {timeAgo(r.created_at, now)}
                     </span>
-                  ) : null}
-                  <span title={r.created_at.slice(0, 16).replace("T", " ")}>
-                    {timeAgo(r.created_at, now)}
                   </span>
-                </span>
-              </li>
-            ))}
-          </ul>
+                </li>
+              ))}
+            </ul>
+          </div>
         )}
       </SettingsCard>
     </SettingsPage>

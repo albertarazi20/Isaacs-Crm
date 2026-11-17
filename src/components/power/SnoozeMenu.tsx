@@ -62,7 +62,7 @@ function useSnooze(card: Target, onDone: () => void) {
         note: `${CHANNEL_LABEL[channel]} back`,
         channel,
       }),
-      `${card.business_name} — ${CHANNEL_LABEL[channel].toLowerCase()} reminder in ${callbackLabel(hours)}`,
+      `${card.business_name}: ${CHANNEL_LABEL[channel].toLowerCase()} reminder in ${callbackLabel(hours)}`,
     );
     setBusy(false);
     onDone();
@@ -78,7 +78,7 @@ function useSnooze(card: Target, onDone: () => void) {
         note: `${CHANNEL_LABEL[channel]} back`,
         channel,
       }),
-      `${card.business_name} — ${CHANNEL_LABEL[channel].toLowerCase()} reminder set`,
+      `${card.business_name}: ${CHANNEL_LABEL[channel].toLowerCase()} reminder set`,
     );
     setBusy(false);
     onDone();
@@ -89,7 +89,7 @@ function useSnooze(card: Target, onDone: () => void) {
     const input = { clientId: card.id, dueOn, reason };
     await call(
       reason ? snoozeWithReasonAction(input) : setFollowUpAction({ clientId: card.id, dueOn }),
-      `${card.business_name} — snoozed until ${formatDate(dueOn, today)}`,
+      `${card.business_name}: snoozed until ${formatDate(dueOn, today)}`,
     );
     setBusy(false);
     setPending(null);

@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { LeadIntakePanel } from "@/components/LeadIntakePanel";
 import { SettingsPage } from "@/components/settings/SettingsNav";
 import { SheetsPanel } from "@/components/settings/SheetsPanel";
@@ -12,6 +13,8 @@ import { listSheetSources } from "@/lib/settings/queries";
 import { gmailStatus } from "@/lib/system/gmail";
 
 export const dynamic = "force-dynamic";
+
+export const metadata: Metadata = { title: "Lead sources" };
 
 export default async function SheetsSettingsPage() {
   const session = await requireSession();

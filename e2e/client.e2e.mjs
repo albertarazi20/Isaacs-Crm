@@ -500,7 +500,7 @@ export default async function clientFlow({ email }) {
     const tp = dialogOf(page).filter({ hasText: "How did the text with" });
     await tp.waitFor({ timeout: 5000 });
     check(
-      "a text offers 'They replied / Sent — no reply yet / Bad number' (no 'No answer')",
+      "a text offers 'They replied / Sent, no reply yet / Bad number' (no 'No answer')",
       (await tp.getByRole("button", { name: "They replied" }).count()) === 1 &&
         (await tp.getByRole("button", { name: "No answer" }).count()) === 0,
     );

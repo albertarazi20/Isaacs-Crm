@@ -19,7 +19,12 @@ export function AiSpendCard({ rows }: { rows: AiSpendRow[] }) {
           Nothing has run in the last 30 days.
         </p>
       ) : (
-        <div className="overflow-x-auto">
+        <div
+          tabIndex={0}
+          role="region"
+          aria-label="AI spend by purpose"
+          className="overflow-x-auto focus-visible:outline-offset-[-2px]"
+        >
           <table className={cn(SHEET.table, "min-w-[620px]")}>
             <thead className={SHEET.thead}>
               <tr>

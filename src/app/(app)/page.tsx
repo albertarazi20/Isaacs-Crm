@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { OverviewRecommendations } from "@/components/assistant/OverviewRecommendations";
 import { QueueList } from "@/components/dashboard/QueueList";
@@ -26,6 +27,7 @@ import {
 } from "@/lib/followup/overview";
 import { parseISODate } from "@/lib/mca/dates";
 import { requestTimeMs } from "@/lib/server-time";
+import { appTitle } from "@/lib/title";
 
 export const dynamic = "force-dynamic";
 
@@ -313,7 +315,12 @@ function Activity({ events, now }: { events: ActivityEvent[]; now: Date }) {
 function Team({ rows }: { rows: RepRow[] }) {
   const best = Math.max(1, ...rows.map((r) => r.broughtIn));
   return (
-    <div className="overflow-x-auto">
+    <div
+      tabIndex={0}
+      role="region"
+      aria-label="Team results"
+      className="overflow-x-auto focus-visible:outline-offset-[-2px]"
+    >
       <table className="w-full min-w-[560px] text-[13px]">
         <thead>
           <tr className="border-y border-border bg-surface-3/50 text-left">
@@ -512,7 +519,7 @@ function body(o: Overview, now: Date, manager: boolean) {
             aside={
               <Link
                 href="/follow-up"
-                className="inline-flex items-center gap-1 text-xs font-medium text-accent transition hover:text-accent-strong"
+                className="inline-flex items-center gap-1 text-xs font-medium text-accent transition hover:text-accent-strong max-sm:min-h-10"
               >
                 Open Follow Up
                 <Glyph name="arrowRight" className="size-3.5" />
@@ -615,6 +622,13 @@ function body(o: Overview, now: Date, manager: boolean) {
       ) : null}
     </>
   );
+}
+
+/** The layout's title template does not reach a page in its own segment, so the Overview writes its whole title. */
+export async function generateMetadata(): Promise<Metadata> {
+  const session = await requireSession();
+  const { due } = await loadShell(session.userId);
+  return { title: { absolute: appTitle(due, "Overview") } };
 }
 
 export default async function OverviewPage({

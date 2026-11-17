@@ -87,7 +87,7 @@ export function CallDialog({ card, onSubmit, onCancel }: DialogProps) {
     <Dialog
       open
       onClose={() => !busy && onCancel()}
-      title={`${card.business_name} — when is the call?`}
+      title={`${card.business_name}: when is the call?`}
       footer={
         <>
           <Button variant="ghost" onClick={onCancel} disabled={busy}>

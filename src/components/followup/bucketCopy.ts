@@ -1,5 +1,11 @@
-import type { BucketRow } from "@/lib/buckets/queries";
+import type { BucketMember, BucketRow } from "@/lib/buckets/queries";
 import type { SequenceStep } from "@/lib/followup/bucketBoard";
+import {
+  leftoverFields,
+  mergeValues,
+  resolveMergeFields,
+  type MergeValues,
+} from "@/lib/messaging/merge";
 
 /** The system bucket a finished file lands in ("Ready to hand off"). */
 export const READY_KEY = "ready_for_ops";
@@ -18,8 +24,23 @@ const PURPOSE: Record<string, string> = {
 export function bucketPurpose(b: Pick<BucketRow, "key" | "owner_id">): string {
   if (b.key && PURPOSE[b.key]) return PURPOSE[b.key] ?? "";
   return b.owner_id === null
-    ? "A shared track the whole shop can put merchants on."
-    : "Your own track. Only you see it.";
+    ? "A shared bucket the whole shop can put merchants on."
+    : "Your own bucket. Only you see it.";
+}
+
+/** What fills a shop bucket on its own, in plain words (the database keeps a key). */
+const RULE_LABEL: Record<string, string> = {
+  manual: "Fills by hand",
+  missing_application: "Fills when no application is signed",
+  missing_statements: "Fills when statements are missing",
+  missing_newest_statement: "Fills when the newest statement is missing",
+  missing_id: "Fills when the ID or voided check is missing",
+  ready_for_ops: "Fills when the application and documents are in",
+  cold: "Fills when a merchant goes quiet",
+};
+
+export function ruleLabel(rule: string): string {
+  return RULE_LABEL[rule] ?? `Fills by rule: ${rule.replace(/_/g, " ")}`;
 }
 
 export const isReadyBucket = (b: Pick<BucketRow, "key">): boolean => b.key === READY_KEY;
@@ -42,11 +63,34 @@ export function sequenceSummary(steps: readonly SequenceStep[]): string {
   return toCold ? `${head}, then Cold` : head;
 }
 
-/** What one step does, as a short title: the subject the merchant sees, or the task it makes. */
-export function stepTitle(s: SequenceStep): string {
+/**
+ * One merchant's merge values for a step's subject, filled the way the blast preview fills them. Links are
+ * only known at send time, so they read as placeholders.
+ */
+export function memberMergeValues(
+  m: Pick<BucketMember, "contact_name" | "business_name" | "rep_name" | "wanted_amount_cents">,
+): MergeValues {
+  return mergeValues({
+    contactName: m.contact_name,
+    businessName: m.business_name,
+    senderName: m.rep_name,
+    applicationLink: "[application link]",
+    wantedAmountCents: m.wanted_amount_cents,
+    uploadLink: "[upload link]",
+  });
+}
+
+/**
+ * What one step does, as a short title: the subject the merchant sees, or the task it makes. With a merchant's
+ * values the subject is filled in; a subject that would still show a raw {field} reads as the template's name.
+ */
+export function stepTitle(s: SequenceStep, values?: MergeValues): string {
   if (s.action === "call") return "Call task for the rep";
   if (s.action === "move_to_cold") return "Move to Cold";
-  return s.template_subject?.trim() || s.template_name || "No template picked";
+  const subject = s.template_subject?.trim() ?? "";
+  const filled = subject && values ? resolveMergeFields(subject, values).text : subject;
+  if (filled && leftoverFields(filled).length === 0) return filled;
+  return s.template_name || filled || "No template picked";
 }
 
 /** The small line under a step: which template, and whether it may send. */

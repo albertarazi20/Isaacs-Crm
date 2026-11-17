@@ -81,7 +81,7 @@ export function GlobalSearch() {
         setError(res.error);
       }
     } catch {
-      setError("Couldn't reach the server — check your connection");
+      setError("Couldn't reach the server. Check your connection");
     } finally {
       loading.current = false;
     }
@@ -143,7 +143,7 @@ function PaletteDialog({
   return (
     <dialog
       ref={ref}
-      aria-label="Find a client"
+      aria-label="Find a merchant"
       onClose={onNativeClose}
       onKeyDown={onKeyDown}
       onCancel={onCancel}
@@ -289,7 +289,7 @@ function Palette({
 
   let status = "";
   if (error) status = error;
-  else if (!rows) status = "Loading clients…";
+  else if (!rows) status = "Loading merchants…";
   else if (result?.kind === "empty") status = "Type to search";
   else status = `${merchants} result${merchants === 1 ? "" : "s"}`;
 
@@ -346,21 +346,21 @@ function Palette({
             </button>
           </p>
         ) : !rows ? (
-          <p className="p-3 text-sm text-muted">Loading clients…</p>
+          <p className="p-3 text-sm text-muted">Loading merchants…</p>
         ) : result?.kind === "empty" ? (
           <p className="px-3 pt-2 pb-3 text-[13px] text-muted">
-            Search every client by name, DBA, merchant, email or phone digits (305555 finds them).
+            Search every merchant by name, DBA, contact, email or phone digits (305555 finds them).
             Type a whole phone number to see who is calling.
           </p>
         ) : merchants === 0 ? (
           <p className="p-3 text-sm text-muted">
             {result?.kind === "number"
-              ? "No client has that number."
-              : `No client matches “${query.trim()}”.`}
+              ? "No merchant has that number."
+              : `No merchant matches “${query.trim()}”.`}
           </p>
         ) : null}
         {rows && !error && items.length > 0 ? (
-          <ul id="gs-list" role="listbox" aria-label="Clients" className="space-y-0.5">
+          <ul id="gs-list" role="listbox" aria-label="Merchants" className="space-y-0.5">
             {items.map((it, i) => {
               const selected = i === activeIdx;
               const first = it.type === "cmd" && items[i - 1]?.type !== "cmd";

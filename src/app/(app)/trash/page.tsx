@@ -1,8 +1,11 @@
+import type { Metadata } from "next";
 import { TrashList } from "@/components/TrashList";
 import { PageHeader } from "@/components/ui";
 import { requireSession } from "@/lib/auth/server";
 import { listTrashed } from "@/lib/data/queries";
 import { db } from "@/lib/db";
+
+export const metadata: Metadata = { title: "Trash" };
 
 export default async function TrashPage() {
   const session = await requireSession();

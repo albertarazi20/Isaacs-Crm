@@ -16,13 +16,13 @@ export async function handOff(q: Db, clientId: string): Promise<string> {
       clientId,
     ]);
     const at = rows[0]?.at;
-    if (!at) throw new UserError("That merchant could not be handed off — try again");
+    if (!at) throw new UserError("That merchant could not be handed off. Try again");
     return iso(at);
   } catch (e) {
     if (code(e) === "P0002")
       throw new UserError("That merchant is not on your list, so you cannot hand it off");
     if (code(e) === "22023")
-      throw new UserError("That merchant is in the trash — restore it before handing it off");
+      throw new UserError("That merchant is in the trash. Restore it before handing it off");
     throw e;
   }
 }
@@ -57,7 +57,7 @@ export async function undoHandOff(q: Db, clientId: string): Promise<UndoneHandOf
     if (code(e) === "P0002")
       throw new UserError("That merchant is not on your list, so you cannot undo its hand-off");
     if (code(e) === "22023")
-      throw new UserError("That merchant is in the trash — restore it before undoing the hand-off");
+      throw new UserError("That merchant is in the trash. Restore it before undoing the hand-off");
     throw e;
   }
 }

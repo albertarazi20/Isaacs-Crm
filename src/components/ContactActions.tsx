@@ -146,7 +146,7 @@ export function ContactActions({
 
   function call() {
     if (!e164)
-      return toast({ message: "No valid phone number on file for this client", tone: "error" });
+      return toast({ message: "No valid phone number on file for this merchant", tone: "error" });
     const quiet = quietHours(client.state ?? "");
     if (quiet) {
       toast({
@@ -689,7 +689,7 @@ export function PendingTouchPrompt() {
         body: note,
         nextDueOn: next,
       }),
-      `Logged — next follow-up ${formatDate(next, today)}`,
+      `Logged. Next follow-up ${formatDate(next, today)}`,
     );
     setBusy(false);
     if (card) close();

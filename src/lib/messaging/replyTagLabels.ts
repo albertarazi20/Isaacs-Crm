@@ -25,7 +25,7 @@ export function replyChip(
       return { label: "Sending docs", tone: "info" };
     case "not_now":
       return {
-        label: reviveOn ? `Not now — back ${formatDate(reviveOn, today)}` : "Not now",
+        label: reviveOn ? `Not now, back ${formatDate(reviveOn, today)}` : "Not now",
         tone: "warn",
       };
     case "wrong_person":

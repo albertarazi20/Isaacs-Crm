@@ -9,7 +9,7 @@ import { formatDate, relativeDay } from "@/lib/format";
 import type { ISODate } from "@/lib/mca/dates";
 import type { MemberMeta } from "@/lib/messaging/memberMeta";
 import { pausedLabel, replyChip } from "@/lib/messaging/replyTagLabels";
-import { stepTitle } from "./bucketCopy";
+import { memberMergeValues, stepTitle } from "./bucketCopy";
 
 /** Small line icons this area needs that the shell's set does not carry. */
 export function Ico({
@@ -108,7 +108,11 @@ export interface NextUp {
 export function nextUp(m: BucketMember, steps: readonly SequenceStep[], today: ISODate): NextUp {
   const s = steps.find((x) => x.step_no === m.next_step);
   const step = `Step ${m.next_step}`;
-  const title = s ? stepTitle(s) : steps.length === 0 ? "No sequence" : "Sequence finished";
+  const title = s
+    ? stepTitle(s, memberMergeValues(m))
+    : steps.length === 0
+      ? "No sequence"
+      : "Sequence finished";
   const date = m.next_due_on ? formatDate(m.next_due_on, today) : null;
   if (m.paused) return { step, title, when: "Paused", tone: "muted", date };
   if (!s || !m.next_due_on) return { step, title, when: "Nothing scheduled", tone: "muted", date };
@@ -122,6 +126,17 @@ export const NEXT_TONE: Record<NextUp["tone"], string> = {
   accent: "text-accent",
   bad: "text-bad",
   muted: "text-muted",
+};
+
+/**
+ * Names for a row's icon buttons that say whose row they act on, so a list of rows reads as distinct buttons
+ * ("Pause Mike's Pizza", not six "Pause").
+ */
+export const rowActionLabel = {
+  copyLink: (m: Pick<BucketMember, "business_name">): string =>
+    `Copy upload link for ${m.business_name}`,
+  pause: (m: Pick<BucketMember, "business_name" | "paused">): string =>
+    `${m.paused ? "Resume" : "Pause"} ${m.business_name}`,
 };
 
 /** Mints the merchant's two-hour upload link and puts it on the clipboard. */

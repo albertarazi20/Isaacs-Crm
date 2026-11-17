@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { SettingsPage } from "@/components/settings/SettingsNav";
 import { TeamPanel } from "@/components/settings/TeamPanel";
 import { requireRole } from "@/lib/auth/server";
@@ -6,6 +7,8 @@ import { db } from "@/lib/db";
 import { listTeam } from "@/lib/settings/team";
 
 export const dynamic = "force-dynamic";
+
+export const metadata: Metadata = { title: "Team" };
 
 export default async function TeamSettingsPage() {
   const session = await requireRole(CAN.manageTeam);

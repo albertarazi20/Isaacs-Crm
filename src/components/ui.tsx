@@ -567,7 +567,7 @@ export function Segmented({
           href={it.href}
           aria-current={it.active ? "page" : undefined}
           className={cn(
-            "inline-flex h-8 shrink-0 items-center gap-1.5 rounded-full px-3 text-[13px] font-medium whitespace-nowrap transition duration-150",
+            "inline-flex h-10 shrink-0 items-center gap-1.5 rounded-full px-3 text-[13px] font-medium whitespace-nowrap transition duration-150 sm:h-8",
             it.active
               ? "bg-surface text-text shadow-card"
               : "text-muted hover:bg-surface/60 hover:text-text",

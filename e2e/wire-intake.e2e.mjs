@@ -415,7 +415,7 @@ async function flow(email, mikeEmail) {
     (await line(A).getByText("Interested", { exact: true }).isVisible()) &&
       (await line(B).getByText("Sending docs", { exact: true }).isVisible()) &&
       (await line(C)
-        .getByText(`Not now — back ${fmt(revive.revive_on)}`, { exact: true })
+        .getByText(`Not now, back ${fmt(revive.revive_on)}`, { exact: true })
         .isVisible()),
     revive.revive_on,
   );

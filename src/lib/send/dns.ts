@@ -126,5 +126,5 @@ export function describeDnsCheck(c: DnsCheck): string {
     `DKIM ${c.dkim.ok ? `found (${c.dkim.selector})` : "missing"}`,
     `DMARC ${c.dmarc.ok ? "found" : "missing"}`,
   ];
-  return `${c.domain}: ${bits.join(", ")}${c.ok ? " — automation may send" : " — automation waits"}`;
+  return `${c.domain}: ${bits.join(", ")}${c.ok ? ". Automation may send" : ". Automation waits"}`;
 }

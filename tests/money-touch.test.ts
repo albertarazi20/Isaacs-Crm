@@ -72,7 +72,7 @@ describe("outcome wording", () => {
   it("a text is 'they replied' or 'sent', never 'left a message'", () => {
     expect(OUTCOMES_BY_KIND.text).toEqual(["reached", "left_message", "bad_number"]);
     expect(outcomeLabel("text", "reached")).toBe("They replied");
-    expect(outcomeLabel("text", "left_message")).toBe("Sent — no reply yet");
+    expect(outcomeLabel("text", "left_message")).toBe("Sent, no reply yet");
     expect(outcomeLabel("call", "left_message")).toBe("Left message");
     expect(OUTCOMES_BY_KIND.email).toEqual([]);
     expect(OUTCOMES_BY_KIND.call).toHaveLength(4);

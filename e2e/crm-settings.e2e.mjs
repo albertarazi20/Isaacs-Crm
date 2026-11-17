@@ -19,11 +19,11 @@ export default async function settingsFlow({ email }) {
   check(
     "the role picker offers rep and manager only",
     JSON.stringify(await roleField.locator("option").allInnerTexts()) ===
-      JSON.stringify(["rep", "manager"]),
+      JSON.stringify(["Rep", "Manager"]),
   );
   await roleField.selectOption("manager");
   await page.getByRole("button", { name: "Add", exact: true }).click();
-  await page.getByText(/Added — they sign in/).waitFor({ timeout: 8000 });
+  await page.getByText(/Added\. They sign in/).waitFor({ timeout: 8000 });
   await page.waitForTimeout(600);
   const member = await withDb((db) =>
     one(db, "select role, active from app_users where email = $1", [

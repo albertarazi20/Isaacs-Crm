@@ -764,7 +764,7 @@ export function noteHints(
     suggestions.push({
       dueOn: f.dueOn,
       label: hintLabel(f.dueOn, today),
-      reason: `You wrote ${quote(raw.slice(f.start, f.end))}${f.why ? ` — ${f.why}` : ""}`,
+      reason: `You wrote ${quote(raw.slice(f.start, f.end))}${f.why ? `: ${f.why}` : ""}`,
     });
     if (suggestions.length >= MAX_HINTS) break;
   }
@@ -777,11 +777,11 @@ export function noteHints(
     });
   } else if (suggestions.length === 0 && hasCallbackIntent(raw)) {
     const pace = paceDate(opts.stage, today);
-    const where = opts.stage ? `${stageDef(opts.stage).label} usually` : "A client usually";
+    const where = opts.stage ? `${stageDef(opts.stage).label} usually` : "A merchant usually";
     suggestions.push({
       dueOn: pace.dueOn,
       label: hintLabel(pace.dueOn, today),
-      reason: `No date I could read in the note — ${where} gets a call in ${pace.words}`,
+      reason: `No date I could read in the note, so ${where} gets a call in ${pace.words}`,
     });
   }
   return { suggestions, hot };

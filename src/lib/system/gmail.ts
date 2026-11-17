@@ -134,9 +134,9 @@ export async function googleAccessTokenFor(
   });
   if (!row) throw new Error("Google is not connected for this user");
   if (purpose === "sheets" && !row.can_read_sheets)
-    throw new Error("Google was connected without Sheets access — reconnect with Sheets");
+    throw new Error("Google was connected without Sheets access. Reconnect with Sheets");
   if (purpose === "mail" && !row.can_read_mail)
-    throw new Error("Google was connected without inbox access — reconnect with inbox reading");
+    throw new Error("Google was connected without inbox access. Reconnect with inbox reading");
   return accessTokenFor(
     { refreshTokenEnc: row.refresh_token_enc, googleEmail: row.google_email },
     {

@@ -10,11 +10,11 @@ export function applicationEmail(a: { contactName: string; businessName: string;
 } {
   const name = greetingName(a.contactName);
   return {
-    subject: `Your application — ${a.businessName}`,
+    subject: `Your application for ${a.businessName}`,
     body: [
       name ? `Hi ${name},` : "Hi,",
       "",
-      `Here is the application for ${a.businessName}. It takes a few minutes, and you can fill it in and sign it right on your phone — no account needed:`,
+      `Here is the application for ${a.businessName}. It takes a few minutes, and you can fill it in and sign it right on your phone, no account needed:`,
       "",
       a.link,
       "",

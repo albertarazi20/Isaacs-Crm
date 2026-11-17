@@ -101,7 +101,7 @@ export function callingYouLine(row: DirectoryRow, nowMs: number): string {
     row.last_call_at ? `last call ${timeAgo(row.last_call_at, new Date(nowMs))}` : "never called",
     row.wanted_amount_cents ? `wants ${formatMoneyCompact(row.wanted_amount_cents)}` : null,
   ].filter(Boolean);
-  return `Calling you: ${who ? `${who} — ` : ""}${row.business_name} · ${bits.join(" · ")}`;
+  return `Calling you: ${who ? `${who}, ` : ""}${row.business_name} · ${bits.join(" · ")}`;
 }
 
 /** The second line of an ordinary result: merchant, phone, stage. */

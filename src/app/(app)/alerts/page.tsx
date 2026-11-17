@@ -10,9 +10,7 @@ export const dynamic = "force-dynamic";
 export async function generateMetadata(): Promise<Metadata> {
   const session = await requireSession();
   const { unreadAlerts } = await loadShell(session.userId);
-  return {
-    title: unreadAlerts > 0 ? `(${unreadAlerts}) Alerts — Selective CRM` : "Alerts — Selective CRM",
-  };
+  return { title: unreadAlerts > 0 ? `Alerts (${unreadAlerts} unread)` : "Alerts" };
 }
 
 /** The person's alert feed: signed applications, paused templates, bounce spikes. */

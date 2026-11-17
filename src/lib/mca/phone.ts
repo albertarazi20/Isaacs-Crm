@@ -13,8 +13,8 @@ export function normalizeUS(raw: string): string | null {
 export function phoneProblem(raw: string): string | null {
   if (normalizeUS(raw)) return null;
   return raw.trim() === ""
-    ? "No phone number on file — add one."
-    : "Not a usable phone number — fix it.";
+    ? "No phone number on file. Add one."
+    : "Not a usable phone number. Fix it.";
 }
 
 export function formatUS(raw: string): string {

@@ -57,10 +57,10 @@ export async function restoreBackup(
     [targetUserId],
   );
   if (used.rows.some((r) => r.name === "clients"))
-    throw new RestoreError("That account already has merchants — restore into an empty account");
+    throw new RestoreError("That account already has merchants. Restore into an empty account");
   if (used.rows.length > 0)
     throw new RestoreError(
-      `That account already has ${used.rows.map((r) => r.name).join(", ")} — restore into an empty account`,
+      `That account already has ${used.rows.map((r) => r.name).join(", ")}. Restore into an empty account`,
     );
   const clash = await q.query<{ n: number }>(
     "select count(*)::int as n from clients where id = any($1::uuid[])",
@@ -68,7 +68,7 @@ export async function restoreBackup(
   );
   if ((clash.rows[0]?.n ?? 0) > 0)
     throw new RestoreError(
-      "Some of these merchants already exist in this database under another account — restore into a fresh database",
+      "Some of these merchants already exist in this database under another account. Restore into a fresh database",
     );
 
   const restored: Record<string, number> = {};

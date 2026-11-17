@@ -260,7 +260,7 @@ describe("labels and reasons", () => {
       stage: "interested",
     }).suggestions;
     expect(a?.reason).toBe(
-      "No date I could read in the note — Interested usually gets a call in 2 business days",
+      "No date I could read in the note, so Interested usually gets a call in 2 business days",
     );
     const [b] = noteHints("call back", FRI).suggestions;
     expect(b?.reason).toContain("2 business days");

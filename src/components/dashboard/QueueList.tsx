@@ -93,7 +93,7 @@ export function QueueList({ items }: { items: QueueItem[] }) {
                 aria-pressed={active}
                 onClick={() => setKind(k)}
                 className={cn(
-                  "inline-flex h-8 shrink-0 items-center gap-1.5 rounded-full border px-3 text-[12.5px] font-medium transition duration-150 active:scale-[0.97]",
+                  "inline-flex h-10 shrink-0 items-center gap-1.5 rounded-full border px-3 text-[12.5px] font-medium transition duration-150 active:scale-[0.97] sm:h-8",
                   active
                     ? "border-accent/40 bg-accent-soft text-text"
                     : "border-border bg-surface-3/60 text-muted hover:border-border-strong hover:text-text",

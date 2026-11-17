@@ -26,7 +26,7 @@ export async function createLeadTokenAction(
       );
       if ((rows[0]?.n ?? 0) >= MAX_ACTIVE_TOKENS)
         throw new UserError(
-          `You already have ${MAX_ACTIVE_TOKENS} active connections — turn one off first`,
+          `You already have ${MAX_ACTIVE_TOKENS} active connections. Turn one off first`,
         );
       await q.query(
         "insert into lead_tokens (user_id, label, token_hash) values (app.current_user_id(), $1, $2)",

@@ -295,7 +295,7 @@ export function buildRows(
         cut.add(`${currentLine}:${f}:secret`);
         problems.push({
           line: currentLine,
-          message: `"${FIELD_LABELS[f]}" looks like it holds a ${secret.kind === "card" ? "card" : secret.kind === "account" ? "bank account" : "Social Security"} number — left out`,
+          message: `"${FIELD_LABELS[f]}" looks like it holds a ${secret.kind === "card" ? "card" : secret.kind === "account" ? "bank account" : "Social Security"} number, so it was left out`,
         });
       }
       return "";
@@ -305,7 +305,7 @@ export function buildRows(
       cut.add(`${currentLine}:${f}`);
       problems.push({
         line: currentLine,
-        message: `"${FIELD_LABELS[f]}" is longer than ${max} characters — cut to fit`,
+        message: `"${FIELD_LABELS[f]}" is longer than ${max} characters, so it was cut to fit`,
       });
     }
     return text.slice(0, max);
@@ -327,7 +327,7 @@ export function buildRows(
       doNotContact += 1;
       problems.push({
         line,
-        message: `${businessName} is marked do-not-contact in your sheet — NOT imported`,
+        message: `${businessName} is marked do-not-contact in your sheet, so it was NOT imported`,
       });
       return;
     }
@@ -338,7 +338,7 @@ export function buildRows(
     if (phoneRaw && !e164 && reachable) {
       problems.push({
         line,
-        message: `"${phoneRaw}" isn't a US phone number — imported without it`,
+        message: `"${phoneRaw}" isn't a US phone number, so it was imported without it`,
       });
     }
     if (!reachable)
@@ -357,7 +357,10 @@ export function buildRows(
     }
     const amount = get(r, "wantedAmount");
     if (amount && parseMoney(amount) === null)
-      problems.push({ line, message: `"${amount}" isn't an amount — imported without it` });
+      problems.push({
+        line,
+        message: `"${amount}" isn't an amount, so it was imported without it`,
+      });
 
     const stageRaw = get(r, "stage");
     const { stage, unsupported } = parseStageWord(stageRaw);
@@ -371,12 +374,12 @@ export function buildRows(
       if (!parsed)
         problems.push({
           line,
-          message: `"${dateRaw}" isn't a date — spread it over the next ${spread} days`,
+          message: `"${dateRaw}" isn't a date, so it was spread over the next ${spread} days`,
         });
       else if (parsed > horizon) {
         problems.push({
           line,
-          message: `${dateRaw} is more than 36 months out — set to 36 months`,
+          message: `${dateRaw} is more than 36 months out, so it was set to 36 months`,
         });
         followUpOn = horizon;
       } else followUpOn = parsed < opts.today ? opts.today : parsed;

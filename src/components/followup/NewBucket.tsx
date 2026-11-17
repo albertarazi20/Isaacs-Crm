@@ -33,7 +33,7 @@ export function NewBucket({ canShare, onDone }: { canShare: boolean; onDone?: ()
     >
       <Field
         label="Name"
-        hint="A bucket is a follow-up track. Add its emails under Sequences once it exists."
+        hint="A bucket is a follow-up list. Add its emails under Sequences once it exists."
       >
         <Input
           value={name}

@@ -1,3 +1,4 @@
+import { merchantMetadata } from "@/lib/title";
 import {
   MerchantHeading,
   MerchantNotice,
@@ -9,6 +10,8 @@ import { db } from "@/lib/db";
 import { resolveUnsubscribe } from "@/lib/system/replies";
 
 export const dynamic = "force-dynamic";
+
+export const metadata = merchantMetadata("Email preferences");
 
 /** The footer link. One button, no sign-in, no other merchant's data. */
 export default async function UnsubscribePage({

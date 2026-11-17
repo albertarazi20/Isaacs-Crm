@@ -63,6 +63,7 @@ export function RecommendationCards({
               <button
                 type="button"
                 onClick={() => onPlan(r)}
+                aria-label={`Plan it: ${r.title}`}
                 disabled={!ready}
                 title={ready ? undefined : "The assistant is not available right now"}
                 className="bg-brand-soft inline-flex h-10 items-center gap-1.5 rounded-full px-3.5 text-[13px] font-semibold text-text ring-1 ring-accent/30 transition duration-150 ring-inset hover:ring-accent/60 active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-50 sm:h-8"

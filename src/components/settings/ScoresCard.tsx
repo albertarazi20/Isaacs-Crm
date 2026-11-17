@@ -19,7 +19,12 @@ type Row = {
 function Table({ rows, first }: { rows: Row[]; first: string }) {
   const hasMembers = rows.some((r) => r.members !== undefined);
   return (
-    <div className="overflow-x-auto border-t border-border">
+    <div
+      tabIndex={0}
+      role="region"
+      aria-label={`Scores by ${first.toLowerCase()}`}
+      className="overflow-x-auto border-t border-border focus-visible:outline-offset-[-2px]"
+    >
       <table className={cn(SHEET.table, "min-w-[640px]")}>
         <thead className={SHEET.thead}>
           <tr>

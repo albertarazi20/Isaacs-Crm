@@ -1,3 +1,4 @@
+import { merchantMetadata } from "@/lib/title";
 import {
   MerchantHeading,
   MerchantNotice,
@@ -11,6 +12,8 @@ import { SeenBeacon } from "@/components/upload/SeenBeacon";
 import { todayIn } from "@/lib/mca/dates";
 
 export const dynamic = "force-dynamic";
+
+export const metadata = merchantMetadata("Your documents");
 
 /**
  * The merchant's upload page. No sign-in: the token is the key. A permanent link mints a two-hour session on open;

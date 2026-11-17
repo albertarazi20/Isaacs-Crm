@@ -38,13 +38,13 @@ function toneOf(stage: StageKey): Tone {
 
 const LINES: Record<Tone, (hi: string, biz: string, me: string) => string> = {
   warm: (hi, biz, me) =>
-    `${hi}it's ${me}. Checking in on the funding you were looking at for ${biz} — still need it? Happy to get numbers back to you quickly.`,
+    `${hi}it's ${me}. Checking in on the funding you were looking at for ${biz}. Still need it? Happy to get numbers back to you quickly.`,
   app: (hi, biz, me) =>
-    `${hi}it's ${me}. Circling back on the application for ${biz} — it only takes a few minutes and I can take it from there as soon as it's in.`,
+    `${hi}it's ${me}. Circling back on the application for ${biz}. It only takes a few minutes and I can take it from there as soon as it's in.`,
   stips: (hi, biz, me) =>
-    `${hi}it's ${me}. To keep ${biz} moving I still need a few documents from you — send them over when you can and I'll push it through.`,
+    `${hi}it's ${me}. To keep ${biz} moving I still need a few documents from you. Send them over when you can and I'll push it through.`,
   revive: (hi, biz, me) =>
-    `${hi}it's ${me}. It's been a while — a lot can change. Is ${biz} looking at any funding right now? Glad to run fresh numbers.`,
+    `${hi}it's ${me}. It's been a while, and a lot can change. Is ${biz} looking at any funding right now? Glad to run fresh numbers.`,
 };
 
 /** A starting message. Isaac edits it; the point is never starting from a blank box. */
@@ -56,7 +56,7 @@ export function textTemplate(a: TemplateArgs): string {
 
 export function emailSubject(a: TemplateArgs): string {
   const subjects: Record<Tone, string> = {
-    warm: `Checking in — funding for ${a.businessName}`,
+    warm: `Checking in on funding for ${a.businessName}`,
     app: `Your application for ${a.businessName}`,
     stips: `Documents needed for ${a.businessName}`,
     revive: `Still looking for funding?`,

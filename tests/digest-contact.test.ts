@@ -66,7 +66,7 @@ describe("digest", () => {
       TODAY,
       "https://app.test",
     );
-    expect(d?.subject).toBe("1 due today, 1 overdue — follow-ups");
+    expect(d?.subject).toBe("Follow-ups: 1 due today, 1 overdue");
     expect(d?.count).toBe(2);
     expect(d?.text).toContain("https://app.test/clients/c2");
     expect(d?.text).toContain("3d overdue");
