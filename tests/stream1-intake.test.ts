@@ -305,6 +305,14 @@ describe("S1-13: bulk intake files N staged rows into one bucket, one transactio
       [bakery],
     );
     expect(welcome).toEqual({ lane: "intake", status: "queued" });
+    // the welcome email's upload link is the merchant's upload link (it once carried the unsubscribe token: a dead link)
+    const link = await one<{ text_body: string; upload_token: string; unsubscribe_token: string }>(
+      `select o.text_body, c.upload_token, c.unsubscribe_token
+         from outbox o join clients c on c.id = o.client_id where o.client_id = $1`,
+      [bakery],
+    );
+    expect(link!.text_body).toContain(`/upload/${link!.upload_token}`);
+    expect(link!.text_body).not.toContain(link!.unsubscribe_token);
     // the same rows again: nothing is made twice
     const again = await fileManyRows({
       db: t.db,

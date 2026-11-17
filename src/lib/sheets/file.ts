@@ -315,7 +315,7 @@ export async function sendWelcome(
     signature: string;
     token: string;
   }>(
-    `select t.id as template_id, t.subject, t.body, c.contact_name, c.business_name, u.name as sender_name, u.application_link, c.application_token, u.signature, c.unsubscribe_token as token
+    `select t.id as template_id, t.subject, t.body, c.contact_name, c.business_name, u.name as sender_name, u.application_link, c.application_token, u.signature, c.upload_token as token
        from bucket_steps s join templates t on t.id = s.template_id
        join clients c on c.id = $1 join app_users u on u.id = c.user_id
       where s.bucket_id = $2 and s.action = 'email' and app.template_may_auto_send(t.id)
