@@ -1,34 +1,64 @@
+import type { ReactNode } from "react";
+import { PageHeader, Segmented } from "@/components/ui";
 import type { Role } from "@/lib/auth/roles";
-import { ChipLink, ChipRow } from "./primitives";
+import { SETTINGS_VIEWS } from "@/lib/nav";
 
-const ITEMS: { href: string; label: string; manager?: boolean }[] = [
-  { href: "/settings", label: "Me" },
-  { href: "/settings/buckets", label: "Buckets & templates" },
-  { href: "/settings/sheets", label: "Google Sheets" },
-  { href: "/settings/team", label: "Team", manager: true },
-  { href: "/settings/email", label: "Email", manager: true },
-  { href: "/settings/ai", label: "AI", manager: true },
-];
-
-/** The pill nav over every settings page. One row that scrolls on a phone, wraps on a desktop. */
-export function SettingsNav({ role, current }: { role: Role; current: string }) {
+/**
+ * The six settings pages as one compact control. The sidebar already lists them on a wide screen, so this is only
+ * drawn below that width, where the sidebar is behind the menu button and a thumb wants the pages one tap away.
+ */
+export function SettingsNav({
+  role,
+  current,
+  className,
+}: {
+  role: Role;
+  current: string;
+  className?: string;
+}) {
   return (
-    <ChipRow aria-label="Settings">
-      {ITEMS.filter((i) => !i.manager || role === "manager").map((i) => (
-        <ChipLink key={i.href} href={i.href} active={i.href === current}>
-          {i.label}
-        </ChipLink>
-      ))}
-    </ChipRow>
+    <Segmented
+      label="Settings pages"
+      className={className}
+      items={SETTINGS_VIEWS.filter((i) => !i.manager || role === "manager").map((i) => ({
+        href: i.href,
+        label: i.label,
+        active: i.href === current,
+      }))}
+    />
   );
 }
 
-/** The title and the pill nav every settings page starts with. */
-export function SettingsHeader({ role, current }: { role: Role; current: string }) {
+/**
+ * The frame every settings page shares: the page header, the phone-only page switcher, then the topics in one
+ * column, each a `SettingsCard` (title and one line on the left, its panel on the right).
+ */
+export function SettingsPage({
+  role,
+  current,
+  title,
+  description,
+  actions,
+  notice,
+  children,
+}: {
+  role: Role;
+  current: string;
+  title: ReactNode;
+  description?: ReactNode;
+  actions?: ReactNode;
+  /** A status line shown under the header (a connect result, a missing key). */
+  notice?: ReactNode;
+  children: ReactNode;
+}) {
   return (
-    <div className="space-y-3">
-      <h1 className="text-xl font-semibold tracking-tight sm:text-2xl">Settings</h1>
-      <SettingsNav role={role} current={current} />
+    <div className="mx-auto max-w-[1120px]">
+      <PageHeader eyebrow="Settings" title={title} description={description} actions={actions} />
+      <div className="mt-4 flex lg:hidden">
+        <SettingsNav role={role} current={current} />
+      </div>
+      {notice ? <div className="mt-5">{notice}</div> : null}
+      <div className="mt-6">{children}</div>
     </div>
   );
 }

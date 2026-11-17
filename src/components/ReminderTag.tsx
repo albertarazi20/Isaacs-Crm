@@ -1,13 +1,13 @@
-import { Icon } from "./client/icons";
+import { Glyph } from "./shell/icons";
 
 /** The small "reminder" marker on a merchant row: what the rep set, in their words. Shared by the lists and the follow-up panel. */
 export function ReminderTag({ text }: { text: string }) {
   return (
     <span
-      className="inline-flex items-center gap-1 rounded-md bg-warn-soft px-1.5 py-0.5 text-[11px] font-semibold whitespace-nowrap text-warn"
+      className="inline-flex items-center gap-1 rounded-full bg-warn-soft px-2 py-0.5 text-[11px] font-semibold whitespace-nowrap text-warn ring-1 ring-warn/20 ring-inset"
       title="Reminder"
     >
-      <Icon name="bell" className="size-3" />
+      <Glyph name="bell" className="size-3" strokeWidth={2} />
       <span className="sr-only">Reminder: </span>
       {text}
     </span>

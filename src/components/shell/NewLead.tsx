@@ -31,6 +31,8 @@ export const useNewLead = () => useContext(NewLeadContext);
 function busyElsewhere(target: EventTarget | null): boolean {
   const el = target as HTMLElement | null;
   if (el?.closest("input, textarea, select, [contenteditable=true]")) return true;
+  // power dial owns the keyboard (N is "next" there) and makes the shell inert while it runs
+  if (document.querySelector("[data-app-header][inert]")) return true;
   return Boolean(document.querySelector("dialog[open]"));
 }
 

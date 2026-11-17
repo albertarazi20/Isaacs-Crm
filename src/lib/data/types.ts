@@ -64,11 +64,32 @@ export interface TimerRow {
   note: string;
 }
 
+/**
+ * Where a merchant stands on the way in (the merchant page's header and "Bringing them in" strip): who owns it, the
+ * bucket it sits in, whether it wrote back, and the hand-off (clients.brought_in_at / brought_in_by, migration 0540).
+ */
+export interface ClientBringIn {
+  /** When the rep handed the merchant off; null while it is still being brought in. */
+  brought_in_at: string | null;
+  brought_in_by: string | null;
+  /** The name of whoever pressed Hand off ("" when unknown). */
+  brought_in_by_name: string;
+  /** The rep whose merchant this is ("" when the name is not set). */
+  owner_name: string;
+  /** The bucket it is enrolled in right now, or null when it is in none. */
+  bucket_name: string | null;
+  /** The merchant's latest reply, or null when they never wrote back. */
+  replied_at: string | null;
+  /** Set while a reply is still waiting on an answer. */
+  reply_waiting_since: string | null;
+}
+
 export interface ClientDetail {
   card: ClientCard;
   activities: ActivityRow[];
   stips: StipRow[];
   timers: TimerRow[];
+  bringIn: ClientBringIn;
 }
 
 export interface UserContext {

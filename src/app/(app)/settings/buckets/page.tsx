@@ -1,9 +1,9 @@
 import { ScoresCard } from "@/components/settings/ScoresCard";
 import { SequenceEditor } from "@/components/settings/SequenceEditor";
 import { SettingsCard } from "@/components/settings/primitives";
-import { SettingsHeader } from "@/components/settings/SettingsNav";
+import { SettingsPage } from "@/components/settings/SettingsNav";
 import { TemplateEditor } from "@/components/settings/TemplateEditor";
-import { Badge, cn } from "@/components/ui";
+import { Badge, buttonClass } from "@/components/ui";
 import { requireSession } from "@/lib/auth/server";
 import { CAN } from "@/lib/auth/roles";
 import {
@@ -43,43 +43,66 @@ export default async function BucketsSettingsPage({
   const focus = b && UUID.test(b) ? b : null;
 
   return (
-    <div className="mx-auto max-w-3xl space-y-5">
-      <SettingsHeader role={session.role} current="/settings/buckets" />
-      <p className="text-sm text-muted">
-        A bucket&apos;s sequence sends its templates on the days you set, stops the moment the
-        merchant replies, uploads or signs, and the stips rules move people between the shop buckets
-        by themselves. Your own buckets are yours to edit; a manager edits the shop&apos;s.
-      </p>
-      <div className="space-y-4">
-        {buckets.map((x) => (
+    <SettingsPage
+      role={session.role}
+      current="/settings/buckets"
+      title="Buckets & templates"
+      description="A bucket's sequence sends its templates on the days you set and stops the moment the merchant replies, uploads or signs. The stips rules move people between the shop buckets by themselves."
+      actions={
+        <>
+          <a href="#templates" className={buttonClass("secondary", "sm")}>
+            Templates
+          </a>
+          <a href="#scores" className={buttonClass("secondary", "sm")}>
+            Scores
+          </a>
+        </>
+      }
+    >
+      {buckets.map((x) => {
+        const mine = x.owner_id === session.userId;
+        const own = steps.get(x.id) ?? [];
+        const last = own.length ? Math.max(...own.map((s) => s.day_offset)) : 0;
+        return (
           <SettingsCard
             key={x.id}
             id={x.id}
             title={x.name}
-            className={cn(focus === x.id && "ring-2 ring-accent/50")}
+            panelClassName={focus === x.id ? "ring-2 ring-accent/50" : undefined}
+            description={
+              <>
+                <span className="tabular-nums">{x.members}</span> in it ·{" "}
+                {own.length === 0
+                  ? "no steps"
+                  : `${own.length} step${own.length === 1 ? "" : "s"} over ${last} day${last === 1 ? "" : "s"}`}
+                {x.owner_id
+                  ? mine
+                    ? ". Yours to edit."
+                    : ". A rep's own bucket."
+                  : ". A manager edits the shop's."}
+              </>
+            }
             aside={
-              <span className="flex flex-wrap items-center justify-end gap-1.5">
+              <>
                 <Badge tone={x.owner_id ? "accent" : "neutral"}>
-                  {x.owner_id
-                    ? "mine"
-                    : x.key
-                      ? `shop · rule: ${x.rule?.replace(/_/g, " ")}`
-                      : "shop"}
+                  {x.owner_id ? "mine" : "shop"}
                 </Badge>
-                <span className="tabular-nums">· {x.members} in it</span>
+                {!x.owner_id && x.key && x.rule ? (
+                  <Badge tone="info">rule: {x.rule.replace(/_/g, " ")}</Badge>
+                ) : null}
                 {!x.active ? <Badge tone="warn">off</Badge> : null}
-              </span>
+              </>
             }
           >
             <SequenceEditor
               bucket={x}
-              steps={steps.get(x.id) ?? []}
+              steps={own}
               templates={templates}
-              canEdit={manager || x.owner_id === session.userId}
+              canEdit={manager || mine}
             />
           </SettingsCard>
-        ))}
-      </div>
+        );
+      })}
       <TemplateEditor templates={templates} manager={manager} scores={scores.templates} />
       <ScoresCard
         buckets={scores.buckets}
@@ -87,6 +110,6 @@ export default async function BucketsSettingsPage({
         days={SCORE_DAYS}
         manager={manager}
       />
-    </div>
+    </SettingsPage>
   );
 }

@@ -1,52 +1,63 @@
 import Link from "next/link";
 import { ClientsTable } from "@/components/ClientsTable";
 import { OverflowMenu } from "@/components/OverflowMenu";
-import { buttonClass } from "@/components/ui";
+import { Glyph } from "@/components/shell/icons";
+import { NewLeadButton } from "@/components/shell/NewLead";
+import { PageHeader } from "@/components/ui";
 import { requireSession } from "@/lib/auth/server";
-import { listCards } from "@/lib/data/queries";
+import { listCardMeta } from "@/lib/data/cardMeta";
+import { listCards, userContext } from "@/lib/data/queries";
 import { db } from "@/lib/db";
-
-const TOOLS = [
-  { href: "/api/export/clients", label: "Download clients (CSV)" },
-  { href: "/api/export/activity", label: "Download notes (CSV)" },
-  { href: "/import", label: "Import from spreadsheet" },
-  { href: "/lead-intake", label: "Lead intake" },
-  { href: "/trash", label: "Trash" },
-];
-
-/** Downloads are plain links (the browser saves the file); pages go through the router. */
-function ToolLink({ tool, className }: { tool: (typeof TOOLS)[number]; className?: string }) {
-  return tool.href.startsWith("/api/") ? (
-    <a href={tool.href} className={className}>
-      {tool.label}
-    </a>
-  ) : (
-    <Link href={tool.href} className={className}>
-      {tool.label}
-    </Link>
-  );
-}
 
 export default async function ClientsPage() {
   const session = await requireSession();
-  const cards = await db.withUser(session.userId, (q) => listCards(q));
+  const { cards, meta, today } = await db.withUser(session.userId, async (q) => {
+    // One at a time: a pooled connection runs a single query at once.
+    const cards = await listCards(q);
+    const meta = await listCardMeta(q);
+    const ctx = await userContext(q);
+    return { cards, meta, today: ctx.today };
+  });
+  const overdue = cards.filter((c) => c.next_due_on !== null && c.next_due_on < today).length;
+  const brought = cards.filter((c) => meta[c.id]?.brought_in_at).length;
+
   return (
     <div className="space-y-5">
-      <div className="flex items-end justify-between gap-3">
-        <h1 className="text-xl font-semibold tracking-tight sm:text-2xl">Merchants</h1>
-        {/* Wide screens: every action is a button. A phone folds them into one "…" menu so the list starts near the top. */}
-        <div className="hidden flex-wrap justify-end gap-2 sm:flex">
-          {TOOLS.map((t) => (
-            <ToolLink key={t.href} tool={t} className={buttonClass("secondary", "sm")} />
-          ))}
-        </div>
-        <OverflowMenu label="More actions">
-          {TOOLS.map((t) => (
-            <ToolLink key={t.href} tool={t} />
-          ))}
-        </OverflowMenu>
-      </div>
-      <ClientsTable cards={cards} />
+      <PageHeader
+        eyebrow="Merchants"
+        title={
+          <>
+            All merchants{" "}
+            <span className="text-muted tabular-nums">{cards.length.toLocaleString("en-US")}</span>
+          </>
+        }
+        description={
+          cards.length === 0
+            ? "Your book is empty. Add a lead and it shows up here with its first follow-up."
+            : `Your whole book in one place. ${overdue} ${overdue === 1 ? "is" : "are"} past their follow-up date and ${brought} ${brought === 1 ? "has" : "have"} been brought in.`
+        }
+        actions={
+          <>
+            {/* Downloads are plain links (the browser saves the file); pages go through the router. */}
+            <OverflowMenu label="Export and tools" text="Export">
+              <a href="/api/export/clients">
+                <Glyph name="sheet" className="size-4 text-muted" />
+                Download merchants (CSV)
+              </a>
+              <a href="/api/export/activity">
+                <Glyph name="file" className="size-4 text-muted" />
+                Download notes (CSV)
+              </a>
+              <Link href="/import">
+                <Glyph name="upload" className="size-4 text-muted" />
+                Import a file
+              </Link>
+            </OverflowMenu>
+            <NewLeadButton />
+          </>
+        }
+      />
+      <ClientsTable cards={cards} meta={meta} />
     </div>
   );
 }

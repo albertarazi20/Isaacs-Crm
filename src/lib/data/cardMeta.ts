@@ -1,0 +1,32 @@
+import type { Db } from "../db";
+
+/** What the Merchants list shows beside a card that the card itself does not carry. Read only. */
+export interface CardMeta {
+  /** The bucket the merchant sits in right now, or null when it is in none. */
+  bucket_id: string | null;
+  bucket_name: string | null;
+  owner_id: string;
+  /** The rep whose merchant it is. */
+  owner_name: string;
+  /** When the rep handed the merchant off ("brought in"), or null while it is still being worked. */
+  brought_in_at: string | null;
+}
+
+/** Bucket, owner and hand-off for every merchant the caller can see, by client id. Trash is left out. */
+export async function listCardMeta(q: Db): Promise<Record<string, CardMeta>> {
+  const { rows } = await q.query<CardMeta & { id: string }>(
+    `select c.id, c.brought_in_at, c.user_id as owner_id,
+            coalesce((select u.name from app_users u where u.id = c.user_id), '') as owner_name,
+            e.bucket_id, e.bucket_name
+       from clients c
+       left join lateral (
+         select b.id as bucket_id, b.name as bucket_name
+           from enrollments en join buckets b on b.id = en.bucket_id
+          where en.client_id = c.id and en.stopped_at is null
+          order by en.entered_at desc limit 1) e on true
+      where not exists (select 1 from trashed_clients t where t.client_id = c.id)`,
+  );
+  const out: Record<string, CardMeta> = {};
+  for (const { id, ...meta } of rows) out[id] = meta;
+  return out;
+}

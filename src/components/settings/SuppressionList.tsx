@@ -21,26 +21,31 @@ export function SuppressionList({ rows }: { rows: SuppressionRow[] }) {
       description="Unsubscribes, hard bounces, complaints and STOP replies. The engine checks it right before every send. Remove one only when the person asked."
       aside={
         <Badge tone="neutral" className="tabular-nums">
-          {rows.length}
+          {rows.length} {rows.length === 1 ? "address" : "addresses"}
         </Badge>
       }
       flush
     >
       {rows.length === 0 ? (
-        <p className="border-t border-border px-4 py-3 text-sm text-muted">Empty.</p>
+        <p className="px-4 py-4 text-[13px] text-muted sm:px-5">
+          Nobody is on the list. Unsubscribes and bounces land here on their own.
+        </p>
       ) : (
-        <ul className="divide-y divide-border border-t border-border text-[13px]">
+        <ul className="max-h-[26rem] divide-y divide-border overflow-y-auto text-[13px]">
           {rows.map((s) => (
             <li
               key={s.id}
-              className="flex items-center justify-between gap-3 px-4 py-2 transition hover:bg-surface-3"
+              className="flex min-h-12 items-center justify-between gap-3 px-4 py-2 transition-colors duration-150 hover:bg-surface-2/50 sm:px-5"
             >
-              <span className="min-w-0 truncate">
-                <span className="font-medium">{s.display ?? "(address purged)"}</span>
-                <span className="text-muted">
-                  {" "}
-                  · {s.reason.replace(/_/g, " ")}
-                  {s.business_name ? ` · ${s.business_name}` : ""} ·{" "}
+              <span className="min-w-0">
+                <span className="flex min-w-0 items-center gap-2">
+                  <span className="truncate font-medium">{s.display ?? "(address purged)"}</span>
+                  <Badge tone={s.reason.includes("complaint") ? "bad" : "neutral"}>
+                    {s.reason.replace(/_/g, " ")}
+                  </Badge>
+                </span>
+                <span className="block truncate text-xs text-muted">
+                  {s.business_name ? `${s.business_name} · ` : ""}
                   {timeAgo(s.created_at, new Date(nowMs))}
                 </span>
               </span>

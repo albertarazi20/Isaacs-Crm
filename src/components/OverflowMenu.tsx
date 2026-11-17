@@ -1,13 +1,25 @@
 "use client";
 
 import { useEffect, useId, useRef, useState, type ReactNode } from "react";
+import { Glyph } from "./shell/icons";
+import { cn } from "./ui";
 
 /**
- * The "…" button for a phone: the page's secondary actions (downloads, imports, reports) fold into one
- * menu instead of a stack of buttons ahead of the list (I-14). The items are plain links passed in as
- * children; tapping one, tapping outside, or Escape closes it. Phones only: hidden from 640px up.
+ * A page's secondary actions (downloads, imports) folded into one menu so the header keeps a single primary
+ * button. The items are plain links passed in as children; tapping one, tapping outside, or Escape closes it.
+ * With `text` the trigger is a labelled pill; without it, a round "more" button.
  */
-export function OverflowMenu({ label, children }: { label: string; children: ReactNode }) {
+export function OverflowMenu({
+  label,
+  text,
+  children,
+  className,
+}: {
+  label: string;
+  text?: string;
+  children: ReactNode;
+  className?: string;
+}) {
   const [open, setOpen] = useState(false);
   const box = useRef<HTMLDivElement>(null);
   const button = useRef<HTMLButtonElement>(null);
@@ -32,7 +44,7 @@ export function OverflowMenu({ label, children }: { label: string; children: Rea
   }, [open]);
 
   return (
-    <div ref={box} className="relative sm:hidden">
+    <div ref={box} className={cn("relative", className)}>
       <button
         ref={button}
         type="button"
@@ -40,15 +52,28 @@ export function OverflowMenu({ label, children }: { label: string; children: Rea
         aria-expanded={open}
         aria-controls={panelId}
         onClick={() => setOpen((v) => !v)}
-        className="inline-flex size-10 items-center justify-center rounded-lg bg-surface-2 text-lg leading-none font-bold text-text hover:bg-border"
+        className={cn(
+          "inline-flex h-10 items-center justify-center gap-1.5 rounded-full border border-border bg-surface text-sm font-medium text-text shadow-card transition duration-150 hover:border-border-strong hover:bg-surface-3 active:scale-[0.97] sm:h-9",
+          text ? "px-4" : "w-10 sm:w-9",
+        )}
       >
-        <span aria-hidden>···</span>
+        {text ? (
+          <>
+            {text}
+            <Glyph
+              name="chevronDown"
+              className={cn("size-3.5 text-muted transition duration-150", open && "rotate-180")}
+            />
+          </>
+        ) : (
+          <Glyph name="more" className="size-[18px]" />
+        )}
       </button>
       {open ? (
         <div
           id={panelId}
           onClick={() => setOpen(false)}
-          className="absolute top-full right-0 z-30 mt-1 w-64 overflow-hidden rounded-xl border border-border bg-surface py-1 shadow-xl [&_a]:flex [&_a]:min-h-11 [&_a]:items-center [&_a]:px-4 [&_a]:text-sm [&_a]:font-medium [&_a:hover]:bg-surface-2"
+          className="glass-strong absolute top-full right-0 z-40 mt-1.5 w-64 animate-pop overflow-hidden rounded-2xl border border-border p-1 shadow-pop [&_a]:flex [&_a]:min-h-10 [&_a]:items-center [&_a]:gap-2.5 [&_a]:rounded-xl [&_a]:px-3 [&_a]:text-[13px] [&_a]:font-medium [&_a]:text-text-2 [&_a]:transition [&_a:hover]:bg-surface-2 [&_a:hover]:text-text"
         >
           {children}
         </div>

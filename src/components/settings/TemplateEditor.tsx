@@ -1,19 +1,37 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { Fragment, useId, useState } from "react";
 import {
   approveTemplateAction,
   archiveTemplateAction,
   saveTemplateAction,
 } from "@/app/buckets-actions";
-import { FormDialog, useFormState, useRun } from "@/components/client/parts";
+import { useFormState, useRun } from "@/components/client/parts";
+import { Drawer } from "@/components/overlay";
 import { Badge, Button, EmptyState, Field, Input, Textarea, cn } from "@/components/ui";
 import type { TemplateRow, TemplateScore } from "@/lib/buckets/queries";
 import { checkClaims } from "@/lib/messaging/claims";
 import { MERGE_FIELD_HELP, MERGE_FIELDS } from "@/lib/messaging/merge";
-import { SettingsCard } from "./primitives";
+import { ICON, Icon, SettingsCard } from "./primitives";
 import { Toggle } from "./Toggle";
+
+/** Merge fields drawn as ink chips, so a preview shows at a glance what the engine fills in. */
+function Preview({ text }: { text: string }) {
+  return (
+    <>
+      {text.split(/(\{[a-z_]+\})/g).map((part, i) =>
+        /^\{[a-z_]+\}$/.test(part) ? (
+          <span key={i} className="rounded-md bg-accent-soft px-1 py-px font-medium text-accent">
+            {part}
+          </span>
+        ) : (
+          <Fragment key={i}>{part}</Fragment>
+        ),
+      )}
+    </>
+  );
+}
 
 function Editor({
   t,
@@ -26,6 +44,7 @@ function Editor({
 }) {
   const run = useRun();
   const router = useRouter();
+  const formId = useId();
   const [busy, setBusy] = useState(false);
   const { v, bind, set } = useFormState(() => ({
     name: t?.name ?? "",
@@ -34,76 +53,118 @@ function Editor({
     shared: t ? t.owner_id === null : canShare,
   }));
   return (
-    <FormDialog
-      title={t ? `Edit “${t.name}”` : "New template"}
+    <Drawer
+      open
       onClose={onClose}
-      busy={busy}
-      wide
-      submitLabel={t ? "Save" : "Create"}
-      onSubmit={async () => {
-        setBusy(true);
-        const ok = await run(
-          saveTemplateAction({
-            id: t?.id,
-            name: v.name,
-            subject: v.subject,
-            body: v.body,
-            shared: v.shared,
-          }),
-          t ? "Saved" : "Template made",
-        );
-        setBusy(false);
-        if (ok) {
-          onClose();
-          router.refresh();
-        }
-      }}
+      eyebrow="Template"
+      title={t ? `Edit “${t.name}”` : "New template"}
+      subtitle="What a bucket's sequence sends. A rep's template waits for a manager's approval before it goes out on its own."
+      footer={
+        <>
+          <Button variant="ghost" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button type="submit" form={formId} variant="primary" disabled={busy}>
+            {busy ? "Saving…" : t ? "Save" : "Create"}
+          </Button>
+        </>
+      }
     >
-      <div className="grid gap-3 sm:grid-cols-2">
+      <form
+        id={formId}
+        className="space-y-4"
+        onSubmit={async (e) => {
+          e.preventDefault();
+          setBusy(true);
+          const ok = await run(
+            saveTemplateAction({
+              id: t?.id,
+              name: v.name,
+              subject: v.subject,
+              body: v.body,
+              shared: v.shared,
+            }),
+            t ? "Saved" : "Template made",
+          );
+          setBusy(false);
+          if (ok) {
+            onClose();
+            router.refresh();
+          }
+        }}
+      >
         <Field label="Name">
           <Input {...bind("name")} placeholder="Interested — follow up" required />
         </Field>
         <Field label="Subject">
           <Input {...bind("subject")} placeholder="{first_name}, your statements for {business}" />
         </Field>
-      </div>
-      <Field label="Body">
-        <Textarea
-          {...bind("body")}
-          rows={9}
-          placeholder={
-            "Hi {first_name},\n\nWe just need your last three statements to get {business} approved. Upload them here: {upload_link}\n\n{sender}"
-          }
-          required
-        />
-      </Field>
-      <p className="text-xs text-muted">
-        Merge fields:{" "}
-        <span className="font-mono text-[11px] text-text-2">
-          {MERGE_FIELDS.map((f) => `{${f}}`).join(" ")}
-        </span>
-        . A field with nothing to fill is never sent as a blank — the email is skipped instead.
-      </p>
-      <details className="text-xs text-muted">
-        <summary className="cursor-pointer font-medium transition hover:text-text">
-          What each field means
-        </summary>
-        <ul className="mt-1.5 space-y-1 rounded-lg border border-border bg-surface-3 p-3">
-          {MERGE_FIELDS.map((f) => (
-            <li key={f}>
-              <span className="font-mono text-text-2">{`{${f}}`}</span> — {MERGE_FIELD_HELP[f]}
-            </li>
-          ))}
-        </ul>
-      </details>
-      {canShare && !t ? (
-        <Toggle
-          label="Shared with the whole shop"
-          checked={v.shared}
-          onChange={(x) => set("shared", x)}
-        />
-      ) : null}
-    </FormDialog>
+        <Field label="Body">
+          <Textarea
+            {...bind("body")}
+            rows={10}
+            placeholder={
+              "Hi {first_name},\n\nWe just need your last three statements to get {business} approved. Upload them here: {upload_link}\n\n{sender}"
+            }
+            required
+          />
+        </Field>
+        <div>
+          <p className="eyebrow mb-2">Merge fields · tap to add to the body</p>
+          <div className="flex flex-wrap gap-1.5">
+            {MERGE_FIELDS.map((f) => (
+              <button
+                key={f}
+                type="button"
+                title={MERGE_FIELD_HELP[f]}
+                onClick={() => set("body", `${v.body}{${f}}`)}
+                className="inline-flex h-8 items-center rounded-full border border-border bg-surface-3 px-2.5 font-mono text-[11.5px] text-text-2 transition duration-150 hover:border-accent/40 hover:bg-accent-soft hover:text-accent active:scale-[0.97]"
+              >
+                {`{${f}}`}
+              </button>
+            ))}
+          </div>
+          <p className="mt-2 text-xs text-muted">
+            A field with nothing to fill is never sent as a blank. The email is skipped instead.
+          </p>
+        </div>
+        <details className="text-xs text-muted">
+          <summary className="cursor-pointer font-medium transition hover:text-text">
+            What each field means
+          </summary>
+          <ul className="mt-2 space-y-1.5 rounded-xl border border-border bg-surface-3 p-3">
+            {MERGE_FIELDS.map((f) => (
+              <li key={f}>
+                <span className="font-mono text-text-2">{`{${f}}`}</span>: {MERGE_FIELD_HELP[f]}
+              </li>
+            ))}
+          </ul>
+        </details>
+        {canShare && !t ? (
+          <div className="rounded-xl border border-border bg-surface-3/60 px-3.5 py-1">
+            <Toggle
+              label="Shared with the whole shop"
+              hint="Off keeps it in your own list."
+              checked={v.shared}
+              onChange={(x) => set("shared", x)}
+            />
+          </div>
+        ) : null}
+        {v.subject || v.body ? (
+          <div>
+            <p className="eyebrow mb-2">Preview</p>
+            <div className="rounded-2xl border border-border bg-surface p-4">
+              <p className="text-sm font-semibold">
+                {v.subject ? <Preview text={v.subject} /> : "(no subject)"}
+              </p>
+              <p className="mt-2 text-[13px] leading-relaxed whitespace-pre-wrap text-text-2">
+                <Preview text={v.body} />
+              </p>
+            </div>
+          </div>
+        ) : null}
+      </form>
+    </Drawer>
   );
 }
 
@@ -141,56 +202,92 @@ export function TemplateEditor({
     }
   }
   const shown = templates;
+  const live = shown.filter((t) => !t.archived);
+  const waiting = live.filter((t) => !t.approved).length;
   return (
     <SettingsCard
+      id="templates"
       title="Templates"
+      description="The emails a sequence sends. Open one to edit it in a side sheet; a manager approves what the engine may send on its own."
       flush
       aside={
-        <Button size="sm" variant="primary" onClick={() => setEditing("new")}>
-          + Template
-        </Button>
+        <>
+          <Button size="sm" variant="primary" onClick={() => setEditing("new")}>
+            + Template
+          </Button>
+          <span className="tabular-nums">
+            {live.length} live{waiting ? ` · ${waiting} waiting` : ""}
+          </span>
+        </>
       }
     >
       {shown.length === 0 ? (
-        <div className="px-4 pb-4">
-          <EmptyState title="No templates yet">
+        <div className="p-4">
+          <EmptyState
+            title="No templates yet"
+            action={
+              <Button size="sm" onClick={() => setEditing("new")}>
+                Write the first one
+              </Button>
+            }
+          >
             Write one; a rep&apos;s template waits for a manager&apos;s approval before the engine
             sends it on its own.
           </EmptyState>
         </div>
       ) : (
-        <ul className="divide-y divide-border border-t border-border">
+        <ul className="divide-y divide-border">
           {shown.map((t) => (
             <li
               key={t.id}
               data-template={t.id}
               className={cn(
-                "flex flex-wrap items-start justify-between gap-x-4 gap-y-2 px-4 py-3",
+                "flex flex-wrap items-start justify-between gap-x-4 gap-y-2.5 px-4 py-3.5 transition-colors duration-150 hover:bg-surface-2/50 sm:px-5",
                 t.archived && "opacity-60",
               )}
             >
+              <span
+                aria-hidden
+                className={cn(
+                  "mt-0.5 hidden size-9 shrink-0 items-center justify-center rounded-full border border-border bg-surface-3 sm:flex",
+                  t.approved ? "text-accent" : "text-warn",
+                )}
+              >
+                <Icon d={ICON.mail} className="size-4" />
+              </span>
               <div className="min-w-0 flex-1 basis-56">
                 <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm font-semibold">
                   <span className="truncate">{t.name}</span>
                   <Badge tone={t.approved ? "good" : "warn"}>
                     {t.approved ? "approved" : "needs approval"}
                   </Badge>
-                  {t.owner_id ? <span className="text-xs font-normal text-muted">mine</span> : null}
-                  {t.archived ? (
-                    <span className="text-xs font-normal text-muted">archived</span>
-                  ) : null}
+                  {t.owner_id ? <Badge tone="accent">mine</Badge> : null}
+                  {t.archived ? <Badge>archived</Badge> : null}
                   {pausedBy.has(t.id) ? (
                     <Badge tone="warn">paused automatically — bounce spike</Badge>
                   ) : null}
                 </p>
+                <p className="mt-0.5 truncate text-[13px] text-text-2">
+                  {t.subject || "(no subject)"}
+                </p>
                 <p className="truncate text-xs text-muted">
-                  {t.subject || "(no subject)"} · {t.body.slice(0, 90).replace(/\s+/g, " ")}…
+                  {t.body.slice(0, 110).replace(/\s+/g, " ")}…
                 </p>
                 {t.used_in.length ? (
-                  <p className="truncate text-xs text-muted">Used in: {t.used_in.join(", ")}</p>
+                  <p className="mt-1.5 flex flex-wrap items-center gap-1 text-xs text-muted">
+                    Used in
+                    {t.used_in.map((b) => (
+                      <span
+                        key={b}
+                        className="rounded-full bg-surface-2 px-2 py-0.5 text-[11px] font-medium text-text-2"
+                      >
+                        {b}
+                      </span>
+                    ))}
+                  </p>
                 ) : null}
                 {pausedBy.has(t.id) ? (
-                  <p className="mt-1 text-xs text-warn" data-paused={t.id}>
+                  <p className="mt-1.5 text-xs text-warn" data-paused={t.id}>
                     {pausedBy.get(t.id)?.auto_pause_reason || "Too many emails bounced"}. It sends
                     nothing until a manager approves it again.
                   </p>
@@ -199,7 +296,7 @@ export function TemplateEditor({
                   <div
                     role="alert"
                     data-claim-reasons={t.id}
-                    className="mt-2 rounded-lg border border-bad/30 bg-bad-soft px-3 py-2 text-sm text-bad"
+                    className="mt-2 rounded-xl border border-bad/30 bg-bad-soft px-3.5 py-2.5 text-sm text-bad"
                   >
                     <p className="font-medium">Not approved. The claim checker found:</p>
                     <ul className="mt-1 list-disc space-y-0.5 pl-5 text-[13px]">
@@ -211,7 +308,7 @@ export function TemplateEditor({
                   </div>
                 ) : null}
               </div>
-              <div className="flex shrink-0 flex-wrap gap-1.5">
+              <div className="flex shrink-0 flex-wrap items-center gap-1.5">
                 {manager || t.owner_id !== null ? (
                   <Button size="sm" onClick={() => setEditing(t)}>
                     Edit

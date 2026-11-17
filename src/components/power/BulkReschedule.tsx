@@ -9,6 +9,7 @@ import { addDays, parseISODate } from "@/lib/mca/dates";
 import { formatMoneyCompact } from "@/lib/money";
 import { useApp } from "../app-context";
 import { Dialog, useCall, useToast } from "../overlay";
+import { Glyph } from "../shell/icons";
 import { Button, cn } from "../ui";
 import { useHotIds } from "./prefs";
 
@@ -27,7 +28,8 @@ export function BulkReschedule({ overdue }: { overdue: ClientCard[] }) {
   return (
     <>
       <Button size="sm" variant="secondary" onClick={() => setOpen(true)}>
-        Reschedule all…
+        <Glyph name="clock" className="size-3.5 text-muted" />
+        Reschedule all
       </Button>
       {open ? <BulkDialog overdue={overdue} onClose={() => setOpen(false)} /> : null}
     </>
@@ -50,6 +52,7 @@ function BulkDialog({ overdue, onClose }: { overdue: ClientCard[]; onClose: () =
   );
   const n = plan.ordered.length;
   const lead = plan.ordered.slice(0, 3);
+  const peak = Math.max(1, ...plan.perDay.map((d) => d.count));
 
   async function submit() {
     setBusy(true);
@@ -69,7 +72,7 @@ function BulkDialog({ overdue, onClose }: { overdue: ClientCard[]; onClose: () =
           ? "Nothing needed moving"
           : `Rescheduled ${res.moved} client${res.moved === 1 ? "" : "s"} over ${res.perDay.length} day${res.perDay.length === 1 ? "" : "s"}` +
             (first
-              ? ` — ${first.count} ${first.date === today ? "today" : `on ${dayLabel(first.date, today)}`}`
+              ? `: ${first.count} ${first.date === today ? "today" : `on ${dayLabel(first.date, today)}`}`
               : ""),
       tone: "success",
     });
@@ -97,7 +100,7 @@ function BulkDialog({ overdue, onClose }: { overdue: ClientCard[]; onClose: () =
           <p id="bulk-days-label" className="text-[12px] font-medium text-text-2">
             Spread them over this many business days
           </p>
-          <div className="mt-1 flex gap-2" role="group" aria-labelledby="bulk-days-label">
+          <div className="mt-2 flex gap-2" role="group" aria-labelledby="bulk-days-label">
             {BULK_DAY_CHOICES.map((d) => (
               <button
                 key={d}
@@ -106,10 +109,10 @@ function BulkDialog({ overdue, onClose }: { overdue: ClientCard[]; onClose: () =
                 aria-label={`${d} business days`}
                 onClick={() => setDays(d)}
                 className={cn(
-                  "h-10 flex-1 rounded-lg border text-sm font-medium tabular-nums transition sm:h-9",
+                  "h-10 flex-1 rounded-full border text-sm font-semibold tabular-nums transition duration-150 active:scale-[0.97] sm:h-9",
                   days === d
                     ? "border-accent/40 bg-accent-soft text-accent"
-                    : "border-border bg-surface text-text-2 hover:border-border-strong hover:bg-surface-3 hover:text-text",
+                    : "border-border bg-surface-3 text-text-2 hover:border-border-strong hover:text-text",
                 )}
               >
                 {d}
@@ -126,7 +129,7 @@ function BulkDialog({ overdue, onClose }: { overdue: ClientCard[]; onClose: () =
             onChange={(e) => setKeep(e.target.checked)}
           />
           <span>
-            Keep merchants with the application in overdue — they need a call
+            Keep merchants with the application in overdue. They need a call.
             <span className="block text-xs text-muted">
               Merchants in Application in are left alone ({plan.keptApplicationIn.length} right
               now).
@@ -134,22 +137,30 @@ function BulkDialog({ overdue, onClose }: { overdue: ClientCard[]; onClose: () =
           </span>
         </label>
 
-        <div className="rounded-lg border border-border bg-surface-2 p-3" aria-live="polite">
+        <div className="rounded-2xl border border-border bg-surface-3/60 p-4" aria-live="polite">
           {n === 0 ? (
             <p className="text-sm">Nothing to move with these settings.</p>
           ) : (
             <>
-              <p className="text-sm font-medium">
+              <p className="eyebrow">
                 {n} client{n === 1 ? "" : "s"}, biggest asks first
               </p>
-              <ul className="mt-2 space-y-1 text-sm" aria-label="How many land on each day">
+              <ul className="mt-3 space-y-2 text-[13px]" aria-label="How many land on each day">
                 {plan.perDay.map((d) => (
-                  <li key={d.date} className="flex justify-between gap-3">
-                    <span>
-                      {dayLabel(d.date, today)}
-                      {d.date === today ? "" : ` · ${relativeDay(d.date, today)}`}
-                    </span>
-                    <span className="font-semibold tabular-nums">{d.count}</span>
+                  <li key={d.date}>
+                    <div className="flex justify-between gap-3">
+                      <span className="text-text-2">
+                        {dayLabel(d.date, today)}
+                        {d.date === today ? "" : ` · ${relativeDay(d.date, today)}`}
+                      </span>
+                      <span className="font-semibold tabular-nums">{d.count}</span>
+                    </div>
+                    <div className="mt-1 h-1 overflow-hidden rounded-full bg-surface-2" aria-hidden>
+                      <div
+                        className="bg-brand h-full rounded-full"
+                        style={{ width: `${Math.round((d.count / peak) * 100)}%` }}
+                      />
+                    </div>
                   </li>
                 ))}
               </ul>
@@ -170,14 +181,14 @@ function BulkDialog({ overdue, onClose }: { overdue: ClientCard[]; onClose: () =
         </div>
 
         {plan.needHands.length > 0 ? (
-          <p className="rounded-lg bg-warn-soft p-3 text-sm text-warn">
+          <p className="rounded-xl bg-warn-soft p-3 text-[13px] text-warn">
             {plan.needHands.length} booked call{plan.needHands.length === 1 ? "" : "s"} can&apos;t
-            be moved here — they stay overdue until you log or cancel them.
+            be moved here. They stay overdue until you log or cancel them.
           </p>
         ) : null}
         {plan.overCap > 0 ? (
-          <p className="rounded-lg bg-warn-soft p-3 text-sm text-warn">
-            One go moves at most 200. The other {plan.overCap} stay overdue — run it again after.
+          <p className="rounded-xl bg-warn-soft p-3 text-[13px] text-warn">
+            One go moves at most 200. The other {plan.overCap} stay overdue. Run it again after.
           </p>
         ) : null}
         <p className="text-xs text-muted">

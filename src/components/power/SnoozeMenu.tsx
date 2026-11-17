@@ -13,6 +13,7 @@ import { stageDef } from "@/lib/mca/stages";
 import { useApp } from "../app-context";
 import { TimeSelect } from "../TimeSelect";
 import { useCall } from "../overlay";
+import { Glyph } from "../shell/icons";
 import { Button, cn, Input } from "../ui";
 
 export const SNOOZES: { label: string; to: (today: ISODate) => ISODate }[] = [
@@ -30,7 +31,11 @@ type Target = Pick<ClientCard, "id" | "business_name" | "stage">;
 
 /** One line of the snooze menu: a 40px row on a phone, 32px on a desktop. */
 const MENU_ITEM =
-  "flex min-h-10 items-center rounded-lg px-2 text-left text-sm transition hover:bg-surface-2 disabled:opacity-50 sm:min-h-8 sm:text-[13px]";
+  "flex min-h-10 items-center rounded-lg px-2.5 text-left text-sm text-text-2 transition duration-150 hover:bg-surface-2 hover:text-text active:scale-[0.98] disabled:opacity-50 sm:min-h-8 sm:text-[13px]";
+const MENU_LABEL = "eyebrow px-2.5 pt-2.5 pb-1";
+/** A large pill for power-dial mode: a thumb-sized target that reads as one choice among a few. */
+const BIG_PILL =
+  "h-12 min-w-24 flex-1 rounded-full border px-4 text-sm font-medium whitespace-nowrap transition duration-150 active:scale-[0.97] disabled:opacity-50 disabled:active:scale-100";
 interface Pending {
   label: string;
   dueOn: ISODate;
@@ -113,7 +118,7 @@ export function ChannelPick({
 }) {
   return (
     <div
-      className="flex gap-0.5 rounded-lg border border-border bg-surface p-0.5"
+      className="flex gap-0.5 rounded-full border border-border bg-surface-2/70 p-1"
       role="group"
       aria-label="Remind me to"
     >
@@ -124,8 +129,10 @@ export function ChannelPick({
           aria-pressed={c === channel}
           onClick={() => onChange(c)}
           className={cn(
-            "h-9 flex-1 rounded-md px-2 text-xs font-semibold transition sm:h-7",
-            c === channel ? "bg-text text-bg" : "text-muted hover:bg-surface-2 hover:text-text",
+            "h-9 flex-1 rounded-full px-2.5 text-xs font-semibold transition duration-150 active:scale-[0.97] sm:h-7",
+            c === channel
+              ? "bg-surface text-text shadow-card"
+              : "text-muted hover:bg-surface/60 hover:text-text",
           )}
         >
           {CHANNEL_LABEL[c]}
@@ -220,8 +227,8 @@ function ReasonForm({
   );
 }
 
-/** The dropdown on a row. */
-export function SnoozeMenu({ card }: { card: Target }) {
+/** The dropdown on a row. `compact` shows only the clock, for a row's hover actions. */
+export function SnoozeMenu({ card, compact = false }: { card: Target; compact?: boolean }) {
   const [open, setOpen] = useState(false);
   const { pending, setPending, busy, apply, choose, callBack, callAt, channel, setChannel } =
     useSnooze(card, () => setOpen(false));
@@ -234,13 +241,22 @@ export function SnoozeMenu({ card }: { card: Target }) {
       }}
       className="relative"
     >
-      <summary className="inline-flex h-10 cursor-pointer list-none items-center rounded-lg px-2.5 text-[13px] font-medium whitespace-nowrap text-muted transition select-none hover:bg-surface-2 hover:text-text sm:h-8 [&::-webkit-details-marker]:hidden">
-        Snooze ▾
+      <summary
+        aria-label={compact ? `Snooze ${card.business_name}` : undefined}
+        title={compact ? "Snooze or set a reminder" : undefined}
+        className={cn(
+          "inline-flex h-10 cursor-pointer list-none items-center justify-center gap-1.5 rounded-full text-[13px] font-medium whitespace-nowrap text-muted transition duration-150 select-none hover:bg-surface-2 hover:text-text active:scale-95 sm:h-8 [&::-webkit-details-marker]:hidden",
+          compact ? "w-10 sm:w-8" : "px-3",
+          open && "bg-surface-2 text-text",
+        )}
+      >
+        <Glyph name="clock" className="size-4" />
+        {compact ? null : "Snooze"}
       </summary>
       <div
         className={cn(
-          "absolute right-0 z-20 mt-1 rounded-xl border border-border bg-surface p-1 shadow-pop",
-          pending ? "w-72" : "grid max-h-[70vh] w-48 gap-0.5 overflow-y-auto",
+          "glass-strong absolute right-0 z-20 mt-1.5 animate-pop rounded-2xl border border-border p-1.5 shadow-pop",
+          pending ? "w-72" : "grid max-h-[70vh] w-52 gap-0.5 overflow-y-auto",
         )}
       >
         {pending ? (
@@ -253,7 +269,7 @@ export function SnoozeMenu({ card }: { card: Target }) {
           />
         ) : (
           <>
-            <p className="px-2 pt-1.5 pb-1 text-[11px] font-semibold text-muted">Remind me in</p>
+            <p className={MENU_LABEL}>Remind me in</p>
             <ChannelPick channel={channel} onChange={setChannel} />
             {CALLBACK_HOURS.map((h) => (
               <button
@@ -266,9 +282,9 @@ export function SnoozeMenu({ card }: { card: Target }) {
                 {callbackLabel(h)}
               </button>
             ))}
-            <p className="px-2 pt-2 pb-1 text-[11px] font-semibold text-muted">Or at a time</p>
+            <p className={MENU_LABEL}>Or at a time</p>
             <PickTime busy={busy} onPick={(d, t) => void callAt(d, t)} />
-            <p className="px-2 pt-2 pb-1 text-[11px] font-semibold text-muted">Snooze until</p>
+            <p className={MENU_LABEL}>Snooze until</p>
             {SNOOZES.map((s) => (
               <button key={s.label} type="button" className={MENU_ITEM} onClick={() => choose(s)}>
                 {s.label}
@@ -287,7 +303,7 @@ export function SnoozeButtons({ card, count = 5 }: { card: Target; count?: numbe
     useSnooze(card, () => undefined);
   if (pending) {
     return (
-      <div className="rounded-xl border border-border bg-surface">
+      <div className="rounded-2xl border border-border bg-surface">
         <ReasonForm
           card={card}
           pending={pending}
@@ -309,21 +325,36 @@ export function SnoozeButtons({ card, count = 5 }: { card: Target; count?: numbe
           type="button"
           disabled={busy}
           onClick={() => void callBack(h)}
-          className="h-12 min-w-24 flex-1 rounded-lg border border-accent/30 bg-accent-soft px-3 text-sm font-semibold text-accent transition hover:brightness-95 disabled:opacity-50"
+          className={cn(
+            BIG_PILL,
+            "border-accent/30 bg-accent-soft font-semibold text-accent hover:border-accent/60",
+          )}
         >
           In {callbackLabel(h)}
         </button>
       ))}
-      <div className="w-full rounded-lg border border-border bg-surface p-2">
-        <PickTime busy={busy} onPick={(d, t) => void callAt(d, t)} />
-      </div>
+      <details className="group w-full rounded-2xl border border-border bg-surface-3/50">
+        <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-2 px-4 text-[13px] font-medium text-text-2 select-none hover:text-text [&::-webkit-details-marker]:hidden">
+          Pick a day and time
+          <Glyph
+            name="chevronDown"
+            className="size-4 text-muted transition duration-150 group-open:rotate-180"
+          />
+        </summary>
+        <div className="px-2 pb-2">
+          <PickTime busy={busy} onPick={(d, t) => void callAt(d, t)} />
+        </div>
+      </details>
       {SNOOZES.slice(0, count).map((s) => (
         <button
           key={s.label}
           type="button"
           disabled={busy}
           onClick={() => choose(s)}
-          className="h-12 min-w-24 flex-1 rounded-lg border border-border bg-surface px-3 text-sm font-medium transition hover:border-border-strong hover:bg-surface-3 disabled:opacity-50"
+          className={cn(
+            BIG_PILL,
+            "border-border bg-surface text-text shadow-card hover:border-border-strong hover:bg-surface-3",
+          )}
         >
           {s.label}
         </button>

@@ -3,7 +3,7 @@ import { todayIn } from "../mca/dates";
 import { normalizeUS } from "../mca/phone";
 import type { ContactStatus } from "../mca/contact";
 import type { StageKey } from "../mca/stages";
-import type { ClientCard, ClientDetail, UserContext } from "./types";
+import type { ClientBringIn, ClientCard, ClientDetail, UserContext } from "./types";
 import { NAME_KEY_SQL, nameKey } from "./nameKey";
 
 export async function userContext(q: Db, now: Date = new Date()): Promise<UserContext> {
@@ -52,7 +52,31 @@ export async function getClientDetail(q: Db, id: string): Promise<ClientDetail |
     "select to_jsonb(t) as j from timers t where t.client_id = $1 and t.done_at is null order by t.due_on",
     [id],
   );
-  return { card, activities, stips, timers } as ClientDetail;
+  // The hand-off and what leads up to it: not on the client_cards view, so read here for this page only.
+  const bringIn = (
+    await json<ClientBringIn>(
+      q,
+      `select to_jsonb(x) as j from (
+         select c.brought_in_at, c.brought_in_by, c.reply_waiting_since,
+                coalesce((select btrim(u.name) from app_users u where u.id = c.brought_in_by), '') as brought_in_by_name,
+                coalesce((select btrim(u.name) from app_users u where u.id = c.user_id), '') as owner_name,
+                (select b.name from enrollments e join buckets b on b.id = e.bucket_id
+                  where e.client_id = c.id and e.stopped_at is null order by e.entered_at desc limit 1) as bucket_name,
+                (select max(a.occurred_at) from activities a
+                  where a.client_id = c.id and a.kind = 'email' and a.body like 'Merchant replied%') as replied_at
+           from clients c where c.id = $1) x`,
+      [id],
+    )
+  )[0] ?? {
+    brought_in_at: null,
+    brought_in_by: null,
+    brought_in_by_name: "",
+    owner_name: "",
+    bucket_name: null,
+    replied_at: null,
+    reply_waiting_since: null,
+  };
+  return { card, activities, stips, timers, bringIn } as ClientDetail;
 }
 
 /** Clients with at least one open timer due today or earlier — the number on the Today tab. */

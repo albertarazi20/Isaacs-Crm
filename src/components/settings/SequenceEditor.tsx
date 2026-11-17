@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { setBucketStepsAction } from "@/app/buckets-actions";
 import { useRun } from "@/components/client/parts";
-import { Button, Input, Select } from "@/components/ui";
+import { Button, cn, IconButton, Input, Select } from "@/components/ui";
 import type { BucketRow, BucketStepRow, TemplateRow } from "@/lib/buckets/queries";
 import { ICON, Icon } from "./primitives";
 
@@ -14,9 +14,27 @@ interface Step {
   templateId: string;
 }
 
+const ACTION_ICON: Record<Step["action"], string> = {
+  email: ICON.mail,
+  call: ICON.phone,
+  move_to_cold: ICON.snow,
+};
+const ACTION_INK: Record<Step["action"], string> = {
+  email: "text-accent",
+  call: "text-good",
+  move_to_cold: "text-info",
+};
+
+const toSteps = (steps: BucketStepRow[]): Step[] =>
+  steps.map((s) => ({
+    dayOffset: String(s.day_offset),
+    action: s.action as Step["action"],
+    templateId: s.template_id ?? "",
+  }));
+
 /**
- * A bucket's sequence: day N → template (or a call task / move to cold). Saved whole. Each step is one row that
- * reads left to right — "Step 1 · day 0 · Email · which template" — and stacks into a small card on a phone.
+ * A bucket's sequence as a timeline: each step is a stop on the line that reads "day N, do this, with that
+ * template". Saved whole. On a phone a stop's controls wrap under its day.
  */
 export function SequenceEditor({
   bucket,
@@ -31,91 +49,116 @@ export function SequenceEditor({
 }) {
   const run = useRun();
   const router = useRouter();
-  const [rows, setRows] = useState<Step[]>(
-    steps.map((s) => ({
-      dayOffset: String(s.day_offset),
-      action: s.action as Step["action"],
-      templateId: s.template_id ?? "",
-    })),
-  );
+  const [rows, setRows] = useState<Step[]>(() => toSteps(steps));
+  const [saved, setSaved] = useState(() => JSON.stringify(toSteps(steps)));
   const [busy, setBusy] = useState(false);
+  const dirty = JSON.stringify(rows) !== saved;
   const update = (i: number, patch: Partial<Step>) =>
     setRows((cur) => cur.map((r, j) => (j === i ? { ...r, ...patch } : r)));
   return (
-    <div className="space-y-3" data-sequence={bucket.name}>
+    <div data-sequence={bucket.name}>
       {rows.length === 0 ? (
-        <p className="text-xs text-muted">No steps — nothing goes out on its own.</p>
+        <p className="flex items-center gap-2.5 text-[13px] text-muted">
+          <span
+            aria-hidden
+            className="flex size-8 items-center justify-center rounded-full border border-dashed border-border-strong"
+          >
+            <Icon d={ICON.plus} className="size-3.5" />
+          </span>
+          No steps yet. Nothing goes out on its own.
+        </p>
       ) : (
-        <ol className="space-y-2">
+        <ol>
           {rows.map((r, i) => (
-            <li
-              key={i}
-              className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-x-2 gap-y-2 rounded-lg border border-border bg-surface-3 p-2.5 text-sm sm:flex sm:flex-wrap sm:border-0 sm:bg-transparent sm:p-0"
-            >
-              <span className="w-12 shrink-0 text-xs font-semibold text-muted tabular-nums">
-                Step {i + 1}
-              </span>
-              <span className="flex items-center gap-1.5 text-xs text-muted">
-                day
-                <Input
-                  value={r.dayOffset}
-                  disabled={!canEdit}
-                  onChange={(e) => update(i, { dayOffset: e.target.value })}
-                  inputMode="numeric"
-                  aria-label={`Step ${i + 1} day`}
-                  className="h-9 w-16 px-2 text-center text-sm tabular-nums sm:h-8 sm:text-[13px]"
+            <li key={i} className="relative flex gap-3 pb-3 last:pb-0">
+              {i < rows.length - 1 ? (
+                <span
+                  aria-hidden
+                  className="absolute top-9 bottom-0 left-[17.5px] w-px bg-border-strong/70"
                 />
-              </span>
-              {canEdit ? (
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  aria-label={`Remove step ${i + 1}`}
-                  title="Remove this step"
-                  className="h-9 w-9 px-0 text-muted sm:order-last sm:ml-auto sm:h-8 sm:w-8"
-                  onClick={() => setRows((cur) => cur.filter((_, j) => j !== i))}
-                >
-                  <Icon d={ICON.close} />
-                </Button>
               ) : null}
-              <Select
-                value={r.action}
-                disabled={!canEdit}
-                onChange={(e) => update(i, { action: e.target.value as Step["action"] })}
-                aria-label={`Step ${i + 1} action`}
-                className="col-span-3 h-9 text-sm sm:h-8 sm:w-36 sm:text-[13px]"
+              <span
+                aria-hidden
+                className={cn(
+                  "relative z-10 flex size-9 shrink-0 items-center justify-center rounded-full border border-border bg-surface-3",
+                  ACTION_INK[r.action],
+                )}
               >
-                <option value="email">Email</option>
-                <option value="call">Call task</option>
-                <option value="move_to_cold">Move to cold</option>
-              </Select>
-              {r.action === "email" ? (
+                <Icon d={ACTION_ICON[r.action]} className="size-4" />
+              </span>
+              <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
+                <span className="flex h-9 shrink-0 items-center gap-1.5 text-[13px] text-muted">
+                  <span className="w-14 font-semibold whitespace-nowrap text-text-2 tabular-nums">
+                    Step {i + 1}
+                  </span>
+                  day
+                  <span className="block w-14">
+                    <Input
+                      value={r.dayOffset}
+                      disabled={!canEdit}
+                      onChange={(e) => update(i, { dayOffset: e.target.value })}
+                      inputMode="numeric"
+                      aria-label={`Step ${i + 1} day`}
+                      className="h-9 px-2 text-center text-sm font-semibold tabular-nums sm:h-9 sm:text-[13px]"
+                    />
+                  </span>
+                </span>
+                {canEdit ? (
+                  <IconButton
+                    label={`Remove step ${i + 1}`}
+                    className="order-last ml-auto sm:size-9"
+                    onClick={() => setRows((cur) => cur.filter((_, j) => j !== i))}
+                  >
+                    <Icon d={ICON.close} className="size-3.5" />
+                  </IconButton>
+                ) : null}
                 <Select
-                  value={r.templateId}
+                  value={r.action}
                   disabled={!canEdit}
-                  onChange={(e) => update(i, { templateId: e.target.value })}
-                  aria-label={`Step ${i + 1} template`}
-                  className="col-span-3 h-9 text-sm sm:h-8 sm:min-w-56 sm:flex-1 sm:text-[13px]"
+                  onChange={(e) => update(i, { action: e.target.value as Step["action"] })}
+                  aria-label={`Step ${i + 1} action`}
+                  className="h-9 w-full text-sm sm:h-9 sm:w-36 sm:text-[13px]"
                 >
-                  <option value="">Pick a template…</option>
-                  {templates
-                    .filter((t) => !t.archived)
-                    .map((t) => (
-                      <option key={t.id} value={t.id}>
-                        {t.name}
-                        {t.approved ? "" : " (unapproved)"}
-                      </option>
-                    ))}
+                  <option value="email">Email</option>
+                  <option value="call">Call task</option>
+                  <option value="move_to_cold">Move to cold</option>
                 </Select>
-              ) : null}
+                {r.action === "email" ? (
+                  <Select
+                    value={r.templateId}
+                    disabled={!canEdit}
+                    onChange={(e) => update(i, { templateId: e.target.value })}
+                    aria-label={`Step ${i + 1} template`}
+                    className="h-9 w-full text-sm sm:h-9 sm:w-auto sm:min-w-52 sm:flex-1 sm:text-[13px]"
+                  >
+                    <option value="">Pick a template…</option>
+                    {templates
+                      .filter((t) => !t.archived)
+                      .map((t) => (
+                        <option key={t.id} value={t.id}>
+                          {t.name}
+                          {t.approved ? "" : " (unapproved)"}
+                        </option>
+                      ))}
+                  </Select>
+                ) : null}
+              </div>
             </li>
           ))}
         </ol>
       )}
       {canEdit ? (
-        <div className="flex flex-wrap items-center justify-end gap-2 border-t border-border pt-3">
+        <div className="mt-4 flex flex-wrap items-center justify-end gap-2 border-t border-border pt-3.5">
+          <span className="mr-auto text-xs text-muted">
+            {dirty ? (
+              <span className="font-medium text-accent">Unsaved changes</span>
+            ) : rows.length > 0 ? (
+              "Stops the moment they reply, upload or sign."
+            ) : null}
+          </span>
           <Button
             size="sm"
+            variant="ghost"
             onClick={() =>
               setRows((cur) => [
                 ...cur,
@@ -132,14 +175,15 @@ export function SequenceEditor({
           </Button>
           <Button
             size="sm"
-            variant="primary"
+            variant={dirty ? "primary" : "secondary"}
             disabled={busy}
             onClick={async () => {
               setBusy(true);
+              const sent = rows;
               const ok = await run(
                 setBucketStepsAction({
                   bucketId: bucket.id,
-                  steps: rows.map((r) => ({
+                  steps: sent.map((r) => ({
                     dayOffset: r.dayOffset,
                     action: r.action,
                     templateId: r.action === "email" ? r.templateId || null : null,
@@ -148,14 +192,19 @@ export function SequenceEditor({
                 "Sequence saved",
               );
               setBusy(false);
-              if (ok) router.refresh();
+              if (ok) {
+                setSaved(JSON.stringify(sent));
+                router.refresh();
+              }
             }}
           >
-            Save sequence
+            {busy ? "Saving…" : "Save sequence"}
           </Button>
         </div>
       ) : (
-        <p className="text-xs text-muted">A manager edits the shop&apos;s sequences.</p>
+        <p className="mt-4 border-t border-border pt-3 text-xs text-muted">
+          A manager edits the shop&apos;s sequences.
+        </p>
       )}
     </div>
   );

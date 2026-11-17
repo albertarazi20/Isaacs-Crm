@@ -11,8 +11,10 @@ import { formatMoney, formatMoneyCompact } from "@/lib/money";
 import { useApp } from "../app-context";
 import { bookedToday } from "@/lib/mca/booked";
 import { ContactActions } from "../ContactActions";
+import { useToast } from "../overlay";
+import { Glyph } from "../shell/icons";
 import { StageBadge } from "../StageBadge";
-import { Badge, buttonClass, cn } from "../ui";
+import { Avatar, Badge, buttonClass, cn, IconButton, Kbd, Meter } from "../ui";
 import { useHotIds } from "./prefs";
 import { SnoozeButtons } from "./SnoozeMenu";
 
@@ -31,11 +33,12 @@ const SHORTCUTS: [string, string][] = [
   ["?", "Show or hide this list"],
 ];
 
-function Row({ label, children }: { label: string; children: ReactNode }) {
+/** One fact about the merchant on the card: a small label over the value. */
+function Fact({ label, wide, children }: { label: string; wide?: boolean; children: ReactNode }) {
   return (
-    <div className="grid grid-cols-[7.5rem_1fr] gap-3 py-2 text-sm sm:grid-cols-[9rem_1fr]">
-      <dt className="text-xs font-medium text-muted">{label}</dt>
-      <dd className="min-w-0 break-words">{children}</dd>
+    <div className={cn("min-w-0", wide && "sm:col-span-2")}>
+      <dt className="eyebrow">{label}</dt>
+      <dd className="mt-1 min-w-0 text-sm break-words text-text-2">{children}</dd>
     </div>
   );
 }
@@ -135,62 +138,72 @@ export function DialRunner({ items }: { items: DialItem[] }) {
   }, [current, n, idx]);
 
   const position = Math.min(done + 1, Math.max(total, 1));
+  const skip = () => {
+    if (current) setSkipped((s) => [...s.filter((id) => id !== current.card.id), current.card.id]);
+  };
 
   return (
     <div
       role="region"
       aria-label="Power dial"
-      className="fixed inset-0 z-[45] flex flex-col bg-bg text-text"
+      className="fixed inset-0 z-[45] flex flex-col overflow-hidden bg-bg text-text"
     >
-      <header className="flex items-center gap-3 border-b border-border bg-surface px-4 py-3 pt-[max(0.75rem,env(safe-area-inset-top))] sm:px-6">
-        <div className="min-w-0 flex-1">
-          <p className="text-[13px] font-semibold tabular-nums" aria-live="polite">
-            {n === 0
-              ? total === 0
-                ? "No calls due"
-                : `${done} of ${total} done`
-              : `${position} of ${total}`}
-          </p>
-          <div
-            role="progressbar"
-            aria-label="Progress through today's calls"
-            aria-valuemin={0}
-            aria-valuemax={total}
-            aria-valuenow={done}
-            className="mt-1.5 h-1.5 max-w-xl overflow-hidden rounded-full bg-surface-2"
+      {/* the room's light, kept low so the one card is all there is to look at */}
+      <div
+        aria-hidden
+        className="bg-brand pointer-events-none absolute -top-48 left-1/2 size-[640px] -translate-x-1/2 rounded-full opacity-[0.09] blur-3xl"
+      />
+
+      <header className="glass relative z-10 border-b border-border pt-[env(safe-area-inset-top)]">
+        <div className="flex items-center gap-3 px-4 py-3 sm:px-6">
+          <span
+            aria-hidden
+            className="bg-brand flex size-9 shrink-0 items-center justify-center rounded-full text-white shadow-glow"
           >
-            <div
-              className="h-full rounded-full bg-accent transition-all"
-              style={{ width: `${total === 0 ? 100 : Math.round((done / total) * 100)}%` }}
-            />
+            <Glyph name="zap" className="size-4" strokeWidth={2} />
+          </span>
+          <div className="min-w-0 flex-1">
+            <p className="eyebrow whitespace-nowrap">Power dial</p>
+            <p className="text-sm font-semibold whitespace-nowrap tabular-nums" aria-live="polite">
+              {n === 0
+                ? total === 0
+                  ? "No calls due"
+                  : `${done} of ${total} done`
+                : `${position} of ${total}`}
+            </p>
           </div>
+          <button
+            type="button"
+            aria-label="Keyboard shortcuts"
+            aria-expanded={help}
+            onClick={() => setHelp((v) => !v)}
+            className={buttonClass("ghost", "md", "gap-2 max-sm:hidden")}
+          >
+            Shortcuts <Kbd>?</Kbd>
+          </button>
+          <Link href="/" className={buttonClass("secondary", "md")}>
+            Done for today
+          </Link>
         </div>
-        <button
-          type="button"
-          aria-label="Keyboard shortcuts"
-          aria-expanded={help}
-          onClick={() => setHelp((v) => !v)}
-          className={buttonClass(
-            "secondary",
-            "md",
-            "hidden size-9 px-0 font-mono sm:inline-flex sm:w-9",
-          )}
-        >
-          ?
-        </button>
-        <Link href="/" className={buttonClass("secondary", "md")}>
-          Done for today
-        </Link>
+        <div role="group" aria-label="Progress through today's calls">
+          <Meter
+            value={total === 0 ? 1 : done}
+            max={total === 0 ? 1 : total}
+            tone="brand"
+            className="h-[3px] rounded-none bg-transparent"
+          />
+        </div>
       </header>
 
       {help ? (
-        <div role="note" className="border-b border-border bg-surface-2 px-4 py-3 text-sm">
-          <ul className="mx-auto max-w-xl space-y-1">
+        <div
+          role="note"
+          className="glass relative z-10 animate-fade border-b border-border px-4 py-3 text-[13px]"
+        >
+          <ul className="mx-auto grid max-w-2xl gap-x-6 gap-y-1.5 sm:grid-cols-2">
             {SHORTCUTS.map(([k, v]) => (
               <li key={k} className="flex items-center gap-3">
-                <kbd className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md border border-border bg-surface font-mono text-xs">
-                  {k}
-                </kbd>
+                <Kbd className="h-6 min-w-6">{k}</Kbd>
                 <span className="text-text-2">{v}</span>
               </li>
             ))}
@@ -198,17 +211,23 @@ export function DialRunner({ items }: { items: DialItem[] }) {
         </div>
       ) : null}
 
-      <div className="flex-1 overflow-y-auto">
-        <div className="mx-auto w-full max-w-xl px-4 py-5">
+      <div className="relative flex-1 overflow-y-auto">
+        <div className="mx-auto w-full max-w-2xl px-4 py-6 sm:py-10">
           {current ? (
             <DialCard key={current.card.id} item={current} timezone={timezone} cardRef={cardRef} />
           ) : (
-            <div className="rounded-xl border border-dashed border-border-strong p-10 text-center">
-              <h1 className="text-2xl font-semibold tracking-tight">You&apos;re done</h1>
-              <p className="mt-2 text-sm text-muted">
+            <div className="glass ring-brand animate-pop rounded-3xl border border-border px-6 py-14 text-center shadow-pop">
+              <span
+                aria-hidden
+                className="bg-brand mx-auto flex size-14 items-center justify-center rounded-full text-white shadow-glow"
+              >
+                <Glyph name="check" className="size-7" strokeWidth={2.2} />
+              </span>
+              <h1 className="mt-5 text-3xl font-semibold tracking-[-0.03em]">You&apos;re done</h1>
+              <p className="mt-2 text-sm text-muted tabular-nums">
                 {total === 0 ? "Nothing is due to call right now." : `${done} of ${total} handled.`}
               </p>
-              <Link href="/" className={buttonClass("primary", "md", "mt-6")}>
+              <Link href="/" className={buttonClass("primary", "lg", "mt-7")}>
                 Back to Today
               </Link>
             </div>
@@ -217,26 +236,48 @@ export function DialRunner({ items }: { items: DialItem[] }) {
       </div>
 
       {current ? (
-        <footer className="border-t border-border bg-surface px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
-          <div className="mx-auto flex max-w-xl gap-2">
+        <footer className="glass relative z-10 border-t border-border px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+          <div className="mx-auto flex max-w-2xl items-center gap-2">
             <button
               type="button"
-              onClick={() =>
-                setSkipped((s) => [...s.filter((id) => id !== current.card.id), current.card.id])
-              }
-              className={buttonClass("secondary", "md", "h-12 flex-1 text-base sm:h-12")}
+              onClick={() => n > 0 && setCursor((idx - 1 + n) % n)}
+              disabled={n < 2}
+              aria-label="Previous client"
+              title="Previous client"
+              className={buttonClass("ghost", "lg", "w-12 px-0")}
             >
-              Skip <span className="font-normal text-muted">(S)</span>
+              <Glyph name="chevron" className="size-5 rotate-180" />
+            </button>
+            <button
+              type="button"
+              onClick={skip}
+              className={buttonClass("secondary", "lg", "flex-1")}
+            >
+              Skip <Kbd className="max-sm:hidden">S</Kbd>
             </button>
             <button
               type="button"
               onClick={() => n > 0 && setCursor((idx + 1) % n)}
               disabled={n < 2}
-              className={buttonClass("secondary", "md", "h-12 flex-1 text-base sm:h-12")}
+              className={buttonClass("secondary", "lg", "flex-1")}
             >
-              Next <span className="font-normal text-muted">(N)</span>
+              Next <Kbd className="max-sm:hidden">N</Kbd>
             </button>
           </div>
+          <p className="mx-auto mt-2.5 hidden max-w-2xl items-center justify-center gap-x-4 text-xs text-muted sm:flex">
+            <span className="inline-flex items-center gap-1.5">
+              <Kbd>C</Kbd> Call
+            </span>
+            <span className="inline-flex items-center gap-1.5">
+              <Kbd>S</Kbd> Skip to the end
+            </span>
+            <span className="inline-flex items-center gap-1.5">
+              <Kbd>N</Kbd> Next
+            </span>
+            <span className="inline-flex items-center gap-1.5">
+              <Kbd>P</Kbd> Previous
+            </span>
+          </p>
         </footer>
       ) : null}
     </div>
@@ -253,23 +294,34 @@ function DialCard({
   cardRef: React.RefObject<HTMLDivElement | null>;
 }) {
   const { today, nowMs } = useApp();
+  const toast = useToast();
   const { card, reason, priority } = item;
   const due = card.next_due_on;
   const overdue = due !== null && due < today;
   const kind = card.next_due_kind as TimerKind | null;
 
   const wants = card.wanted_amount_cents ? formatMoney(card.wanted_amount_cents) : "";
+  const phone = card.phone ? formatUS(card.phone) : "";
+
+  async function copyPhone() {
+    try {
+      await navigator.clipboard.writeText(phone);
+      toast({ message: `Copied ${phone}`, tone: "success" });
+    } catch {
+      toast({ message: "Couldn't copy. Select the number and copy it by hand.", tone: "error" });
+    }
+  }
 
   return (
-    <div ref={cardRef} className="space-y-4">
+    <div ref={cardRef} className="animate-rise space-y-5">
       <article
         aria-label={card.business_name}
-        className="space-y-4 rounded-xl border border-border bg-surface p-4 sm:p-5"
+        className="glass ring-brand rounded-3xl border border-border p-5 shadow-pop sm:p-8"
       >
         <div className="flex flex-wrap items-center gap-1.5">
           <StageBadge stage={card.stage} />
           {due ? (
-            <Badge tone={overdue ? "bad" : due === today ? "warn" : "neutral"}>
+            <Badge tone={overdue ? "warn" : due === today ? "accent" : "neutral"}>
               {kind ? `${timerLabel(kind)} · ` : ""}
               {relativeDay(due, today)}
             </Badge>
@@ -280,67 +332,103 @@ function DialCard({
           ) : null}
         </div>
 
-        <div>
-          <h1 className="text-2xl leading-tight font-semibold tracking-tight break-words sm:text-[28px]">
-            {card.business_name}
-          </h1>
-          <p className="mt-1 text-sm text-muted">
-            {[
-              card.contact_name,
-              card.dba && card.dba !== card.business_name ? `dba ${card.dba}` : "",
-            ]
-              .filter(Boolean)
-              .join(" · ") || "No merchant name"}
-          </p>
-          <p className="mt-2 text-xl font-semibold tracking-tight tabular-nums">
-            {card.phone ? formatUS(card.phone) : "No phone number"}
-          </p>
+        <div className="mt-5 flex items-start gap-4">
+          <Avatar name={card.business_name} size={52} className="max-sm:hidden" />
+          <div className="min-w-0">
+            <h1 className="text-[26px] leading-[1.1] font-semibold tracking-[-0.03em] break-words sm:text-[32px]">
+              {card.business_name}
+            </h1>
+            <p className="mt-1.5 text-sm text-muted">
+              {[
+                card.contact_name,
+                card.dba && card.dba !== card.business_name ? `dba ${card.dba}` : "",
+              ]
+                .filter(Boolean)
+                .join(" · ") || "No merchant name"}
+            </p>
+          </div>
         </div>
 
-        <dl className="divide-y divide-border border-t border-border">
-          <Row label="Wants">{wants || <span className="text-muted">Not recorded</span>}</Row>
-          {card.stips_required > 0 ? (
-            <Row label="Stips">
-              {card.stips_received} of {card.stips_required} received
-            </Row>
+        <div className="mt-6 flex items-center gap-2">
+          <p
+            className={cn(
+              "leading-none font-semibold tracking-[-0.035em] tabular-nums",
+              phone ? "text-[34px] sm:text-[46px]" : "text-2xl text-muted",
+            )}
+          >
+            {phone || "No phone number"}
+          </p>
+          {phone ? (
+            <IconButton label="Copy the phone number" onClick={() => void copyPhone()}>
+              <svg
+                aria-hidden
+                viewBox="0 0 24 24"
+                className="size-[18px]"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.75"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <rect x="9" y="9" width="11" height="11" rx="2.5" />
+                <path d="M15 9V6.5A2.5 2.5 0 0 0 12.5 4h-6A2.5 2.5 0 0 0 4 6.5v6A2.5 2.5 0 0 0 6.5 15H9" />
+              </svg>
+            </IconButton>
           ) : null}
-          <Row label="Last call">
+        </div>
+
+        <div
+          className={cn(
+            "mt-6 [&_button]:h-12 [&_button]:flex-1 [&_button]:text-base [&>div]:w-full [&>div]:gap-2",
+          )}
+        >
+          <ContactActions client={card} size="md" />
+        </div>
+
+        <dl className="mt-7 grid gap-x-8 gap-y-5 border-t border-border pt-6 sm:grid-cols-2">
+          <Fact label="Why now" wide>
+            <span className="font-medium text-text">{timerLabel(kind)}</span>
+            {reason ? <span className="text-muted"> · {reason}</span> : null}
+          </Fact>
+          <Fact label="Last call" wide>
             {card.last_call_at ? (
               <>
                 {timeAgo(card.last_call_at, new Date(nowMs))}
                 {card.last_call_note ? (
-                  <span className="italic"> — “{card.last_call_note}”</span>
+                  <span className="mt-1 block italic">“{card.last_call_note}”</span>
                 ) : null}
               </>
             ) : (
               <span className="text-muted">Never called</span>
             )}
-          </Row>
-          <Row label="Why now">
-            {timerLabel(kind)}
-            {reason ? <span className="text-muted"> — {reason}</span> : null}
-          </Row>
-          <Row label="At stake">
-            <span title={priority.explanation}>
+          </Fact>
+          <Fact label="Wants">{wants || <span className="text-muted">Not recorded</span>}</Fact>
+          {card.stips_required > 0 ? (
+            <Fact label="Stips">
+              <span className="tabular-nums">
+                {card.stips_received} of {card.stips_required} received
+              </span>
+              <Meter
+                value={card.stips_received}
+                max={card.stips_required}
+                tone="brand"
+                className="mt-2 h-1 max-w-40"
+              />
+            </Fact>
+          ) : null}
+          <Fact label="At stake" wide={card.stips_required > 0}>
+            <span title={priority.explanation} className="font-medium text-text tabular-nums">
               {priority.basis === "unknown"
                 ? "No amount on file"
                 : formatMoneyCompact(priority.atStakeCents)}
             </span>
-            <span className="block text-xs text-muted">{priority.explanation}</span>
-          </Row>
+            <span className="mt-0.5 block text-xs text-muted">{priority.explanation}</span>
+          </Fact>
         </dl>
-
-        <div
-          className={cn(
-            "border-t border-border pt-4 [&>div]:w-full [&>div]:gap-2 [&_button]:h-12 [&_button]:flex-1 [&_button]:text-base",
-          )}
-        >
-          <ContactActions client={card} size="md" />
-        </div>
       </article>
 
-      <section aria-label="Snooze this client" className="space-y-2">
-        <h2 className="text-[13px] font-semibold text-text">Not now</h2>
+      <section aria-label="Snooze this client" className="space-y-3 px-1">
+        <h2 className="eyebrow">Not now</h2>
         <SnoozeButtons key={card.id} card={card} />
       </section>
     </div>
