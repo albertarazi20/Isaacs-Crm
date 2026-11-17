@@ -1,3 +1,4 @@
+import { OwnedElsewhereError } from "@/lib/leads/owner";
 import { NextResponse } from "next/server";
 import { ZodError } from "zod";
 import { isAllowedEmail } from "@/lib/auth/google";
@@ -71,6 +72,9 @@ export async function POST(req: Request) {
         429,
         { "retry-after": "3600" },
       );
+    // another rep already works this merchant: say so without naming anyone to the outside sender
+    if (e instanceof OwnedElsewhereError)
+      return json({ error: "This merchant is already in the CRM with another rep." }, 409);
     if (e instanceof UserError || e instanceof ZodError)
       return json({ error: toActionError(e) }, 400);
     const code = (e as { code?: string } | null)?.code;

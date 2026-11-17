@@ -6,6 +6,7 @@ import type { UserContext } from "../data/types";
 import { contactAllowed, type ContactStatus } from "../mca/contact";
 import { normalizeUS } from "../mca/phone";
 import { toNewClient, type LeadInput } from "./schema";
+import { refuseAnotherReps } from "./owner";
 import { MAX_NEW_PER_DAY } from "./token";
 
 export interface IntakeResult {
@@ -103,6 +104,9 @@ export async function ingestLead(
       ...(blocked ? { doNotContact: true } : {}),
     };
   }
+
+  // another rep's merchant is never added a second time under this rep (two reps would chase the same merchant)
+  await refuseAnotherReps(q, { phone: input.phone, email: input.email });
 
   if (tokenId) {
     const { rows: slot } = await q.query<{ ok: boolean }>(

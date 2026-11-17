@@ -151,20 +151,32 @@ const OPEN_PREFIXES = [
   "/settings",
 ];
 
+/**
+ * A link the assistant may offer: a page of this app, judged by where it really lands. The text is resolved the way
+ * the browser resolves it (so "/clients/../api/export" is the API route it becomes, and refused), dot segments and
+ * backslashes in any spelling are refused outright, and the landing path must be one of the app's pages.
+ */
+export function isAppPage(href: string): boolean {
+  if (!href.startsWith("/") || href.startsWith("//")) return false;
+  if (/\\|\.\.|%2e|%5c|%2f/i.test(href)) return false;
+  let u: URL;
+  try {
+    u = new URL(href, "https://app.invalid");
+  } catch {
+    return false;
+  }
+  if (u.host !== "app.invalid" || u.hash) return false;
+  const path = u.pathname;
+  return (
+    OPEN_PREFIXES.some((p) => path === p || path.startsWith(`${p}/`)) && !path.startsWith("/api")
+  );
+}
+
 export const actionSchema = z.discriminatedUnion("type", [
   z.object({
     type: z.literal("open"),
     label,
-    href: z
-      .string()
-      .max(300)
-      .refine(
-        (h) =>
-          h.startsWith("/") &&
-          !h.startsWith("//") &&
-          OPEN_PREFIXES.some((p) => h === p || h.startsWith(`${p}/`) || h.startsWith(`${p}?`)),
-        "Only a page in this app",
-      ),
+    href: z.string().max(300).refine(isAppPage, "Only a page in this app"),
   }),
   z.object({ type: z.literal("hand_off"), label, merchant_id: uuid }),
   z.object({ type: z.literal("set_follow_up"), label, merchant_id: uuid, date: day }),

@@ -1,4 +1,5 @@
 import type { Db } from "../db";
+import { refuseAnotherReps } from "../leads/owner";
 import { normalizeUS } from "../mca/phone";
 import { toActionError } from "./errors";
 import { addNote, createClient } from "./mutations";
@@ -77,6 +78,8 @@ export async function importClients(
         wantedAmount: row.wantedAmount,
         source: row.source || "Imported",
       });
+      // another rep's merchant is not imported a second time: the row is listed as failed, with whose it is
+      await refuseAnotherReps(q, { phone: input.phone, email: input.email });
       const card = await createClient(q, input, ctx);
       const note = [row.statusNote, row.notes].filter(Boolean).join("\n");
       if (note) await addNote(q, { clientId: card.id, body: note });
