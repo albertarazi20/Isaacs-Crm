@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
-import { ALL_BUCKETS_BRIEF, AskButton, bucketBrief } from "@/components/assistant/AskButton";
+import { AskButton } from "@/components/assistant/AskButton";
+import { ALL_BUCKETS_BRIEF, bucketBrief } from "@/lib/assistant/prompts";
 import Link from "next/link";
 import { BucketBoard } from "@/components/followup/BucketBoard";
 import { BucketBrief } from "@/components/followup/BucketBrief";

@@ -76,3 +76,13 @@ export function queueBrief(
     label: `${ask.label}: ${name}`,
   };
 }
+
+/** The brief behind "Next step" on a merchant (the merchant page and the bucket drawer). */
+export const merchantBrief = (business: string, id: string) =>
+  `Look at ${business} (merchant_id ${id}): read the file and tell me where it stands, what is still missing, and the next best step today. Write the message I should send next (a short email and a text), and set up the actions.`;
+
+export const bucketBrief = (name: string, id: string) =>
+  `Look at the "${name}" bucket (bucket_id ${id}): its email sequence and its merchants. Who is closest to done, who has gone quiet, and what should I do with this bucket today? Set up the actions.`;
+
+export const ALL_BUCKETS_BRIEF =
+  "Look at all my follow-up buckets. Which one needs attention most today and why, and which emails are not landing? Give me a short plan and set up the actions.";

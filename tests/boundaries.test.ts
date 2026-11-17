@@ -152,6 +152,45 @@ describe("architecture boundaries", () => {
       .map(rel);
     expect(offenders).toEqual([]);
   });
+  it("a server file never uses a plain function or value exported from a 'use client' module", () => {
+    // On the server such an export is a client reference: calling it throws ("Attempted to call X() from the
+    // server") and the page shows the error screen. Only components (Capitalised) and hooks may cross. A helper both
+    // sides need lives in a module without "use client" (the assistant's briefs: src/lib/assistant/prompts.ts).
+    const isClient = (src: string) => /^\s*["']use client["']/.test(src);
+    const plainExports = new Map<string, string[]>();
+    for (const f of files) {
+      const src = readFileSync(f, "utf8");
+      if (!isClient(src)) continue;
+      const names = [
+        ...src.matchAll(/^export\s+(?:async\s+)?(?:const|let|function)\s+([A-Za-z_$][\w$]*)/gm),
+      ]
+        .map((m) => m[1]!)
+        .filter((n) => !/^[A-Z][a-z]/.test(n) && !/^use[A-Z]/.test(n));
+      if (names.length) plainExports.set("@/" + rel(f).replace(/\.(ts|tsx)$/, ""), names);
+    }
+    const bad: string[] = [];
+    for (const f of files) {
+      const src = readFileSync(f, "utf8");
+      if (isClient(src)) continue;
+      for (const m of src.matchAll(/import\s+(?!type\b)\{([^}]*)\}\s+from\s+["']([^"']+)["']/g)) {
+        const names = plainExports.get(m[2]!);
+        if (!names) continue;
+        const used = m[1]!
+          .split(",")
+          .map(
+            (x) =>
+              x
+                .trim()
+                .replace(/^type\s+/, "")
+                .split(/\s+as\s+/)[0]!,
+          )
+          .filter((x) => names.includes(x));
+        for (const n of used) bad.push(`${rel(f)} imports ${n} from ${m[2]}`);
+      }
+    }
+    expect(bad).toEqual([]);
+  });
+
   it("never disables a lint rule", () => {
     const offenders = [
       ...files,

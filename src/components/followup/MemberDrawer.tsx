@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { AskButton, merchantBrief } from "@/components/assistant/AskButton";
+import { AskButton } from "@/components/assistant/AskButton";
+import { merchantBrief } from "@/lib/assistant/prompts";
 import { useState, type ReactNode } from "react";
 import { useApp } from "@/components/app-context";
 import { copyText } from "@/components/client/parts";

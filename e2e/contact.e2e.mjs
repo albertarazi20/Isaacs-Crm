@@ -24,7 +24,7 @@ export default async function contactFlow({ email }) {
     .getByLabel("What they said (kept on the record)")
     .fill("Asked us to stop calling on Oct 3");
   await page.getByRole("dialog").getByRole("button", { name: "Save" }).click();
-  await page.getByText(/all reminders cancelled/).waitFor({ timeout: 8000 });
+  await page.getByText(/all reminders cancelled/i).waitFor({ timeout: 8000 });
 
   const row = await withDb((db) =>
     one(db, "select contact_status, contact_status_note from clients where id = $1", [client.id]),
