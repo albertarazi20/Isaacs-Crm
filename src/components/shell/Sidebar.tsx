@@ -13,6 +13,9 @@ import type { Theme } from "@/lib/theme";
 import { Glyph, type GlyphName } from "./icons";
 import { NewLeadButton } from "./NewLead";
 
+/** Ask the assistant panel (mounted once in the layout) to open. */
+const openAssistantPanel = () => window.dispatchEvent(new Event("crm:assistant"));
+
 export interface SidebarBucket {
   id: string;
   name: string;
@@ -251,6 +254,19 @@ function SidebarBody({
           <span className="flex-1 text-left">Find a merchant…</span>
           <Kbd>⌘K</Kbd>
         </button>
+        <button
+          type="button"
+          onClick={() => {
+            onNavigate?.();
+            openAssistantPanel();
+          }}
+          aria-keyshortcuts="Control+J Meta+J"
+          className="bg-brand-soft group flex h-10 w-full items-center gap-2.5 rounded-full pr-2 pl-3.5 text-[13px] font-medium text-text ring-1 ring-accent/25 transition duration-150 ring-inset hover:ring-accent/55 active:scale-[0.98] lg:h-9"
+        >
+          <Glyph name="sparkles" className="size-4 text-accent" />
+          <span className="flex-1 text-left">Ask the assistant</span>
+          <Kbd>⌘J</Kbd>
+        </button>
       </div>
 
       <nav
@@ -471,6 +487,14 @@ export function Sidebar(props: SidebarProps) {
         </Link>
         <span className="text-[15px] font-semibold tracking-tight">Selective</span>
         <span className="flex-1" />
+        <button
+          type="button"
+          aria-label="Ask the assistant"
+          onClick={openAssistantPanel}
+          className="inline-flex size-10 items-center justify-center rounded-full text-accent transition hover:bg-surface-2 active:scale-95"
+        >
+          <Glyph name="sparkles" className="size-5" />
+        </button>
         <button
           type="button"
           aria-label="Find a client"

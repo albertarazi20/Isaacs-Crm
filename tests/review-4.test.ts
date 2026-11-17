@@ -168,6 +168,7 @@ describe("C-6: an older backup still restores after a new column with a default"
       "access_log",
       "user_alerts", // 0500: the alert feed, system state
       "applications", // 0530: the signed application record; the PDF itself is in documents
+      "assistant_threads", // 0541: a person's conversations with the assistant, private to them
       "ai_runs",
       "app_state_tz",
       "area_code_tz",

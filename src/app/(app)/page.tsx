@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { OverviewRecommendations } from "@/components/assistant/OverviewRecommendations";
 import { QueueList } from "@/components/dashboard/QueueList";
 import { WeeklyChart } from "@/components/dashboard/WeeklyChart";
 import { CountUp } from "@/components/fx";
@@ -8,7 +9,11 @@ import { Avatar, Delta, LinkButton, Meter, PageHeader, Sparkline, cn } from "@/c
 import { CAN } from "@/lib/auth/roles";
 import { requireSession } from "@/lib/auth/server";
 import { monthOf, type EmailMeter } from "@/lib/dashboard/queries";
+import { loadRecommendations } from "@/lib/assistant/recommendations";
 import { loadShell } from "@/lib/data/shell";
+import { env } from "@/lib/env";
+import { assistantState } from "@/lib/leads/assistant";
+import { gmailStatus } from "@/lib/system/gmail";
 import { db } from "@/lib/db";
 import { formatDate, timeAgo } from "@/lib/format";
 import {
@@ -586,9 +591,16 @@ export default async function OverviewPage({
   const session = await requireSession();
   const manager = CAN.seeEveryone(session.role);
   const me = await loadShell(session.userId);
-  const overview = await db.withUser(session.userId, (q) =>
-    loadOverview(q, { today: me.ctx.today, month: monthOf(me.ctx.today), manager }),
-  );
+  const gmail = await gmailStatus(session.userId);
+  const { overview, recommendations, assistant } = await db.withUser(session.userId, async (q) => ({
+    overview: await loadOverview(q, { today: me.ctx.today, month: monthOf(me.ctx.today), manager }),
+    recommendations: await loadRecommendations(q, {
+      today: me.ctx.today,
+      manager,
+      gmailConnected: gmail.connected,
+    }),
+    assistant: await assistantState(q, Boolean(env().ANTHROPIC_API_KEY)),
+  }));
   const nowMs = requestTimeMs();
   const first = (me.user?.name || me.user?.email.split("@")[0] || "").split(" ")[0];
   const { kpis } = overview;
@@ -640,6 +652,7 @@ export default async function OverviewPage({
           }
         />
       </div>
+      <OverviewRecommendations items={recommendations} ready={assistant.ready} />
       {body(overview, new Date(nowMs), manager)}
     </div>
   );

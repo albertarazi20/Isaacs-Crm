@@ -202,6 +202,16 @@ function Palette({
           setTimeout(() => newLead(), 0);
         },
       },
+      {
+        id: "assistant",
+        label: "Ask the assistant",
+        hint: "Claude Opus 5.5",
+        icon: "sparkles",
+        run: () => {
+          onClose();
+          setTimeout(() => window.dispatchEvent(new Event("crm:assistant")), 0);
+        },
+      },
       { id: "overview", label: "Overview", hint: "Go to", icon: "overview", run: to("/") },
       { id: "follow", label: "Follow Up", hint: "Go to", icon: "followup", run: to("/follow-up") },
       {

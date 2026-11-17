@@ -7,6 +7,7 @@ import { PendingTouchPrompt } from "@/components/ContactActions";
 import { HotImport } from "@/components/power/HotImport";
 import { GlobalSearch } from "@/components/power/GlobalSearch";
 import { ReminderWatcher } from "@/components/ReminderWatcher";
+import { AssistantProvider } from "@/components/assistant/Assistant";
 import { NewLeadProvider } from "@/components/shell/NewLead";
 import { Sidebar } from "@/components/shell/Sidebar";
 import { CAN, ROLE_LABEL } from "@/lib/auth/roles";
@@ -65,53 +66,55 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     >
       <ToastProvider>
         <NewLeadProvider buckets={live} assistant={shell.assistant}>
-          <ReminderWatcher />
-          <Sidebar
-            user={{
-              name: me.user.name,
-              email: me.user.email,
-              roleLabel: ROLE_LABEL[session.role],
-            }}
-            theme={theme}
-            manager={CAN.manageTeam(session.role)}
-            buckets={live.map((b) => ({
-              id: b.id,
-              name: b.name,
-              count: b.members,
-              mine: b.owner_id !== null,
-            }))}
-            due={me.due}
-            unreadAlerts={me.unreadAlerts}
-          />
-          <GlobalSearch />
-          <div className="lg:pl-[272px]">
-            {reminders?.stale ? (
-              <div
-                role="status"
-                className="border-b border-bad/30 bg-bad-soft px-4 py-2 text-center text-sm font-medium text-bad"
-              >
-                {reminders.missing.length > 0
-                  ? `Reminder emails can't go out — the server is missing ${reminders.missing.join(", ")}.`
-                  : reminders.neverRan
-                    ? "Reminder emails have never gone out — check the hourly scheduler."
-                    : `Reminder emails haven't gone out for ${reminders.hoursSince} hours — check the hourly scheduler.`}
-              </div>
-            ) : null}
-            {gmail.needsReconnect ? (
-              <div className="border-b border-warn/30 bg-warn-soft px-4 py-2 text-center text-sm text-warn">
-                Gmail needs to be reconnected —{" "}
-                <a className="font-semibold underline" href="/api/auth/google?purpose=gmail">
-                  reconnect now
-                </a>
-                . Until then, emails open in Gmail instead of sending.
-              </div>
-            ) : null}
-            <main className="mx-auto max-w-[1480px] px-4 py-5 pb-16 sm:px-6 sm:py-7 lg:px-9 lg:py-8">
-              {children}
-            </main>
-          </div>
-          <PendingTouchPrompt />
-          <HotImport />
+          <AssistantProvider state={shell.assistant}>
+            <ReminderWatcher />
+            <Sidebar
+              user={{
+                name: me.user.name,
+                email: me.user.email,
+                roleLabel: ROLE_LABEL[session.role],
+              }}
+              theme={theme}
+              manager={CAN.manageTeam(session.role)}
+              buckets={live.map((b) => ({
+                id: b.id,
+                name: b.name,
+                count: b.members,
+                mine: b.owner_id !== null,
+              }))}
+              due={me.due}
+              unreadAlerts={me.unreadAlerts}
+            />
+            <GlobalSearch />
+            <div className="lg:pl-[272px]">
+              {reminders?.stale ? (
+                <div
+                  role="status"
+                  className="border-b border-bad/30 bg-bad-soft px-4 py-2 text-center text-sm font-medium text-bad"
+                >
+                  {reminders.missing.length > 0
+                    ? `Reminder emails can't go out — the server is missing ${reminders.missing.join(", ")}.`
+                    : reminders.neverRan
+                      ? "Reminder emails have never gone out — check the hourly scheduler."
+                      : `Reminder emails haven't gone out for ${reminders.hoursSince} hours — check the hourly scheduler.`}
+                </div>
+              ) : null}
+              {gmail.needsReconnect ? (
+                <div className="border-b border-warn/30 bg-warn-soft px-4 py-2 text-center text-sm text-warn">
+                  Gmail needs to be reconnected —{" "}
+                  <a className="font-semibold underline" href="/api/auth/google?purpose=gmail">
+                    reconnect now
+                  </a>
+                  . Until then, emails open in Gmail instead of sending.
+                </div>
+              ) : null}
+              <main className="mx-auto max-w-[1480px] px-4 py-5 pb-16 sm:px-6 sm:py-7 lg:px-9 lg:py-8">
+                {children}
+              </main>
+            </div>
+            <PendingTouchPrompt />
+            <HotImport />
+          </AssistantProvider>
         </NewLeadProvider>
       </ToastProvider>
     </AppProvider>

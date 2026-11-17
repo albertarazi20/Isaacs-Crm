@@ -187,7 +187,9 @@ export function Drawer({
               <CloseButton onClose={onClose} />
             </div>
           </header>
-          <div className="min-h-0 flex-1 overflow-y-auto px-5 py-5 sm:px-7">{children}</div>
+          <div data-drawer-body className="min-h-0 flex-1 overflow-y-auto px-5 py-5 sm:px-7">
+            {children}
+          </div>
           {footer ? (
             <footer className="flex justify-end gap-2 border-t border-border px-5 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:px-7">
               {footer}
