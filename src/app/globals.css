@@ -230,6 +230,70 @@ table th {
   font-variant-numeric: tabular-nums;
 }
 
+/*
+ * Tick boxes and radio buttons in the app's own material. In the base layer, so a component that draws its own
+ * (a switch built on a hidden checkbox, a utility-sized box) still wins.
+ */
+@layer base {
+  input[type="checkbox"]:not([role="switch"]) {
+    appearance: none;
+    display: inline-grid;
+    place-content: center;
+    flex-shrink: 0;
+    width: 1.0625rem;
+    height: 1.0625rem;
+    border-radius: 6px;
+    border: 1.5px solid var(--border-strong);
+    background: var(--surface-3);
+    box-shadow: inset 0 1px 2px var(--shadow-c1);
+    cursor: pointer;
+    transition:
+      background-color 0.15s ease,
+      border-color 0.15s ease,
+      transform 0.15s var(--ease-out);
+  }
+  input[type="checkbox"]:not([role="switch"]):hover {
+    border-color: var(--accent);
+  }
+  input[type="checkbox"]:not([role="switch"]):active {
+    transform: scale(0.92);
+  }
+  input[type="checkbox"]:not([role="switch"])::after {
+    content: "";
+    width: 9px;
+    height: 5px;
+    border-left: 2px solid #fff;
+    border-bottom: 2px solid #fff;
+    transform: translateY(-1px) rotate(-45deg) scale(0);
+    transition: transform 0.18s var(--ease-spring);
+  }
+  input[type="checkbox"]:not([role="switch"]):checked,
+  input[type="checkbox"]:not([role="switch"]):indeterminate {
+    border-color: transparent;
+    background: var(--brand-gradient);
+  }
+  input[type="checkbox"]:not([role="switch"]):checked::after {
+    transform: translateY(-1px) rotate(-45deg) scale(1);
+  }
+  input[type="checkbox"]:not([role="switch"]):indeterminate::after {
+    height: 0;
+    border-left: 0;
+    transform: none;
+  }
+  input[type="checkbox"]:not([role="switch"]):disabled {
+    cursor: not-allowed;
+    opacity: 0.5;
+  }
+  input[type="radio"] {
+    accent-color: var(--accent);
+  }
+  input[type="date"],
+  input[type="time"],
+  input[type="datetime-local"] {
+    color-scheme: inherit;
+  }
+}
+
 /* Only one of the two logo variants shows: the wrong one for the mode is hidden; the layout classes decide the rest. */
 html[data-theme="light"] .only-dark,
 html[data-theme="dark"] .only-light,

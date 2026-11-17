@@ -4,9 +4,12 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { createBucketAction } from "@/app/buckets-actions";
 import { useRun } from "@/components/client/parts";
-import { Button, Input } from "@/components/ui";
+import { Dialog } from "@/components/overlay";
+import { Glyph } from "@/components/shell/icons";
+import { Button, Field, Input } from "@/components/ui";
 
-export function NewBucket({ canShare }: { canShare: boolean }) {
+/** The form itself: a name, and for a manager whether the whole shop gets the bucket. */
+export function NewBucket({ canShare, onDone }: { canShare: boolean; onDone?: () => void }) {
   const run = useRun();
   const router = useRouter();
   const [name, setName] = useState("");
@@ -14,7 +17,7 @@ export function NewBucket({ canShare }: { canShare: boolean }) {
   const [busy, setBusy] = useState(false);
   return (
     <form
-      className="space-y-2"
+      className="space-y-4"
       onSubmit={async (e) => {
         e.preventDefault();
         if (!name.trim()) return;
@@ -24,33 +27,62 @@ export function NewBucket({ canShare }: { canShare: boolean }) {
         if (ok) {
           setName("");
           router.refresh();
+          onDone?.();
         }
       }}
     >
-      <Input
-        value={name}
-        onChange={(e) => setName(e.target.value)}
-        placeholder="New bucket…"
-        className="text-sm"
-      />
-      <div className="flex items-center justify-between gap-2">
+      <Field
+        label="Name"
+        hint="A bucket is a follow-up track. Add its emails under Sequences once it exists."
+      >
+        <Input
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          placeholder="New bucket…"
+          maxLength={80}
+          autoFocus
+        />
+      </Field>
+      <div className="flex items-center justify-between gap-3">
         {canShare ? (
-          <label className="flex min-h-8 items-center gap-1.5 text-xs text-muted">
+          <label className="flex min-h-9 items-center gap-2 text-[13px] text-text-2">
             <input
               type="checkbox"
               className="size-4 accent-accent"
               checked={shared}
               onChange={(e) => setShared(e.target.checked)}
-            />{" "}
-            shared with everyone
+            />
+            Shared with everyone
           </label>
         ) : (
-          <span />
+          <span className="text-xs text-muted">Only you will see it.</span>
         )}
-        <Button type="submit" size="sm" disabled={busy || !name.trim()}>
-          Add
+        <Button type="submit" variant="primary" disabled={busy || !name.trim()}>
+          {busy ? "Adding…" : "Add"}
         </Button>
       </div>
     </form>
+  );
+}
+
+/** "New bucket" as a button: the form opens in a dialog over whatever bucket you are looking at. */
+export function NewBucketButton({
+  canShare,
+  variant = "secondary",
+}: {
+  canShare: boolean;
+  variant?: "primary" | "secondary";
+}) {
+  const [open, setOpen] = useState(false);
+  return (
+    <>
+      <Button variant={variant} onClick={() => setOpen(true)}>
+        <Glyph name="plus" className="size-4" strokeWidth={2.1} />
+        New bucket
+      </Button>
+      <Dialog open={open} onClose={() => setOpen(false)} title="New bucket">
+        <NewBucket canShare={canShare} onDone={() => setOpen(false)} />
+      </Dialog>
+    </>
   );
 }
