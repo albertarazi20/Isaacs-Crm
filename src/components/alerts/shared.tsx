@@ -33,6 +33,17 @@ export const ALERT_LOOK: Record<
       </svg>
     ),
   },
+  // every required document is in (0543): the rep's cue to hand the merchant off
+  file_complete: {
+    tone: "good",
+    group: "signed",
+    icon: (
+      <svg aria-hidden viewBox="0 0 24 24" className="size-[18px]" {...stroke}>
+        <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z" />
+        <path d="m9 13 2 2 4-4" />
+      </svg>
+    ),
+  },
   template_paused: {
     tone: "warn",
     group: "sending",

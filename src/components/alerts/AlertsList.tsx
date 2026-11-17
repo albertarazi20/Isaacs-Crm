@@ -137,7 +137,7 @@ export function AlertsList({
             </LinkButton>
           }
         >
-          Signed applications, paused templates and bounce spikes show up here.
+          Signed applications, complete files, paused templates and bounce spikes show up here.
         </EmptyState>
       ) : (
         <>

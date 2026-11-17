@@ -164,8 +164,7 @@ describe("the sequence runner", () => {
     s = await runBucketSteps({ db: t.db, now: day(14), appUrl: "https://crm.test" });
     expect(s.moved).toBeGreaterThanOrEqual(1);
     expect(await liveBucketKey(id)).toBe("cold");
-    // three different emails went out, not the same one
-    // three different emails went out over the sequence (the move to Cold cancels what was still queued)
+    // three different emails went out over the sequence, not the same one
     const subjects = (await outboxFor(id)).map((o) => o.subject);
     expect(new Set(subjects).size).toBe(3);
   });
@@ -179,8 +178,14 @@ describe("the sequence runner", () => {
     await t.pool.query("update enrollments set next_due_on = '2026-12-01' where client_id = $1", [
       id,
     ]);
-    for (let n = 0; n < 3; n += 1)
+    // each day's copy goes out in that day's window: the outbox holds one pending copy of a step at a time (0543)
+    for (let n = 0; n < 3; n += 1) {
       await runBucketSteps({ db: t.db, now: day(n), appUrl: "https://crm.test" });
+      await t.pool.query(
+        "update outbox set status = 'sent', sent_at = now() where client_id = $1 and status = 'queued'",
+        [id],
+      );
+    }
     const ob = (await outboxFor(id)).map((o) => o.source);
     expect(ob).toHaveLength(3);
     expect(new Set(ob).size).toBe(1); // step 1 every time
@@ -209,11 +214,8 @@ describe("the sequence runner", () => {
     expect(s.skipped).toBeGreaterThanOrEqual(1);
     expect(await outboxFor(id)).toHaveLength(0);
     await t.pool.query("update templates set approved = true where id = $1", [tpl]);
-    // the unapproved run finished the one-step sequence; bring it back as if freshly enrolled
-    await t.pool.query(
-      "update enrollments set next_step = 1, next_due_on = current_date - 1, stopped_at = null, stop_reason = null where client_id = $1",
-      [id],
-    );
+    // the unapproved run finished the one-step sequence and handed over to Cold (0543); enrol it again
+    await t.db.withUser(rep, (q) => q.query("select enroll_in_bucket($1, $2)", [id, mine]));
     s = await runBucketSteps({ db: t.db, appUrl: "https://crm.test" });
     expect((await outboxFor(id)).length).toBe(1);
   });

@@ -7,9 +7,11 @@ import { enqueueEmail } from "../send/enqueue";
 /**
  * The bucket sequence runner. Once a day (or whenever the cron fires) it finds every live enrolment whose next
  * step is due in the merchant's local day and performs it: queue the step's template on the outbox, open a call
- * task, or move the merchant to Cold. Then it schedules the following step. It never sends itself: the outbox
- * worker does, inside the send window and under the cap. With sequences switched off in Settings, step 1 repeats
- * daily until a stop rule fires.
+ * task, or move the merchant to Cold. Then it schedules the following step. When a bucket's sequence runs out the
+ * merchant goes to Cold; Cold itself keeps its members after its last nudge, with nothing more scheduled. It never
+ * sends itself: the outbox worker does, inside the send window and under the cap. With sequences switched off in
+ * Settings, step 1 repeats daily until a stop rule fires. Two runs at once are safe: each enrolment is locked and
+ * re-read before its step is taken, and the outbox holds one pending copy of a step (0543).
  */
 
 export interface RunSummary {
@@ -21,6 +23,8 @@ export interface RunSummary {
   skipped: number;
   /** Enrolments paused with a date ("not now until…") that re-opened today. */
   resumed: number;
+  /** Due rows another run was already working on, or had already done: left alone. */
+  taken: number;
 }
 
 interface DueRow {
@@ -29,7 +33,9 @@ interface DueRow {
   client_id: string;
   bucket_id: string;
   bucket_name: string;
+  bucket_key: string | null;
   next_step: number;
+  next_due_on: string;
   steps_sent: number;
   timezone: string;
   contact_name: string;
@@ -92,6 +98,7 @@ export async function runBucketSteps(args: {
     finished: 0,
     skipped: 0,
     resumed: 0,
+    taken: 0,
   };
   const sequences = await args.db.withSystem(
     async (q) =>
@@ -105,6 +112,7 @@ export async function runBucketSteps(args: {
          update enrollments e set paused = false, resume_on = null
            from clients c
           where e.client_id = c.id and e.stopped_at is null and e.paused and e.resume_on is not null
+            and c.brought_in_at is null
             and e.resume_on <= (($1::timestamptz at time zone app.client_timezone(c))::date)
           returning e.user_id, e.client_id, e.bucket_id),
        cleared as (
@@ -125,7 +133,8 @@ export async function runBucketSteps(args: {
   });
   const due = await args.db.withSystem(async (q) => {
     const { rows } = await q.query<DueRow>(
-      `select e.id as enrollment_id, e.user_id, e.client_id, e.bucket_id, b.name as bucket_name, e.next_step, e.steps_sent,
+      `select e.id as enrollment_id, e.user_id, e.client_id, e.bucket_id, b.name as bucket_name, b.key as bucket_key,
+              e.next_step, e.next_due_on::text as next_due_on, e.steps_sent,
               app.client_timezone(c) as timezone, c.contact_name, c.business_name, c.email,
               u.name as sender_name, u.application_link, c.application_token, u.signature,
               (select wanted_amount_cents from client_asks k where k.client_id = c.id order by created_at desc limit 1) as wanted_amount_cents,
@@ -137,6 +146,7 @@ export async function runBucketSteps(args: {
         where e.stopped_at is null and not e.paused and e.next_due_on is not null
           and e.next_due_on <= (($1::timestamptz at time zone app.client_timezone(c))::date)
           and c.contact_status <> 'dnc'
+          and c.brought_in_at is null
           and not exists (select 1 from trashed_clients tc where tc.client_id = c.id)
         order by e.next_due_on, e.entered_at`,
       [now.toISOString()],
@@ -147,6 +157,17 @@ export async function runBucketSteps(args: {
 
   for (const row of due) {
     await args.db.withSystem(async (q) => {
+      // another run may hold this enrolment, or may have taken this step already: lock it and re-read it first
+      const mine = await q.query(
+        `select 1 from enrollments
+          where id = $1 and stopped_at is null and not paused and next_step = $2 and next_due_on = $3::date
+          for update skip locked`,
+        [row.enrollment_id, row.next_step, row.next_due_on],
+      );
+      if (mine.rowCount === 0) {
+        summary.taken += 1;
+        return;
+      }
       const steps = await stepsFor(q, row.bucket_id);
       const today: ISODate = todayIn(row.timezone, now);
       if (steps.length === 0) {
@@ -157,25 +178,43 @@ export async function runBucketSteps(args: {
         summary.skipped += 1;
         return;
       }
+      // the sequence ran out: Cold keeps its member with nothing more scheduled; any other bucket hands over to Cold,
+      // unless the chase is over for good (handed off, opted out, bounced), when the enrolment simply ends
+      const finish = async (took: number) => {
+        summary.finished += 1;
+        if (row.bucket_key === "cold") {
+          await q.query(
+            "update enrollments set next_due_on = null, next_step = next_step + $2, steps_sent = steps_sent + $2 where id = $1",
+            [row.enrollment_id, took],
+          );
+          return;
+        }
+        await q.query(
+          "update enrollments set stopped_at = now(), stop_reason = 'sequence_done', steps_sent = steps_sent + $2 where id = $1",
+          [row.enrollment_id, took],
+        );
+        const cold = (
+          await q.query<{ id: string }>(
+            "select b.id from buckets b where b.key = 'cold' and b.active and not app.chase_closed($1)",
+            [row.client_id],
+          )
+        ).rows[0]?.id;
+        if (cold) {
+          await q.query("select enroll_in_bucket($1, $2, 'sequence_done')", [row.client_id, cold]);
+          summary.moved += 1;
+        }
+      };
       const step = sequences
         ? steps.find((s) => s.step_no === row.next_step)
         : steps.find((s) => s.action === "email");
       if (!step) {
-        await q.query(
-          "update enrollments set stopped_at = now(), stop_reason = 'sequence_done' where id = $1",
-          [row.enrollment_id],
-        );
-        summary.finished += 1;
+        await finish(0);
         return;
       }
       const after = sequences ? steps.find((s) => s.step_no === step.step_no + 1) : step;
       const scheduleNext = async () => {
         if (!after) {
-          await q.query(
-            "update enrollments set stopped_at = now(), stop_reason = 'sequence_done', steps_sent = steps_sent + 1 where id = $1",
-            [row.enrollment_id],
-          );
-          summary.finished += 1;
+          await finish(1);
           return;
         }
         // with sequences off, "tomorrow" again; with them on, entered_at + the next step's offset (never in the past)
@@ -305,7 +344,8 @@ export async function queueBlast(
         `select c.id as client_id, c.user_id, c.contact_name, c.business_name, c.email, c.upload_token,
                 u.name as sender_name, u.application_link, c.application_token, u.signature,
                 (select wanted_amount_cents from client_asks k where k.client_id = c.id order by created_at desc limit 1) as wanted_amount_cents,
-                '' as enrollment_id, '' as bucket_id, '' as bucket_name, 0 as next_step, 0 as steps_sent, app.client_timezone(c) as timezone
+                '' as enrollment_id, '' as bucket_id, '' as bucket_name, null as bucket_key, 0 as next_step, '' as next_due_on,
+                0 as steps_sent, app.client_timezone(c) as timezone
            from clients c join app_users u on u.id = c.user_id where c.id = $1`,
         [clientId],
       )

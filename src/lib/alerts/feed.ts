@@ -17,6 +17,7 @@ export interface AlertFeedRow {
 
 export const ALERT_KIND_LABELS: Record<string, string> = {
   application_signed: "Application signed",
+  file_complete: "File complete",
   template_paused: "Template paused",
   bounce_spike: "Bounce spike",
 };

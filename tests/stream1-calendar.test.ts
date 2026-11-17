@@ -64,19 +64,26 @@ describe("S1-11: US federal holidays", () => {
       )
     ).rows[0]!.id;
     const at = new Date("2026-11-26T14:30:00Z"); // 9:30 ET on Thanksgiving
-    const queued = () =>
+    // a step per call: the outbox holds one pending copy of a step (0543)
+    const queued = (step: number) =>
       t.db.withUser(rep, async (q) => {
         const r = await enqueueEmail(
           q,
-          { clientId: id, lane: "sequence", source: "bucket:x:step:1", subject: "s", text: "t" },
+          {
+            clientId: id,
+            lane: "sequence",
+            source: `bucket:x:step:${step}`,
+            subject: "s",
+            text: "t",
+          },
           at,
         );
         if (!r.queued) throw new Error("not queued");
         return r.notBefore;
       });
-    expect((await queued()).slice(0, 10)).toBe("2026-11-27");
+    expect((await queued(1)).slice(0, 10)).toBe("2026-11-27");
     await t.pool.query("update shop_settings set send_on_holidays = true");
-    expect(await queued()).toBe("2026-11-26T14:30:00.000Z");
+    expect(await queued(2)).toBe("2026-11-26T14:30:00.000Z");
     await t.pool.query("update shop_settings set send_on_holidays = false");
   });
 });
