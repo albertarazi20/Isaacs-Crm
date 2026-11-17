@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { AskButton, merchantBrief } from "@/components/assistant/AskButton";
 import { useState, type ReactNode } from "react";
 import { useApp } from "@/components/app-context";
 import { copyText } from "@/components/client/parts";
@@ -364,6 +365,11 @@ export function MemberDrawer({
               Open merchant
               <Glyph name="arrowUpRight" className="size-4 text-muted" />
             </Link>
+            <AskButton
+              text="Next step"
+              label={`Next step for ${member.business_name}`}
+              prompt={merchantBrief(member.business_name, member.client_id)}
+            />
             <Button variant="primary" disabled={busy} onClick={() => actions.onHandOff(member)}>
               <Glyph name="flag" className="size-4" />
               Hand off
