@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { ActiveBadge } from "./ActiveBadge";
 import { useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import type { CardMeta } from "@/lib/data/cardMeta";
@@ -28,8 +29,8 @@ import { NewLeadButton } from "./shell/NewLead";
 import { StageBadge } from "./StageBadge";
 import { Avatar, Badge, Button, cn, EmptyState, IconButton, Input, Select } from "./ui";
 
-type SortKey = "due" | "name" | "touch" | "newest";
-const SORTS: readonly SortKey[] = ["due", "name", "touch", "newest"];
+type SortKey = "due" | "name" | "touch" | "newest" | "active";
+const SORTS: readonly SortKey[] = ["due", "name", "touch", "newest", "active"];
 const GROUPS = ["all", "prospecting", "application", "exit"] as const;
 const QUIETS: readonly QuietFilter[] = ["any", "30", "90", "180", "never"];
 /** Rows drawn at first; the rest arrive a page at a time so a book of hundreds still opens at once. */
@@ -279,6 +280,10 @@ export function ClientsTable({
       name: (a, b) => a.business_name.localeCompare(b.business_name),
       touch: (a, b) => (b.last_touch_at ?? "").localeCompare(a.last_touch_at ?? ""),
       newest: (a, b) => b.created_at.localeCompare(a.created_at),
+      // the merchant's own last move (reply, open, document, signature), most recent first; never-active last
+      active: (a, b) =>
+        (meta[b.id]?.active_at ?? "").localeCompare(meta[a.id]?.active_at ?? "") ||
+        a.business_name.localeCompare(b.business_name),
     };
     return [...list].sort(by[sort]);
   }, [cards, meta, f, bucket, owner, brought, nowMs, sort]);
@@ -500,6 +505,7 @@ export function ClientsTable({
             <option value="name">Name</option>
             <option value="touch">Last contacted</option>
             <option value="newest">Newest first</option>
+            <option value="active">Most active</option>
           </Select>
         </label>
       </div>
@@ -604,7 +610,9 @@ export function ClientsTable({
                           <Glyph name="check" className="size-3" strokeWidth={2.4} />
                           Brought in
                         </Badge>
-                      ) : null}
+                      ) : (
+                        <ActiveBadge at={m?.active_at} nowMs={nowMs} />
+                      )}
                     </div>
                     <div role="cell" className="hidden min-w-0 truncate text-text-2 xl:block">
                       {m?.bucket_name ?? <span className="text-muted">None</span>}

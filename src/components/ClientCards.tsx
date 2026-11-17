@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { ActiveBadge } from "./ActiveBadge";
 import type { CardMeta } from "@/lib/data/cardMeta";
 import type { ClientCard } from "@/lib/data/types";
 import { formatDate, relativeDay, timeAgo } from "@/lib/format";
@@ -81,7 +82,9 @@ export function ClientCards({
                       <Glyph name="check" className="size-3" strokeWidth={2.4} />
                       Brought in
                     </Badge>
-                  ) : null}
+                  ) : (
+                    <ActiveBadge at={m?.active_at} nowMs={nowMs} />
+                  )}
                   <span className="text-xs text-muted">
                     {m?.bucket_name ? `${m.bucket_name} · ` : ""}
                     {c.last_touch_at

@@ -10,6 +10,11 @@ export interface CardMeta {
   owner_name: string;
   /** When the rep handed the merchant off ("brought in"), or null while it is still being worked. */
   brought_in_at: string | null;
+  /**
+   * The last time the merchant themself did something: wrote back, opened their link or application, sent a
+   * document, signed. Null when they never have. What "Most active" sorts by and the "Active" mark shows.
+   */
+  active_at: string | null;
 }
 
 /** Bucket, owner and hand-off for every merchant the caller can see, by client id. Trash is left out. */
@@ -17,7 +22,14 @@ export async function listCardMeta(q: Db): Promise<Record<string, CardMeta>> {
   const { rows } = await q.query<CardMeta & { id: string }>(
     `select c.id, c.brought_in_at, c.user_id as owner_id,
             coalesce((select u.name from app_users u where u.id = c.user_id), '') as owner_name,
-            e.bucket_id, e.bucket_name
+            e.bucket_id, e.bucket_name,
+            greatest(
+              (select max(ie.received_at) from inbound_emails ie where ie.client_id = c.id),
+              (select max(lo.opened_at) from link_opens lo where lo.client_id = c.id),
+              (select max(d.created_at) from documents d
+                where d.client_id = c.id and d.deleted_at is null and d.source in ('upload_link', 'email')),
+              (select max(ap.signed_at) from applications ap where ap.client_id = c.id)
+            ) as active_at
        from clients c
        left join lateral (
          select b.id as bucket_id, b.name as bucket_name
