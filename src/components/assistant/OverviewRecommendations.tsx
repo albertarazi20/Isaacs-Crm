@@ -43,6 +43,7 @@ export function OverviewRecommendations({
         <RecommendationCards
           items={items}
           ready={ready}
+          phoneLimit={2}
           onPlan={(r) => ask({ prompt: r.prompt, label: r.title, send: true, fresh: true })}
         />
       ) : (

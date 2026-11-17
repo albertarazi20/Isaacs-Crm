@@ -493,7 +493,7 @@ function body(o: Overview, now: Date, manager: boolean) {
         />
       </section>
 
-      <div className="grid grid-cols-[minmax(0,1fr)] gap-4 sm:gap-5 xl:grid-cols-[minmax(0,5fr)_minmax(0,3fr)]">
+      <div className="grid grid-cols-[minmax(0,1fr)] gap-4 max-sm:order-[-1] sm:gap-5 xl:grid-cols-[minmax(0,5fr)_minmax(0,3fr)]">
         <div className="relative xl:min-h-[520px]">
           <Panel
             title="Do this now"
@@ -658,17 +658,18 @@ export default async function OverviewPage({
   const { kpis } = overview;
   const waiting = kpis.replyWaiting + kpis.overdue;
 
+  // On a phone the "Do this now" list comes straight after the recommendations (order -1); the numbers follow it.
   return (
-    <div className="space-y-4 sm:space-y-5">
+    <div className="flex flex-col gap-4 sm:gap-5">
       {denied ? (
         <p
           role="status"
-          className="rounded-2xl border border-border bg-surface-2 px-4 py-2.5 text-sm text-muted"
+          className="rounded-2xl border border-border bg-surface-2 px-4 py-2.5 text-sm text-muted max-sm:order-[-2]"
         >
           That page isn&apos;t available, so you&apos;re back on the Overview.
         </p>
       ) : null}
-      <div className="animate-rise pb-1">
+      <div className="animate-rise pb-1 max-sm:order-[-2]">
         <PageHeader
           eyebrow={`${WEEKDAYS[parseISODate(me.ctx.today).getUTCDay()]}, ${formatDate(me.ctx.today)}`}
           title={
@@ -704,7 +705,9 @@ export default async function OverviewPage({
           }
         />
       </div>
-      <OverviewRecommendations items={recommendations} ready={assistant.ready} />
+      <div className="max-sm:order-[-2]">
+        <OverviewRecommendations items={recommendations} ready={assistant.ready} />
+      </div>
       {body(overview, new Date(nowMs), manager)}
     </div>
   );
