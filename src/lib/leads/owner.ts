@@ -1,5 +1,6 @@
 import type { Db } from "../db";
 import { UserError } from "../data/mutations";
+import { matchableEmail } from "../mca/matchEmail";
 import { stageDef, type StageKey } from "../mca/stages";
 import { firstName, tidy } from "../mca/templates";
 
@@ -36,10 +37,11 @@ export async function lookupLeadOwner(
   q: Db,
   input: { phone?: string; email?: string },
 ): Promise<LeadOwner | null> {
-  if (!input.phone?.trim() && !input.email?.trim()) return null;
+  const email = matchableEmail(input.email);
+  if (!input.phone?.trim() && !email) return null;
   const { rows } = await q.query<LeadOwner>("select * from lead_owner($1, $2)", [
     input.phone ?? "",
-    input.email ?? "",
+    email,
   ]);
   return rows[0] ?? null;
 }

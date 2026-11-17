@@ -207,7 +207,7 @@ const QUEUE_SQL = `${BASE}, q as (
        join lateral (select lo.kind, max(lo.opened_at) as at from link_opens lo
                       where lo.client_id = c.id and lo.opened_at > now() - interval '48 hours'
                       group by lo.kind order by max(lo.opened_at) desc limit 1) o on true
-      where c.brought_in_at is null
+      where c.brought_in_at is null and c.contact_status <> 'dnc'
         and not (o.kind = 'apply' and exists (select 1 from applications a
                                                where a.client_id = c.id and a.signed_at >= o.at))
         and not (o.kind = 'upload' and exists (select 1 from documents d
@@ -218,7 +218,7 @@ const QUEUE_SQL = `${BASE}, q as (
             'New lead' || case when btrim(c.looking_for) <> '' then ' · wants ' || left(btrim(c.looking_for), 60) else '' end,
             c.created_at, -extract(epoch from c.created_at)
        from live c
-      where c.brought_in_at is null and c.created_at > now() - interval '24 hours'
+      where c.brought_in_at is null and c.created_at > now() - interval '24 hours' and c.contact_status <> 'dnc'
         and not exists (select 1 from activities a where a.client_id = c.id and a.kind = 'call')
       order by c.created_at desc limit 25)
     union all
@@ -244,16 +244,17 @@ const QUEUE_SQL = `${BASE}, q as (
     union all
     (select 6, 'bounced', c.id, c.business_name, c.contact_name, c.user_id,
             'Email bounced · fix the address', c.email_bounced_at, -extract(epoch from c.email_bounced_at)
-       from live c where c.email_bounced_at is not null and c.brought_in_at is null
+       from live c where c.email_bounced_at is not null and c.brought_in_at is null and c.contact_status <> 'dnc'
       order by c.email_bounced_at desc limit 25)
     union all
+    -- the same rule as the overdue count above (and the call list): never do-not-contact, not booked for today
     (select 7, 'overdue', c.id, c.business_name, c.contact_name, c.user_id,
-            'Follow-up was due ' || to_char(t.due_on, 'FMMon FMDD'), t.due_on::timestamptz, extract(epoch from t.due_on::timestamptz)
-       from live c
-       join lateral (select min(t.due_on) as due_on from timers t
-                      where t.client_id = c.id and t.done_at is null and t.due_on < $1::date) t on t.due_on is not null
-      where c.brought_in_at is null
-      order by t.due_on limit 25)
+            'Follow-up was due ' || to_char(cc.next_due_on, 'FMMon FMDD'), cc.next_due_on::timestamptz,
+            extract(epoch from cc.next_due_on::timestamptz)
+       from live c join client_cards cc on cc.id = c.id
+      where cc.next_due_on < $1::date and cc.contact_status <> 'dnc' and c.brought_in_at is null
+        and not (cc.scheduled_call_at is not null and cc.scheduled_call_at::date = $1::date)
+      order by cc.next_due_on limit 25)
   )
   select q.kind, q.client_id, q.business_name, q.contact_name, q.detail, q.at,
          case when app.can_see_all() then (select nullif(btrim(u.name), '') from app_users u where u.id = q.user_id) end as owner_name

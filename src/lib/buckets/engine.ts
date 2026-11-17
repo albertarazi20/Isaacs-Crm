@@ -227,12 +227,10 @@ export async function runBucketSteps(args: {
         );
       };
 
+      // "move to Cold" is the sequence handing over early: the same guards as running out (Cold must be active and
+      // the chase still open; otherwise the enrolment simply ends)
       if (step.action === "move_to_cold") {
-        const cold = (await q.query<{ id: string }>("select id from buckets where key = 'cold'"))
-          .rows[0]?.id;
-        if (cold)
-          await q.query("select enroll_in_bucket($1, $2, 'sequence_done')", [row.client_id, cold]);
-        summary.moved += 1;
+        await finish(0);
         return;
       }
       if (step.action === "call") {
@@ -337,7 +335,16 @@ export async function queueBlast(
   ).rows[0];
   if (!tpl) throw new Error("template not found");
   const out = { queued: 0, skipped: [] as { clientId: string; reason: string }[] };
-  const blastId = `blast:${args.templateId}:${now.toISOString().slice(0, 10)}`;
+  // "pressing Blast twice is the same row" holds for the rep's whole day, not a UTC day (which ends at 7pm ET)
+  const day = (
+    await q.query<{ d: string }>(
+      `select ($1::timestamptz at time zone coalesce(
+                 (select nullif(u.timezone, '') from app_users u where u.id = app.current_user_id()),
+                 'America/New_York'))::date::text as d`,
+      [now.toISOString()],
+    )
+  ).rows[0]!.d;
+  const blastId = `blast:${args.templateId}:${day}`;
   for (const clientId of args.clientIds) {
     const row = (
       await q.query<DueRow>(

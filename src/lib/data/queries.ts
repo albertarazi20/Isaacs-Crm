@@ -1,4 +1,5 @@
 import type { Db } from "../db";
+import { matchableEmail } from "../mca/matchEmail";
 import { todayIn } from "../mca/dates";
 import { normalizeUS } from "../mca/phone";
 import type { ContactStatus } from "../mca/contact";
@@ -127,7 +128,7 @@ export async function findDuplicates(
   const e164 = input.phone ? normalizeUS(input.phone) : null;
   const digits = e164 ? e164.slice(2) : null;
   const name = nameKey(input.businessName ?? "");
-  const email = (input.email ?? "").trim().toLowerCase();
+  const email = matchableEmail(input.email);
   if (!digits && !name && !email) return [];
   const { rows } = await q.query<{
     id: string;

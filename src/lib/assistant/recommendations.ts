@@ -231,16 +231,19 @@ export async function loadRecommendationFacts(
   // counted on their own: the "do this now" list is capped at 25 and shows one reason per merchant
   const counts = await q.query<{ new_leads: number; bounced: number; opened: number }>(
     `select
-       (select count(distinct c.id)::int from clients c
-          join link_opens o on o.client_id = c.id and o.opened_at > now() - interval '48 hours'
-         where c.brought_in_at is null
+       -- the "do this now" list's own rule: the newest link opened, unfinished, never do-not-contact
+       (select count(*)::int from clients c
+          join lateral (select lo.kind, max(lo.opened_at) as at from link_opens lo
+                         where lo.client_id = c.id and lo.opened_at > now() - interval '48 hours'
+                         group by lo.kind order by max(lo.opened_at) desc limit 1) o on true
+         where c.brought_in_at is null and c.contact_status <> 'dnc'
            and not exists (select 1 from trashed_clients t where t.client_id = c.id)
            and not (o.kind = 'apply' and exists (select 1 from applications a
-                                                  where a.client_id = c.id and a.signed_at >= o.opened_at))
+                                                  where a.client_id = c.id and a.signed_at >= o.at))
            and not (o.kind = 'upload' and exists (select 1 from documents d where d.client_id = c.id
-                                                   and d.deleted_at is null and d.created_at >= o.opened_at))) as opened,
+                                                   and d.deleted_at is null and d.created_at >= o.at))) as opened,
        (select count(*)::int from clients c
-         where c.brought_in_at is null and c.created_at > now() - interval '24 hours'
+         where c.brought_in_at is null and c.created_at > now() - interval '24 hours' and c.contact_status <> 'dnc'
            and not exists (select 1 from activities a where a.client_id = c.id and a.kind = 'call')
            and not exists (select 1 from trashed_clients t where t.client_id = c.id)) as new_leads,
        (select count(*)::int from clients c

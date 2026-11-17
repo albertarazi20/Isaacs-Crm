@@ -26,9 +26,23 @@ async function handle(req: Request): Promise<NextResponse> {
   const e = env();
   if (!authorised(req, e.CRON_SECRET))
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
-  const statements = await runStatementClock(db);
-  const buckets = await runBucketSteps({ db, appUrl: e.APP_URL });
-  const nudges = await runOpenNudges({ db, appUrl: e.APP_URL });
+  // each job on its own: one that fails (a lock timeout in the statement clock) must not skip the hour's sequences
+  const errors: string[] = [];
+  const attempt = async <T>(name: string, job: () => Promise<T>): Promise<T | null> => {
+    try {
+      return await job();
+    } catch (err) {
+      console.error(`cron nightly: ${name} failed:`, err);
+      errors.push(name);
+      return null;
+    }
+  };
+  const statements = await attempt("statements", () => runStatementClock(db));
+  const buckets = await attempt("buckets", () => runBucketSteps({ db, appUrl: e.APP_URL }));
+  const nudges = await attempt("nudges", () => runOpenNudges({ db, appUrl: e.APP_URL }));
+  // a run with a failed job is not healthy: no heartbeat, and a 500 so the scheduler shows it
+  if (errors.length > 0)
+    return NextResponse.json({ statements, buckets, nudges, failed: errors }, { status: 500 });
   await recordHeartbeat("nightly");
   return NextResponse.json({ statements, buckets, nudges });
 }

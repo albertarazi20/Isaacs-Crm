@@ -85,7 +85,7 @@ describe("the recommendations", () => {
     );
     const inDb = await t.pool.query<{ n: number }>(
       `select count(*)::int as n from clients c where c.user_id = $1 and c.brought_in_at is null
-          and c.created_at > now() - interval '24 hours'
+          and c.created_at > now() - interval '24 hours' and c.contact_status <> 'dnc'
           and not exists (select 1 from activities a where a.client_id = c.id and a.kind = 'call')`,
       [rep],
     );
