@@ -139,13 +139,14 @@ function PaletteDialog({
   onClose: () => void;
   children: React.ReactNode;
 }) {
-  const [ref, onNativeClose, onKeyDown] = useModal(open, onClose);
+  const [ref, onNativeClose, onKeyDown, onCancel] = useModal(open, onClose);
   return (
     <dialog
       ref={ref}
       aria-label="Find a client"
       onClose={onNativeClose}
       onKeyDown={onKeyDown}
+      onCancel={onCancel}
       onClick={(e) => {
         if (e.target === ref.current) onClose();
       }}

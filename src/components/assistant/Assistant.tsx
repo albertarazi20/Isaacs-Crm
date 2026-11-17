@@ -26,7 +26,8 @@ import { useApp } from "@/components/app-context";
 import { Drawer, useCall, useToast } from "@/components/overlay";
 import { Glyph, type GlyphName } from "@/components/shell/icons";
 import { cn, IconButton, Kbd, Skeleton } from "@/components/ui";
-import { timeAgo } from "@/lib/format";
+import { formatDate, timeAgo } from "@/lib/format";
+import type { ISODate } from "@/lib/mca/dates";
 import { PLAN_MY_DAY, STARTERS } from "@/lib/assistant/prompts";
 import type { Recommendation } from "@/lib/assistant/recommendations";
 import type { ShownItem, ThreadSummary } from "@/lib/assistant/run";
@@ -38,6 +39,8 @@ import { RecommendationCards } from "./RecommendationCards";
 interface OpenOptions {
   /** Put this in the composer, or send it straight away with `send`. */
   prompt?: string;
+  /** What the person's bubble says when a long brief is sent for them ("Plan my day"). */
+  label?: string;
   send?: boolean;
   /** Start a new conversation first (a recommendation always does). */
   fresh?: boolean;
@@ -49,7 +52,7 @@ export const useAssistant = () => useContext(AssistantContext);
 
 type ToolChip = { label: string; done: boolean };
 type Item =
-  | { kind: "user"; text: string }
+  | { kind: "user"; text: string; label?: string }
   | {
       kind: "assistant";
       text: string;
@@ -99,19 +102,42 @@ function ActionIcon({ type }: { type: ShownAction["type"] }) {
   return <Glyph name={name} className="size-4" />;
 }
 
+const PAGE_NAMES: [string, string][] = [
+  ["/follow-up", "Follow Up"],
+  ["/clients", "Merchants"],
+  ["/today", "Call list"],
+  ["/dial", "Power dial"],
+  ["/import", "Import a file"],
+  ["/trash", "Trash"],
+  ["/alerts", "Alerts"],
+  ["/settings/email", "Settings, Email"],
+  ["/settings/buckets", "Settings, Buckets & templates"],
+  ["/settings/sheets", "Settings, Lead sources"],
+  ["/settings", "Settings"],
+];
+function pageName(href: string): string {
+  if (href === "/" || href.startsWith("/?")) return "Overview";
+  return (
+    PAGE_NAMES.find(
+      ([p]) => href === p || href.startsWith(`${p}/`) || href.startsWith(`${p}?`),
+    )?.[1] ?? href
+  );
+}
+
 /** What an action does, in a few words, under its label. */
-function actionDetail(a: ShownAction): string {
+function actionDetail(a: ShownAction, today: string): string {
+  const day = (d: string) => (d === today ? "today" : formatDate(d as ISODate, today));
   switch (a.type) {
     case "open":
-      return a.href;
+      return `Go to ${pageName(a.href)}`;
     case "hand_off":
       return `${a.merchant_name}: mark brought in, stop the chase`;
     case "set_follow_up":
-      return `${a.merchant_name}: next follow-up ${a.date}`;
+      return `${a.merchant_name}: next follow-up ${day(a.date)}`;
     case "add_note":
       return `${a.merchant_name}: add to the timeline`;
     case "pause":
-      return `${a.merchant_name}: pause emails${a.until ? ` until ${a.until}` : ""}`;
+      return `${a.merchant_name}: pause emails${a.until ? ` until ${day(a.until)}` : ""}`;
     case "move_to_bucket":
       return `${a.merchant_name}: move to ${a.bucket_name}`;
     case "copy":
@@ -123,10 +149,12 @@ function ActionCard({
   action,
   status,
   onRun,
+  today,
 }: {
   action: ShownAction;
   status: Status;
   onRun: () => void;
+  today: string;
 }) {
   const done = status === "done";
   return (
@@ -163,7 +191,9 @@ function ActionCard({
         </span>
         <span className="min-w-0 flex-1">
           <span className="block truncate text-[13px] font-semibold">{action.label}</span>
-          <span className="block truncate text-[12px] text-muted">{actionDetail(action)}</span>
+          <span className="block truncate text-[12px] text-muted">
+            {actionDetail(action, today)}
+          </span>
         </span>
         <span
           className={cn(
@@ -193,6 +223,30 @@ function ActionCard({
         </span>
       </button>
     </li>
+  );
+}
+
+/** The person's words. A long brief sent for them shows its short name, with the brief one click away. */
+function UserBubble({ text, label }: { text: string; label?: string }) {
+  const [full, setFull] = useState(false);
+  const long = text.length > 220;
+  return (
+    <div className="max-w-[85%] rounded-2xl rounded-br-md bg-surface-2 px-4 py-2.5 text-[14px] leading-relaxed text-text">
+      {label && !full ? (
+        <p className="font-medium">{label}</p>
+      ) : (
+        <p className={cn("whitespace-pre-wrap", long && !full && "line-clamp-3")}>{text}</p>
+      )}
+      {label || long ? (
+        <button
+          type="button"
+          onClick={() => setFull((v) => !v)}
+          className="mt-1 text-[12px] font-medium text-muted transition hover:text-text"
+        >
+          {full ? "Show less" : label ? "Show the brief" : "Show all"}
+        </button>
+      ) : null}
+    </div>
   );
 }
 
@@ -227,7 +281,7 @@ export function AssistantProvider({
   const router = useRouter();
   const call = useCall();
   const toast = useToast();
-  const { nowMs } = useApp();
+  const { nowMs, today } = useApp();
   const [open, setOpen] = useState(false);
   const [view, setView] = useState<"chat" | "history">("chat");
   const [threadId, setThreadId] = useState<string | null>(null);
@@ -240,7 +294,7 @@ export function AssistantProvider({
   const abort = useRef<AbortController | null>(null);
   const scroller = useRef<HTMLDivElement | null>(null);
   const input = useRef<HTMLTextAreaElement | null>(null);
-  const pending = useRef<string | null>(null);
+  const pending = useRef<{ prompt: string; label?: string } | null>(null);
 
   const patchLast = useCallback(
     (fn: (a: Extract<Item, { kind: "assistant" }>) => Extract<Item, { kind: "assistant" }>) =>
@@ -253,7 +307,7 @@ export function AssistantProvider({
   );
 
   const send = useCallback(
-    async (text: string) => {
+    async (text: string, label?: string) => {
       const message = text.trim();
       if (!message || busy) return;
       setBusy(true);
@@ -261,7 +315,7 @@ export function AssistantProvider({
       setView("chat");
       setItems((cur) => [
         ...cur,
-        { kind: "user", text: message },
+        { kind: "user", text: message, label },
         { kind: "assistant", text: "", actions: [], tools: [], streaming: true },
       ]);
       const controller = new AbortController();
@@ -379,7 +433,7 @@ export function AssistantProvider({
         .then((r) => setRecs(r.ok ? r.data : []))
         .catch(() => setRecs([]));
       if (o.prompt) {
-        if (o.send && state.ready) pending.current = o.prompt;
+        if (o.send && state.ready) pending.current = { prompt: o.prompt, label: o.label };
         else setDraft(o.prompt);
       }
     },
@@ -391,7 +445,7 @@ export function AssistantProvider({
     if (!open || !pending.current || busy) return;
     const p = pending.current;
     pending.current = null;
-    void send(p);
+    void send(p.prompt, p.label);
   }, [open, busy, send]);
 
   // ⌘J / Ctrl+J anywhere; the shell's buttons ask with an event
@@ -539,6 +593,7 @@ export function AssistantProvider({
                 <textarea
                   ref={input}
                   aria-label="Ask the assistant"
+                  autoFocus
                   value={draft}
                   rows={1}
                   disabled={!state.ready}
@@ -647,7 +702,7 @@ export function AssistantProvider({
               <button
                 type="button"
                 disabled={!state.ready || busy}
-                onClick={() => void send(PLAN_MY_DAY)}
+                onClick={() => void send(PLAN_MY_DAY, "Plan my day")}
                 className="ring-brand bg-brand-soft flex w-full items-center gap-3 rounded-2xl border border-border px-4 py-3.5 text-left transition duration-150 hover:border-accent/50 active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <Glyph name="target" className="size-5 shrink-0 text-accent" />
@@ -673,7 +728,7 @@ export function AssistantProvider({
                     compact
                     items={recs}
                     ready={state.ready && !busy}
-                    onPlan={(r) => void send(r.prompt)}
+                    onPlan={(r) => void send(r.prompt, r.title)}
                   />
                 )}
               </section>
@@ -685,7 +740,7 @@ export function AssistantProvider({
                       key={s.label}
                       type="button"
                       disabled={!state.ready || busy}
-                      onClick={() => void send(s.prompt)}
+                      onClick={() => void send(s.prompt, s.label)}
                       className="h-10 rounded-full border border-border bg-surface px-3.5 text-[13px] font-medium text-text-2 transition duration-150 hover:border-accent/50 hover:text-text active:scale-[0.97] disabled:opacity-50 sm:h-9"
                     >
                       {s.label}
@@ -699,9 +754,7 @@ export function AssistantProvider({
               {items.map((it, i) =>
                 it.kind === "user" ? (
                   <li key={i} className="flex justify-end">
-                    <p className="max-w-[85%] rounded-2xl rounded-br-md bg-surface-2 px-4 py-2.5 text-[14px] leading-relaxed whitespace-pre-wrap text-text">
-                      {it.text}
-                    </p>
+                    <UserBubble text={it.text} label={it.label} />
                   </li>
                 ) : (
                   <li key={i} className="flex gap-3">
@@ -749,6 +802,7 @@ export function AssistantProvider({
                                 action={a}
                                 status={status[a.id] ?? "idle"}
                                 onRun={() => void runAction(a)}
+                                today={today}
                               />
                             ))}
                           </ul>

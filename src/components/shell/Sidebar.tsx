@@ -447,7 +447,7 @@ function SidebarBody({
 export function Sidebar(props: SidebarProps) {
   const [open, setOpen] = useState(false);
   const close = useCallback(() => setOpen(false), []);
-  const [sheet, onNativeClose, onKeyDown] = useModal(open, close);
+  const [sheet, onNativeClose, onKeyDown, onCancel] = useModal(open, close);
   return (
     <div data-app-header className="contents">
       <aside className="glass fixed inset-y-0 left-0 z-30 hidden w-[272px] border-r border-border lg:block">
@@ -521,6 +521,7 @@ export function Sidebar(props: SidebarProps) {
         aria-label="Menu"
         onClose={onNativeClose}
         onKeyDown={onKeyDown}
+        onCancel={onCancel}
         onClick={(e) => {
           if (e.target === sheet.current) close();
         }}

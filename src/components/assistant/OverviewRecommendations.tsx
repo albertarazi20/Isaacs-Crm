@@ -30,7 +30,9 @@ export function OverviewRecommendations({
         <button
           type="button"
           disabled={!ready}
-          onClick={() => ask({ prompt: PLAN_MY_DAY, send: true, fresh: true })}
+          onClick={() =>
+            ask({ prompt: PLAN_MY_DAY, label: "Plan my day", send: true, fresh: true })
+          }
           className="inline-flex h-10 items-center gap-2 rounded-full border border-border bg-surface px-4 text-[13px] font-semibold shadow-card transition duration-150 hover:border-accent/50 active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-50 sm:h-9"
         >
           <Glyph name="target" className="size-4 text-accent" />
@@ -41,7 +43,7 @@ export function OverviewRecommendations({
         <RecommendationCards
           items={items}
           ready={ready}
-          onPlan={(r) => ask({ prompt: r.prompt, send: true, fresh: true })}
+          onPlan={(r) => ask({ prompt: r.prompt, label: r.title, send: true, fresh: true })}
         />
       ) : (
         <p className="rounded-2xl border border-dashed border-border-strong/70 px-4 py-6 text-center text-[13px] text-muted">

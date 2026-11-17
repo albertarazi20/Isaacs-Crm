@@ -9,6 +9,7 @@ import {
   useState,
   type KeyboardEvent as ReactKeyboardEvent,
   type ReactNode,
+  type SyntheticEvent,
 } from "react";
 import type { ActionResult } from "@/lib/data/types";
 import { cn } from "./ui";
@@ -54,7 +55,16 @@ export function useModal(open: boolean, onClose: () => void) {
     },
     [onClose],
   );
-  return [ref, onNativeClose, onKeyDown] as const;
+  // Escape pressed while focus is outside the dialog (the clicked button was removed) never reaches onKeyDown; the
+  // browser fires "cancel" on the top dialog instead, at once, so the state follows it before any late close event
+  const onCancel = useCallback(
+    (e: SyntheticEvent<HTMLDialogElement>) => {
+      e.preventDefault();
+      onClose();
+    },
+    [onClose],
+  );
+  return [ref, onNativeClose, onKeyDown, onCancel] as const;
 }
 
 function CloseButton({ onClose }: { onClose: () => void }) {
@@ -95,13 +105,14 @@ export function Dialog({
   footer?: ReactNode;
   wide?: boolean;
 }) {
-  const [ref, onNativeClose, onKeyDown] = useModal(open, onClose);
+  const [ref, onNativeClose, onKeyDown, onCancel] = useModal(open, onClose);
   return (
     <dialog
       ref={ref}
       aria-label={title}
       onClose={onNativeClose}
       onKeyDown={onKeyDown}
+      onCancel={onCancel}
       onClick={(e) => {
         if (e.target === ref.current) onClose();
       }}
@@ -159,13 +170,14 @@ export function Drawer({
   wide?: boolean;
   headerAside?: ReactNode;
 }) {
-  const [ref, onNativeClose, onKeyDown] = useModal(open, onClose);
+  const [ref, onNativeClose, onKeyDown, onCancel] = useModal(open, onClose);
   return (
     <dialog
       ref={ref}
       aria-label={title}
       onClose={onNativeClose}
       onKeyDown={onKeyDown}
+      onCancel={onCancel}
       onClick={(e) => {
         if (e.target === ref.current) onClose();
       }}
