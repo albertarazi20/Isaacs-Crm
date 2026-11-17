@@ -326,3 +326,39 @@ a dropdown sidebar, lead intake as a button and never a page, compact pages with
   closes on the Escape key press itself, counts its own closes and ignores a close event that arrives while the
   dialog is open. The search palette and the phone menu use the same hook.
 - **Supabase `aztoxzcmnvqaypjuuuwj`**: 0540 applied by hand in one transaction; 80 migrations, matching local.
+
+## The assistant, two bug hunts, hot signals and the nudge (2026-11-17, overnight): branch signals
+
+The owner asked for an AI assistant on Claude Opus 5.5 that tells a rep what to do next and sets it up for them, then
+for the night to be spent finding bugs, fixing designs and adding ideas that make the CRM a better follow-up desk.
+
+- **The assistant** (`src/lib/assistant/`, `src/components/assistant/`, `0541_assistant.sql`): a side panel (⌘J) that
+  reads the CRM through read-only tools under the person's row security and proposes actions as buttons (open, hand
+  off, set a follow-up, add a note, pause, move to a bucket, send an email after review, copy a text). Nothing
+  happens until the person clicks. Recommendations on the Overview open it with a brief. Every model call is logged
+  against the daily AI budget; conversations are saved per person. The model is scripted in the tests and in the
+  browser suite (`e2e/model-stub.mjs`); a real key goes in Netlify as `ANTHROPIC_API_KEY`.
+- **Hot signals** (`0547_link_opens.sql`, `src/lib/system/linkSignals.ts`, `/api/seen`): a merchant who keeps their
+  upload link or application on screen for three seconds is recorded (a mail scanner is not; a signed-in rep is
+  not). They go second in "Do this now" as Opened link, and the assistant recommends calling them.
+- **Nudge after an open** (`0548_open_nudge.sql`, `src/lib/system/openNudge.ts`, hourly): off until a manager switches
+  it on in Settings > Email. A merchant whose latest open was 20 to 72 hours ago and who has not finished gets their
+  link again, once a week at most, from the two shop templates "Nudge: finish uploading" and "Nudge: finish the
+  application".
+- **Ask from anywhere**: each "Do this now" row has a sparkles button with a brief for why it is there (draft my
+  reply, nudge them, prep the call, check the file, what came in, fix the email, catch up), and a merchant's newest
+  reply has Draft my reply. Briefs carry the merchant's id, never their name.
+- **Bug hunt 1** (four agents: engine, documents, UI, security; `0542`–`0546`): a not-now reply re-opened a closed
+  chase; duplicate automated emails; the statement clock never ran; a relabelled or deleted file kept its box ticked;
+  undo of a hand-off lost the bucket; renewal templates made money claims; stale alerts; another rep's merchant could
+  be imported or sent by webhook a second time; wording, em dashes and touch targets across the app.
+- **Bug hunt 2** (two fresh reviewers; `0549` and code): the open bucket page crashed (a server page called a
+  function from a client-only file; `tests/boundaries.test.ts` now fails any such import); the assistant's link check
+  accepted `/.//api/...`; cut-off model calls were not counted; one failed lookup broke the batch; the panel mixed
+  threads when history was opened mid-answer; undo of a hand-off skipped the step it cancelled and ignored documents
+  that came in meanwhile; re-bucketing re-opened closed chases and dropped pauses; a scan-rejected file kept its box
+  ticked; the statement checklist never let an old month go; blasts were keyed to the UTC day; do-not-contact
+  merchants showed on the call-now, opened and overdue lists; placeholder emails matched unrelated merchants.
+- **Gates**: typecheck, lint, format clean; unit 102 files / 1,389 tests; `pnpm build` passes; browser suites run
+  locally against the stand-in model.
+- **Supabase `aztoxzcmnvqaypjuuuwj`**: 0541–0549 applied by hand, one transaction each (no 0545); 88 migrations.
