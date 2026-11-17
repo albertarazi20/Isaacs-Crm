@@ -306,7 +306,7 @@ function NoteComposer({ card }: { card: ClientCard }) {
           }
         }}
         placeholder="Write a note: what they said, what they want, when to call back…"
-        className="block min-h-24 w-full resize-y bg-transparent px-4 pt-3.5 pb-2 text-[15px] leading-relaxed text-text placeholder:text-muted/70 focus:outline-none sm:px-5"
+        className="block min-h-24 w-full resize-y bg-transparent px-4 pt-3.5 pb-2 text-[15px] leading-relaxed text-text placeholder:text-muted focus:outline-none sm:px-5"
       />
       {hintSource.trim() ? (
         <div className="px-4 pb-2 empty:hidden sm:px-5">

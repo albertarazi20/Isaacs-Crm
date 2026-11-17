@@ -609,7 +609,7 @@ export function AssistantProvider({
                       void send(draft);
                     }
                   }}
-                  className="max-h-40 min-h-9 flex-1 resize-none bg-transparent py-2 text-[14px] text-text outline-none! [field-sizing:content] placeholder:text-muted/70 disabled:cursor-not-allowed"
+                  className="max-h-40 min-h-9 flex-1 resize-none bg-transparent py-2 text-[14px] text-text outline-none! [field-sizing:content] placeholder:text-muted disabled:cursor-not-allowed"
                 />
                 {busy ? (
                   <button

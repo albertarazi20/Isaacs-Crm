@@ -322,7 +322,7 @@ function Palette({
             setActive(0);
           }}
           onKeyDown={onKeyDown}
-          className="h-14 flex-1 bg-transparent text-base text-text outline-none! placeholder:text-muted/70"
+          className="h-14 flex-1 bg-transparent text-base text-text outline-none! placeholder:text-muted"
         />
         <button
           type="button"

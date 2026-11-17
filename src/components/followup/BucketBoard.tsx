@@ -105,7 +105,13 @@ function BucketCard({
             title={`${score.sent} sent, ${score.replies} replied, ${score.docs_in} brought documents in. Last ${days} days.`}
           >
             <span className="shrink-0 text-muted">Reply rate</span>
-            <Meter value={score.reply_rate} max={1} tone="brand" className="h-1" />
+            <Meter
+              label="Reply rate"
+              value={score.reply_rate}
+              max={1}
+              tone="brand"
+              className="h-1"
+            />
             <span className="shrink-0 font-semibold text-text tabular-nums">
               {pct(score.reply_rate)}
             </span>

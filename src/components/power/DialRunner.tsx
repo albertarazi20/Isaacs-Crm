@@ -187,6 +187,7 @@ export function DialRunner({ items }: { items: DialItem[] }) {
         </div>
         <div role="group" aria-label="Progress through today's calls">
           <Meter
+            label="Calls done today"
             value={total === 0 ? 1 : done}
             max={total === 0 ? 1 : total}
             tone="brand"
@@ -409,6 +410,7 @@ function DialCard({
                 {card.stips_received} of {card.stips_required} received
               </span>
               <Meter
+                label="Documents received"
                 value={card.stips_received}
                 max={card.stips_required}
                 tone="brand"

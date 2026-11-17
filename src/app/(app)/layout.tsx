@@ -68,6 +68,12 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         <NewLeadProvider buckets={live} assistant={shell.assistant}>
           <AssistantProvider state={shell.assistant}>
             <ReminderWatcher />
+            <a
+              href="#content"
+              className="sr-only z-50 rounded-full bg-surface px-4 py-2 text-sm font-semibold shadow-pop focus:not-sr-only focus:fixed focus:top-3 focus:left-3"
+            >
+              Skip to content
+            </a>
             <Sidebar
               user={{
                 name: me.user.name,
@@ -108,7 +114,11 @@ export default async function AppLayout({ children }: { children: React.ReactNod
                   . Until then, emails open in Gmail instead of sending.
                 </div>
               ) : null}
-              <main className="mx-auto max-w-[1480px] px-4 py-5 pb-16 sm:px-6 sm:py-7 lg:px-9 lg:py-8">
+              <main
+                id="content"
+                tabIndex={-1}
+                className="mx-auto max-w-[1480px] outline-none px-4 py-5 pb-16 sm:px-6 sm:py-7 lg:px-9 lg:py-8"
+              >
                 {children}
               </main>
             </div>

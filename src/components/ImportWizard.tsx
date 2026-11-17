@@ -545,6 +545,7 @@ export function ImportWizard() {
 
           {busy && progress && progress.total > IMPORT_BATCH ? (
             <Meter
+              label="Rows imported"
               value={Math.min(progress.done + IMPORT_BATCH, progress.total)}
               max={progress.total}
               tone="brand"

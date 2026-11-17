@@ -208,7 +208,7 @@ export function NewLeadButton({
         aria-label="New lead"
         onClick={() => open()}
         className={cn(
-          "bg-brand inline-flex size-10 shrink-0 items-center justify-center rounded-full text-white shadow-glow transition duration-150 hover:brightness-110 active:scale-95",
+          "bg-brand-ink inline-flex size-10 shrink-0 items-center justify-center rounded-full text-white shadow-glow transition duration-150 hover:brightness-110 active:scale-95",
           className,
         )}
       >
@@ -221,7 +221,7 @@ export function NewLeadButton({
       onClick={() => open()}
       aria-keyshortcuts="N"
       className={cn(
-        "bg-brand group inline-flex items-center gap-2 rounded-full text-sm font-semibold text-white shadow-glow transition duration-150 [text-shadow:0_1px_1px_rgb(20_10_60/0.35)] hover:brightness-110 active:scale-[0.97]",
+        "bg-brand-ink group inline-flex items-center gap-2 rounded-full text-sm font-semibold text-white shadow-glow transition duration-150 [text-shadow:0_1px_1px_rgb(20_10_60/0.35)] hover:brightness-110 active:scale-[0.97]",
         variant === "full" ? "h-11 w-full justify-between pr-2 pl-4" : "h-10 px-4 sm:h-9",
         className,
       )}

@@ -28,7 +28,7 @@ type Size = "sm" | "md" | "lg";
  */
 const VARIANT: Record<Variant, string> = {
   primary:
-    "bg-brand font-semibold text-white shadow-glow hover:brightness-110 active:brightness-95 [text-shadow:0_1px_1px_rgb(20_10_60/0.35)]",
+    "bg-brand-ink font-semibold text-white shadow-glow hover:brightness-110 active:brightness-95 [text-shadow:0_1px_1px_rgb(20_10_60/0.35)]",
   secondary:
     "border border-border bg-surface text-text shadow-card hover:border-border-strong hover:bg-surface-3 active:bg-surface-2",
   ghost: "text-text-2 hover:bg-surface-2 hover:text-text active:bg-surface-2",
@@ -107,7 +107,7 @@ export function IconButton({
 }
 
 const FIELD =
-  "w-full rounded-xl border border-border bg-surface-3 px-3 text-sm text-text shadow-[inset_0_1px_2px_var(--shadow-c1)] transition duration-150 placeholder:text-muted/70 hover:border-border-strong focus:border-accent focus:bg-surface focus:ring-[3px] focus:ring-ring focus:outline-none disabled:cursor-not-allowed disabled:opacity-60";
+  "w-full rounded-xl border border-border bg-surface-3 px-3 text-sm text-text shadow-[inset_0_1px_2px_var(--shadow-c1)] transition duration-150 placeholder:text-muted hover:border-border-strong focus:border-accent focus:bg-surface focus:ring-[3px] focus:ring-ring focus:outline-none disabled:cursor-not-allowed disabled:opacity-60";
 
 export function Input({ className, ...rest }: InputHTMLAttributes<HTMLInputElement>) {
   return <input className={cn(FIELD, "h-10 sm:h-9", className)} {...rest} />;
@@ -423,11 +423,14 @@ export function Meter({
   max,
   tone = "accent",
   className,
+  label,
 }: {
   value: number;
   max: number;
   tone?: Tone | "brand";
   className?: string;
+  /** What it measures, for a screen reader ("Emails sent today of the cap"). */
+  label: string;
 }) {
   const pct = max > 0 ? Math.max(0, Math.min(100, (value / max) * 100)) : 0;
   const fill =
@@ -444,6 +447,7 @@ export function Meter({
   return (
     <div
       role="meter"
+      aria-label={label}
       aria-valuemin={0}
       aria-valuemax={max}
       aria-valuenow={value}

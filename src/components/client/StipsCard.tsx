@@ -73,6 +73,7 @@ export function StipsCard({
       }
     >
       <Meter
+        label="Required documents received"
         value={roll.requiredReceived}
         max={roll.requiredTotal}
         tone={roll.ready ? "good" : "brand"}

@@ -85,7 +85,13 @@ export default async function AiSettingsPage() {
               </span>
               <span className="text-sm font-medium text-muted tabular-nums">of {usd(cap)}</span>
             </p>
-            <Meter value={spent} max={Math.max(cap, 1)} tone={tone} className="mt-3.5 h-2" />
+            <Meter
+              label="AI spend today, of the daily cap"
+              value={spent}
+              max={Math.max(cap, 1)}
+              tone={tone}
+              className="mt-3.5 h-2"
+            />
             <p className="mt-2 text-xs text-muted tabular-nums">
               {share >= 1
                 ? "The cap is reached. Raise it below, or it starts again tomorrow."

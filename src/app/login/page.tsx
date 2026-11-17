@@ -100,7 +100,7 @@ export default async function LoginPage({
                   autoComplete="current-password"
                   placeholder="Passcode"
                   aria-label="Passcode"
-                  className="h-13 w-full rounded-full border border-border bg-surface-3 px-5 text-base text-text shadow-[inset_0_1px_2px_var(--shadow-c1)] transition duration-150 placeholder:text-muted/70 hover:border-border-strong focus:border-accent focus:bg-surface focus:ring-[3px] focus:ring-ring focus:outline-none"
+                  className="h-13 w-full rounded-full border border-border bg-surface-3 px-5 text-base text-text shadow-[inset_0_1px_2px_var(--shadow-c1)] transition duration-150 placeholder:text-muted hover:border-border-strong focus:border-accent focus:bg-surface focus:ring-[3px] focus:ring-ring focus:outline-none"
                 />
                 <button
                   type="submit"

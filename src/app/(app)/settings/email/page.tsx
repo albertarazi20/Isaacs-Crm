@@ -82,6 +82,7 @@ export default async function EmailSettingsPage() {
                     </div>
                     <p className="truncate text-xs text-muted">{m.address}</p>
                     <Meter
+                      label={`${m.address}: emails sent in 24 hours, of the cap`}
                       value={m.sent_24h}
                       max={m.cap}
                       tone={m.sent_24h === 0 ? "neutral" : tone === "good" ? "brand" : tone}

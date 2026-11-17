@@ -49,9 +49,9 @@
   );
 
   /* status */
-  --good: light-dark(#12803a, #4ade80);
+  --good: light-dark(#0f7535, #4ade80);
   --good-soft: light-dark(#e4f6eb, #10271a);
-  --warn: light-dark(#b45309, #fbbf24);
+  --warn: light-dark(#a14a07, #fbbf24);
   --warn-soft: light-dark(#fdf1dc, #2a220e);
   --bad: light-dark(#be1d1d, #fb7185);
   --bad-soft: light-dark(#fde9e9, #2d1418);
@@ -367,6 +367,10 @@ html:not([data-theme]) .only-light {
 }
 .bg-brand {
   background-image: var(--brand-gradient);
+}
+/* The same gradient a step deeper, for surfaces that carry white text (buttons, counts): 5:1 or better on every stop. */
+.bg-brand-ink {
+  background-image: linear-gradient(135deg, #1f5fd6 0%, #8b3fd9 52%, #b62fc4 100%);
 }
 .bg-brand-soft {
   background-image: var(--brand-gradient-soft);

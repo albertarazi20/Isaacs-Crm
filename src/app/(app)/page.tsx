@@ -344,7 +344,12 @@ function Team({ rows }: { rows: RepRow[] }) {
                 <span className="flex items-center gap-2.5">
                   <span className="w-6 text-right font-semibold">{r.broughtIn}</span>
                   <span className="w-20 shrink-0">
-                    <Meter value={r.broughtIn} max={best} tone="brand" />
+                    <Meter
+                      value={r.broughtIn}
+                      max={best}
+                      tone="brand"
+                      label={`${r.name}: brought in`}
+                    />
                   </span>
                 </span>
               </td>
@@ -378,6 +383,7 @@ function Sending({ meters }: { meters: EmailMeter[] }) {
             </span>
           </div>
           <Meter
+            label={`${m.address}: emails sent in 24 hours, of the cap`}
             value={m.sent_24h}
             max={m.cap}
             tone={m.tone === "red" ? "bad" : m.tone === "amber" ? "warn" : "good"}
@@ -522,7 +528,12 @@ function body(o: Overview, now: Date, manager: boolean) {
                   >
                     <span className="min-w-0 flex-1 truncate">{b.name}</span>
                     <span className="w-24 shrink-0">
-                      <Meter value={b.count} max={topBucket} tone="accent" />
+                      <Meter
+                        value={b.count}
+                        max={topBucket}
+                        tone="accent"
+                        label={`${b.name}: merchants`}
+                      />
                     </span>
                     <span className="w-8 text-right font-semibold tabular-nums">{b.count}</span>
                   </Link>

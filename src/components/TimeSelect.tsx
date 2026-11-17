@@ -118,7 +118,7 @@ export function TimeSelect({
         }}
         className={cn(
           "flex h-10 w-full items-center justify-between gap-2 rounded-lg border border-border bg-surface px-3 text-left text-sm transition hover:border-border-strong focus:border-accent focus:ring-2 focus:ring-ring focus:outline-none sm:h-9",
-          value ? "font-medium text-text" : "text-muted/70",
+          value ? "font-medium text-text" : "text-muted",
         )}
       >
         <span className="truncate">{value ? labelOf(value) : (none ?? "Pick a time")}</span>

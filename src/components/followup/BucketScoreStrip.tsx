@@ -34,7 +34,13 @@ function Stat({
         ) : null}
       </dd>
       {rate !== undefined ? (
-        <Meter value={rate} max={1} tone={tone ?? "brand"} className="mt-2 h-1 max-w-24" />
+        <Meter
+          label={label}
+          value={rate}
+          max={1}
+          tone={tone ?? "brand"}
+          className="mt-2 h-1 max-w-24"
+        />
       ) : null}
     </div>
   );

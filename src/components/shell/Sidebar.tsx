@@ -3,7 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
-import { useCallback, useState, type ReactNode } from "react";
+import { useCallback, useRef, useState, type ReactNode } from "react";
 import { LogoutButton } from "@/components/LogoutButton";
 import { useModal } from "@/components/overlay";
 import { ThemeSwitch } from "@/components/ThemeSwitch";
@@ -59,7 +59,7 @@ function Count({ n, tone = "quiet" }: { n: number; tone?: "quiet" | "hot" }) {
     <span
       className={cn(
         "ml-auto min-w-5 rounded-full px-1.5 text-center text-[11px] leading-5 font-semibold tabular-nums",
-        tone === "hot" ? "bg-brand text-white shadow-glow" : "bg-surface-2 text-text-2",
+        tone === "hot" ? "bg-brand-ink text-white shadow-glow" : "bg-surface-2 text-text-2",
       )}
     >
       {n > 999 ? "999+" : n}
@@ -219,6 +219,7 @@ function SidebarBody({
   // what the person toggled by hand; until they do, a dropdown is open when you are inside it
   const [manual, setManual] = useState<Partial<Record<GroupKey, boolean>>>({});
   const [account, setAccount] = useState(false);
+  const accountButton = useRef<HTMLButtonElement | null>(null);
   const isOpen = (k: GroupKey, fallback: boolean) => manual[k] ?? fallback;
   const toggle = (k: GroupKey, fallback: boolean) =>
     setManual((m) => ({ ...m, [k]: !(m[k] ?? fallback) }));
@@ -389,52 +390,67 @@ function SidebarBody({
           <Count n={unreadAlerts} tone="hot" />
         </Link>
 
+        {/* the button comes first in the page so Tab goes from it into the panel; the panel shows above it */}
         <div
-          className={cn(
-            "grid transition-[grid-template-rows,opacity] duration-300 ease-out",
-            account ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0",
-          )}
-          inert={!account}
+          className="flex flex-col-reverse"
+          onKeyDown={(e) => {
+            if (e.key === "Escape" && account) {
+              e.stopPropagation();
+              setAccount(false);
+              accountButton.current?.focus();
+            }
+          }}
         >
-          <div className="overflow-hidden">
-            <div className="space-y-2.5 px-1 pt-2 pb-2.5">
-              <p className="eyebrow text-[10px]!">Appearance</p>
-              <ThemeSwitch initial={theme} />
-              <div className="flex items-center justify-between">
-                <Link
-                  href="/settings"
-                  onClick={onNavigate}
-                  className="text-[13px] text-muted transition hover:text-text"
-                >
-                  Account settings
-                </Link>
-                <LogoutButton email={user.email} />
+          <button
+            ref={accountButton}
+            type="button"
+            aria-expanded={account}
+            aria-controls="account-panel"
+            aria-label="Account"
+            onClick={() => setAccount((v) => !v)}
+            className="flex w-full items-center gap-3 rounded-2xl border border-border bg-surface-3/50 p-2 text-left transition duration-150 hover:border-border-strong hover:bg-surface-2/60"
+          >
+            <Avatar name={user.name || user.email} size={34} />
+            <span className="min-w-0 flex-1">
+              <span className="block truncate text-[13px] font-semibold">
+                {user.name || user.email.split("@")[0]}
+              </span>
+              <span className="block truncate text-[11.5px] text-muted">{user.roleLabel}</span>
+            </span>
+            <Glyph
+              name="chevronDown"
+              className={cn(
+                "mr-1 size-4 text-muted transition-transform duration-300",
+                account ? "" : "rotate-180",
+              )}
+            />
+          </button>
+          <div
+            className={cn(
+              "grid transition-[grid-template-rows,opacity] duration-300 ease-out",
+              account ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0",
+            )}
+            inert={!account}
+            id="account-panel"
+          >
+            <div className="overflow-hidden">
+              <div className="space-y-2.5 px-1 pt-2 pb-2.5">
+                <p className="eyebrow text-[10px]!">Appearance</p>
+                <ThemeSwitch initial={theme} />
+                <div className="flex items-center justify-between">
+                  <Link
+                    href="/settings"
+                    onClick={onNavigate}
+                    className="text-[13px] text-muted transition hover:text-text"
+                  >
+                    Account settings
+                  </Link>
+                  <LogoutButton email={user.email} />
+                </div>
               </div>
             </div>
           </div>
         </div>
-        <button
-          type="button"
-          aria-expanded={account}
-          aria-label="Account"
-          onClick={() => setAccount((v) => !v)}
-          className="flex w-full items-center gap-3 rounded-2xl border border-border bg-surface-3/50 p-2 text-left transition duration-150 hover:border-border-strong hover:bg-surface-2/60"
-        >
-          <Avatar name={user.name || user.email} size={34} />
-          <span className="min-w-0 flex-1">
-            <span className="block truncate text-[13px] font-semibold">
-              {user.name || user.email.split("@")[0]}
-            </span>
-            <span className="block truncate text-[11.5px] text-muted">{user.roleLabel}</span>
-          </span>
-          <Glyph
-            name="chevronDown"
-            className={cn(
-              "mr-1 size-4 text-muted transition-transform duration-300",
-              account ? "" : "rotate-180",
-            )}
-          />
-        </button>
       </div>
     </div>
   );
@@ -458,6 +474,7 @@ export function Sidebar(props: SidebarProps) {
         <button
           type="button"
           aria-label="Menu"
+          aria-expanded={open}
           onClick={() => setOpen(true)}
           className="inline-flex size-10 items-center justify-center rounded-full text-text-2 transition hover:bg-surface-2 active:scale-95"
         >

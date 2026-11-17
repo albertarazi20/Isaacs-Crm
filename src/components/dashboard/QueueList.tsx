@@ -142,7 +142,7 @@ export function QueueList({ items }: { items: QueueItem[] }) {
                     {timeAgo(it.at, now)}
                   </span>
                   {it.ownerName ? (
-                    <span className="block text-[11.5px] text-muted/80">{it.ownerName}</span>
+                    <span className="block text-[11.5px] text-muted">{it.ownerName}</span>
                   ) : null}
                 </span>
                 <Glyph

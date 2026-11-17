@@ -14,6 +14,18 @@ import {
 import type { ActionResult } from "@/lib/data/types";
 import { cn } from "./ui";
 
+/** Put focus back on the control that opened a dialog, if it is still on the page and nothing else took focus. */
+function returnFocus(opener: { current: HTMLElement | null }) {
+  const el = opener.current;
+  opener.current = null;
+  if (!el) return;
+  requestAnimationFrame(() => {
+    const now = document.activeElement;
+    if (el.isConnected && (!now || now === document.body || !now.isConnected))
+      el.focus({ preventScroll: true });
+  });
+}
+
 /**
  * Opens and closes a native <dialog> from a boolean, and keeps the boolean honest.
  *
@@ -28,15 +40,24 @@ import { cn } from "./ui";
 export function useModal(open: boolean, onClose: () => void) {
   const ref = useRef<HTMLDialogElement>(null);
   const ownCloses = useRef(0);
+  // what had focus when it opened: focus goes back there when it closes, even when the caller removes the dialog
+  // from the page at once (the browser's own focus return never runs then, and focus would fall to <body>)
+  const opener = useRef<HTMLElement | null>(null);
   useEffect(() => {
     const d = ref.current;
     if (!d) return;
-    if (open && !d.open) d.showModal();
+    if (open && !d.open) {
+      opener.current =
+        document.activeElement instanceof HTMLElement ? document.activeElement : null;
+      d.showModal();
+    }
     if (!open && d.open) {
       ownCloses.current += 1;
       d.close();
+      returnFocus(opener);
     }
   }, [open]);
+  useEffect(() => () => returnFocus(opener), []);
   const onNativeClose = useCallback(() => {
     if (ownCloses.current > 0) {
       ownCloses.current -= 1;
