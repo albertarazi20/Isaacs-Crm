@@ -30,19 +30,14 @@ function useModal(open: boolean, onClose: () => void) {
       d.close();
     }
   }, [open]);
-  return {
-    ref,
-    onClose: () => {
-      if (ownCloses.current > 0) {
-        ownCloses.current -= 1;
-        return;
-      }
-      onClose();
-    },
-    onClick: (e: { target: EventTarget | null }) => {
-      if (e.target === ref.current) onClose();
-    },
-  };
+  const onNativeClose = useCallback(() => {
+    if (ownCloses.current > 0) {
+      ownCloses.current -= 1;
+      return;
+    }
+    onClose();
+  }, [onClose]);
+  return [ref, onNativeClose] as const;
 }
 
 function CloseButton({ onClose }: { onClose: () => void }) {
@@ -83,12 +78,14 @@ export function Dialog({
   footer?: ReactNode;
   wide?: boolean;
 }) {
-  const modal = useModal(open, onClose);
+  const [ref, onNativeClose] = useModal(open, onClose);
   return (
     <dialog
-      ref={modal.ref}
-      onClose={modal.onClose}
-      onClick={modal.onClick}
+      ref={ref}
+      onClose={onNativeClose}
+      onClick={(e) => {
+        if (e.target === ref.current) onClose();
+      }}
       className={cn(
         // anchored a fixed distance from the top on a desktop, so content that loads after it opens grows downward instead
         // of re-centring the box under the pointer; a bottom sheet with a grab handle on a phone
@@ -143,13 +140,15 @@ export function Drawer({
   wide?: boolean;
   headerAside?: ReactNode;
 }) {
-  const modal = useModal(open, onClose);
+  const [ref, onNativeClose] = useModal(open, onClose);
   return (
     <dialog
-      ref={modal.ref}
+      ref={ref}
       aria-label={title}
-      onClose={modal.onClose}
-      onClick={modal.onClick}
+      onClose={onNativeClose}
+      onClick={(e) => {
+        if (e.target === ref.current) onClose();
+      }}
       className={cn(
         "sheet-right glass-strong m-0 ml-auto h-dvh max-h-none w-full border-l border-border p-0 text-text shadow-pop sm:rounded-l-3xl",
         wide ? "max-w-[820px]" : "max-w-[560px]",
