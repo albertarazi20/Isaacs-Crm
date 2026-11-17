@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { AskButton, merchantBrief } from "@/components/assistant/AskButton";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import {
@@ -275,6 +276,12 @@ export function ClientHero({ detail, className }: { detail: ClientDetail; classN
               className="pointer-events-none absolute top-1/2 right-3 size-3.5 -translate-y-1/2 text-muted"
             />
           </div>
+          <AskButton
+            size="sm"
+            text="Next step"
+            label={`Next step for ${card.business_name}`}
+            prompt={merchantBrief(card.business_name, card.id)}
+          />
           <Button size="sm" onClick={() => setEditing(true)}>
             <Icon name="note" className="size-3.5 text-muted" />
             Edit details

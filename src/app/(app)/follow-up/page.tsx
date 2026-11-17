@@ -1,3 +1,4 @@
+import { ALL_BUCKETS_BRIEF, AskButton, bucketBrief } from "@/components/assistant/AskButton";
 import Link from "next/link";
 import { BucketBoard } from "@/components/followup/BucketBoard";
 import { BucketBrief } from "@/components/followup/BucketBrief";
@@ -94,6 +95,11 @@ export default async function FollowUpPage({
           description="Each bucket emails its people on its own schedule and stops the moment they reply, upload or sign. Open one to work its list."
           actions={
             <>
+              <AskButton
+                label="Review my buckets"
+                text="Review with the assistant"
+                prompt={ALL_BUCKETS_BRIEF}
+              />
               {sequencesLink}
               <NewBucketButton canShare={manager} variant="primary" />
             </>
@@ -141,7 +147,16 @@ export default async function FollowUpPage({
           </>
         }
         description={bucketPurpose(selected)}
-        actions={<NewBucketButton canShare={manager} />}
+        actions={
+          <>
+            <AskButton
+              label={`Work the ${data.selected.name} bucket`}
+              text="Work it with the assistant"
+              prompt={bucketBrief(data.selected.name, data.selected.id)}
+            />
+            <NewBucketButton canShare={manager} />
+          </>
+        }
       />
       <BucketSwitcher
         current={selected.id}
