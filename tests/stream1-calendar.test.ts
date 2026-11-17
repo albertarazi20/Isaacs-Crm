@@ -82,11 +82,11 @@ describe("S1-11: US federal holidays", () => {
 });
 
 describe("S1-14: the Cold bucket", () => {
-  it("the Cold bucket has no email steps; a Cold member stays put and the engine sends it nothing", async () => {
-    const steps = await t.pool.query<{ action: string }>(
-      "select s.action from bucket_steps s join buckets b on b.id = s.bucket_id where b.key = 'cold'",
+  it("the Cold bucket has its monthly nudge back (0540): three emails at 30, 60 and 90 days, one a month", async () => {
+    const steps = await t.pool.query<{ action: string; day_offset: number }>(
+      "select s.action, s.day_offset from bucket_steps s join buckets b on b.id = s.bucket_id where b.key = 'cold' order by s.step_no",
     );
-    expect(steps.rows).toEqual([]);
+    expect(steps.rows).toEqual([30, 60, 90].map((day_offset) => ({ action: "email", day_offset })));
     const id = (
       await t.pool.query<{ id: string }>(
         "insert into clients (user_id, business_name, contact_name, phone, email, state) values ($1, 'Cold Co', 'Owner', '3055550101', 'cold@x.com', 'FL') returning id",
@@ -106,14 +106,17 @@ describe("S1-14: the Cold bucket", () => {
         )
       ).rows.map((r) => r.source);
 
-    // ninety days of the bucket engine: nothing from the bucket, and the merchant is still in Cold
-    for (const n of [0, 1, 30, 31, 60, 61, 90])
+    // the first month is quiet and the merchant stays in Cold; then one nudge a month, three in all
+    for (const n of [0, 1, 28])
       await runBucketSteps({ db: t.db, now: new Date(day(n)), appUrl: "https://crm.test" });
     expect(await emails()).toEqual([]);
-    const live = await t.pool.query<{ key: string; next_due_on: string | null }>(
-      "select b.key, e.next_due_on::text from enrollments e join buckets b on b.id = e.bucket_id where e.client_id = $1 and e.stopped_at is null",
+    const live = await t.pool.query<{ key: string }>(
+      "select b.key from enrollments e join buckets b on b.id = e.bucket_id where e.client_id = $1 and e.stopped_at is null",
       [id],
     );
-    expect(live.rows).toEqual([{ key: "cold", next_due_on: null }]);
+    expect(live.rows).toEqual([{ key: "cold" }]);
+    for (const n of [30, 31, 60, 61, 90])
+      await runBucketSteps({ db: t.db, now: new Date(day(n)), appUrl: "https://crm.test" });
+    expect(await emails()).toEqual([1, 2, 3].map((n) => `bucket:${cold}:step:${n}`));
   });
 });
