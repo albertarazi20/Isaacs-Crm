@@ -299,6 +299,7 @@ export async function runReadTool(
       replies_waiting: o.kpis.replyWaiting,
       ready_to_hand_off: o.kpis.readyToHandOff,
       median_minutes_to_first_touch: o.kpis.speedToLeadMinutes,
+      median_days_to_bring_in: o.kpis.daysToBringIn,
       funnel_this_month: o.funnel.map((s) => ({ step: s.label, merchants: s.count })),
       buckets: o.buckets.map((b) => ({ id: b.id, name: b.name, merchants: b.count })),
       do_this_now: o.queue.map((x) => ({
