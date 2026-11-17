@@ -143,7 +143,7 @@ export default async function todayFlow({ email }) {
     withDb((db) =>
       one(
         db,
-        "select count(*) filter (where c.business_name = 'Totally Different Name')::int n, count(*) filter (where c.phone = '+13055550999')::int same_phone from clients c join app_users u on u.id = c.user_id where u.email = $1",
+        "select count(*) filter (where c.business_name = 'Totally Different Name')::int n, count(*) filter (where right(regexp_replace(c.phone, '\\D', '', 'g'), 10) = '3055550999')::int same_phone from clients c join app_users u on u.id = c.user_id where u.email = $1",
         [email],
       ),
     );

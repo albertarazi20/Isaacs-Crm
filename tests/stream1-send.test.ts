@@ -1,7 +1,12 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { setTemplateApproved } from "@/lib/buckets/templates";
 import { checkClaims } from "@/lib/messaging/claims";
-import { automationDomain, checkAutomationDns, storeDnsCheck } from "@/lib/send/dns";
+import {
+  automationDomain,
+  checkAutomationDns,
+  DnsUnreachableError,
+  storeDnsCheck,
+} from "@/lib/send/dns";
 import { enqueueEmail } from "@/lib/send/enqueue";
 import type { Lane } from "@/lib/send/rules";
 import { drainOutbox, type Deliverer } from "@/lib/send/worker";
@@ -272,6 +277,36 @@ describe("S1-4 / S1-5: the DNS gate and the Resend branch", () => {
     expect(automationDomain("auto@Selectivecap.com")).toBe("selectivecap.com");
     expect(automationDomain("")).toBeNull();
     expect(automationDomain("nobody")).toBeNull();
+  });
+
+  it("a DNS lookup that does not answer is not 'nothing published': the check refuses in words and nothing is stored", async () => {
+    const before = (
+      await t.pool.query<{ dns_checked_at: string | null }>(
+        "select dns_checked_at from shop_settings",
+      )
+    ).rows[0];
+    const silent = {
+      resolveTxt: () =>
+        Promise.reject(Object.assign(new Error("queryTxt ETIMEOUT"), { code: "ETIMEOUT" })),
+    };
+    const err = await checkAutomationDns("auto@mail.selectivecap.com", silent).catch(
+      (e: unknown) => e,
+    );
+    expect(err).toBeInstanceOf(DnsUnreachableError);
+    expect((err as Error).message).toMatch(/did not answer\. Nothing was changed/);
+    // a missing record is still an answer, not an error
+    const empty = {
+      resolveTxt: () =>
+        Promise.reject(Object.assign(new Error("queryTxt ENODATA"), { code: "ENODATA" })),
+    };
+    const check = await checkAutomationDns("auto@mail.selectivecap.com", empty);
+    expect(check).toMatchObject({ ok: false, spf: { ok: false }, dmarc: { ok: false } });
+    const after = (
+      await t.pool.query<{ dns_checked_at: string | null }>(
+        "select dns_checked_at from shop_settings",
+      )
+    ).rows[0];
+    expect(after).toEqual(before);
   });
 
   it("automated mail waits with dns_not_verified until SPF, DKIM and DMARC are all found; then Resend sends it, reply-to the rep", async () => {

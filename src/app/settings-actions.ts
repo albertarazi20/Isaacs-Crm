@@ -8,7 +8,12 @@ import { toActionError } from "@/lib/data/errors";
 import { id } from "@/lib/data/schemas";
 import type { ActionResult } from "@/lib/data/types";
 import { db } from "@/lib/db";
-import { checkAutomationDns, describeDnsCheck, storeDnsCheck } from "@/lib/send/dns";
+import {
+  checkAutomationDns,
+  describeDnsCheck,
+  DnsUnreachableError,
+  storeDnsCheck,
+} from "@/lib/send/dns";
 import { saveAiSettings, saveShopSettings } from "@/lib/settings/mutations";
 import { aiSchema, shopSchema } from "@/lib/settings/schemas";
 
@@ -45,6 +50,7 @@ export async function checkAutomationDnsAction(): Promise<
     revalidatePath("/settings/email");
     return { ok: true, data: { ok: check.ok, summary: describeDnsCheck(check) } };
   } catch (e) {
+    if (e instanceof DnsUnreachableError) return { ok: false, error: e.message };
     return { ok: false, error: toActionError(e) };
   }
 }

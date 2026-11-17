@@ -33,6 +33,14 @@ export function automationDomain(from: string): string | null {
   return /^[a-z0-9.-]+\.[a-z]{2,}$/.test(domain) ? domain : null;
 }
 
+/** The DNS lookup itself did not answer (timed out or refused): the check could not be made, so nothing is stored. */
+export class DnsUnreachableError extends Error {
+  constructor(host: string) {
+    super(`The DNS lookup for ${host} did not answer. Nothing was changed; try again in a minute.`);
+    this.name = "DnsUnreachableError";
+  }
+}
+
 /** A missing record is an answer, not a failure: NXDOMAIN and "no data" read as "nothing published". */
 async function txt(resolver: DnsResolver, host: string): Promise<string[]> {
   try {
@@ -40,6 +48,10 @@ async function txt(resolver: DnsResolver, host: string): Promise<string[]> {
   } catch (e) {
     const code = (e as { code?: string } | null)?.code ?? "";
     if (code === "ENOTFOUND" || code === "ENODATA" || code === "ESERVFAIL") return [];
+    // no answer at all is not "nothing published": say so and store nothing, so a slow resolver never marks a good
+    // domain as failing
+    if (code === "ETIMEOUT" || code === "ECONNREFUSED" || code === "ECANCELLED")
+      throw new DnsUnreachableError(host);
     throw e;
   }
 }

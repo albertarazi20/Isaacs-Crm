@@ -151,7 +151,7 @@ function GroupChip({
       aria-pressed={active}
       onClick={onClick}
       className={cn(
-        "inline-flex h-9 shrink-0 items-center gap-1.5 rounded-full px-3 text-[13px] font-medium whitespace-nowrap transition duration-150 active:scale-[0.97] sm:h-8",
+        "inline-flex h-10 shrink-0 items-center gap-1.5 rounded-full px-3 text-[13px] font-medium whitespace-nowrap transition duration-150 active:scale-[0.97] sm:h-8",
         active
           ? "bg-surface text-text shadow-card"
           : "text-muted hover:bg-surface/60 hover:text-text",
@@ -491,7 +491,7 @@ export function ClientsTable({
         <label className="flex items-center gap-2 text-xs text-muted">
           <span className="max-sm:sr-only">Sort</span>
           <Select
-            className="h-9 w-auto min-w-0 rounded-full bg-surface pr-8 text-[13px] sm:h-8"
+            className="h-10 w-auto min-w-0 rounded-full bg-surface pr-8 text-[13px] sm:h-8"
             aria-label="Sort by"
             value={sort}
             onChange={(e) => change({ sort: e.target.value as SortKey })}
