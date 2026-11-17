@@ -4,10 +4,8 @@ import {
   addDays,
   addMonths,
   bucketFor,
-  businessDaysBetween,
   dueFromPreset,
   FOLLOW_UP_PRESETS,
-  isLongGame,
   parseISODate,
   todayIn,
   validateFollowUpDate,
@@ -38,11 +36,6 @@ describe("business days", () => {
   it("skips weekends", () => {
     expect(addBusinessDays(TODAY, 1)).toBe("2026-10-26");
     expect(addBusinessDays(TODAY, 5)).toBe("2026-10-30");
-  });
-  it("counts the half-open range (from, to]", () => {
-    expect(businessDaysBetween(TODAY, "2026-10-30")).toBe(5);
-    expect(businessDaysBetween(TODAY, TODAY)).toBe(0);
-    expect(businessDaysBetween("2026-10-30", TODAY)).toBe(0);
   });
 });
 
@@ -100,9 +93,5 @@ describe("follow-up buckets", () => {
     ["2029-10-24", "later"],
   ])("%s lands in %s", (due, bucket) => {
     expect(bucketFor(due, TODAY)).toBe(bucket);
-  });
-  it("flags long-game clients as more than a year out", () => {
-    expect(isLongGame("2027-10-23", TODAY)).toBe(false);
-    expect(isLongGame("2027-10-24", TODAY)).toBe(true);
   });
 });

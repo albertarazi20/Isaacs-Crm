@@ -31,26 +31,8 @@ function card(over: Partial<ClientCard> & { business_name: string }): ClientCard
     last_touch_at: null,
     last_call_note: null,
     wanted_amount_cents: null,
-    wanted_terms: null,
-    est_approval_cents: null,
-    est_approval_note: null,
-    position_count: 0,
-    position_balance_cents: 0,
     stips_required: 0,
     stips_received: 0,
-    funding_id: null,
-    funded_on: null,
-    funding_amount_cents: null,
-    factor_rate: null,
-    funding_payback_cents: null,
-    funding_payment_cents: null,
-    funding_frequency: null,
-    paid_back_override_cents: null,
-    funding_status: null,
-    defaulted_on: null,
-    last_payment_on: null,
-    promise_to_pay_at: null,
-    promise_amount_cents: null,
     ...over,
   };
 }
@@ -60,13 +42,7 @@ describe("today view", () => {
     card({ business_name: "Late Old", next_due_on: "2026-10-10" }),
     card({ business_name: "Late New", next_due_on: "2026-10-21" }),
     card({ business_name: "Today Prospect", next_due_on: TODAY, stage: "name_in" }),
-    card({ business_name: "Today Closing", next_due_on: TODAY, stage: "contract_out" }),
-    card({
-      business_name: "Today Renewal",
-      next_due_on: TODAY,
-      next_due_kind: "renewal",
-      stage: "funded",
-    }),
+    card({ business_name: "Today Application", next_due_on: TODAY, stage: "application_in" }),
     card({
       business_name: "Call 3pm",
       next_due_on: TODAY,
@@ -91,10 +67,9 @@ describe("today view", () => {
   it("lists booked calls separately, earliest first", () => {
     expect(view.scheduled.map((c) => c.business_name)).toEqual(["Call 10am", "Call 3pm"]);
   });
-  it("ranks today's work: renewals, then deals near funding, then prospects", () => {
+  it("ranks today's work: merchants whose application is in, then prospects", () => {
     expect(view.dueToday.map((c) => c.business_name)).toEqual([
-      "Today Renewal",
-      "Today Closing",
+      "Today Application",
       "Today Prospect",
     ]);
   });
@@ -102,7 +77,7 @@ describe("today view", () => {
     expect(view.upcoming.map((c) => c.business_name)).toEqual(["Tomorrow", "Day 7"]);
   });
   it("counts calls booked today in 'due today'", () => {
-    expect(view.kpis).toMatchObject({ overdue: 2, dueToday: 5, next7: 2 });
+    expect(view.kpis).toMatchObject({ overdue: 2, dueToday: 4, next7: 2 });
   });
   it("ignores clients with no timer rather than crashing", () => {
     expect(

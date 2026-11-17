@@ -172,12 +172,8 @@ describe("S1-15: the claim checker", () => {
     ]);
     expect(checkClaims("No upfront fees, ever").ok).toBe(false);
     expect(checkClaims("A quick business loan").ok).toBe(false);
-    expect(
-      checkClaims("Factor rate 1.35 over 8 months", { state: "CA" }).ok,
-    ).toBe(false);
-    expect(
-      checkClaims("Factor rate 1.35 over 8 months", { state: "TX" }).ok,
-    ).toBe(true);
+    expect(checkClaims("Factor rate 1.35 over 8 months", { state: "CA" }).ok).toBe(false);
+    expect(checkClaims("Factor rate 1.35 over 8 months", { state: "TX" }).ok).toBe(true);
     // the seeded wording passes: "before they approve" is not a claim of approval
     expect(
       checkClaims("lenders will ask for your newest statement before they approve it").ok,

@@ -112,6 +112,19 @@ const FOLDS_INTO: Partial<Record<StageKey, StageKey>> = {
 
 export const foldStage = (key: StageKey): StageKey => FOLDS_INTO[key] ?? key;
 
+/** The stages a sheet's status can put an imported merchant in. */
+export const IMPORT_STAGES: readonly StageKey[] = [
+  "name_in",
+  "spoke_with_owner",
+  "interested",
+  "call_scheduled",
+  "application_sent",
+  "application_in",
+  "stips",
+  "dead",
+  "not_interested",
+];
+
 /** What every dropdown offers. */
 export const CORE_STAGES: readonly StageDef[] = STAGES;
 

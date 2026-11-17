@@ -21,7 +21,6 @@ describe("do-this-now ranking", () => {
       {
         kind: "overdue",
         client_id: "a",
-        deal_id: null,
         business_name: "A",
         label: "",
         detail: "",
@@ -32,7 +31,6 @@ describe("do-this-now ranking", () => {
       {
         kind: "merchant_replied",
         client_id: "b",
-        deal_id: null,
         business_name: "B",
         label: "",
         detail: "",
@@ -106,12 +104,12 @@ describe("dashboard queries", () => {
   });
 
   it("the now-list ranks the merchant who wrote back above the overdue call; a rep sees only their own", async () => {
-    const mine = await t.db.withUser(rep2, (q) => nowItems(q, today, { manager: false }));
+    const mine = await t.db.withUser(rep2, (q) => nowItems(q, today));
     expect(mine.map((n) => n.kind)).toEqual(["merchant_replied", "overdue"]);
     expect(mine.every((n) => n.business_name === "Taco Town")).toBe(true);
     expect(mine[0]?.href).toBe(`/clients/${taco}`);
-    expect(await t.db.withUser(rep, (q) => nowItems(q, today, { manager: false }))).toEqual([]);
-    const all = await t.db.withUser(manager, (q) => nowItems(q, today, { manager: true }));
+    expect(await t.db.withUser(rep, (q) => nowItems(q, today))).toEqual([]);
+    const all = await t.db.withUser(manager, (q) => nowItems(q, today));
     expect(all.length).toBeGreaterThanOrEqual(mine.length);
   });
 

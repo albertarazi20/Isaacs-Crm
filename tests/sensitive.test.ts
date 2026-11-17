@@ -117,7 +117,6 @@ describe("single-line fields and email addresses", () => {
         callTime: "3:30 PM",
         wantedAmount: null,
         lastCallNote: null,
-        positionCount: 0,
       },
       "https://app.test",
     );

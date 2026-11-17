@@ -76,9 +76,7 @@ describe("freshness", () => {
       status: "stale",
     });
     expect(f.missing).toEqual(["2026-07-01", "2026-10-01"]);
-    expect(f.message).toBe(
-      "Newest statement is September 2026. The file needs October 2026.",
-    );
+    expect(f.message).toBe("Newest statement is September 2026. The file needs October 2026.");
     expect(
       freshness(["2026-07-01", "2026-08-01", "2026-09-01", "2026-10-01"], "2026-11-15").status,
     ).toBe("fresh");
@@ -261,9 +259,7 @@ describe("the document pipeline", () => {
     expect(await t.db.withUser(rep2, (q) => listDocuments(q, pizza))).toEqual([]);
     expect((await t.db.withUser(manager, (q) => listDocuments(q, pizza))).length).toBe(2);
 
-    await t.db.withUser(rep, (q) =>
-      relabelDocument(q, r.documentId, "signed_application", null, rep),
-    );
+    await t.db.withUser(rep, (q) => relabelDocument(q, r.documentId, "signed_application", null));
     const stip = await t.pool.query<{ received_at: string | null }>(
       "select received_at::text from stips where client_id = $1 and kind = 'signed_application'",
       [pizza],

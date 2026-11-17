@@ -47,22 +47,22 @@ describe("digest", () => {
     const g = groupDue(
       [
         timer({ timerId: "a", clientId: "same", kind: "follow_up" }),
-        timer({ timerId: "b", clientId: "same", kind: "renewal" }),
-        timer({ timerId: "c", clientId: "same", kind: "check_in", dueOn: "2026-10-10" }),
+        timer({ timerId: "b", clientId: "same", kind: "scheduled_call" }),
+        timer({ timerId: "c", clientId: "same", kind: "follow_up", dueOn: "2026-10-10" }),
       ],
       TODAY,
     );
     expect(g.overdue.map((t) => t.timerId)).toEqual(["c"]); // the oldest wins, so it is shown as overdue
     expect(g.dueToday).toEqual([]);
     const same = groupDue(
-      [timer({ timerId: "a", kind: "follow_up" }), timer({ timerId: "b", kind: "renewal" })],
+      [timer({ timerId: "a", kind: "follow_up" }), timer({ timerId: "b", kind: "scheduled_call" })],
       TODAY,
     );
     expect(same.dueToday.map((t) => t.timerId)).toEqual(["b"]);
   });
   it("names the count and links straight to each client", () => {
     const d = buildDigest(
-      [timer({}), timer({ timerId: "t2", clientId: "c2", dueOn: "2026-10-20", kind: "renewal" })],
+      [timer({}), timer({ timerId: "t2", clientId: "c2", dueOn: "2026-10-20", kind: "follow_up" })],
       TODAY,
       "https://app.test",
     );
@@ -70,7 +70,7 @@ describe("digest", () => {
     expect(d?.count).toBe(2);
     expect(d?.text).toContain("https://app.test/clients/c2");
     expect(d?.text).toContain("3d overdue");
-    expect(d?.text).toContain("Renewal call");
+    expect(d?.text).toContain("Follow up");
   });
   it("words the subject for overdue-only and today-only digests", () => {
     expect(buildDigest([timer({ dueOn: "2026-10-20" })], TODAY, "https://app.test")?.subject).toBe(

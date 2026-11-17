@@ -64,14 +64,14 @@ describe("the export routes", () => {
     try {
       const { GET } = await import("@/app/api/export/clients/route");
       await asUser(rep, "rep@x.com", "rep");
-      const denied = await GET(new Request("http://localhost/api/export/clients"));
+      const denied = await GET();
       expect(denied.status).toBe(403);
 
       jar.token = "";
-      expect((await GET(new Request("http://localhost/api/export/clients"))).status).toBe(401);
+      expect((await GET()).status).toBe(401);
 
       await asUser(manager, "boss@x.com", "manager");
-      const res = await GET(new Request("http://localhost/api/export/clients"));
+      const res = await GET();
       expect(res.status).toBe(200);
       expect(res.headers.get("content-type")).toMatch(/text\/csv/);
       const csv = await res.text();
@@ -79,13 +79,9 @@ describe("the export routes", () => {
       expect(csv).toContain("Taco Town");
 
       const backup = await import("@/app/api/export/backup/route");
-      expect((await backup.GET(new Request("http://localhost/api/export/backup"))).status).toBe(
-        200,
-      );
+      expect((await backup.GET()).status).toBe(200);
       const activity = await import("@/app/api/export/activity/route");
-      expect((await activity.GET(new Request("http://localhost/api/export/activity"))).status).toBe(
-        200,
-      );
+      expect((await activity.GET()).status).toBe(200);
       // no access log line and no e-mail about a download
       expect(
         (await t.pool.query("select 1 from access_log where action in ('export', 'backup')"))

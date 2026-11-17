@@ -52,7 +52,6 @@ describe("message templates", () => {
     }
   });
   it("sounds right for the stage, and never uses loan language", () => {
-    expect(textTemplate({ ...base, stage: "paid_in_full" })).toContain("renewal");
     expect(textTemplate({ ...base, stage: "stips" })).toContain("documents");
     for (const stage of STAGE_KEYS) {
       expect(textTemplate({ ...base, stage }).toLowerCase(), stage).not.toMatch(

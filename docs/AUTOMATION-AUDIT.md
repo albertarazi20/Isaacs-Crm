@@ -1,3 +1,5 @@
+> Scope changed on 2026-11-16: see docs/FOLLOW-UP-SYSTEM.md; the deals, lenders, money, win-back and trust parts below are removed from the app.
+
 # Automation audit — the plan against the code (2026-11-16)
 
 Owner's instruction (2026-11-16): no work on how the app looks yet; finish every automation the plan asks for, and

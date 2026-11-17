@@ -1,3 +1,5 @@
+> Scope changed on 2026-11-16: see docs/FOLLOW-UP-SYSTEM.md; the deals, lenders, money, win-back and trust parts below are removed from the app.
+
 # Selective CRM — how the system is built
 
 For the owner, for the next engineer, and for the lawyer who asks "where does this data go". It says what runs

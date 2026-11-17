@@ -159,8 +159,8 @@ describe("the 'Calling you' line", () => {
     );
   });
   it("drops the dash when there is no merchant name", () => {
-    expect(callingYouLine(row({ business_name: "Solo LLC", stage: "offers_in" }), NOW)).toBe(
-      "Calling you: Solo LLC · Offers in · never called",
+    expect(callingYouLine(row({ business_name: "Solo LLC", stage: "application_in" }), NOW)).toBe(
+      "Calling you: Solo LLC · Application in · never called",
     );
   });
   it("the detail line shows merchant, DBA, formatted phone and stage", () => {

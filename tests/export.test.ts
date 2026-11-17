@@ -98,7 +98,6 @@ describe("clients export", () => {
     const at = (name: (typeof CLIENT_HEADER)[number]) => row[CLIENT_HEADER.indexOf(name)];
     expect(at("Business")).toBe("Mike's Pizza");
     expect(at("Wanted ($)")).toBe("50000.00");
-    expect(at("Funders would approve ($)")).toBe("35000.50");
     expect(at("Last call note")).toBe('Said "call Friday", wants $50k');
     expect(at("Last call")).toBe("2026-10-20");
     expect(at("Stage")).toBe("Interested");

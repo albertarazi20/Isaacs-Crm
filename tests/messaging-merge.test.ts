@@ -3,17 +3,14 @@ import { defaultSnippets, DEFAULT_SNIPPET_TITLES, snippetsFor } from "@/lib/mess
 import {
   appendSignature,
   describeLeftovers,
-  describeOffer,
   effectiveSignature,
   isMergeField,
   leftoverFields,
   MERGE_FIELDS,
   mergeValues,
-  pickBestOffer,
   resolveMergeFields,
   splitSubject,
   type MergeContext,
-  type OfferSummary,
 } from "@/lib/messaging/merge";
 import { messageSettingsSchema, snippetSchema } from "@/lib/messaging/schemas";
 
@@ -23,14 +20,6 @@ const ctx: MergeContext = {
   senderName: "Isaac Cohen",
   applicationLink: "https://apply.example.com/isaac",
   wantedAmountCents: 6_000_000,
-  bestOffer: {
-    funderName: "Rival Capital",
-    amountCents: 5_000_000,
-    factorRate: 1.42,
-    termDays: 180,
-    offeredOn: "2026-05-01",
-    won: true,
-  },
 };
 
 describe("resolveMergeFields", () => {
@@ -38,11 +27,11 @@ describe("resolveMergeFields", () => {
 
   it("fills every field", () => {
     const r = resolveMergeFields(
-      "Hey {first_name}, it's {sender}. {business} wants {amount_wanted}. Apply: {application_link}. Best so far: {funder_best_offer}.",
+      "Hey {first_name}, it's {sender}. {business} wants {amount_wanted}. Apply: {application_link}.",
       values,
     );
     expect(r.text).toBe(
-      "Hey Mike, it's Isaac. Mike's Pizza wants $60,000. Apply: https://apply.example.com/isaac. Best so far: $50,000 at 1.42 from Rival Capital.",
+      "Hey Mike, it's Isaac. Mike's Pizza wants $60,000. Apply: https://apply.example.com/isaac.",
     );
     expect(r.missing).toEqual([]);
     expect(r.unknown).toEqual([]);
@@ -72,11 +61,11 @@ describe("resolveMergeFields", () => {
 
   it("reports each missing field once, in order of appearance", () => {
     const r = resolveMergeFields(
-      "{amount_wanted} {funder_best_offer} {amount_wanted}",
-      mergeValues({ ...ctx, wantedAmountCents: null, bestOffer: null }),
+      "{amount_wanted} {upload_link} {amount_wanted}",
+      mergeValues({ ...ctx, wantedAmountCents: null }),
     );
-    expect(r.missing).toEqual(["amount_wanted", "funder_best_offer"]);
-    expect(r.text).toBe("{amount_wanted} {funder_best_offer} {amount_wanted}");
+    expect(r.missing).toEqual(["amount_wanted", "upload_link"]);
+    expect(r.text).toBe("{amount_wanted} {upload_link} {amount_wanted}");
   });
 
   it("leaves an unknown field visible and flags it", () => {
@@ -140,42 +129,6 @@ describe("mergeValues", () => {
   });
 });
 
-describe("offers", () => {
-  const o = (
-    funderName: string,
-    amountCents: number | null,
-    factorRate: number | null,
-  ): OfferSummary => ({
-    funderName,
-    amountCents,
-    factorRate,
-    termDays: null,
-    offeredOn: null,
-    won: false,
-  });
-
-  it("describes only what was logged", () => {
-    expect(describeOffer(o("Rival Capital", 5_000_000, 1.42))).toBe(
-      "$50,000 at 1.42 from Rival Capital",
-    );
-    expect(describeOffer(o("Rival Capital", 5_000_000, null))).toBe("$50,000 from Rival Capital");
-    expect(describeOffer(o("Rival Capital", null, 1.345))).toBe("1.345 from Rival Capital");
-    expect(describeOffer(o("Rival Capital", null, 1.4))).toBe("1.40 from Rival Capital");
-    expect(describeOffer(o("Rival Capital", null, null))).toBe("an offer from Rival Capital");
-  });
-  it("picks the most money, then the lowest factor rate; offers with no amount come last", () => {
-    expect(pickBestOffer([])).toBeNull();
-    const list = [
-      o("A", 3_000_000, 1.3),
-      o("B", 5_000_000, 1.45),
-      o("C", 5_000_000, 1.38),
-      o("D", null, 1.1),
-    ];
-    expect(pickBestOffer(list)?.funderName).toBe("C");
-    expect(pickBestOffer([o("D", null, 1.1), o("E", null, 1.2)])?.funderName).toBe("D");
-  });
-});
-
 describe("leftovers", () => {
   it("lists every field still in a message", () => {
     expect(leftoverFields("Hi {first_name}, {foo} and {first_name} again")).toEqual([
@@ -232,23 +185,16 @@ describe("email subject and signature", () => {
   });
 });
 
-describe("the six built-in snippets", () => {
-  it("are exactly the six named, in both kinds", () => {
-    expect(DEFAULT_SNIPPET_TITLES).toEqual([
-      "Send application",
-      "Need statements",
-      "Following up on offers",
-      "Contract reminder",
-      "Renewal check",
-      "Win-back",
-    ]);
+describe("the two built-in snippets", () => {
+  it("are exactly the two named, in both kinds", () => {
+    expect(DEFAULT_SNIPPET_TITLES).toEqual(["Send application", "Need statements"]);
     for (const kind of ["text", "email"] as const) {
       const list = defaultSnippets(kind);
       expect(list.map((s) => s.title)).toEqual([...DEFAULT_SNIPPET_TITLES]);
       expect(list.every((s) => s.isDefault && s.kind === kind && s.id.startsWith("default:"))).toBe(
         true,
       );
-      expect(new Set(list.map((s) => s.id)).size).toBe(6);
+      expect(new Set(list.map((s) => s.id)).size).toBe(2);
     }
   });
   it("only use real fields, resolve fully for a known merchant, and say nothing a loan shop would", () => {
@@ -284,7 +230,7 @@ describe("the six built-in snippets", () => {
     for (const s of defaultSnippets("text")) expect(s.body.length, s.title).toBeLessThan(260);
   });
   it("show until he saves his own of that kind, then his replace them", () => {
-    expect(snippetsFor([], "text")).toHaveLength(6);
+    expect(snippetsFor([], "text")).toHaveLength(2);
     const saved = [
       {
         id: "11111111-1111-4111-8111-111111111111",
@@ -296,7 +242,7 @@ describe("the six built-in snippets", () => {
     expect(snippetsFor(saved, "text").map((s) => s.title)).toEqual(["Mine"]);
     expect(snippetsFor(saved, "text")[0]?.isDefault).toBe(false);
     // a text snippet doesn't hide the email defaults
-    expect(snippetsFor(saved, "email")).toHaveLength(6);
+    expect(snippetsFor(saved, "email")).toHaveLength(2);
   });
 });
 
@@ -327,7 +273,7 @@ describe("snippet and settings validation (plain words)", () => {
     const msg = r.error?.issues[0]?.message ?? "";
     expect(msg).toContain("{firstname} isn't a field I know");
     expect(msg).toContain("{first_name}");
-    expect(msg).toContain("{funder_best_offer}");
+    expect(msg).toContain("{upload_link}");
   });
   it("refuses an SSN or a card number in the body", () => {
     expect(

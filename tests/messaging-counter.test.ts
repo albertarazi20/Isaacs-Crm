@@ -4,7 +4,6 @@ import {
   readTextCount,
   TEXT_COUNT_KEY,
   TEXT_WARN_AT,
-  textCountMessage,
   textCountWarning,
   type CounterStorage,
 } from "@/lib/messaging/textCounter";
@@ -67,11 +66,6 @@ describe("the soft text counter", () => {
     };
     expect(readTextCount(broken, "2026-10-23")).toBe(0);
     expect(bumpTextCount(broken, "2026-10-23")).toBe(1);
-  });
-  it("says the count in plain words", () => {
-    expect(textCountMessage(0)).toBe("0 texts today");
-    expect(textCountMessage(1)).toBe("1 text today");
-    expect(textCountMessage(7)).toBe("7 texts today");
   });
   it("warns gently from 15 and not before", () => {
     expect(TEXT_WARN_AT).toBe(15);

@@ -30,10 +30,6 @@ const shopForm = {
   perMerchantWeekly: 3,
   automationFrom: "",
   automationReplyToRep: true,
-  lenderChaseDays: 3,
-  lenderChaseMode: "send" as const,
-  lenderChaseMax: 2,
-  maxLendersPerDeal: 2,
 };
 const stored = () =>
   t.pool.query("select * from shop_settings").then((r) => r.rows[0] as Record<string, unknown>);
@@ -51,78 +47,41 @@ afterAll(async () => {
   await t.drop();
 });
 
-describe("shop settings: the new fields", () => {
-  it("writes the deals inbox, the two day counts, the holiday switch and chase mode draft", async () => {
-    const i = shopSchema.parse({
-      ...shopForm,
-      sendOnHolidays: true,
-      lenderChaseMode: "draft",
-      approvalValidDays: "21",
-      resubmitBlockDays: "45",
-      dealsInboxAddress: "  Deals@Mail.SelectiveCap.com ",
-    });
+describe("shop settings", () => {
+  it("writes the holiday switch and the cap, and the database holds them", async () => {
+    const i = shopSchema.parse({ ...shopForm, sendOnHolidays: true, dailyCap: 1400 });
     await t.db.withUser(manager, (q) => saveShopSettings(q, i));
-    const row = await stored();
-    expect(row).toMatchObject({
-      send_on_holidays: true,
-      lender_chase_mode: "draft",
-      approval_valid_days: 21,
-      resubmit_block_days: 45,
-      deals_inbox_address: "deals@mail.selectivecap.com",
-    });
+    expect(await stored()).toMatchObject({ send_on_holidays: true, daily_cap: 1400 });
   });
 
-  it("a form that leaves the newer fields out keeps what is stored (an older form cannot reset them)", async () => {
-    const i = shopSchema.parse({ ...shopForm, dailyCap: 1400 });
+  it("a form that leaves the holiday switch out keeps what is stored (an older form cannot reset it)", async () => {
+    const i = shopSchema.parse({ ...shopForm, dailyCap: 1450 });
     await t.db.withUser(manager, (q) => saveShopSettings(q, i));
-    const row = await stored();
-    expect(row).toMatchObject({
-      daily_cap: 1400,
-      send_on_holidays: true,
-      approval_valid_days: 21,
-      resubmit_block_days: 45,
-      deals_inbox_address: "deals@mail.selectivecap.com",
-    });
+    expect(await stored()).toMatchObject({ daily_cap: 1450, send_on_holidays: true });
   });
 
-  it("an empty deals inbox clears it, and the holiday switch turns off when the form says false", async () => {
-    const i = shopSchema.parse({ ...shopForm, sendOnHolidays: false, dealsInboxAddress: "" });
+  it("the holiday switch turns off when the form says false", async () => {
+    const i = shopSchema.parse({ ...shopForm, sendOnHolidays: false });
     await t.db.withUser(manager, (q) => saveShopSettings(q, i));
-    expect(await stored()).toMatchObject({ send_on_holidays: false, deals_inbox_address: "" });
+    expect(await stored()).toMatchObject({ send_on_holidays: false });
   });
 
-  it("the read side returns every new column", async () => {
+  it("the read side returns the columns the settings pages show", async () => {
     const s = await t.db.withUser(manager, (q) => getShopSettings(q));
     expect(s).toMatchObject({
       send_on_holidays: false,
-      approval_valid_days: 21,
-      resubmit_block_days: 45,
-      deals_inbox_address: "",
       dns_ok: false,
       dns_checked_at: null,
       dns_result: {},
-      document_retention_days: 730,
-      winback_opener_mode: "review",
-      lender_chase_mode: "send", // the last form to save said send; the draft write is in the first test
     });
   });
 
-  it("refuses numbers outside the columns' ranges, in words, and a deals inbox that is not one address", () => {
-    const why = (over: Record<string, unknown>) => {
-      const r = shopSchema.safeParse({ ...shopForm, ...over });
-      return r.success ? null : r.error.issues[0]?.message;
-    };
-    expect(why({ approvalValidDays: "0" })).toBe("Approval validity is at least 1 day");
-    expect(why({ approvalValidDays: "400" })).toBe("Approval validity is at most 365 days");
-    expect(why({ resubmitBlockDays: "-1" })).toBe("The double-submission window can't be negative");
-    expect(why({ resubmitBlockDays: "0" })).toBeNull(); // 0 turns the block off
-    expect(why({ lenderChaseMode: "shout" })).not.toBeNull();
-    expect(why({ dealsInboxAddress: "deals@x.com, ops@x.com" })).toMatch(/one email address/);
-    expect(why({ dealsInboxAddress: "not an address" })).toMatch(/one email address/);
-    // a blank number box means "not sent", not zero
-    expect(
-      shopSchema.parse({ ...shopForm, approvalValidDays: "" }).approvalValidDays,
-    ).toBeUndefined();
+  it("refuses numbers outside the columns' ranges", () => {
+    const why = (over: Record<string, unknown>) => shopSchema.safeParse({ ...shopForm, ...over });
+    expect(why({ dailyCap: 10 }).success).toBe(false);
+    expect(why({ perMerchantDaily: 9 }).success).toBe(false);
+    expect(why({ sendWindowEnd: 0 }).success).toBe(false);
+    expect(why({}).success).toBe(true);
   });
 
   it("a rep's write changes nothing (row-level security)", async () => {
@@ -195,62 +154,46 @@ describe("the DNS card's view of the stored check", () => {
   });
 });
 
-describe("AI settings: the opener mode and the spend list", () => {
-  it("saves the win-back opener mode and leaves it alone when the form does not send it", async () => {
-    const form = {
-      aiEnabled: true,
-      aiModel: "claude-opus-5-5",
-      aiDailyCapCents: 2000,
-      aiAutoApplyLowStakes: true,
-    };
-    await t.db.withUser(manager, (q) =>
-      saveAiSettings(q, aiSchema.parse({ ...form, winbackOpenerMode: "auto" })),
-    );
-    expect((await stored()).winback_opener_mode).toBe("auto");
-    await t.db.withUser(manager, (q) =>
-      saveAiSettings(q, aiSchema.parse({ ...form, aiDailyCapCents: 1500 })),
-    );
-    expect(await stored()).toMatchObject({ winback_opener_mode: "auto", ai_daily_cap_cents: 1500 });
-    expect(aiSchema.safeParse({ ...form, winbackOpenerMode: "maybe" }).success).toBe(false);
+describe("AI settings and the spend list", () => {
+  it("saves the kill switch, the model and the daily cap, and the database holds them", async () => {
+    const form = { aiEnabled: false, aiModel: "claude-opus-5-5", aiDailyCapCents: 1500 };
+    await t.db.withUser(manager, (q) => saveAiSettings(q, aiSchema.parse(form)));
+    expect(await stored()).toMatchObject({
+      ai_enabled: false,
+      ai_model: "claude-opus-5-5",
+      ai_daily_cap_cents: 1500,
+    });
+    expect(aiSchema.safeParse({ ...form, aiDailyCapCents: -1 }).success).toBe(false);
   });
 
-  it("groups ai_runs by purpose with today and 30-day cost, newest purposes included", async () => {
+  it("groups ai_runs by purpose with today and 30-day cost, biggest spender first", async () => {
     await t.pool.query(
       `insert into ai_runs (purpose, model, prompt_version, input_hash, cost_cents, created_at) values
-        ('read_lender_email', 'm', 'v1', 'h', 3.5, now()),
-        ('read_lender_email', 'm', 'v1', 'h', 1.5, now() - interval '5 days'),
-        ('ask_deal', 'm', 'v1', 'h', 12, now()),
+        ('classify_reply', 'm', 'v1', 'h', 3.5, now()),
+        ('classify_reply', 'm', 'v1', 'h', 1.5, now() - interval '5 days'),
         ('split_lead_line', 'm', 'v1', 'h', 0.4, now()),
-        ('transcribe_offer_image', 'm', 'v1', 'h', 40, now() - interval '2 days'),
-        ('read_lender_email', 'm', 'v1', 'h', 99, now() - interval '60 days')`,
+        ('classify_reply', 'm', 'v1', 'h', 99, now() - interval '60 days')`,
     );
     await t.pool.query(
-      "insert into ai_runs (purpose, model, prompt_version, input_hash, error) values ('classify_reply', 'm', 'v1', 'h', 'timeout')",
+      "insert into ai_runs (purpose, model, prompt_version, input_hash, error) values ('split_lead_line', 'm', 'v1', 'h', 'timeout')",
     );
     const rows = await t.db.withUser(manager, (q) => aiSpendByPurpose(q));
     const by = Object.fromEntries(rows.map((r) => [r.purpose, r]));
-    expect(by.read_lender_email).toMatchObject({
+    expect(by.classify_reply).toMatchObject({
       runs_today: 1,
       cents_today: 3.5,
       runs_30d: 2,
       cents_30d: 5,
-      label: "Reading lender email",
+      label: "Tagging merchant replies",
     });
-    expect(by.ask_deal).toMatchObject({
-      runs_today: 1,
-      cents_today: 12,
-      label: "Questions about a deal",
-    });
-    expect(by.transcribe_offer_image).toMatchObject({ runs_today: 0, runs_30d: 1, cents_30d: 40 });
-    expect(by.classify_reply).toMatchObject({ errors_30d: 1 });
+    expect(by.split_lead_line).toMatchObject({ runs_today: 2, errors_30d: 1 });
     // biggest spender first; the 60-day-old run is outside the window
-    expect(rows[0]?.purpose).toBe("transcribe_offer_image");
-    expect(rows.reduce((n, r) => n + r.cents_30d, 0)).toBeCloseTo(40 + 12 + 5 + 0.4, 5);
+    expect(rows[0]?.purpose).toBe("classify_reply");
+    expect(rows.reduce((n, r) => n + r.cents_30d, 0)).toBeCloseTo(5 + 0.4, 5);
   });
 
   it("a purpose nobody labelled still reads as words", () => {
     expect(aiPurposeLabel("weekly_digest_draft")).toBe("Weekly digest draft");
-    expect(aiPurposeLabel("draft_winback")).toBe("Win-back opening lines");
   });
   it("shows cents and dollars the way a person reads them", () => {
     expect(centsText(0.4)).toBe("0.40¢");

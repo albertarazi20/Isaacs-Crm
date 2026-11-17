@@ -102,14 +102,15 @@ describe("C-5 and C-13: restore brings the settings back and wants an empty acco
         digest_hour: 7,
         email: "dst@x.com", // the sign-in address is the account's own, never the file's
       });
-      // an account with only a funder in it is not empty
+      // an account with only a snippet in it is not empty
       const other = await insertUser(dst.pool, "other@x.com", "UTC");
-      await dst.pool.query("insert into funders (user_id, name) values ($1, 'Already here')", [
-        other,
-      ]);
+      await dst.pool.query(
+        "insert into snippets (user_id, title, kind, body, sort) values ($1, 'Already here', 'text', 'Hi', 0)",
+        [other],
+      );
       const c2 = await dst.pool.connect();
       try {
-        await expect(restoreBackup(c2, backup, other)).rejects.toThrow(/already has funders/);
+        await expect(restoreBackup(c2, backup, other)).rejects.toThrow(/already has snippets/);
       } finally {
         c2.release();
       }
@@ -205,6 +206,13 @@ describe("C-6: an older backup still restores after a new column with a default"
       "commission_statements", // stream 3
       "fundings_corrections", // stream 3
       "winback_reasons", // stream 3
+      // the removed features' tables: the schema stays, the backup no longer carries them
+      "positions",
+      "competing_offers",
+      "fundings",
+      "funders",
+      "submissions",
+      "offers",
       "rescue_nudges", // stream 3
       "backdoor_reports", // stream 3
     ];

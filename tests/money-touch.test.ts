@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formatMoney, formatMoneyCompact, parseFactor, parseMoney } from "@/lib/money";
+import { formatMoney, formatMoneyCompact, parseMoney } from "@/lib/money";
 import {
   OUTCOMES_BY_KIND,
   outcomeLabel,
@@ -42,13 +42,6 @@ describe("formatting", () => {
     expect(formatMoneyCompact(120_000_000)).toBe("$1.2M");
     expect(formatMoneyCompact(40_000)).toBe("$400");
   });
-  it("parses factor rates in range only", () => {
-    expect(parseFactor("1.32")).toBe(1.32);
-    expect(parseFactor("1.4999")).toBe(1.5);
-    expect(parseFactor("0.9")).toBeNull();
-    expect(parseFactor("4")).toBeNull();
-    expect(parseFactor("x")).toBeNull();
-  });
 });
 
 describe("suggested next follow-up", () => {
@@ -64,8 +57,7 @@ describe("suggested next follow-up", () => {
     expect(suggestNextFollowUp("reached", "2026-10-23", "offers_in")).toBe("2026-10-26");
     expect(suggestNextFollowUp("reached", "2026-10-23", "interested")).toBe("2026-10-27");
   });
-  it("caps slow stages at two weeks — funded merchants and exits don't wait a month or a year", () => {
-    expect(suggestNextFollowUp("reached", "2026-10-23", "funded")).toBe("2026-11-06");
+  it("caps slow stages at two weeks — exits don't wait a month or a year", () => {
     expect(suggestNextFollowUp("reached", "2026-10-23", "dead")).toBe("2026-11-06");
     expect(suggestNextFollowUp("reached", "2026-10-23", "not_interested")).toBe("2026-11-06");
   });

@@ -20,74 +20,26 @@ beforeAll(async () => {
   const q = <T>(fn: (c: Parameters<Parameters<typeof src.db.withUser>[1]>[0]) => Promise<T>) =>
     src.db.withUser(srcUser, fn);
 
-  // a funded merchant with a renewal call, notes and an ask
-  const funded = await insertClient(src.db, srcUser, "Funded Pizza");
+  // a merchant with a follow-up, a note and an ask
+  const pizza = await insertClient(src.db, srcUser, "Application Pizza");
   await q(async (c) => {
     await c.query("select * from move_client($1, 'application_in', $2::jsonb)", [
-      funded,
+      pizza,
       timersJson({ kind: "follow_up", due_on: d(2) }),
-    ]);
-    await c.query("select * from record_funding($1, $2::jsonb, $3::jsonb)", [
-      funded,
-      JSON.stringify({
-        funded_on: d(-20),
-        funder_name: "Alpha",
-        amount_cents: 5_000_000,
-        factor_rate: 1.251,
-        payment_cents: 55_000,
-        frequency: "daily",
-        position_no: 1,
-        commission_cents: 250_000,
-      }),
-      timersJson({ kind: "check_in", due_on: d(10) }, { kind: "renewal", due_on: d(60) }),
     ]);
     await c.query(
       "insert into activities (user_id, client_id, kind, body) values (app.current_user_id(), $1, 'note', 'He said call after the 5th — “quoted” text, ünïcode')",
-      [funded],
+      [pizza],
     );
     await c.query(
       "insert into client_asks (user_id, client_id, wanted_amount_cents, wanted_terms) values (app.current_user_id(), $1, 6000000, '6 months')",
-      [funded],
+      [pizza],
     );
   });
 
-  // offers: two funders, one accepted (so the other carries declined_by → a self-reference)
-  const deal = await insertClient(src.db, srcUser, "Offer Deli");
+  // a second merchant, and a saved snippet
+  await insertClient(src.db, srcUser, "Docs Deli");
   await q(async (c) => {
-    await c.query("select * from move_client($1, 'application_in', $2::jsonb)", [
-      deal,
-      timersJson({ kind: "follow_up", due_on: d(2) }),
-    ]);
-    const f = [
-      (
-        await c.query<{ id: string }>(
-          "insert into funders (user_id, name) values (app.current_user_id(), 'F1') returning id",
-        )
-      ).rows[0]?.id,
-      (
-        await c.query<{ id: string }>(
-          "insert into funders (user_id, name) values (app.current_user_id(), 'F2') returning id",
-        )
-      ).rows[0]?.id,
-    ];
-    const subs = (
-      await c.query<{ id: string }>("select * from create_submissions($1, $2::uuid[], null, '')", [
-        deal,
-        f,
-      ])
-    ).rows;
-    const offers: string[] = [];
-    for (const s of subs) {
-      offers.push(
-        (
-          await c.query<{ id: string }>("select * from record_offer($1, $2::jsonb)", [
-            s.id,
-            JSON.stringify({ amount_cents: 3_000_000, factor_rate: 1.3 }),
-          ])
-        ).rows[0]?.id as string,
-      );
-    }
-    await c.query("select * from accept_offer($1)", [offers[0]]);
     await c.query(
       "insert into snippets (user_id, title, kind, body, sort) values (app.current_user_id(), 'Hi', 'text', 'Hi {first_name}', 0)",
     );
@@ -117,15 +69,13 @@ const strip = (rows: Record<string, unknown>[]) =>
 
 describe("restoring a backup", () => {
   it("puts every table back exactly, under the new account", async () => {
-    // the fixture really is rich: a trashed merchant, a funded one, and an offer tied to another by declined_by
+    // the fixture really is rich: a trashed merchant, an ask and a snippet
     expect(backup.counts).toMatchObject({
       clients: 3,
       trashed_clients: 1,
-      fundings: 1,
-      offers: 2,
+      client_asks: 1,
       snippets: 1,
     });
-    expect(backup.tables.offers?.some((o) => o.declined_by !== null)).toBe(true);
     const client = await dst.pool.connect();
     try {
       await client.query("begin");
@@ -141,14 +91,11 @@ describe("restoring a backup", () => {
       expect(strip(again.tables[name] ?? []), name).toEqual(strip(backup.tables[name] ?? []));
       for (const row of again.tables[name] ?? []) expect(row.user_id, name).toBe(dstUser);
     }
-    // the generated payback was recomputed, not copied: $50,000 × 1.251
-    const f = await dst.pool.query<{ payback_cents: string }>(
-      "select payback_cents::text from fundings",
-    );
-    expect(f.rows[0]?.payback_cents).toBe("6255000");
-    // the trashed merchant is still trashed, the renewal call is still there
+    // the trashed merchant is still trashed, and the follow-up timer is still there
     expect(again.counts.trashed_clients).toBe(1);
-    expect(again.tables.timers?.some((t) => t.kind === "renewal" && t.done_at === null)).toBe(true);
+    expect(again.tables.timers?.some((t) => t.kind === "follow_up" && t.done_at === null)).toBe(
+      true,
+    );
   });
 
   it("the restored account works: the merchants list and an edit behave normally", async () => {
@@ -160,7 +107,7 @@ describe("restoring a backup", () => {
     expect(r.rows[0]?.n).toBe(2);
     await dst.db.withUser(dstUser, (c) =>
       c.query("select * from set_follow_up($1, $2)", [
-        backup.tables.clients?.find((x) => x.business_name === "Funded Pizza")?.id,
+        backup.tables.clients?.find((x) => x.business_name === "Application Pizza")?.id,
         addDays(dst.today, 30),
       ]),
     );
@@ -188,8 +135,8 @@ describe("restoring a backup", () => {
   it("refuses a file that is not a backup, or from another version", () => {
     expect(() => checkBackup({ hello: 1 })).toThrow(RestoreError);
     expect(() => checkBackup({ ...backup, version: 99 })).toThrow(/version 99/);
-    const broken = { ...backup, tables: { ...backup.tables, offers: undefined } };
-    expect(() => checkBackup(broken)).toThrow(/missing its "offers"/);
+    const broken = { ...backup, tables: { ...backup.tables, snippets: undefined } };
+    expect(() => checkBackup(broken)).toThrow(/missing its "snippets"/);
   });
 
   it("the app role can't call the restore function (it would write rows under anyone's id)", async () => {

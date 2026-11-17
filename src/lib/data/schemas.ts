@@ -2,7 +2,7 @@ import "../zod-setup";
 import { z } from "zod";
 import { findSensitive } from "./sensitive";
 import { isRealDate } from "../mca/dates";
-import { STAGE_KEYS } from "../mca/stages";
+import { IMPORT_STAGES, STAGE_KEYS } from "../mca/stages";
 import { parseMoney } from "../money";
 
 const isoDate = z
@@ -188,7 +188,9 @@ export const importRowSchema = z.object({
   industry: line(100).default(""),
   state: line(40).default(""),
   notes: text(5000).default(""),
-  stage: z.enum(STAGE_KEYS),
+  stage: z
+    .enum(STAGE_KEYS)
+    .refine((s) => IMPORT_STAGES.includes(s), "That status can't be imported"),
   followUpOn: isoDate,
   source: line(100).default(""),
   statusNote: line(200).default(""),

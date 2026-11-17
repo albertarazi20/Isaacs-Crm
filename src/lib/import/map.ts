@@ -1,7 +1,7 @@
 import { findSensitive } from "../data/sensitive";
 import { addDays, addMonths, parseISODate, toISODate, type ISODate } from "../mca/dates";
 import { normalizeUS } from "../mca/phone";
-import { isStageKey, STAGES, type StageKey } from "../mca/stages";
+import { IMPORT_STAGES, isStageKey, STAGES, type StageKey } from "../mca/stages";
 import { parseMoney } from "../money";
 
 export const IMPORT_FIELDS = [
@@ -166,18 +166,7 @@ const STAGE_WORDS: [RegExp, StageKey][] = [
 const WORKED_ELSEWHERE =
   /submitted|sent to|offers?|approved|approval|presented|contract|funded|default|collections|written|paid/;
 
-/** The stages a sheet's status can put a merchant in. */
-const IMPORTABLE = new Set<StageKey>([
-  "name_in",
-  "spoke_with_owner",
-  "interested",
-  "call_scheduled",
-  "application_sent",
-  "application_in",
-  "stips",
-  "dead",
-  "not_interested",
-]);
+const IMPORTABLE = new Set<StageKey>(IMPORT_STAGES);
 
 export function parseStageWord(raw: string): { stage: StageKey | null; unsupported: boolean } {
   const w = norm(raw);

@@ -2,7 +2,7 @@ import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import pg from "@/lib/db/pg";
 import { migrate } from "@/lib/db/migrate";
-import { STAGES } from "@/lib/mca/stages";
+import { STAGE_KEYS } from "@/lib/mca/stages";
 import { createTestDb, insertClient, insertUser, type TestDb } from "./helpers/db";
 
 let t: TestDb;
@@ -36,13 +36,9 @@ describe("migrations", () => {
       c.release();
     }
   });
-  it("seed the same stages, labels, groups and order as the TypeScript catalogue", async () => {
-    const { rows } = await t.pool.query(
-      "select key, label, stage_group, sort from stages order by sort",
-    );
-    expect(rows).toEqual(
-      STAGES.map((s, i) => ({ key: s.key, label: s.label, stage_group: s.group, sort: i + 1 })),
-    );
+  it("seed exactly the stage keys the TypeScript vocabulary knows", async () => {
+    const { rows } = await t.pool.query<{ key: string }>("select key from stages order by sort");
+    expect(rows.map((r) => r.key)).toEqual([...STAGE_KEYS]);
   });
 });
 

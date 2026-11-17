@@ -27,7 +27,6 @@ const kinds: ActivityRow["kind"][] = [
   "email",
   "stage_change",
   "timer",
-  "funding",
   "system",
   "note",
 ];
@@ -38,7 +37,7 @@ describe("timeline filters", () => {
     expect(filterActivities(rows, "all").map((r) => r.id)).toEqual(rows.map((r) => r.id));
   });
   it("Notes is only notes", () => {
-    expect(filterActivities(rows, "notes").map((r) => r.id)).toEqual(["0", "8"]);
+    expect(filterActivities(rows, "notes").map((r) => r.id)).toEqual(["0", "7"]);
   });
   it("Calls & texts includes emails — they are contact too", () => {
     expect(filterActivities(rows, "contact").map((r) => r.kind)).toEqual(["call", "text", "email"]);

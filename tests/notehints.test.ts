@@ -227,13 +227,13 @@ table("a call-back with no date gets the stage's pace — and only that", [
   [FRI, "call back after he talks to his dispatcher", ["2026-10-26"], "offers_in"], // 1 business day
   [FRI, "call back after he talks to his dispatcher", ["2026-10-26"], "contract_out"],
   [FRI, "call back after he talks to his dispatcher", ["2026-10-27"]], // no stage: 2 business days
-  [FRI, "follow up", ["2026-10-26"], "name_in"],
-  [FRI, "circle back", ["2026-10-28"], "application_sent"], // 3 business days
+  [FRI, "follow up", ["2026-10-27"], "name_in"], // retired stages are paced as the stage they fold into
+  [FRI, "circle back", ["2026-10-27"], "application_sent"], // 2 business days
   [FRI, "touch base", ["2026-10-27"], "interested"],
   [FRI, "check back", ["2026-10-27"], "interested"],
   [FRI, "he'll get back to us", [], "interested"], // he calls us: nothing to schedule
   [FRI, "call him back", ["2027-07-23"], "dead"], // 9 months
-  [FRI, "call back", ["2027-01-23"], "declined"], // 3 months; a Saturday is kept — it is the stage's own pace
+  [FRI, "call back", ["2027-07-23"], "declined"], // folds into Trash: 9 months
   [FRI, "great guy, has 2 trucks", [], "interested"],
   [FRI, "wants 40k for equipment", [], "interested"],
   [FRI, "call him back Tuesday", ["2026-10-27"], "dead"], // a date in the note beats the pace

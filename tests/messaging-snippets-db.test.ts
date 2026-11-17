@@ -390,21 +390,13 @@ describe("column grants on app_users are exactly what we meant", () => {
 });
 
 describe("what the Text and Email dialogs load", () => {
-  it("returns settings, saved snippets, the latest ask and the best competing offer — only for this merchant", async () => {
+  it("returns settings, saved snippets, the latest ask — only for this merchant", async () => {
     const u = await insertUser(t.pool, "ctx@x.com");
     const c1 = await insertClient(t.db, u, "Ctx Pizza");
-    const c2 = await insertClient(t.db, u, "Other Pizza");
     await t.db.withUser(u, async (q) => {
       await q.query(
         "insert into client_asks (user_id, client_id, wanted_amount_cents) values ($1, $2, 3000000), ($1, $2, 6000000)",
         [u, c1],
-      );
-      await q.query(
-        `insert into competing_offers (user_id, client_id, funder_name, amount_cents, factor_rate, term_days, offered_on, won) values
-           ($1, $2, 'Small Co', 2000000, 1.30, 120, '2026-05-01', false),
-           ($1, $2, 'Rival Capital', 5000000, 1.42, 180, '2026-05-02', true),
-           ($1, $3, 'Elsewhere', 9000000, 1.20, 90, '2026-05-03', true)`,
-        [u, c1, c2],
       );
     });
     await save(u, { title: "Mine", body: "Hi {first_name}" });
@@ -419,24 +411,15 @@ describe("what the Text and Email dialogs load", () => {
       signature: "Sig",
       applicationLink: "https://x.example/a",
       wantedAmountCents: 6_000_000,
-      bestOffer: {
-        funderName: "Rival Capital",
-        amountCents: 5_000_000,
-        factorRate: 1.42,
-        termDays: 180,
-        won: true,
-      },
     });
     expect(ctx.snippets.map((s) => s.title)).toEqual(["Mine"]);
     const none = await t.db.withUser(u, (q) =>
       getMessagingContext(q, "00000000-0000-4000-8000-000000000000"),
     );
     expect(none.wantedAmountCents).toBeNull();
-    expect(none.bestOffer).toBeNull();
-    // another user can't see this merchant's ask or offers through the same call
+    // another user can't see this merchant's ask through the same call
     const other = await t.db.withUser(b, (q) => getMessagingContext(q, c1));
     expect(other.wantedAmountCents).toBeNull();
-    expect(other.bestOffer).toBeNull();
     expect(other.snippets.map((s) => s.title)).toEqual(["Win-back"]);
   });
 });

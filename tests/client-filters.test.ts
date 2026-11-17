@@ -49,11 +49,11 @@ describe("applyFilters", () => {
     expect(run([a, b], { state: "FL", industry: "trucking" })).toEqual(["B"]);
   });
   it("filters by an exact stage and by stage group", () => {
-    const a = card({ business_name: "A", stage: "offers_in" });
+    const a = card({ business_name: "A", stage: "application_in" });
     const b = card({ business_name: "B", stage: "dead" });
     expect(run([a, b], { stage: "dead" })).toEqual(["B"]);
     expect(run([a, b], { group: "exit" })).toEqual(["B"]);
-    expect(run([a, b], { group: "underwriting" })).toEqual(["A"]);
+    expect(run([a, b], { group: "application" })).toEqual(["A"]);
   });
   it("'wants at least' drops merchants who want less or haven't said", () => {
     const a = card({ business_name: "A", wanted_amount_cents: 5_000_000 });

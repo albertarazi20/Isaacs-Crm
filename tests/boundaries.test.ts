@@ -121,7 +121,6 @@ describe("architecture boundaries", () => {
     // a column map). A new one fails here until someone has checked it and added it below on purpose.
     const ALLOWED: Record<string, number> = {
       "lib/messaging/mutations.ts": 2, // ${COLUMNS}
-      "lib/messaging/queries.ts": 2, // ${offerSql}
       "lib/data/mutations.ts": 2, // ${sets} from the CLIENT_COLUMNS map; ${fn} from a fixed list
       "lib/data/queries.ts": 1, // ${NAME_KEY_SQL("business_name")}
       // ${TZ_LABEL}: a constant CASE expression (time-zone label); stream 1 adds ${SENDS_SQL} / ${TOTALS_SQL}, the

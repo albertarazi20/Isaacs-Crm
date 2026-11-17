@@ -146,8 +146,10 @@ describe("importing clients", () => {
       (await t.pool.query("select 1 from clients where business_name = 'Fine Co'")).rows,
     ).toHaveLength(1);
   });
-  it("never imports a client as Funded without terms, and caps the batch", () => {
-    expect(() => importSchema.parse({ rows: [row({ stage: "funded" })] })).toThrow(/terms/);
+  it("never imports a client as Funded, and caps the batch", () => {
+    expect(() => importSchema.parse({ rows: [row({ stage: "funded" })] })).toThrow(
+      /can't be imported/,
+    );
     expect(() => importSchema.parse({ rows: [] })).toThrow(/Nothing to import/);
     expect(() => importSchema.parse({ rows: Array.from({ length: 2001 }, () => row({})) })).toThrow(
       /2,000/,

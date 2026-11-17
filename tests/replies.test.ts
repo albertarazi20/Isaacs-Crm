@@ -179,7 +179,7 @@ describe("replies, bounces, unsubscribes", () => {
       body: "Merchant replied: Re: October statement — Sending it tonight (mike@pizza.com)",
     });
 
-    const now = await t.db.withUser(rep, (q) => nowItems(q, t.today, { manager: false }));
+    const now = await t.db.withUser(rep, (q) => nowItems(q, t.today));
     expect(now[0]).toMatchObject({
       kind: "merchant_replied",
       business_name: "Pizza Palace",
@@ -194,7 +194,7 @@ describe("replies, bounces, unsubscribes", () => {
       ),
     );
     expect((await client(pizza)).reply_waiting_since).toBeNull();
-    const after = await t.db.withUser(rep, (q) => nowItems(q, t.today, { manager: false }));
+    const after = await t.db.withUser(rep, (q) => nowItems(q, t.today));
     expect(after.some((n) => n.kind === "merchant_replied")).toBe(false);
   });
 

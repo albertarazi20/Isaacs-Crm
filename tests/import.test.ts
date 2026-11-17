@@ -86,15 +86,14 @@ describe("loose dates and statuses", () => {
   it("maps the words an MCA sheet uses to stages", () => {
     expect(parseStageWord("Interested").stage).toBe("interested");
     expect(parseStageWord("App Sent").stage).toBe("application_sent");
-    expect(parseStageWord("Declined").stage).toBe("declined");
+    expect(parseStageWord("Declined").stage).toBe("dead");
     expect(parseStageWord("Dead").stage).toBe("dead");
     expect(parseStageWord("Not Interested").stage).toBe("not_interested");
-    expect(parseStageWord("Lost deal").stage).toBe("lost");
-    expect(parseStageWord("Paid in full").stage).toBe("paid_in_full");
+    expect(parseStageWord("Went with a competitor").stage).toBe("dead");
   });
-  it("refuses to import Funded or defaults as-is, since they need terms", () => {
-    expect(parseStageWord("Funded")).toEqual({ stage: null, unsupported: true });
-    expect(parseStageWord("Default")).toEqual({ stage: null, unsupported: true });
+  it("does not import a status about a file worked elsewhere as a stage: the note says it instead", () => {
+    for (const w of ["Funded", "Default", "Submitted", "Offer in", "Paid in full", "Contract out"])
+      expect(parseStageWord(w), w).toEqual({ stage: null, unsupported: true });
     expect(parseStageWord("")).toEqual({ stage: null, unsupported: false });
   });
 });
