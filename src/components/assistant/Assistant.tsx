@@ -72,6 +72,10 @@ type Item =
       streaming: boolean;
       notice?: string;
       error?: string;
+      /** From a conversation reopened from history: its buttons may be out of date, so only Open and Copy work. */
+      earlier?: boolean;
+      /** The answer was handed back unfinished after the automatic continues: offer "Keep going". */
+      canContinue?: boolean;
     };
 
 type Status = "idle" | "running" | "done" | "failed";
@@ -164,20 +168,26 @@ function ActionCard({
   status,
   onRun,
   today,
+  earlier = false,
 }: {
   action: ShownAction;
   status: Status;
   onRun: () => void;
   today: string;
+  /** From a reopened conversation: anything that changes a merchant waits for a fresh answer. */
+  earlier?: boolean;
 }) {
   const done = status === "done";
+  const stale = earlier && !done && action.type !== "copy" && action.type !== "open";
   return (
     <li>
       <button
         type="button"
         onClick={onRun}
         disabled={
-          status === "running" || (done && action.type !== "copy" && action.type !== "open")
+          stale ||
+          status === "running" ||
+          (done && action.type !== "copy" && action.type !== "open")
         }
         className={cn(
           "group flex w-full items-center gap-3 rounded-2xl border px-3 py-2.5 text-left transition duration-150 active:scale-[0.99]",
@@ -206,7 +216,9 @@ function ActionCard({
         <span className="min-w-0 flex-1">
           <span className="block truncate text-[13px] font-semibold">{action.label}</span>
           <span className="block truncate text-[12px] text-muted">
-            {actionDetail(action, today)}
+            {stale
+              ? "From an earlier conversation. Ask again to act on it."
+              : actionDetail(action, today)}
           </span>
         </span>
         <span
@@ -221,23 +233,25 @@ function ActionCard({
                   : "bg-surface-2 text-text-2 group-hover:bg-accent group-hover:text-accent-fg",
           )}
         >
-          {done
-            ? action.type === "copy"
-              ? "Copied"
-              : action.type === "send_email"
-                ? "Sent"
-                : "Done"
-            : status === "running"
-              ? "Working…"
-              : status === "failed"
-                ? "Try again"
-                : action.type === "copy"
-                  ? "Copy"
-                  : action.type === "open"
-                    ? "Open"
-                    : action.type === "send_email"
-                      ? "Review"
-                      : "Do it"}
+          {stale
+            ? "Earlier"
+            : done
+              ? action.type === "copy"
+                ? "Copied"
+                : action.type === "send_email"
+                  ? "Sent"
+                  : "Done"
+              : status === "running"
+                ? "Working…"
+                : status === "failed"
+                  ? "Try again"
+                  : action.type === "copy"
+                    ? "Copy"
+                    : action.type === "open"
+                      ? "Open"
+                      : action.type === "send_email"
+                        ? "Review"
+                        : "Do it"}
         </span>
       </button>
     </li>
@@ -405,25 +419,36 @@ export function AssistantProvider({
     [],
   );
 
-  const send = useCallback(
-    async (text: string, label?: string) => {
-      const message = text.trim();
-      if (!message || busy) return;
+  /** A new question (text), or null to keep going with the answer that was handed back unfinished. */
+  const run = useCallback(
+    async (text: string | null, label?: string) => {
+      const message = text === null ? null : text.trim();
+      if (message === "" || busy) return;
       setBusy(true);
-      setDraft("");
       setView("chat");
-      setItems((cur) => [
-        ...cur,
-        { kind: "user", text: message, label },
-        { kind: "assistant", text: "", actions: [], tools: [], streaming: true },
-      ]);
+      if (message !== null) {
+        setDraft("");
+        setItems((cur) => [
+          ...cur,
+          { kind: "user", text: message, label },
+          { kind: "assistant", text: "", actions: [], tools: [], streaming: true },
+        ]);
+      } else {
+        patchLast((a) => ({ ...a, streaming: true, canContinue: false, notice: undefined }));
+      }
       const controller = new AbortController();
       abort.current = controller;
       let thread = threadId;
       let next: string | null = message;
+      // the text this request streamed, and where the current model call's text began: a call the server stops
+      // (the time limit, an unreadable tool input) is run again, so its text is taken back out
+      let streamed = "";
+      let callStart = 0;
+      let more = false;
       try {
-        // a long turn is handed back after ~40 s (a hosted request has 60); carry on a few times without asking
+        // a long turn is handed back after ~30 s (a hosted request has 60); carry on a few times without asking
         for (let round = 0; round < 5; round++) {
+          callStart = streamed.length;
           const res = await fetch("/api/assistant", {
             method: "POST",
             headers: { "content-type": "application/json" },
@@ -437,7 +462,7 @@ export function AssistantProvider({
           const reader = res.body.getReader();
           const decoder = new TextDecoder();
           let buffer = "";
-          let more = false;
+          more = false;
           let finished = false;
           for (;;) {
             const { value, done } = await reader.read();
@@ -455,18 +480,22 @@ export function AssistantProvider({
                 | { t: "tool"; name: string; label: string }
                 | { t: "actions"; actions: ShownAction[] }
                 | { t: "notice"; message: string }
+                | { t: "discard" }
                 | { t: "done"; threadId: string; more: boolean }
                 | { t: "error"; message: string };
               if (e.t === "thread") {
                 thread = e.id;
                 setThreadId(e.id);
               } else if (e.t === "text") {
+                streamed += e.d;
                 patchLast((a) => ({
                   ...a,
                   text: a.text + e.d,
                   tools: a.tools.map((t) => ({ ...t, done: true })),
                 }));
               } else if (e.t === "tool") {
+                if (streamed && !streamed.endsWith("\n\n")) streamed += "\n\n";
+                callStart = streamed.length;
                 patchLast((a) => ({
                   ...a,
                   // an answer written before a tool call is a progress note; keep it, start the rest on a new line
@@ -480,6 +509,14 @@ export function AssistantProvider({
                 patchLast((a) => ({ ...a, actions: [...a.actions, ...e.actions] }));
               } else if (e.t === "notice") {
                 patchLast((a) => ({ ...a, notice: e.message }));
+              } else if (e.t === "discard") {
+                const cut = streamed.length - callStart;
+                streamed = streamed.slice(0, callStart);
+                if (cut > 0)
+                  patchLast((a) => ({
+                    ...a,
+                    text: a.text.slice(0, Math.max(0, a.text.length - cut)),
+                  }));
               } else if (e.t === "error") {
                 patchLast((a) => ({ ...a, error: e.message }));
                 finished = true;
@@ -501,11 +538,18 @@ export function AssistantProvider({
             error: err instanceof Error ? err.message : "The assistant could not be reached",
           }));
       } finally {
+        const stopped = controller.signal.aborted;
         patchLast((a) => ({
           ...a,
           streaming: false,
           tools: a.tools.map((t) => ({ ...t, done: true })),
-          notice: controller.signal.aborted ? "Stopped." : a.notice,
+          // still unfinished after the automatic continues: the person decides whether it carries on
+          canContinue: !stopped && more && !a.error,
+          notice: stopped
+            ? "Stopped."
+            : more && !a.error
+              ? "This one is taking a while. Keep going to let it finish."
+              : a.notice,
         }));
         abort.current = null;
         setBusy(false);
@@ -514,6 +558,7 @@ export function AssistantProvider({
     },
     [busy, patchLast, router, threadId],
   );
+  const send = useCallback((text: string, label?: string) => run(text, label), [run]);
 
   const reset = useCallback(() => {
     abort.current?.abort();
@@ -525,7 +570,8 @@ export function AssistantProvider({
 
   const show = useCallback(
     (o: OpenOptions = {}) => {
-      if (o.fresh && !busy) reset();
+      // a fresh ask stops whatever is still streaming, so it never lands in the old conversation
+      if (o.fresh) reset();
       setOpen(true);
       setRecs(null);
       void loadRecommendationsAction()
@@ -536,7 +582,7 @@ export function AssistantProvider({
         else setDraft(o.prompt);
       }
     },
-    [busy, reset, state.ready],
+    [reset, state.ready],
   );
 
   // a prompt handed over by open({ send: true }) goes out once the sheet has rendered (after a reset, if any)
@@ -632,6 +678,8 @@ export function AssistantProvider({
   }
 
   async function openThread(t: ThreadSummary) {
+    // an answer still streaming would write into the conversation opened under it
+    if (busy) return;
     const r = await call(loadThreadAction({ id: t.id }));
     if (!r) return;
     setThreadId(t.id);
@@ -640,7 +688,14 @@ export function AssistantProvider({
       r.map((i: ShownItem): Item =>
         i.role === "user"
           ? { kind: "user", text: i.text }
-          : { kind: "assistant", text: i.text, actions: i.actions, tools: [], streaming: false },
+          : {
+              kind: "assistant",
+              text: i.text,
+              actions: i.actions,
+              tools: [],
+              streaming: false,
+              earlier: true,
+            },
       ),
     );
     setView("chat");
@@ -670,7 +725,11 @@ export function AssistantProvider({
         subtitle="Reads your merchants, plans the work, and sets up the steps. Nothing happens until you click."
         headerAside={
           <>
-            <IconButton label="Past conversations" onClick={() => void openHistory()}>
+            <IconButton
+              label="Past conversations"
+              onClick={() => void openHistory()}
+              disabled={busy}
+            >
               <Glyph name="clock" className="size-4" />
             </IconButton>
             <IconButton label="New conversation" onClick={reset} disabled={busy}>
@@ -906,12 +965,19 @@ export function AssistantProvider({
                                 status={status[a.id] ?? "idle"}
                                 onRun={() => void runAction(a)}
                                 today={today}
+                                earlier={it.earlier}
                               />
                             ))}
                           </ul>
                         </div>
                       ) : null}
                       {it.notice ? <p className="text-[12.5px] text-muted">{it.notice}</p> : null}
+                      {it.canContinue && !busy && i === items.length - 1 ? (
+                        <Button variant="secondary" size="sm" onClick={() => void run(null)}>
+                          <Glyph name="sparkles" className="size-3.5 text-accent" />
+                          Keep going
+                        </Button>
+                      ) : null}
                       {it.error ? (
                         <p className="rounded-xl border border-bad/25 bg-bad-soft px-3 py-2 text-[13px] text-bad">
                           {it.error}

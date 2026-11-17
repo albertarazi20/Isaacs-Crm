@@ -194,10 +194,49 @@ export default async function assistantFlow({ email }) {
       (await until(() => panel.getByText(/You have \d+ overdue/).isVisible())) &&
         (await panel.getByRole("button", { name: /^Call .+ tomorrow/ }).isVisible()),
     );
+    check(
+      "its buttons that change a merchant wait for a fresh answer; Copy and Open still work",
+      (await panel.getByRole("button", { name: /^Call .+ tomorrow/ }).isDisabled()) &&
+        (await panel.getByRole("button", { name: /^Email / }).isDisabled()) &&
+        (await panel.getByRole("button", { name: /^Copy a text to send/ }).isEnabled()) &&
+        (await panel.getByRole("button", { name: /^Open the call list/ }).isEnabled()),
+    );
     await page.keyboard.press("Escape");
     check("Escape closes the panel", await until(async () => !(await panel.isVisible())));
     await page.keyboard.press("Control+j");
     check("Ctrl+J opens it again", await until(() => panel.isVisible()));
+    await page.keyboard.press("Escape");
+    await until(async () => !(await panel.isVisible()));
+
+    // a "Do this now" row asks about its merchant by id; the name is only in the label the person sees
+    await page.goto(`${BASE}/`, { waitUntil: "networkidle" });
+    const rowAsk = page
+      .getByRole("button", {
+        name: /^(Draft my reply|Nudge them|Prep the call|Check the file|What came in\?|Fix the email|Catch up): /,
+      })
+      .first();
+    const askLabel = (await rowAsk.getAttribute("aria-label")) ?? "";
+    const name = askLabel.slice(askLabel.indexOf(": ") + 2);
+    const before = model.calls.length;
+    await rowAsk.click();
+    await panel.waitFor({ timeout: 8000 });
+    const sentBrief = await until(async () => model.calls.length > before, 15000);
+    const firstUser = model.calls[before]?.body.messages?.[0]?.content ?? [];
+    const briefText = Array.isArray(firstUser)
+      ? firstUser.map((b) => b.text ?? "").join(" ")
+      : String(firstUser);
+    check(
+      "a Do-this-now row's sparkles button asks about that merchant by id, and the bubble shows its name",
+      sentBrief &&
+        /merchant_id [0-9a-f-]{36}/.test(briefText) &&
+        !briefText.includes(name) &&
+        (await panel.getByText(askLabel).first().isVisible()),
+      askLabel,
+    );
+    await until(
+      async () => (await panel.getByRole("button", { name: "Stop" }).count()) === 0,
+      20000,
+    );
   } finally {
     await browser.close();
     await model?.close();

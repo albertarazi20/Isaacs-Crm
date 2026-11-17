@@ -281,7 +281,7 @@ export function ClientHero({ detail, className }: { detail: ClientDetail; classN
             size="sm"
             text="Next step"
             label={`Next step for ${card.business_name}`}
-            prompt={merchantBrief(card.business_name, card.id)}
+            prompt={merchantBrief(card.id)}
           />
           <Button size="sm" onClick={() => setEditing(true)}>
             <Icon name="note" className="size-3.5 text-muted" />

@@ -22,6 +22,10 @@ export const ASSISTANT_PROMPT_VERSION = "assistant-v2";
 export const MAX_THREAD_MESSAGES = 120;
 /** Model calls in one request; past this the browser is told to continue. */
 const MAX_CALLS_PER_REQUEST = 6;
+/** No new model call starts after this; the browser continues in a fresh request (a hosted request has 60 s). */
+const START_BUDGET_MS = 30_000;
+/** A call still running at this point is stopped (its spend counted) and re-run by the browser's continue. */
+const HARD_STOP_MS = 54_000;
 
 type MessageParam = Anthropic.Beta.Messages.BetaMessageParam;
 type Message = Anthropic.Beta.Messages.BetaMessage;
@@ -49,20 +53,73 @@ export interface TurnEvents {
   tool(name: string, label: string): void;
   actions(actions: ShownAction[]): void;
   notice(message: string): void;
+  /** Drop the text streamed by the call that just failed: it is run again, and its text would show twice. */
+  discard?(): void;
 }
 
 export type ModelCaller = (
   params: StreamParams,
   onText: (delta: string) => void,
+  opts?: { deadline?: number },
 ) => Promise<Message>;
+
+/**
+ * A model call that did not finish. Carries what the call had produced when it stopped, so its spend is still
+ * counted, and whether it was stopped on purpose at the request's time limit.
+ */
+export class UnfinishedCallError extends Error {
+  constructor(
+    readonly reason: unknown,
+    readonly partial: Message | undefined,
+    readonly timedOut: boolean,
+  ) {
+    super("The model call did not finish");
+  }
+}
 
 /** The real caller: streams from the Messages API and resolves with the whole message. */
 export function anthropicCaller(client: Anthropic = new Anthropic()): ModelCaller {
-  return async (params, onText) => {
+  return async (params, onText, opts) => {
     const stream = client.beta.messages.stream(params);
     stream.on("text", onText);
-    return stream.finalMessage();
+    let timedOut = false;
+    const timer =
+      opts?.deadline === undefined
+        ? null
+        : setTimeout(
+            () => {
+              timedOut = true;
+              stream.abort();
+            },
+            Math.max(0, opts.deadline - Date.now()),
+          );
+    try {
+      return await stream.finalMessage();
+    } catch (e) {
+      throw new UnfinishedCallError(e, stream.currentMessage, timedOut);
+    } finally {
+      if (timer) clearTimeout(timer);
+    }
   };
+}
+
+/** The SDK's "the streamed tool input was not valid JSON" (an AnthropicError, never one of its API errors). */
+export function isToolJsonError(e: unknown): boolean {
+  if (e instanceof SyntaxError) return true;
+  return (
+    e instanceof Anthropic.AnthropicError &&
+    !(e instanceof Anthropic.APIError) &&
+    /parse tool parameter JSON/i.test(e.message)
+  );
+}
+
+/**
+ * The usage of a call that stopped part way. Output tokens are only reported at the end of a stream, so they are
+ * estimated from what was produced (about four characters a token) when that is more.
+ */
+export function partialUsage(m: Message): Message {
+  const produced = Math.ceil(JSON.stringify(m.content ?? []).length / 4);
+  return { ...m, usage: { ...m.usage, output_tokens: Math.max(m.usage.output_tokens, produced) } };
 }
 
 export function buildParams(messages: MessageParam[]): StreamParams {
@@ -177,6 +234,8 @@ export interface TurnInput {
   now?: Date;
   /** Stop starting new model calls once this many milliseconds have passed (a hosted request has 60 seconds). */
   budgetMs?: number;
+  /** Stop a call still running at this many milliseconds; the browser's continue runs it again. */
+  hardStopMs?: number;
 }
 
 export interface TurnResult {
@@ -188,7 +247,8 @@ export interface TurnResult {
 export async function runAssistantTurn(input: TurnInput): Promise<TurnResult> {
   const started = Date.now();
   const now = input.now ?? new Date();
-  const budgetMs = input.budgetMs ?? 40_000;
+  const budgetMs = input.budgetMs ?? START_BUDGET_MS;
+  const deadline = started + (input.hardStopMs ?? HARD_STOP_MS);
 
   // 1. who, when, the budget, and the conversation
   const setup = await db.withUser(input.userId, async (q) => {
@@ -229,6 +289,20 @@ export async function runAssistantTurn(input: TurnInput): Promise<TurnResult> {
     if (!last || last.role !== "user") return { threadId: thread.id, more: false }; // nothing left to continue
   }
 
+  // every call is counted against the daily budget, finished or not
+  const logRun = (m: Message, outcome: string) =>
+    db.withUser(input.userId, (q) =>
+      q.query("select app.log_ai_run('assistant', $1, $2, $3, $4, $5, $6, $7::jsonb, null)", [
+        m.model,
+        ASSISTANT_PROMPT_VERSION,
+        createHash("sha256").update(thread.id).digest("hex"),
+        m.usage.input_tokens + (m.usage.cache_read_input_tokens ?? 0),
+        m.usage.output_tokens,
+        callCostCents(m),
+        JSON.stringify({ thread: thread.id, stop_reason: outcome }),
+      ]),
+    );
+
   // 2. the loop: call, read tools, call again, until an answer or the time budget is spent
   let parseRetries = 0;
   for (let calls = 0; ;) {
@@ -236,27 +310,28 @@ export async function runAssistantTurn(input: TurnInput): Promise<TurnResult> {
       return { threadId: thread.id, more: true };
     let message: Message;
     try {
-      message = await input.caller(buildParams(thread.messages), input.events.text);
-    } catch (e) {
+      message = await input.caller(buildParams(thread.messages), input.events.text, { deadline });
+    } catch (raw) {
+      const unfinished = raw instanceof UnfinishedCallError ? raw : null;
+      const e = unfinished ? unfinished.reason : raw;
+      if (unfinished?.partial) await logRun(partialUsage(unfinished.partial), "unfinished");
+      // stopped at the request's time limit: nothing of it is kept, the browser continues in a fresh request
+      if (unfinished?.timedOut) {
+        input.events.discard?.();
+        return { threadId: thread.id, more: true };
+      }
       // a tool input the stream could not parse at all: re-issue the same turn, at most twice
-      if (!(e instanceof Anthropic.APIError) && e instanceof SyntaxError && parseRetries++ < 2)
+      if (isToolJsonError(e) && parseRetries++ < 2) {
+        input.events.discard?.();
+        calls++;
         continue;
+      }
       throw e;
     }
     calls++;
     parseRetries = 0;
 
-    await db.withUser(input.userId, (q) =>
-      q.query("select app.log_ai_run('assistant', $1, $2, $3, $4, $5, $6, $7::jsonb, null)", [
-        message.model,
-        ASSISTANT_PROMPT_VERSION,
-        createHash("sha256").update(thread.id).digest("hex"),
-        message.usage.input_tokens + (message.usage.cache_read_input_tokens ?? 0),
-        message.usage.output_tokens,
-        callCostCents(message),
-        JSON.stringify({ thread: thread.id, stop_reason: message.stop_reason }),
-      ]),
-    );
+    await logRun(message, message.stop_reason ?? "unknown");
 
     if (message.stop_reason === "refusal") {
       input.events.notice("The assistant can't help with that one. Try asking it another way.");
@@ -280,39 +355,43 @@ export async function runAssistantTurn(input: TurnInput): Promise<TurnResult> {
       return { threadId: thread.id, more: false };
     }
 
-    // 3. run the tools (reads under the person's row security; proposals checked, then shown)
+    // 3. run the tools (reads under the person's row security; proposals checked, then shown). Each runs behind its
+    // own savepoint: one that fails (a statement timeout) must not abort the transaction the others share.
     const results: Anthropic.Beta.Messages.BetaToolResultBlockParam[] = [];
     await db.withUser(input.userId, async (q) => {
       for (const use of uses) {
         input.events.tool(use.name, toolLabel(use.name));
-        if (use.name === "propose_actions") {
-          const checked = await checkActions(q, use.input, ctx.today, use.id);
-          if (checked.shown.length > 0) input.events.actions(checked.shown);
-          results.push({
-            type: "tool_result",
-            tool_use_id: use.id,
-            content: JSON.stringify({
-              shown_to_the_person: checked.shown.length,
-              shown: checked.shown,
-              refused: checked.refused,
-              reminder: "Nothing has happened yet: the person decides by clicking.",
-            }),
-            is_error: checked.shown.length === 0 && checked.refused.length > 0,
-          });
-          continue;
-        }
+        await q.query("savepoint assistant_tool");
         try {
-          const r = await runReadTool(q, use.name, use.input, {
-            today: ctx.today,
-            manager: ctx.manager,
-          });
-          results.push({
-            type: "tool_result",
-            tool_use_id: use.id,
-            content: r.content,
-            is_error: r.isError,
-          });
+          if (use.name === "propose_actions") {
+            const checked = await checkActions(q, use.input, ctx.today, use.id);
+            if (checked.shown.length > 0) input.events.actions(checked.shown);
+            results.push({
+              type: "tool_result",
+              tool_use_id: use.id,
+              content: JSON.stringify({
+                shown_to_the_person: checked.shown.length,
+                shown: checked.shown,
+                refused: checked.refused,
+                reminder: "Nothing has happened yet: the person decides by clicking.",
+              }),
+              is_error: checked.shown.length === 0 && checked.refused.length > 0,
+            });
+          } else {
+            const r = await runReadTool(q, use.name, use.input, {
+              today: ctx.today,
+              manager: ctx.manager,
+            });
+            results.push({
+              type: "tool_result",
+              tool_use_id: use.id,
+              content: r.content,
+              is_error: r.isError,
+            });
+          }
+          await q.query("release savepoint assistant_tool");
         } catch (e) {
+          await q.query("rollback to savepoint assistant_tool");
           console.error("assistant tool failed:", use.name, e);
           results.push({
             type: "tool_result",

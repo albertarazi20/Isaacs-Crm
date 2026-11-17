@@ -370,7 +370,7 @@ export function MemberDrawer({
             <AskButton
               text="Next step"
               label={`Next step for ${member.business_name}`}
-              prompt={merchantBrief(member.business_name, member.client_id)}
+              prompt={merchantBrief(member.client_id)}
             />
             <Button variant="primary" disabled={busy} onClick={() => actions.onHandOff(member)}>
               <Glyph name="flag" className="size-4" />

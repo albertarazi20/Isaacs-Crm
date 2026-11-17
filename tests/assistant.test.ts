@@ -576,4 +576,110 @@ describe("a turn", () => {
     expect(rec.log.text).toBe("Here is the plan.");
     expect(second.sent[1]!.messages).toHaveLength(3);
   });
+
+  it("a call stopped at the time limit is still counted, its text is dropped, nothing of it is saved, and the browser continues", async () => {
+    const partial = {
+      id: "msg_cut",
+      type: "message",
+      role: "assistant",
+      model: "claude-opus-5-5",
+      stop_reason: null,
+      stop_sequence: null,
+      usage: { input_tokens: 4000, output_tokens: 1 },
+      content: [text("Here is the start of a long pla")],
+    } as unknown as Message;
+    const caller = async (_p: StreamParams, onText: (d: string) => void): Promise<Message> => {
+      onText("Here is the start of a long pla");
+      throw new run.UnfinishedCallError(new Error("aborted"), partial, true);
+    };
+    let dropped = 0;
+    const rec = recorder();
+    const r = await run.runAssistantTurn({
+      userId: rita,
+      threadId: null,
+      message: "A very long plan",
+      keySet: true,
+      caller,
+      events: { ...rec.events, discard: () => (dropped += 1) },
+    });
+    expect(r.more).toBe(true);
+    expect(dropped).toBe(1);
+    const logged = await one<{ n: number; cost: string }>(
+      "select count(*)::int as n, max(cost_cents)::text as cost from ai_runs where purpose = 'assistant' and output->>'stop_reason' = 'unfinished'",
+    );
+    expect(logged!.n).toBe(1);
+    expect(Number(logged!.cost)).toBeGreaterThan(0);
+    const saved = await one<{ messages: { role: string }[] }>(
+      "select messages from assistant_threads where id = $1",
+      [r.threadId],
+    );
+    // only the question: the cut-off answer is not part of the history the next request continues from
+    expect(saved!.messages.map((m) => m.role)).toEqual(["user"]);
+  });
+
+  it("a tool input the stream could not parse is asked for again (the SDK's own error, not an API error)", async () => {
+    const { AnthropicError } = await import("@anthropic-ai/sdk");
+    let calls = 0;
+    const rec = recorder();
+    let dropped = 0;
+    const r = await run.runAssistantTurn({
+      userId: rita,
+      threadId: null,
+      message: "Plan it",
+      keySet: true,
+      caller: async (_p, onText) => {
+        calls += 1;
+        if (calls === 1)
+          throw new run.UnfinishedCallError(
+            new AnthropicError("Unable to parse tool parameter JSON from model. JSON: {"),
+            undefined,
+            false,
+          );
+        onText("Done.");
+        return {
+          id: "msg_ok",
+          type: "message",
+          role: "assistant",
+          model: "claude-opus-5-5",
+          stop_reason: "end_turn",
+          stop_sequence: null,
+          usage: { input_tokens: 10, output_tokens: 5 },
+          content: [text("Done.")],
+        } as unknown as Message;
+      },
+      events: { ...rec.events, discard: () => (dropped += 1) },
+    });
+    expect(calls).toBe(2);
+    expect(dropped).toBe(1);
+    expect(r.more).toBe(false);
+    expect(rec.log.text).toBe("Done.");
+    expect(run.isToolJsonError(new Error("Unable to parse tool parameter JSON"))).toBe(false);
+  });
+});
+
+describe("a proposed pause", () => {
+  it("is refused for a merchant in no bucket (there is nothing to pause)", async () => {
+    const loose = (await one<{ id: string }>(
+      "insert into clients (user_id, business_name, contact_name, phone, email, state) values ($1, 'Loose Co', 'Ann Lee', '3105550177', 'ann@loose.com', 'CA') returning id",
+      [rita],
+    ))!.id;
+    await t.pool.query("select stop_enrollment($1, 'removed')", [loose]);
+    const checked = await t.db.withUser(rita, (q) =>
+      tools.checkActions(
+        q,
+        {
+          actions: [
+            { type: "pause", label: "Pause Loose Co", merchant_id: loose },
+            { type: "pause", label: "Pause Harbor Tacos", merchant_id: ritaMerchant },
+          ],
+        },
+        t.today,
+        "call_pause",
+      ),
+    );
+    expect(checked.shown.map((a) => ("merchant_id" in a ? a.merchant_id : null))).toEqual([
+      ritaMerchant,
+    ]);
+    expect(checked.refused.join(" ")).toMatch(/not in a bucket/);
+  });
 });

@@ -41,8 +41,25 @@ export async function POST(req: Request) {
   const encoder = new TextEncoder();
   const stream = new ReadableStream<Uint8Array>({
     async start(controller) {
-      const send = (event: Record<string, unknown>) =>
-        controller.enqueue(encoder.encode(`${JSON.stringify(event)}\n`));
+      // once the browser has gone (Stop, a closed tab) every later write throws: that also stops the model call,
+      // whose spend up to that point is still counted (runAssistantTurn logs an unfinished call)
+      let gone = false;
+      const send = (event: Record<string, unknown>) => {
+        if (gone) throw new Error("the browser went away");
+        try {
+          controller.enqueue(encoder.encode(`${JSON.stringify(event)}\n`));
+        } catch (e) {
+          gone = true;
+          throw e;
+        }
+      };
+      const last = (event: Record<string, unknown>) => {
+        try {
+          send(event);
+        } catch {
+          // nobody is listening any more
+        }
+      };
       try {
         const result = await runAssistantTurn({
           userId: session.userId,
@@ -56,17 +73,23 @@ export async function POST(req: Request) {
             tool: (name, label) => send({ t: "tool", name, label }),
             actions: (actions) => send({ t: "actions", actions }),
             notice: (message) => send({ t: "notice", message }),
+            discard: () => send({ t: "discard" }),
           },
         });
-        send({ t: "done", threadId: result.threadId, more: result.more });
+        last({ t: "done", threadId: result.threadId, more: result.more });
       } catch (e) {
+        if (gone) return;
         if (!(e instanceof Anthropic.APIError)) console.error("assistant turn failed:", e);
-        send({
+        last({
           t: "error",
           message: e instanceof Anthropic.APIError ? apiErrorWords(e) : toActionError(e),
         });
       } finally {
-        controller.close();
+        try {
+          controller.close();
+        } catch {
+          // already closed by the browser leaving
+        }
       }
     },
   });

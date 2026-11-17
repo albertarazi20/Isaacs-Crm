@@ -72,14 +72,17 @@ export function queueBrief(
   const name = business.trim() || "This merchant";
   const ask = QUEUE_ASK[reason];
   return {
-    prompt: `${name} (merchant_id ${id}) ${ask.task}`,
+    // the name is shown to the person, never put in the brief: a merchant writes their own business name (a lead
+    // form can say anything), and the person's own words are what the model trusts most. It reads the name through
+    // the tools, where merchant text is marked as data.
+    prompt: `The merchant with merchant_id ${id} ${ask.task}`,
     label: `${ask.label}: ${name}`,
   };
 }
 
 /** The brief behind "Next step" on a merchant (the merchant page and the bucket drawer). */
-export const merchantBrief = (business: string, id: string) =>
-  `Look at ${business} (merchant_id ${id}): read the file and tell me where it stands, what is still missing, and the next best step today. Write the message I should send next (a short email and a text), and set up the actions.`;
+export const merchantBrief = (id: string) =>
+  `Look at the merchant with merchant_id ${id}: read the file and tell me where it stands, what is still missing, and the next best step today. Write the message I should send next (a short email and a text), and set up the actions.`;
 
 export const bucketBrief = (name: string, id: string) =>
   `Look at the "${name}" bucket (bucket_id ${id}): its email sequence and its merchants. Who is closest to done, who has gone quiet, and what should I do with this bucket today? Set up the actions.`;

@@ -141,6 +141,12 @@ describe("the assistant's links", () => {
       "/api/export/backup",
       "/today#x",
       "/nowhere",
+      // a single dot segment resolves to a "//" path (second review)
+      "/.//evil.com",
+      "/.//api/export/backup",
+      "/.//api/auth/google?purpose=gmail",
+      "/./today",
+      "/clients/./abc",
     ])
       expect(isAppPage(bad), bad).toBe(false);
   });

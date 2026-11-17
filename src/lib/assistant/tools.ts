@@ -158,8 +158,9 @@ const OPEN_PREFIXES = [
 
 /**
  * A link the assistant may offer: a page of this app, judged by where it really lands. The text is resolved the way
- * the browser resolves it (so "/clients/../api/export" is the API route it becomes, and refused), dot segments and
- * backslashes in any spelling are refused outright, and the landing path must be one of the app's pages.
+ * the browser resolves it and must already BE that resolved form (so "/clients/../api/export" and "/.//api/export",
+ * which land somewhere else than they read, are refused), dot segments and backslashes in any spelling are refused
+ * outright, the landing path never starts with "//", and it must be one of the app's pages.
  */
 export function isAppPage(href: string): boolean {
   if (!href.startsWith("/") || href.startsWith("//")) return false;
@@ -172,6 +173,7 @@ export function isAppPage(href: string): boolean {
   }
   if (u.host !== "app.invalid" || u.hash) return false;
   const path = u.pathname;
+  if (path.startsWith("//") || href !== path + u.search) return false;
   return (
     OPEN_PREFIXES.some((p) => path === p || path.startsWith(`${p}/`)) && !path.startsWith("/api")
   );
@@ -291,6 +293,19 @@ export async function checkActions(
     if (a.type === "pause" && a.until && (a.until <= today || a.until > addDays(today, 365))) {
       refused.push(`action ${i + 1}: a pause date must be after today and within a year`);
       continue;
+    }
+    if (a.type === "pause") {
+      // pausing stops a bucket's emails: a merchant in no bucket has nothing to pause
+      const enrolled = await q.query(
+        "select 1 from enrollments where client_id = $1 and stopped_at is null",
+        [a.merchant_id],
+      );
+      if (enrolled.rowCount === 0) {
+        refused.push(
+          `action ${i + 1}: that merchant is not in a bucket, so there is nothing to pause`,
+        );
+        continue;
+      }
     }
     if (a.type === "move_to_bucket") {
       const b = await q.query<{ name: string }>(
