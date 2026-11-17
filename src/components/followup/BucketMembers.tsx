@@ -40,6 +40,16 @@ const FILTERS: readonly { id: Filter; label: string }[] = [
 const GRID =
   "grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-x-3 gap-y-1.5 md:grid-cols-[auto_minmax(0,2.1fr)_minmax(0,1.5fr)_minmax(0,0.9fr)_minmax(0,1.7fr)_132px] md:gap-x-4";
 
+/** Why a blast skipped a merchant, in words (src/lib/send/enqueue.ts and queueBlast give the codes). */
+const SKIP_WORDS: Record<string, string> = {
+  duplicate: "already queued or sent today",
+  brought_in: "handed off",
+  opted_out: "opted out",
+  no_address: "no email address",
+  suppressed: "address blocked",
+  dnc: "do not contact",
+};
+
 /** The lead lines of one bucket: search, filter, check, blast, move, pause, hand off, and a sheet per merchant. */
 export function BucketMembers({
   bucket,
@@ -239,13 +249,14 @@ export function BucketMembers({
 
   async function blast() {
     if (!templateId || ids.length === 0) return;
+    const why = (reason: string | undefined) => (reason ? (SKIP_WORDS[reason] ?? reason) : "");
     setConfirmBlast(false);
     setBusy(true);
     const r = await blastAction({ templateId, clientIds: ids });
     setBusy(false);
     if (!r.ok) return toast({ message: r.error, tone: "error" });
     toast({
-      message: `${r.data.queued} queued${r.data.skipped.length ? `, ${r.data.skipped.length} skipped (${r.data.skipped[0]?.reason})` : ""}`,
+      message: `${r.data.queued} queued${r.data.skipped.length ? `, ${r.data.skipped.length} skipped (${why(r.data.skipped[0]?.reason)})` : ""}`,
       tone: "success",
     });
     setChecked(new Set());

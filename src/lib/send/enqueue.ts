@@ -19,7 +19,10 @@ export interface EnqueueInput {
 
 export type EnqueueResult =
   | { queued: true; outboxId: string; notBefore: string }
-  | { queued: false; reason: "no_address" | "opted_out" | "suppressed" | "dnc" };
+  /** duplicate: the same automated email (merchant and source) is already pending, or the blast already went today. */
+  | { queued: false; reason: "no_address" | "opted_out" | "suppressed" | "dnc" | "duplicate" }
+  /** The row was written but the database cancelled it as it landed (a handed-off merchant gets no automated mail). */
+  | { queued: false; reason: "brought_in" | "cancelled"; outboxId: string };
 
 interface ClientBits {
   user_id: string;
@@ -40,7 +43,9 @@ interface Window {
 /**
  * Put one email on the outbox for a merchant. Checks that cannot change by send time are done here (address,
  * opt-out, suppression, do-not-contact); the ones that can (the cap, the per-merchant limit, a reply that
- * arrived) are checked by the worker right before it sends.
+ * arrived) are checked by the worker right before it sends. The result is read from the row as the database stored
+ * it: a second pending copy of the same sequence step or blast is not written (0543), and a row the database
+ * cancelled on the way in is not reported as queued.
  */
 export async function enqueueEmail(
   q: Db,
@@ -81,9 +86,11 @@ export async function enqueueEmail(
   const expires = input.expiresInHours
     ? new Date(notBefore.getTime() + input.expiresInHours * 3_600_000)
     : null;
-  const ins = await q.query<{ id: string }>(
+  const ins = await q.query<{ id: string; status: string; skip_reason: string | null }>(
     `insert into outbox (user_id, client_id, lane, source, to_address, subject, text_body, not_before, expires_at, template_id)
-     values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) returning id`,
+     values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+     on conflict do nothing
+     returning id, status, skip_reason`,
     [
       c.user_id,
       input.clientId,
@@ -97,9 +104,15 @@ export async function enqueueEmail(
       input.templateId ?? null,
     ],
   );
-  const id = ins.rows[0]?.id;
-  if (!id) throw new Error("outbox insert returned no row");
-  return { queued: true, outboxId: id, notBefore: notBefore.toISOString() };
+  const row = ins.rows[0];
+  if (!row) return { queued: false, reason: "duplicate" };
+  if (row.status !== "queued")
+    return {
+      queued: false,
+      reason: row.skip_reason === "brought_in" ? "brought_in" : "cancelled",
+      outboxId: row.id,
+    };
+  return { queued: true, outboxId: row.id, notBefore: notBefore.toISOString() };
 }
 
 /** Cancel every queued automated email to a merchant (a reply came in, docs arrived, the merchant moved on). */

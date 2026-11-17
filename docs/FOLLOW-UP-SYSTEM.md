@@ -78,4 +78,6 @@ Built on branch `scope/redesign`, in three parts that were merged there:
    New lead as a sheet instead of a page, and every page redone.
 
 Decision 1 as built: Hand off is on the merchant page, on each row and in the merchant sheet in Follow Up, and in
-bulk; it can be undone. It is the rep's press, not automatic.
+bulk; it can be undone. It is the rep's press, not automatic. Reaching "Ready to hand off" sends the rep one "File
+complete" alert (`0543_engine_fixes.sql`); a handed-off merchant cannot be put back in a bucket until the hand-off is
+undone, and a "not now" reply does not re-open their chase.

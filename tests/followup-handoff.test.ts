@@ -48,8 +48,9 @@ const queue = (clientId: string, source: string, lane: Lane) =>
       text: "Checking in",
       when: "now",
     });
-    if (!r.queued) throw new Error(`not queued: ${r.reason}`);
-    return r.outboxId;
+    // a row the database cancelled as it landed (a handed-off merchant) is still a row to read back
+    if (r.queued || r.reason === "brought_in") return r.outboxId;
+    throw new Error(`not queued: ${r.reason}`);
   });
 const outbox = async (id: string) =>
   (
@@ -124,9 +125,10 @@ describe("hand_off", () => {
     expect(closed.rows).toEqual([{ done_reason: "completed" }]);
     expect((await lines(id)).filter((l) => l === "Handed off — brought in")).toHaveLength(1);
     const alerts = async () =>
+      // entering Ready to hand off also wrote the rep's 'file_complete' alert (0543, tests/engine-fixes.test.ts)
       (
         await t.pool.query<{ user_id: string; kind: string; title: string; body: string }>(
-          "select user_id, kind, title, body from user_alerts where client_id = $1",
+          "select user_id, kind, title, body from user_alerts where client_id = $1 and kind = 'brought_in'",
           [id],
         )
       ).rows;
