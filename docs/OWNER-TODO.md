@@ -5,6 +5,25 @@
 Never paste secrets (API keys, client secrets) into chat. Put them in the hosting provider's
 environment variables; Claude only needs to be told they are set.
 
+## Selective Capital, as of 2026-11-17 (this is the list that applies now)
+
+The live site is the Netlify project `selective-capital-crm`; the database is Supabase `aztoxzcmnvqaypjuuuwj`, in step
+with the code (migrations through 0550). What only you can do, most useful first:
+
+1. **Turn the assistant on:** add `ANTHROPIC_API_KEY` in Netlify → Site configuration → Environment variables, marked
+   secret. Until then the panel says it is not set up (the recommendations still link to the pages).
+2. **Set the shop's postal address** in Settings → Email. Bucket sequences and blasts wait until it is filled (the
+   law asks for it in every automated email); welcome emails and replies already go.
+3. **Make the database password and the sign-in passcode random, and mark both secret** in Netlify (they are short
+   and visible today).
+4. **Google** (Gmail send and read, Sheets) and **Resend** (the automation domain and bounces): create the keys and
+   put them in Netlify's environment variables, then tell Claude they are set.
+5. **Decide on "Nudge after an open"** (Settings → Email, off): a merchant who opens their link and does not finish
+   gets it again a day later, once a week at most. The two emails are the "Nudge" templates.
+6. **Run the two Supabase statements** listed in `BUILD-NOTES.md` ("Automations pass") in the SQL editor.
+
+Everything below this section was written for the original Isaac deployment and is kept for reference.
+
 ## A. You, in this order (about 2 hours of your own time)
 
 **Already done (re-verified 2026-11-15):** the database. A Supabase project holds all 31 migrations, and a fingerprint of
