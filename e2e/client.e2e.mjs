@@ -219,7 +219,8 @@ const tapAudit = (page) =>
       if (cs.visibility === "hidden" || cs.display === "none" || r.width <= 1 || r.height <= 1)
         continue;
       if (r.bottom < 0 || r.top > document.documentElement.scrollHeight) continue;
-      if (r.height < 40)
+      // half a pixel of slack: a 40px target mid-transition (the theme switch, a press) measures 39.9
+      if (r.height < 39.5)
         out.push({
           label: (
             el.getAttribute("aria-label") ||

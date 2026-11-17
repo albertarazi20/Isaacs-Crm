@@ -52,6 +52,8 @@ export interface BucketMember {
   stips_missing: number;
   /** The required checklist items not yet in, for the {missing_docs} merge field. */
   missing: { kind: StipKind; period: string | null }[];
+  /** The merchant's own last move: a reply, an open, a document they sent, a signature (see CardMeta.active_at). */
+  active_at: string | null;
   rep_name: string;
 }
 
@@ -73,6 +75,13 @@ export async function listBucketMembers(q: Db, bucketId: string): Promise<Bucket
               (select count(*)::int from stips s where s.client_id = c.id and s.required and s.received_at is null) as stips_missing,
               coalesce((select jsonb_agg(jsonb_build_object('kind', s.kind, 'period', s.period::text) order by s.kind, s.period)
                           from stips s where s.client_id = c.id and s.required and s.received_at is null), '[]'::jsonb) as missing,
+              greatest(
+                (select max(ie.received_at) from inbound_emails ie where ie.client_id = c.id),
+                (select max(lo.opened_at) from link_opens lo where lo.client_id = c.id),
+                (select max(d.created_at) from documents d
+                  where d.client_id = c.id and d.deleted_at is null and d.source in ('upload_link', 'email')),
+                (select max(ap.signed_at) from applications ap where ap.client_id = c.id)
+              ) as active_at,
               u.name as rep_name
          from enrollments e join clients c on c.id = e.client_id join app_users u on u.id = c.user_id
         where e.bucket_id = $1 and e.stopped_at is null

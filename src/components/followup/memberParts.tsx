@@ -1,6 +1,8 @@
 "use client";
 
 import { mintUploadLinkAction } from "@/app/docs-actions";
+import { ActiveBadge } from "@/components/ActiveBadge";
+import { useApp } from "@/components/app-context";
 import { copyText } from "@/components/client/parts";
 import { Badge, cn } from "@/components/ui";
 import type { BucketMember } from "@/lib/buckets/queries";
@@ -62,12 +64,14 @@ export function MemberChips({
   today: ISODate;
   className?: string;
 }) {
+  const { nowMs } = useApp();
   const chip = meta ? replyChip(meta.tag, meta.tag_revive_on, today) : null;
   const quiet =
     !m.paused && !chip && !m.reply_waiting && !noUsableEmail(m) && m.stips_missing === 0;
   return (
     <span className={cn("flex min-w-0 flex-wrap items-center gap-1", className)}>
       {m.reply_waiting ? <Badge tone="bad">Reply waiting</Badge> : null}
+      <ActiveBadge at={m.active_at} nowMs={nowMs} />
       {m.paused ? <Badge tone="warn">{pausedLabel(meta?.resume_on ?? null, today)}</Badge> : null}
       {chip ? <Badge tone={chip.tone}>{chip.label}</Badge> : null}
       {m.email_opt_out ? (
