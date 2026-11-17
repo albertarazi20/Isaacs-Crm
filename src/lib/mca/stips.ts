@@ -1,3 +1,4 @@
+import { expectedMonth } from "../docs/freshness";
 import { addMonths, parseISODate, toISODate, type ISODate } from "./dates";
 
 export type StipKind =
@@ -39,15 +40,16 @@ export interface StipSeed {
 
 /**
  * Default checklist when an application lands. Statements are one box per month — "statements:
- * partial" tells Isaac nothing, "Oct missing" does. The last N *complete* months are required.
+ * partial" tells Isaac nothing, "Oct missing" does. The last N months a lender expects are required, ending at
+ * the newest one that exists: before the 5th, last month's statement is not out yet (freshness.ts expectedMonth).
  */
 export function defaultStips(asOf: ISODate, statementMonths = 4): StipSeed[] {
-  const firstOfThisMonth = `${asOf.slice(0, 7)}-01`;
+  const newest = expectedMonth(asOf);
   const statements: StipSeed[] = [];
-  for (let i = statementMonths; i >= 1; i -= 1) {
+  for (let i = statementMonths - 1; i >= 0; i -= 1) {
     statements.push({
       kind: "bank_statement",
-      period: addMonths(firstOfThisMonth, -i),
+      period: addMonths(newest, -i),
       required: true,
     });
   }

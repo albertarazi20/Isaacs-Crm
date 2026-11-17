@@ -68,11 +68,19 @@ const MONTHS: Record<string, number> = {
 
 const pad = (n: number) => String(n).padStart(2, "0");
 
+/** A statement month read from a file name; `certain` is false when the name allows another reading. */
+export interface NamePeriod {
+  period: ISODate;
+  certain: boolean;
+}
+
 /**
- * The statement month in a file name: "Oct 2026", "October_2026", "2026-10", "10-2026", "10_26", "2026_10_31".
+ * The statement month in a file name: "Oct 2026", "October_2026", "2026-10", "10-2026", "10_26", "2026_10_31",
+ * "12-01-2025", "9/30/2026". A full date with the year last is read US-style (month first); when both parts could
+ * be the month ("12-01-2025": December 1st, or 12 January?) the reading is not `certain`, so a rep confirms it.
  * `today` keeps a two-digit year honest and refuses months in the future.
  */
-export function periodFromName(name: string, today: ISODate): ISODate | null {
+export function readPeriod(name: string, today: ISODate): NamePeriod | null {
   const n = name.toLowerCase().replace(/\.[a-z0-9]+$/, "");
   const ty = Number(today.slice(0, 4));
   const tm = Number(today.slice(5, 7));
@@ -80,8 +88,24 @@ export function periodFromName(name: string, today: ISODate): ISODate | null {
     m >= 1 && m <= 12 && y >= ty - 3 && (y < ty || (y === ty && m <= tm))
       ? `${y}-${pad(m)}-01`
       : null;
+  const sure = (p: ISODate | null): NamePeriod | null => (p ? { period: p, certain: true } : null);
 
   let m: RegExpMatchArray | null;
+  // 12-01-2025, 9/30/2026, 10_31_26: a whole date with the year last. Its month is final: the month-year rules
+  // below would read "01-2025" out of "12-01-2025" as January.
+  if ((m = n.match(/(?:^|\D)(\d{1,2})[-_./ ](\d{1,2})[-_./ ](20\d{2}|\d{2})(?!\d)/))) {
+    const a = Number(m[1]);
+    const b = Number(m[2]);
+    const y = m[3]!.length === 2 ? 2000 + Number(m[3]) : Number(m[3]);
+    if (a >= 1 && a <= 12 && b >= 1 && b <= 31) {
+      // month first (US); a day of 12 or less could be the month instead
+      const p = ok(y, a);
+      return p ? { period: p, certain: b > 12 || a === b } : null;
+    }
+    // 31-10-2026 can only be day first
+    if (a >= 13 && a <= 31 && b >= 1 && b <= 12) return sure(ok(y, b));
+    return null;
+  }
   // 2026-10, 2026_10, 2026.10, 202610 (optionally followed by a day)
   if (
     (m = n.match(
@@ -89,12 +113,12 @@ export function periodFromName(name: string, today: ISODate): ISODate | null {
     ))
   ) {
     const r = ok(Number(m[1]), Number(m[2]));
-    if (r) return r;
+    if (r) return sure(r);
   }
-  // 10-2026, 10_2026, 10.2026 (day-month-year is read as month-year when the first part is ≤ 12)
+  // 10-2026, 10_2026, 10.2026
   if ((m = n.match(/(?:^|\D)(0?[1-9]|1[0-2])[-_. ](20\d{2})(?!\d)/))) {
     const r = ok(Number(m[2]), Number(m[1]));
-    if (r) return r;
+    if (r) return sure(r);
   }
   // oct 2026, october_2026, oct26, oct-26
   if (
@@ -104,14 +128,19 @@ export function periodFromName(name: string, today: ISODate): ISODate | null {
   ) {
     const y = m[2]!.length === 2 ? 2000 + Number(m[2]) : Number(m[2]);
     const r = ok(y, MONTHS[m[1]!] ?? 0);
-    if (r) return r;
+    if (r) return sure(r);
   }
   // 10_26, 10-26 as month_yy (two-digit year only when it reads as a recent year)
   if ((m = n.match(/(?:^|\D)(0?[1-9]|1[0-2])[-_](2[4-9])(?!\d)/))) {
     const r = ok(2000 + Number(m[2]), Number(m[1]));
-    if (r) return r;
+    if (r) return sure(r);
   }
   return null;
+}
+
+/** The statement month in a file name, or null (see readPeriod). */
+export function periodFromName(name: string, today: ISODate): ISODate | null {
+  return readPeriod(name, today)?.period ?? null;
 }
 
 const IMAGE = /^image\/(jpeg|png|heic|heif|webp)$/;
@@ -119,7 +148,8 @@ const IMAGE = /^image\/(jpeg|png|heic|heif|webp)$/;
 export function labelFile(filename: string, contentType: string, today: ISODate): Label {
   const n = filename.toLowerCase();
   const has = (...words: string[]) => words.some((w) => n.includes(w));
-  const period = periodFromName(filename, today);
+  const read = readPeriod(filename, today);
+  const period = read?.period ?? null;
 
   if (
     has(
@@ -150,8 +180,13 @@ export function labelFile(filename: string, contentType: string, today: ISODate)
     return {
       kind: "bank_statement",
       period,
-      confidence: period ? 0.9 : 0.75,
-      reason: period ? "bank + month in the name" : "bank in the name, month unknown",
+      // a date that reads either way is a guess at the month: below 0.8, so a rep confirms it
+      confidence: !read ? 0.75 : read.certain ? 0.9 : 0.6,
+      reason: !read
+        ? "bank in the name, month unknown"
+        : read.certain
+          ? "bank + month in the name"
+          : "bank + a date in the name that reads month-first or day-first",
     };
   }
   if (
