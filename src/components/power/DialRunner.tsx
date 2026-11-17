@@ -137,7 +137,9 @@ export function DialRunner({ items }: { items: DialItem[] }) {
     return () => window.removeEventListener("keydown", onKey);
   }, [current, n, idx]);
 
-  const position = Math.min(done + 1, Math.max(total, 1));
+  // where the merchant on screen sits in today's line: the handled ones first, then the queue in order, so N and P
+  // move it and a skip sends it to the end
+  const position = Math.min(done + idx + 1, Math.max(total, 1));
   const skip = () => {
     if (current) setSkipped((s) => [...s.filter((id) => id !== current.card.id), current.card.id]);
   };
@@ -419,12 +421,12 @@ function DialCard({
             </Fact>
           ) : null}
           <Fact label="At stake" wide={card.stips_required > 0}>
-            <span title={priority.explanation} className="font-medium text-text tabular-nums">
+            <span className="font-medium text-text tabular-nums">
               {priority.basis === "unknown"
                 ? "No amount on file"
-                : formatMoneyCompact(priority.atStakeCents)}
+                : `${formatMoneyCompact(priority.atStakeCents)} (what they want)`}
             </span>
-            <span className="mt-0.5 block text-xs text-muted">{priority.explanation}</span>
+            <span className="mt-0.5 block text-xs text-muted">{priority.summary}</span>
           </Fact>
         </dl>
       </article>

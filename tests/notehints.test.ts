@@ -233,7 +233,7 @@ table("a call-back with no date gets the stage's pace — and only that", [
   [FRI, "check back", ["2026-10-27"], "interested"],
   [FRI, "he'll get back to us", [], "interested"], // he calls us: nothing to schedule
   [FRI, "call him back", ["2027-07-23"], "dead"], // 9 months
-  [FRI, "call back", ["2027-07-23"], "declined"], // folds into Trash: 9 months
+  [FRI, "call back", ["2027-07-23"], "declined"], // folds into Not interested: 9 months
   [FRI, "great guy, has 2 trucks", [], "interested"],
   [FRI, "wants 40k for equipment", [], "interested"],
   [FRI, "call him back Tuesday", ["2026-10-27"], "dead"], // a date in the note beats the pace

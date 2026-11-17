@@ -1,8 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState, type DragEvent, type ReactNode } from "react";
-import { importClientsAction } from "@/app/actions";
+import { useEffect, useMemo, useState, type DragEvent, type ReactNode } from "react";
+import { checkImportAction, importClientsAction } from "@/app/actions";
 import type { ImportResult } from "@/lib/data/import";
 import { chunk, emptyImportResult, IMPORT_BATCH, mergeImportResults } from "@/lib/import/batches";
 import { parseCsv } from "@/lib/import/csv";
@@ -12,6 +12,7 @@ import {
   guessMapping,
   IMPORT_FIELDS,
   type ImportField,
+  type ImportRow,
 } from "@/lib/import/map";
 import { foldStage, stageDef } from "@/lib/mca/stages";
 import { formatDate } from "@/lib/format";
@@ -119,22 +120,45 @@ function StepTitle({ children, hint }: { children: ReactNode; hint?: ReactNode }
   );
 }
 
-/** One number in a summary row. */
-function Figure({ label, value, tone }: { label: string; value: number; tone: Tone }) {
+/** One number in a summary row. `pending`: the number is still being worked out (shown as a quiet dash). */
+function Figure({
+  label,
+  value,
+  tone,
+  pending = false,
+  className,
+}: {
+  label: string;
+  value: number;
+  tone: Tone;
+  pending?: boolean;
+  className?: string;
+}) {
   return (
-    <div className="min-w-0 px-4 py-3.5">
+    <div className={cn("min-w-0 px-4 py-3.5", className)}>
       <p className="eyebrow truncate">{label}</p>
       <p
         className={cn(
           "mt-1.5 text-[26px] leading-none font-semibold tracking-[-0.03em] tabular-nums",
-          value > 0 ? TONE_TEXT[tone] : "text-muted",
-          value > 0 && tone === "neutral" && "text-text",
+          value > 0 && !pending ? TONE_TEXT[tone] : "text-muted",
+          value > 0 && !pending && tone === "neutral" && "text-text",
         )}
       >
-        {value.toLocaleString("en-US")}
+        {pending ? "–" : value.toLocaleString("en-US")}
       </p>
     </div>
   );
+}
+
+/** Rows per look-ahead call (the server's limit for one check). */
+const CHECK_BATCH = 2000;
+
+/** What the review step learned from the server about the rows on screen. */
+interface ReviewCheck {
+  rows: readonly ImportRow[];
+  existing: ReadonlySet<number>;
+  doNotContact: ReadonlySet<number>;
+  error: string | null;
 }
 
 const SAMPLE =
@@ -150,6 +174,8 @@ export function ImportWizard() {
   const [mapping, setMapping] = useState<Record<ImportField, number | null> | null>(null);
   const [spreadDays, setSpreadDays] = useState(10);
   const [defaultSource, setDefaultSource] = useState("");
+  const [includeUnreachable, setIncludeUnreachable] = useState(false);
+  const [review, setReview] = useState<ReviewCheck | null>(null);
   const [busy, setBusy] = useState(false);
   const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
   const [at, setAt] = useState<Step>(1);
@@ -212,16 +238,28 @@ export function ImportWizard() {
     setFileError(null);
     setMapping(null);
     setResult(null);
+    setIncludeUnreachable(false);
     setAt(1);
   }
 
+  // The rows the import would send: rows with no phone and no email only when the person asks for them.
+  const toImport = useMemo<readonly ImportRow[]>(
+    () =>
+      built
+        ? includeUnreachable
+          ? [...built.rows, ...built.unreachable].sort((a, b) => a.line - b.line)
+          : built.rows
+        : [],
+    [built, includeUnreachable],
+  );
+
   async function submit() {
-    if (!built || built.rows.length === 0) return;
+    if (toImport.length === 0) return;
     setBusy(true);
-    const all = built.rows.length;
+    const all = toImport.length;
     let r = emptyImportResult();
     let stoppedAt: number | null = null;
-    for (const [i, slice] of chunk(built.rows, IMPORT_BATCH).entries()) {
+    for (const [i, slice] of chunk(toImport, IMPORT_BATCH).entries()) {
       setProgress({ done: i * IMPORT_BATCH, total: all });
       const got = await call(importClientsAction({ rows: slice }));
       if (!got) {
@@ -232,7 +270,7 @@ export function ImportWizard() {
     }
     setProgress(null);
     setBusy(false);
-    const parts = [`Imported ${r.created} client${r.created === 1 ? "" : "s"}`];
+    const parts = [`Imported ${r.created} merchant${r.created === 1 ? "" : "s"}`];
     if (r.skippedExisting) parts.push(`${r.skippedExisting} already in your CRM`);
     if (r.skippedDoNotContact)
       parts.push(`${r.skippedDoNotContact} match a do-not-contact merchant and were not added`);
@@ -254,6 +292,41 @@ export function ImportWizard() {
   const reach: Step = ready ? (built ? 3 : 2) : 1;
   const step: Step = at === 4 && result ? 4 : at > reach ? reach : at;
   const sample = parsed?.records[0] ?? [];
+
+  // The review asks the server which rows are already in the person's CRM (their own merchants, under row
+  // security), so "Ready to import" counts only rows that will land. The import itself still judges every row.
+  useEffect(() => {
+    if (step !== 3 || toImport.length === 0) return;
+    let live = true;
+    void (async () => {
+      const existing = new Set<number>();
+      const doNotContact = new Set<number>();
+      let error: string | null = null;
+      for (const slice of chunk(toImport, CHECK_BATCH)) {
+        const got = await checkImportAction({
+          rows: slice.map((r) => ({ line: r.line, phone: r.phone, businessName: r.businessName })),
+        }).catch(() => null);
+        if (!got?.ok) {
+          error = got
+            ? got.error
+            : "Couldn't check your CRM, so rows already in it are not counted yet";
+          break;
+        }
+        for (const l of got.data.existing) existing.add(l);
+        for (const l of got.data.doNotContact) doNotContact.add(l);
+      }
+      if (live) setReview({ rows: toImport, existing, doNotContact, error });
+    })();
+    return () => {
+      live = false;
+    };
+  }, [step, toImport]);
+  const checked = review && review.rows === toImport && !review.error ? review : null;
+  const checking = step === 3 && toImport.length > 0 && review?.rows !== toImport;
+  const readyRows = checked
+    ? toImport.filter((r) => !checked.existing.has(r.line) && !checked.doNotContact.has(r.line))
+    : toImport;
+  const unreachableCount = built?.unreachable.length ?? 0;
 
   return (
     <div className="space-y-4">
@@ -458,7 +531,7 @@ export function ImportWizard() {
               Back
             </Button>
             <Button variant="primary" disabled={!built} onClick={() => setAt(3)}>
-              Review {built ? built.rows.length : 0} rows
+              Review {built ? built.rows.length + built.unreachable.length : 0} rows
               <Glyph name="arrowRight" className="size-4" />
             </Button>
           </div>
@@ -467,16 +540,53 @@ export function ImportWizard() {
 
       {step === 3 && built ? (
         <Card className="animate-fade space-y-5 p-4 sm:p-6">
-          <StepTitle hint="Merchants whose phone is already in your CRM are skipped automatically.">
+          <StepTitle hint="Merchants already in your CRM are counted here and skipped. A row with no phone and no email is held back: nobody could reach that merchant.">
             Review and import
           </StepTitle>
-          <div className="grid grid-cols-2 divide-x divide-y divide-border overflow-hidden rounded-2xl border border-border sm:grid-cols-4 sm:divide-y-0">
-            <Figure label="Ready to import" value={built.rows.length} tone="good" />
-            <Figure label="Repeated phones" value={built.duplicatesInFile} tone="warn" />
-            <Figure label="Do not contact" value={built.doNotContact} tone="bad" />
-            <Figure label="To look at" value={built.problems.length} tone="warn" />
+          <div
+            aria-busy={checking}
+            className="grid grid-cols-2 gap-px overflow-hidden rounded-2xl border border-border bg-border xl:grid-cols-5"
+          >
+            <Figure
+              label="Ready to import"
+              value={readyRows.length}
+              tone="good"
+              pending={checking}
+              className="col-span-2 bg-surface xl:col-span-1"
+            />
+            <Figure
+              label="Already in your CRM"
+              value={checked?.existing.size ?? 0}
+              tone="neutral"
+              pending={checking}
+              className="bg-surface"
+            />
+            <Figure
+              label="Repeated phones"
+              value={built.duplicatesInFile}
+              tone="warn"
+              className="bg-surface"
+            />
+            <Figure
+              label="Do not contact"
+              value={built.doNotContact + (checked?.doNotContact.size ?? 0)}
+              tone="bad"
+              pending={checking}
+              className="bg-surface"
+            />
+            <Figure
+              label="To look at"
+              value={built.problems.length}
+              tone="warn"
+              className="bg-surface"
+            />
           </div>
-          {built.rows.length > 0 ? (
+          {review && review.rows === toImport && review.error ? (
+            <p role="alert" className="rounded-xl bg-warn-soft px-3 py-2 text-sm text-warn">
+              {review.error}. The import still skips them.
+            </p>
+          ) : null}
+          {readyRows.length > 0 ? (
             <div className="overflow-hidden rounded-2xl border border-border">
               <div className="overflow-x-auto">
                 <table className="w-full min-w-[640px] text-left text-[13px]">
@@ -491,7 +601,7 @@ export function ImportWizard() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-border">
-                    {built.rows.slice(0, 8).map((r) => (
+                    {readyRows.slice(0, 8).map((r) => (
                       <tr
                         key={r.line}
                         className="transition-colors duration-150 hover:bg-surface-2/50"
@@ -513,9 +623,9 @@ export function ImportWizard() {
                   </tbody>
                 </table>
               </div>
-              {built.rows.length > 8 ? (
+              {readyRows.length > 8 ? (
                 <p className="border-t border-border bg-surface-3/40 px-4 py-2 text-xs text-muted tabular-nums">
-                  Showing the first 8 of {built.rows.length.toLocaleString("en-US")} rows.
+                  Showing the first 8 of {readyRows.length.toLocaleString("en-US")} rows.
                 </p>
               ) : null}
             </div>
@@ -543,6 +653,27 @@ export function ImportWizard() {
             </details>
           ) : null}
 
+          {unreachableCount > 0 ? (
+            <label className="flex cursor-pointer items-start gap-3 rounded-2xl border border-border bg-surface-3/40 px-4 py-3 text-[13px]">
+              <input
+                type="checkbox"
+                checked={includeUnreachable}
+                onChange={(e) => setIncludeUnreachable(e.target.checked)}
+                className="mt-0.5 size-4 accent-accent"
+              />
+              <span>
+                <span className="block font-medium text-text">
+                  Import {unreachableCount === 1 ? "the one" : `the ${unreachableCount}`} with no
+                  phone or email anyway
+                </span>
+                <span className="block text-xs text-muted">
+                  Off by default: nobody can call or email {unreachableCount === 1 ? "it" : "them"}{" "}
+                  until you add a way to reach {unreachableCount === 1 ? "it" : "them"}.
+                </span>
+              </span>
+            </label>
+          ) : null}
+
           {busy && progress && progress.total > IMPORT_BATCH ? (
             <Meter
               label="Rows imported"
@@ -558,14 +689,16 @@ export function ImportWizard() {
             </Button>
             <Button
               variant="primary"
-              disabled={busy || built.rows.length === 0}
+              disabled={busy || checking || readyRows.length === 0}
               onClick={() => void submit()}
             >
               {busy
                 ? progress && progress.total > IMPORT_BATCH
                   ? `Importing ${Math.min(progress.done + IMPORT_BATCH, progress.total)} of ${progress.total}…`
                   : "Importing…"
-                : `Import ${built.rows.length} client${built.rows.length === 1 ? "" : "s"}`}
+                : checking
+                  ? "Checking your CRM…"
+                  : `Import ${readyRows.length} merchant${readyRows.length === 1 ? "" : "s"}`}
             </Button>
           </div>
         </Card>

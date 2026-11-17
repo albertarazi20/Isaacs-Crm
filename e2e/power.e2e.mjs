@@ -99,7 +99,7 @@ export default async function powerFlow({ email }) {
   const overdueScores = async () =>
     (
       await section("Overdue")
-        .locator('article button[aria-expanded][title*="priority"] >> visible=true')
+        .locator('article button[aria-expanded][title*="at stake"] >> visible=true')
         .evaluateAll((els) => els.map((e) => e.title))
     ).map(scoreOf);
   const overdueAges = async () =>
@@ -206,12 +206,13 @@ export default async function powerFlow({ email }) {
 
   // The explanation is on the page, not only in a tooltip.
   const stakeBtn = section("Overdue")
-    .locator('article button[aria-expanded][title*="priority"] >> visible=true')
+    .locator('article button[aria-expanded][title*="at stake"] >> visible=true')
     .first();
   const stakeArticle = stakeBtn.locator("xpath=ancestor::article[1]");
   // the note renders on the next paint; under load that took longer than 4s once, so poll for the words themselves.
   // A refresh that lands just after the tap re-renders the list and closes the note, so tap again if it is closed.
-  const STAKE_WORDS = /at stake \(.+\)\. .+ counts x [\d.]+\. .+\. That makes priority [\d,]+\./;
+  // plain words, never the working ("counts x 0.6", "priority 150,000")
+  const STAKE_WORDS = /at stake \(what they want\)\. .+, \d+ days? overdue\./;
   let stakeText = "";
   for (let attempt = 0; attempt < 4 && !STAKE_WORDS.test(stakeText); attempt++) {
     if ((await stakeBtn.getAttribute("aria-expanded")) !== "true") await stakeBtn.click();
@@ -556,7 +557,7 @@ export default async function powerFlow({ email }) {
   );
   const a = await title();
   check(
-    "the card shows his phone, what he wants and the last call",
+    "the card shows the phone, what they want and the last call",
     // the labels are set in small caps, so they are matched as written, not as drawn
     (await region.locator("dt", { hasText: /^Wants$/ }).isVisible()) &&
       (await region.locator("dt", { hasText: /^Last call$/ }).isVisible()),
@@ -601,11 +602,16 @@ export default async function powerFlow({ email }) {
   check("S skips: a different client is up", b !== a, `${a} -> ${b}`);
   await page.keyboard.press("p");
   check(
-    "…and the skipped one went to the END of the line (Previous wraps to it)",
-    (await title()) === a,
+    "…and the skipped one went to the END of the line (Previous wraps to it), and the header says so: 3 of 3",
+    (await title()) === a && (await progress()) === "3 of 3",
+    await progress(),
   );
   await page.keyboard.press("n");
-  check("N moves on without reordering", (await title()) === b);
+  check(
+    "N moves on without reordering, and the header follows: 1 of 3",
+    (await title()) === b && (await progress()) === "1 of 3",
+    await progress(),
+  );
 
   // Card B: click Call, Reached.
   const [popup] = await Promise.all([

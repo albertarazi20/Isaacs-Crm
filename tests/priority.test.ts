@@ -97,7 +97,7 @@ describe("dollars at stake", () => {
       const p = stake({ wanted_amount_cents: wanted });
       expect(p.atStakeCents).toBe(UNKNOWN_STAKE_CENTS);
       expect(p.basis).toBe("unknown");
-      expect(p.explanation).toMatch(/no amount on file/);
+      expect(p.explanation).toMatch(/no amount on file/i);
     }
   });
   it("a known amount counts as it is, even a small one", () => {
@@ -156,12 +156,13 @@ describe("overdue age in the score", () => {
       card({ stage: "application_in", wanted_amount_cents: 8_000_000, next_due_on: "2026-10-20" }),
       CTX,
     );
-    expect(p.explanation).toContain("$80k at stake");
-    expect(p.explanation).toContain("what he wants");
-    expect(p.explanation).toContain("Application in");
-    expect(p.explanation).toContain("3 days overdue");
-    expect(p.explanation).toMatch(/priority [\d,]+\./);
-    expect(priorityOf(card(), CTX).explanation).toContain("Due on time");
+    expect(p.explanation).toBe("$80k at stake (what they want). Application in, 3 days overdue.");
+    expect(p.summary).toBe("Application in, 3 days overdue.");
+    // no working: no weights, no score
+    expect(p.explanation).not.toMatch(/ x [\d.]|priority|counts/);
+    expect(priorityOf(card(), CTX).summary).toBe("Interested, due today.");
+    expect(priorityOf(card({ next_due_on: null }), CTX).summary).toContain("no follow-up date");
+    expect(priorityOf(card({ stage: "dead" }), CTX).summary).toBe("Not interested, due today.");
   });
 });
 

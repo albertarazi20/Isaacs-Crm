@@ -196,7 +196,7 @@ describe("hand_off", () => {
 });
 
 describe("undo_hand_off", () => {
-  it("clears the mark, writes the timeline, opens one follow-up for tomorrow and does not re-enrol", async () => {
+  it("clears the mark, writes the timeline and puts the merchant back in the bucket the hand-off stopped (0546)", async () => {
     const id = await merchant(rep, "Changed Mind Co");
     await t.db.withUser(rep, (q) =>
       q.query("select enroll_in_bucket($1, (select id from buckets where key = 'interested'))", [
@@ -205,22 +205,38 @@ describe("undo_hand_off", () => {
     );
     const at = await t.db.withUser(rep, (q) => handOff(q, id));
     const undone = await t.db.withUser(rep, (q) => undoHandOff(q, id));
-    expect(undone).toBe(at);
+    expect(undone).toEqual({ undone: at, bucket: "Interested" });
     expect(await mark(id)).toEqual({ at: null, by: null });
     expect(await lines(id)).toContain("Hand-off undone");
+    // back in the bucket, so no stand-in follow-up for tomorrow (the hand-off closed the one it had)
+    expect(await openTimers(id)).toEqual([]);
+    const live = await t.pool.query<{ key: string }>(
+      `select b.key from enrollments e join buckets b on b.id = e.bucket_id
+        where e.client_id = $1 and e.stopped_at is null`,
+      [id],
+    );
+    expect(live.rows).toEqual([{ key: "interested" }]);
+    // nothing to undo the second time
+    expect(await t.db.withUser(rep, (q) => undoHandOff(q, id))).toEqual({
+      undone: null,
+      bucket: null,
+    });
+    expect((await lines(id)).filter((l) => l === "Hand-off undone")).toHaveLength(1);
+    // and automated mail may reach the merchant again
+    const b = await bucket("interested");
+    expect((await outbox(await queue(id, `bucket:${b}:step:1`, "sequence"))).status).toBe("queued");
+  });
+
+  it("a merchant who was in no bucket gets one follow-up for tomorrow instead", async () => {
+    const id = await merchant(rep, "No Bucket Co");
+    await t.db.withUser(rep, (q) => handOff(q, id));
+    expect(await t.db.withUser(rep, (q) => undoHandOff(q, id))).toMatchObject({ bucket: null });
     expect(await openTimers(id)).toEqual([{ kind: "follow_up", due_on: addDays(t.today, 1) }]);
     const live = await t.pool.query(
       "select 1 from enrollments where client_id = $1 and stopped_at is null",
       [id],
     );
     expect(live.rowCount).toBe(0);
-    // nothing to undo the second time
-    expect(await t.db.withUser(rep, (q) => undoHandOff(q, id))).toBeNull();
-    expect((await lines(id)).filter((l) => l === "Hand-off undone")).toHaveLength(1);
-    expect(await openTimers(id)).toHaveLength(1);
-    // and automated mail may reach the merchant again
-    const b = await bucket("interested");
-    expect((await outbox(await queue(id, `bucket:${b}:step:1`, "sequence"))).status).toBe("queued");
   });
 });
 

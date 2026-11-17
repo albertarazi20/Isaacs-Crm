@@ -180,7 +180,7 @@ export default async function mobileUi({ email }) {
     check("and the due chip is fully on screen (no swipe needed)", visibleDue);
     check(
       "and the stage",
-      /Interested|Application|Trash/.test(cardText),
+      /Interested|Application|Not interested/.test(cardText),
       cardText.replace(/\s+/g, " ").slice(0, 80),
     );
     const tiny = await p.evaluate(() =>

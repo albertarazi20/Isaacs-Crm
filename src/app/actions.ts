@@ -8,7 +8,12 @@ import { requireSession } from "@/lib/auth/server";
 import { db, type Db } from "@/lib/db";
 import { GmailReconnectError } from "@/lib/email/gmail";
 import { toActionError } from "@/lib/data/errors";
-import { importClients, type ImportResult } from "@/lib/data/import";
+import {
+  checkImportRows,
+  importClients,
+  type ImportCheck,
+  type ImportResult,
+} from "@/lib/data/import";
 import { mergeSources } from "@/lib/data/sources";
 import * as m from "@/lib/data/mutations";
 import { findDuplicates, listSources, userContext, type DuplicateMatch } from "@/lib/data/queries";
@@ -107,6 +112,10 @@ export async function setStipAction(input: unknown): Promise<ActionResult<null>>
     await m.setStip(q, s.stipSchema.parse(input));
     return null;
   });
+}
+/** Review before import: which rows are already in the person's CRM (or do-not-contact), under row security. */
+export async function checkImportAction(input: unknown): Promise<ActionResult<ImportCheck>> {
+  return run((q) => checkImportRows(q, s.importCheckSchema.parse(input).rows), false);
 }
 export async function importClientsAction(input: unknown): Promise<ActionResult<ImportResult>> {
   return run((q, ctx) => importClients(q, s.importSchema.parse(input).rows, ctx));

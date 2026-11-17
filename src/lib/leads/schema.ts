@@ -38,9 +38,11 @@ export const leadSchema = z
     notes: str(2000).optional(),
   })
   // "N/A", "none", "-" are not phone numbers: kept out, so the lead is judged on what it really gave.
+  // The state (trimmed by str) is kept in capitals: "ny" and "NY" are one state.
   .transform((v) => ({
     ...v,
     phone: (v.phone ?? "").replace(/\D/g, "").length >= 7 ? v.phone : undefined,
+    ...(v.state ? { state: v.state.toUpperCase() } : {}),
   }))
   .superRefine((v, ctx) => {
     if (!v.phone && !v.email)

@@ -154,19 +154,37 @@ export function BucketMembers({
   }
 
   // Hand off: the merchant is marked brought in and the chase stops. The toast carries the way back.
+  // Undo puts each merchant back in the bucket they were taken out of, at the same step; one with no bucket to go
+  // back to gets a follow-up for tomorrow instead. The toast says which happened.
   async function undoHandOff(list: readonly BucketMember[]) {
-    let undone = 0;
+    const back: { name: string; bucket: string }[] = [];
+    let toFollowUp = 0;
     for (const m of list) {
       const r = await undoHandOffAction({ clientId: m.client_id }).catch(() => null);
-      if (r?.ok) undone += 1;
-      else toast({ message: r ? r.error : "Couldn't reach the server", tone: "error" });
+      if (!r?.ok) {
+        toast({ message: r ? r.error : "Couldn't reach the server", tone: "error" });
+        continue;
+      }
+      if (!r.data.undone) continue;
+      if (r.data.bucket) back.push({ name: m.business_name, bucket: r.data.bucket });
+      else toFollowUp += 1;
     }
-    if (undone > 0)
+    const parts: string[] = [];
+    const only = back.length === 1 ? back[0] : undefined;
+    if (only) parts.push(`${only.name} is back in ${only.bucket}, at the step it stopped on.`);
+    else if (back.length > 1)
+      parts.push(
+        `${back.length} merchants are back in their buckets, at the step each stopped on.`,
+      );
+    if (toFollowUp > 0)
+      parts.push(
+        toFollowUp === 1
+          ? "One had no bucket to go back to, so it has a follow-up for tomorrow."
+          : `${toFollowUp} had no bucket to go back to, so each has a follow-up for tomorrow.`,
+      );
+    if (parts.length > 0)
       toast({
-        message:
-          undone === 1
-            ? "Hand-off undone. Back on the list with a follow-up for tomorrow."
-            : `${undone} hand-offs undone. Back on the list with a follow-up for tomorrow.`,
+        message: `Hand-off${back.length + toFollowUp === 1 ? "" : "s"} undone. ${parts.join(" ")}`,
       });
     router.refresh();
   }

@@ -7,7 +7,7 @@ import { toActionError } from "@/lib/data/errors";
 import { id } from "@/lib/data/schemas";
 import type { ActionResult } from "@/lib/data/types";
 import { db } from "@/lib/db";
-import { handOff, undoHandOff } from "@/lib/followup/handoff";
+import { handOff, undoHandOff, type UndoneHandOff } from "@/lib/followup/handoff";
 
 const schema = z.object({ clientId: id });
 
@@ -26,16 +26,17 @@ export async function handOffAction(
   }
 }
 
-/** Takes a hand-off back; `undone` is the hand-off time that was cleared (null when there was none). */
-export async function undoHandOffAction(
-  input: unknown,
-): Promise<ActionResult<{ undone: string | null }>> {
+/**
+ * Takes a hand-off back; `undone` is the hand-off time that was cleared (null when there was none), `bucket` the
+ * bucket the merchant went back into (null: a follow-up for tomorrow was set instead).
+ */
+export async function undoHandOffAction(input: unknown): Promise<ActionResult<UndoneHandOff>> {
   const session = await requireSession();
   try {
     const { clientId } = schema.parse(input);
-    const undone = await db.withUser(session.userId, (q) => undoHandOff(q, clientId));
+    const data = await db.withUser(session.userId, (q) => undoHandOff(q, clientId));
     revalidatePath("/", "layout");
-    return { ok: true, data: { undone } };
+    return { ok: true, data };
   } catch (e) {
     return { ok: false, error: toActionError(e) };
   }
