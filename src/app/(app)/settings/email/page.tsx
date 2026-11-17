@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { DnsCard } from "@/components/settings/DnsCard";
 import { MailboxSync } from "@/components/settings/MailboxSync";
 import { SettingsCard } from "@/components/settings/primitives";
@@ -15,6 +16,8 @@ import { getShopSettings, listSuppressions } from "@/lib/settings/queries";
 import { requestTimeMs } from "@/lib/server-time";
 
 export const dynamic = "force-dynamic";
+
+export const metadata: Metadata = { title: "Email settings" };
 
 export default async function EmailSettingsPage() {
   const session = await requireRole(CAN.manageTeam);

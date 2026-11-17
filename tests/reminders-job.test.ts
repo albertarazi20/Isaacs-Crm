@@ -65,7 +65,7 @@ describe("reminder digest job", () => {
     expect(send).toHaveBeenCalledTimes(1);
     const [to, digest] = send.mock.calls[0] ?? [];
     expect(to).toBe("alerts@x.com");
-    expect(digest.subject).toBe("1 due today, 1 overdue — follow-ups");
+    expect(digest.subject).toBe("Follow-ups: 1 due today, 1 overdue");
     expect(digest.text).toContain("Due Today Pizza");
     expect(digest.text).toContain("Overdue Auto");
     expect(digest.text).not.toContain("Future Fitness");

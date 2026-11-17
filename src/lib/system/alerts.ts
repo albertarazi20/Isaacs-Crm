@@ -42,7 +42,7 @@ export function buildAlertEmail(
   const subject =
     rows.length === 1 && first
       ? first.title
-      : `${rows.length} things need you — ${first?.title ?? ""}`.slice(0, 150);
+      : `${rows.length} things need you: ${first?.title ?? ""}`.slice(0, 150);
   const lines = rows.map((r) => {
     const href = r.href ? `${appUrl}${r.href.startsWith("/") ? "" : "/"}${r.href}` : `${appUrl}/`;
     return {

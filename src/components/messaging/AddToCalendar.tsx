@@ -54,7 +54,7 @@ export function AddToCalendar({ card, topic }: { card: ClientCard; topic?: strin
     a.click();
     a.remove();
     setTimeout(() => URL.revokeObjectURL(url), 10_000);
-    toast({ message: "Calendar file downloaded — open it to add the call" });
+    toast({ message: "Calendar file downloaded. Open it to add the call" });
   }
 
   return (

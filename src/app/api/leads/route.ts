@@ -30,7 +30,7 @@ export async function POST(req: Request) {
   const check = await checkLeadToken(token);
   if (!check.ok) {
     return check.reason === "rate_limited"
-      ? json({ error: "Too many leads this minute — slow down" }, 429, { "retry-after": "60" })
+      ? json({ error: "Too many leads this minute. Slow down" }, 429, { "retry-after": "60" })
       : json({ error: "That lead token isn't valid" }, 401);
   }
   // Taking someone off ALLOWED_EMAILS must switch their token off too, like their session.
@@ -79,10 +79,10 @@ export async function POST(req: Request) {
       return json({ error: toActionError(e) }, 400);
     const code = (e as { code?: string } | null)?.code;
     if (code === "40P01" || code === "40001" || code === "55P03")
-      return json({ error: "Busy right now — please send it again" }, 503, { "retry-after": "2" });
+      return json({ error: "Busy right now. Please send it again" }, 503, { "retry-after": "2" });
     console.error("lead intake failed:", e);
     return json(
-      { error: "Something went wrong on our side — your lead was not saved. Send it again." },
+      { error: "Something went wrong on our side, so your lead was not saved. Send it again." },
       500,
     );
   }

@@ -112,7 +112,7 @@ export function useStageMove(): StageMove {
       if (!input) return;
       await call(
         moveClientAction(input),
-        `Undone — ${r.from.business_name} is back in ${stageDef(r.from.stage).label}`,
+        `Undone. ${r.from.business_name} is back in ${stageDef(r.from.stage).label}`,
       );
     },
     [call, dismiss, today],

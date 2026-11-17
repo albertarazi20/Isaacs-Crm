@@ -66,6 +66,6 @@ export function applySplit<T extends PasteValues>(current: T, split: SplitResult
   return {
     next,
     filled,
-    warning: split.phone.trim() === "" ? "No phone number in that line — add it below." : null,
+    warning: split.phone.trim() === "" ? "No phone number in that line. Add it below." : null,
   };
 }

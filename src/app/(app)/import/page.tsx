@@ -1,8 +1,11 @@
+import type { Metadata } from "next";
 import { ImportWizard } from "@/components/ImportWizard";
 import { PageHeader } from "@/components/ui";
 
 // Importing a few thousand merchants is one server action; give it room instead of the plan default.
 export const maxDuration = 60;
+
+export const metadata: Metadata = { title: "Import" };
 
 export default function ImportPage() {
   return (

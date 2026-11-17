@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { ALL_BUCKETS_BRIEF, AskButton, bucketBrief } from "@/components/assistant/AskButton";
 import Link from "next/link";
 import { BucketBoard } from "@/components/followup/BucketBoard";
@@ -8,7 +9,7 @@ import { NewBucketButton } from "@/components/followup/NewBucket";
 import { bucketPurpose } from "@/components/followup/bucketCopy";
 import { Glyph } from "@/components/shell/icons";
 import { EmptyState, PageHeader, buttonClass } from "@/components/ui";
-import { requirePage } from "@/lib/auth/server";
+import { requirePage, requireSession } from "@/lib/auth/server";
 import { CAN } from "@/lib/auth/roles";
 import { bucketScores, listBucketMembers, listBuckets, listTemplates } from "@/lib/buckets/queries";
 import { userContext } from "@/lib/data/queries";
@@ -46,6 +47,22 @@ function PostalHold({ manager }: { manager: boolean }) {
       </span>
     </p>
   );
+}
+
+/** The bucket's own name in the tab when one is open; the overview of every bucket is "Follow Up". */
+export async function generateMetadata({
+  searchParams,
+}: {
+  searchParams: Promise<{ b?: string }>;
+}): Promise<Metadata> {
+  const { b } = await searchParams;
+  if (!b || !UUID.test(b)) return { title: "Follow Up" };
+  const session = await requireSession();
+  const name = await db.withUser(session.userId, async (q) => {
+    const r = await q.query<{ name: string }>("select name from buckets where id = $1", [b]);
+    return r.rows[0]?.name;
+  });
+  return { title: name ?? "Follow Up" };
 }
 
 export default async function FollowUpPage({
@@ -108,7 +125,7 @@ export default async function FollowUpPage({
         {hold}
         {buckets.length === 0 ? (
           <EmptyState title="No buckets yet" action={<NewBucketButton canShare={manager} />}>
-            A bucket is a follow-up track: the people in it, and the emails they get.
+            A bucket is a follow-up list: the merchants in it, and the emails they get.
           </EmptyState>
         ) : (
           <BucketBoard

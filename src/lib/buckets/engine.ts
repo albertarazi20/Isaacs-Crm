@@ -126,7 +126,7 @@ export async function runBucketSteps(args: {
         [
           r.user_id,
           r.client_id,
-          `Follow-up emails resumed — the merchant said to check back now (${r.bucket_name})`,
+          `Follow-up emails resumed: the merchant said to check back now (${r.bucket_name})`,
         ],
       );
     return rows.length;

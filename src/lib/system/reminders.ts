@@ -176,7 +176,7 @@ export async function sendTestDigest(args: {
         {
           timerId: "sample",
           clientId: "sample",
-          businessName: "Sample Pizza (nothing is due — this is a preview)",
+          businessName: "Sample Pizza (a preview: nothing is due)",
           contactName: "Mike",
           phone: "5551234567",
           stage: "interested",

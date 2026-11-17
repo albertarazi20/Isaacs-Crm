@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { ClientView } from "@/components/client/ClientView";
 import { requireSession } from "@/lib/auth/server";
@@ -11,6 +12,26 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /** The clock at request time. The page is dynamic (cookies), so this is never a cached value. */
 const requestTimeMs = () => Date.now();
+
+/** The merchant's business name in the tab. */
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}): Promise<Metadata> {
+  const { id } = await params;
+  if (!UUID.test(id)) return { title: "Merchant" };
+  const session = await requireSession();
+  // RLS scopes this to the signed-in user, like the page itself
+  const name = await db.withUser(session.userId, async (q) => {
+    const r = await q.query<{ business_name: string }>(
+      "select business_name from clients where id = $1",
+      [id],
+    );
+    return r.rows[0]?.business_name;
+  });
+  return { title: name || "Merchant" };
+}
 
 export default async function ClientPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;

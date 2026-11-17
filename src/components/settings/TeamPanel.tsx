@@ -6,10 +6,12 @@ import { addTeamMemberAction, setTeamMemberAction } from "@/app/team-actions";
 import { useApp } from "@/components/app-context";
 import { useFormState, useRun } from "@/components/client/parts";
 import { Avatar, Badge, Button, Field, Input, Select, cn } from "@/components/ui";
-import { OFFERED_ROLES } from "@/lib/auth/roles";
+import { isRole, OFFERED_ROLES, ROLE_LABEL } from "@/lib/auth/roles";
 import { timeAgo } from "@/lib/format";
 import type { TeamMember } from "@/lib/settings/team";
 import { SettingsCard, StatusChip } from "./primitives";
+
+const roleLabel = (r: string): string => (isRole(r) ? ROLE_LABEL[r] : r);
 
 function AddMember() {
   const run = useRun();
@@ -35,7 +37,7 @@ function AddMember() {
           setBusy(true);
           const ok = await run(
             addTeamMemberAction(v),
-            "Added — they sign in with that Google account",
+            "Added. They sign in with that Google account",
           );
           setBusy(false);
           if (ok) {
@@ -55,7 +57,7 @@ function AddMember() {
           <Select {...bind("role")}>
             {OFFERED_ROLES.map((r) => (
               <option key={r} value={r}>
-                {r}
+                {ROLE_LABEL[r]}
               </option>
             ))}
           </Select>
@@ -125,7 +127,9 @@ export function TeamPanel({ members, meId }: { members: TeamMember[]; meId: stri
               </span>
               <span>
                 {m.id === meId ? (
-                  <Badge tone={m.role === "manager" ? "accent" : "neutral"}>{m.role}</Badge>
+                  <Badge tone={m.role === "manager" ? "accent" : "neutral"}>
+                    {roleLabel(m.role)}
+                  </Badge>
                 ) : (
                   <Select
                     aria-label={`Role for ${m.name || m.email}`}
@@ -134,14 +138,17 @@ export function TeamPanel({ members, meId }: { members: TeamMember[]; meId: stri
                     onChange={(e) => void setMember(m, e.target.value, m.active)}
                     className="h-9 w-28 min-w-28 rounded-full px-3 text-[13px] sm:h-8"
                   >
-                    {[
-                      ...OFFERED_ROLES,
-                      ...(OFFERED_ROLES.some((r) => r === m.role) ? [] : [m.role]),
-                    ].map((r) => (
+                    {OFFERED_ROLES.map((r) => (
                       <option key={r} value={r}>
-                        {r}
+                        {ROLE_LABEL[r]}
                       </option>
                     ))}
+                    {/* an old role the shop no longer offers shows as it is, but can't be picked again */}
+                    {OFFERED_ROLES.some((r) => r === m.role) ? null : (
+                      <option value={m.role} disabled>
+                        {roleLabel(m.role)}
+                      </option>
+                    )}
                   </Select>
                 )}
               </span>

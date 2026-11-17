@@ -86,7 +86,12 @@ export function DnsCard({ view }: { view: DnsView }) {
         </div>
       </dl>
       {view.lines.length > 0 ? (
-        <div className="overflow-x-auto border-t border-border">
+        <div
+          tabIndex={0}
+          role="region"
+          aria-label="DNS records"
+          className="overflow-x-auto border-t border-border focus-visible:outline-offset-[-2px]"
+        >
           <table className="w-full text-[13px]">
             <thead className="max-sm:sr-only">
               <tr className="text-left">

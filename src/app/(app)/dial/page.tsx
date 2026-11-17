@@ -7,7 +7,7 @@ import { listCards, userContext } from "@/lib/data/queries";
 import { buildToday } from "@/lib/data/views";
 import { db } from "@/lib/db";
 
-export const metadata: Metadata = { title: "Power dial | Selective CRM" };
+export const metadata: Metadata = { title: "Power dial" };
 
 /**
  * Today's call list as a queue: calls booked for today (they are appointments, earliest first), then

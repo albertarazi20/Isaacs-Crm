@@ -17,7 +17,7 @@ describe("buildNewLeadAlert", () => {
   };
   it("is short, says call now, and links to the merchant", () => {
     const a = buildNewLeadAlert(lead, "https://app.test");
-    expect(a.subject).toBe("New lead: Mike's Pizza — call now");
+    expect(a.subject).toBe("New lead: Mike's Pizza. Call now");
     expect(a.text).toContain("(305) 555-0100");
     expect(a.text).toContain("Wants $50k");
     expect(a.text).toContain("https://app.test/clients/c1");
@@ -36,7 +36,7 @@ describe("buildNewLeadAlert", () => {
       { ...lead, phone: "", contactName: "", wantedAmount: null, source: "" },
       "https://app.test",
     );
-    expect(a.text).toContain("no phone — email only");
+    expect(a.text).toContain("no phone, email only");
     expect(a.text).not.toContain("Contact:");
   });
 });
@@ -95,7 +95,7 @@ describe("sendNewLeadAlert", () => {
     expect(send).toHaveBeenCalledTimes(1);
     const [to, msg] = send.mock.calls[0] ?? [];
     expect(to).toBe("isaac@x.com");
-    expect(msg.subject).toBe("New lead: Alert One — call now");
+    expect(msg.subject).toBe("New lead: Alert One. Call now");
     expect(await claims(a)).toEqual([{ ref: id, provider_id: "resend_1" }]);
   });
   it("a second call for the same lead sends nothing", async () => {

@@ -86,7 +86,7 @@ describe("paste a lead line: what goes into the form", () => {
     const notesOnly = applySplit(form, { ...blank, notes: "call after 3pm" });
     expect(notesOnly.next.lookingFor).toBe("call after 3pm");
     expect(notesOnly.filled).toEqual(["What they are looking for"]);
-    expect(notesOnly.warning).toBe("No phone number in that line — add it below.");
+    expect(notesOnly.warning).toBe("No phone number in that line. Add it below.");
   });
 
   it("a line that says nothing changes nothing", () => {
@@ -120,10 +120,10 @@ describe("the chips on a lead line", () => {
       tone: "info",
     });
     expect(replyChip("not_now", "2026-11-30", today)).toEqual({
-      label: "Not now — back Nov 30",
+      label: "Not now, back Nov 30",
       tone: "warn",
     });
-    expect(replyChip("not_now", "2027-01-05", today)?.label).toBe("Not now — back Jan 5, 2027");
+    expect(replyChip("not_now", "2027-01-05", today)?.label).toBe("Not now, back Jan 5, 2027");
     expect(replyChip("not_now", null, today)?.label).toBe("Not now");
     expect(replyChip("wrong_person", null, today)).toEqual({ label: "Wrong person", tone: "bad" });
     expect(replyChip("stop", null, today)).toEqual({ label: "Stop", tone: "bad" });
@@ -143,7 +143,7 @@ describe("the email that carries the application link", () => {
       businessName: "Weiss Dental",
       link: "https://crm.test/apply/abc",
     });
-    expect(e.subject).toBe("Your application — Weiss Dental");
+    expect(e.subject).toBe("Your application for Weiss Dental");
     expect(e.body.startsWith("Hi Dr. Weiss,")).toBe(true);
     expect(e.body.split("https://crm.test/apply/abc")).toHaveLength(2);
     expect(applicationEmail({ contactName: "", businessName: "X", link: "l" }).body).toMatch(

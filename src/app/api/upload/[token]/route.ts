@@ -39,7 +39,7 @@ export async function POST(req: Request, { params }: Params) {
   const declared = Number(req.headers.get("content-length") ?? "0");
   if (Number.isFinite(declared) && declared > MAX_BODY_BYTES)
     return NextResponse.json(
-      { error: "That is too much at once — send fewer files" },
+      { error: "That is too much at once. Send fewer files" },
       { status: 413 },
     );
   let form: FormData;

@@ -42,7 +42,7 @@ export function buildScorecard(i: ScorecardInput, appUrl: string): Omit<Digest, 
     );
     if (d.pushed > d.onTime && d.pushed >= 5)
       lines.push(
-        "More were pushed back than done on the day — pushing the same merchants again is how they go cold.",
+        "More were pushed back than done on the day. Pushing the same merchants again is how they go cold.",
       );
   }
   lines.push(`${plural(i.added, "new merchant")} added.`);
@@ -52,7 +52,7 @@ export function buildScorecard(i: ScorecardInput, appUrl: string): Omit<Digest, 
     return {
       href: `${appUrl}/clients/${o.clientId}`,
       name: o.businessName,
-      text: `${o.businessName}${wants} — ${plural(o.daysOverdue, "day")} overdue`,
+      text: `${o.businessName}${wants}: ${plural(o.daysOverdue, "day")} overdue`,
     };
   });
   const more = i.overdueTotal - startHere.length;
@@ -60,7 +60,7 @@ export function buildScorecard(i: ScorecardInput, appUrl: string): Omit<Digest, 
   const headline = d.onTimeRate === null ? "Your week" : `Your week: ${d.onTimeRate}% on time`;
   const subject = oneLine(`${headline} · ${i.weekLabel}`);
   const text = [
-    `Your week — ${i.weekLabel}`,
+    `Your week: ${i.weekLabel}`,
     "",
     ...lines,
     ...(startHere.length
@@ -75,7 +75,7 @@ export function buildScorecard(i: ScorecardInput, appUrl: string): Omit<Digest, 
     `${appUrl}/`,
     "",
   ].join("\n");
-  const html = `<div style="font-family:system-ui,sans-serif"><h3>Your week — ${esc(i.weekLabel)}</h3><ul>${lines
+  const html = `<div style="font-family:system-ui,sans-serif"><h3>Your week: ${esc(i.weekLabel)}</h3><ul>${lines
     .map((l) => `<li>${esc(l)}</li>`)
     .join("")}</ul>${
     startHere.length

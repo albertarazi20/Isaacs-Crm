@@ -133,7 +133,7 @@ describe("the DNS card's view of the stored check", () => {
     ]);
     expect(v.lines[0]?.detail).toContain("v=spf1");
     expect(v.summary).toContain("DKIM missing");
-    expect(v.summary).toContain("automation waits");
+    expect(v.summary).toContain(". Automation waits");
   });
   it("is verified only when the stored flag is", () => {
     const ok = dnsView({
@@ -150,7 +150,7 @@ describe("the DNS card's view of the stored check", () => {
       },
     });
     expect(ok.state).toBe("ok");
-    expect(ok.summary).toContain("automation may send");
+    expect(ok.summary).toContain(". Automation may send");
   });
 });
 

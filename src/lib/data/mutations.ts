@@ -36,7 +36,7 @@ function checkDate(dueOn: ISODate, today: ISODate): void {
 
 async function mustCard(q: Db, id: string): Promise<ClientCard> {
   const card = await getCard(q, id);
-  if (!card) throw new UserError("That client no longer exists");
+  if (!card) throw new UserError("That merchant no longer exists");
   return card;
 }
 
@@ -124,7 +124,7 @@ export async function moveClient(q: Db, input: MoveInput, ctx: UserContext): Pro
   ]);
   if (stage === "call_scheduled" && input.callAt) {
     if (input.callAt.slice(0, 10) < ctx.today)
-      throw new UserError("That call time has already passed — pick a time from now on");
+      throw new UserError("That call time has already passed. Pick a time from now on");
     const at = await localToInstant(q, input.callAt, ctx.timezone);
     await q.query("select * from schedule_call($1, $2, $3)", [clientId, at, input.reason]);
   }
@@ -181,7 +181,7 @@ export async function assertContactAllowed(
   const card = await mustCard(q, clientId);
   const check = contactAllowed(card.contact_status, kind);
   if (!check.ok)
-    throw new UserError(`${check.reason} — ${card.business_name} can't be contacted that way`);
+    throw new UserError(`${check.reason}. ${card.business_name} can't be contacted that way`);
   return card;
 }
 
@@ -218,7 +218,7 @@ export async function scheduleCall(
 ): Promise<ClientCard> {
   // The database would call this "a follow-up date in the past"; he is booking a call.
   if (input.at.slice(0, 10) < ctx.today)
-    throw new UserError("That call time has already passed — pick a time from now on");
+    throw new UserError("That call time has already passed. Pick a time from now on");
   const at = await localToInstant(q, input.at, ctx.timezone);
   await q.query("select * from schedule_call($1, $2, $3)", [input.clientId, at, input.note ?? ""]);
   await q.query(
@@ -242,7 +242,7 @@ export async function setHot(q: Db, input: { clientId: string; hot: boolean }): 
     input.clientId,
     input.hot,
   ]);
-  if (res.rowCount === 0) throw new UserError("That client no longer exists");
+  if (res.rowCount === 0) throw new UserError("That merchant no longer exists");
 }
 
 /** One-time move of the stars a browser kept for itself to the server. Ids that are not his are skipped. */
@@ -272,7 +272,7 @@ export async function addNote(q: Db, input: z.output<typeof noteSchema>): Promis
     "insert into activities (user_id, client_id, kind, body) select user_id, id, 'note', $2 from clients where id = $1",
     [input.clientId, input.body],
   );
-  if (res.rowCount === 0) throw new UserError("That client no longer exists");
+  if (res.rowCount === 0) throw new UserError("That merchant no longer exists");
 }
 
 const CLIENT_COLUMNS = {
@@ -308,7 +308,7 @@ export async function updateClient(
       [input.clientId],
     );
     const res = await q.query(`update clients set ${sets.join(", ")} where id = $1`, values);
-    if (res.rowCount === 0 || !was.rows[0]) throw new UserError("That client no longer exists");
+    if (res.rowCount === 0 || !was.rows[0]) throw new UserError("That merchant no longer exists");
     const now = await q.query<{ j: Record<string, unknown> }>(
       "select to_jsonb(c) as j from clients c where id = $1",
       [input.clientId],
@@ -321,7 +321,7 @@ export async function updateClient(
 
 /** Hides the client everywhere and closes every timer; the history stays. Undo with restoreClient. */
 export async function trashClient(q: Db, clientId: string): Promise<void> {
-  await trashCall(q, "trash_client", clientId, "That client no longer exists");
+  await trashCall(q, "trash_client", clientId, "That merchant no longer exists");
 }
 
 export async function restoreClient(q: Db, clientId: string): Promise<void> {

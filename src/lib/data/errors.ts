@@ -10,7 +10,7 @@ export function checkMessage(constraint: string | undefined): string {
   if (c === "clients_business_name_check") return "Business name is required";
   if (/_cents_check$/.test(c) && /^client_asks_wanted/.test(c)) return "Enter an amount above $0";
   if (/_cents_check$/.test(c)) return "Amounts can't be negative";
-  return "One of those values isn't allowed — check the amounts and dates";
+  return "One of those values isn't allowed. Check the amounts and dates";
 }
 
 export function toActionError(e: unknown): string {
@@ -23,5 +23,5 @@ export function toActionError(e: unknown): string {
   if (code === "23514") return checkMessage((e as { constraint?: string } | null)?.constraint);
   if (code === "23505") return "That already exists";
   console.error(e);
-  return "Something went wrong — try again";
+  return "Something went wrong. Try again";
 }

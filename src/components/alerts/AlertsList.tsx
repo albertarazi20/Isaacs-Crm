@@ -153,7 +153,7 @@ export function AlertsList({
                 aria-pressed={filter === f.key}
                 onClick={() => setFilter(f.key)}
                 className={cn(
-                  "inline-flex h-8 shrink-0 items-center gap-1.5 rounded-full px-3 text-[13px] font-medium whitespace-nowrap transition duration-150 active:scale-[0.97]",
+                  "inline-flex h-10 shrink-0 items-center gap-1.5 rounded-full px-3 text-[13px] font-medium whitespace-nowrap transition duration-150 active:scale-[0.97] sm:h-8",
                   filter === f.key
                     ? "bg-surface text-text shadow-card"
                     : "text-muted hover:bg-surface/60 hover:text-text",

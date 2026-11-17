@@ -8,7 +8,7 @@ import type { Db } from "../db";
 export const ASSISTANT_REFUSALS = {
   notSetUp: "The assistant is not set up on this server",
   off: "The assistant is switched off in Settings",
-  budget: "The assistant has used today's budget — type the lead in by hand",
+  budget: "The assistant has used today's budget. Type the lead in by hand",
 } as const;
 
 export function assistantRefusal(s: {

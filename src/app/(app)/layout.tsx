@@ -21,14 +21,19 @@ import { requestTimeMs } from "@/lib/server-time";
 import { gmailStatus } from "@/lib/system/gmail";
 import { reminderStatus } from "@/lib/system/heartbeat";
 import { parseTheme, THEME_COOKIE } from "@/lib/theme";
+import { appTitle } from "@/lib/title";
 
 export const dynamic = "force-dynamic";
 
-/** "(12) Selective CRM" in the tab. Set here, on the server, because Next re-applies page metadata after hydration. */
+/**
+ * "(12) Follow Up · Selective CRM" in the tab: each page names itself and this template adds the due count. Set
+ * here, on the server, because Next re-applies page metadata after hydration. The Overview sits in this same
+ * segment, where a template does not reach, so it builds its whole title (src/app/(app)/page.tsx).
+ */
 export async function generateMetadata(): Promise<Metadata> {
   const session = await requireSession();
   const { due } = await loadShell(session.userId);
-  return { title: due > 0 ? `(${due}) Selective CRM` : "Selective CRM" };
+  return { title: { template: appTitle(due, "%s"), default: appTitle(due) } };
 }
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
@@ -99,15 +104,15 @@ export default async function AppLayout({ children }: { children: React.ReactNod
                   className="border-b border-bad/30 bg-bad-soft px-4 py-2 text-center text-sm font-medium text-bad"
                 >
                   {reminders.missing.length > 0
-                    ? `Reminder emails can't go out — the server is missing ${reminders.missing.join(", ")}.`
+                    ? `Reminder emails can't go out: the server is missing ${reminders.missing.join(", ")}.`
                     : reminders.neverRan
-                      ? "Reminder emails have never gone out — check the hourly scheduler."
-                      : `Reminder emails haven't gone out for ${reminders.hoursSince} hours — check the hourly scheduler.`}
+                      ? "Reminder emails have never gone out. Check the hourly scheduler."
+                      : `Reminder emails haven't gone out for ${reminders.hoursSince} hours. Check the hourly scheduler.`}
                 </div>
               ) : null}
               {gmail.needsReconnect ? (
                 <div className="border-b border-warn/30 bg-warn-soft px-4 py-2 text-center text-sm text-warn">
-                  Gmail needs to be reconnected —{" "}
+                  Gmail needs to be reconnected:{" "}
                   <a className="font-semibold underline" href="/api/auth/google?purpose=gmail">
                     reconnect now
                   </a>

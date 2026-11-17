@@ -150,12 +150,12 @@ describe("search by text", () => {
 describe("the 'Calling you' line", () => {
   it("says who, what business, the stage, the last call and what he wants", () => {
     expect(callingYouLine(mike, NOW)).toBe(
-      "Calling you: Mike Ross — Mike's Pizza · Interested · last call 3 days ago · wants $50k",
+      "Calling you: Mike Ross, Mike's Pizza · Interested · last call 3 days ago · wants $50k",
     );
   });
   it("copes with a client nobody has called or priced", () => {
     expect(callingYouLine(bella, NOW)).toBe(
-      "Calling you: Linh Tran — Bella Nails & Spa · Interested · never called",
+      "Calling you: Linh Tran, Bella Nails & Spa · Interested · never called",
     );
   });
   it("drops the dash when there is no merchant name", () => {

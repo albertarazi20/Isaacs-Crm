@@ -16,7 +16,7 @@ import { formatDate, timeAgo, toLocalInput } from "@/lib/format";
 export type TimelineFilter = "all" | "notes" | "contact" | "stage";
 
 export const TIMELINE_FILTERS: readonly { key: TimelineFilter; label: string; hint: string }[] = [
-  { key: "all", label: "All", hint: "Everything on this client" },
+  { key: "all", label: "All", hint: "Everything on this merchant" },
   { key: "notes", label: "Notes", hint: "Only notes" },
   { key: "contact", label: "Calls & texts", hint: "Calls, texts and emails" },
   { key: "stage", label: "Stage changes", hint: "Moves between stages" },
@@ -70,6 +70,8 @@ export function activityBody(a: Pick<ActivityRow, "kind" | "body">, today?: ISOD
     });
   }
   if (a.kind !== "system") return a.body;
+  // the database trigger that opens every timeline still writes the old word
+  if (a.body === "Client added") return "Merchant added";
   const m = /^(Received|Marked missing): ([a-z_]+)(?: ([A-Z][a-z]{2} \d{4}))?$/.exec(a.body);
   const kind = m?.[2];
   if (!m || !kind || !(kind in STIP_LABELS)) return a.body;

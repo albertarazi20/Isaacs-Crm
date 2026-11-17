@@ -28,11 +28,14 @@ function Stake({ priority }: { priority: Priority }) {
         aria-expanded={open}
         title={priority.explanation}
         onClick={() => setOpen((v) => !v)}
-        className="inline-flex items-center rounded-full bg-accent-soft px-2 py-0.5 text-[11px] font-semibold text-accent tabular-nums ring-1 ring-accent/25 transition duration-150 ring-inset hover:brightness-110 active:scale-[0.97]"
+        // on a phone the button is a 40px tall target; the pill inside keeps its size
+        className="group/stake inline-flex items-center rounded-full transition duration-150 active:scale-[0.97] max-sm:min-h-10"
       >
-        {priority.basis === "unknown"
-          ? "amount not set"
-          : `${formatMoneyCompact(priority.atStakeCents)} at stake`}
+        <span className="inline-flex items-center rounded-full bg-accent-soft px-2 py-0.5 text-[11px] font-semibold text-accent tabular-nums ring-1 ring-accent/25 transition duration-150 ring-inset group-hover/stake:brightness-110">
+          {priority.basis === "unknown"
+            ? "amount not set"
+            : `${formatMoneyCompact(priority.atStakeCents)} at stake`}
+        </span>
       </button>
       {open ? (
         <p className="basis-full text-xs text-muted" role="note">
@@ -72,7 +75,7 @@ export const ClientRow = memo(function ClientRow({
   priority?: Priority;
   /** Today only: starred clients go to the top. Kept on the merchant, so every device agrees. */
   hot?: boolean;
-  /** Times this client's date was pushed in the last 14 days. */
+  /** Times this merchant's date was pushed in the last 14 days. */
   snoozeCount?: number;
 }) {
   const { today, nowMs, timezone } = useApp();
@@ -92,7 +95,7 @@ export const ClientRow = memo(function ClientRow({
           <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
             <Link
               href={`/clients/${card.id}`}
-              className="text-sm font-semibold tracking-tight transition-colors hover:text-accent-strong"
+              className="inline-flex items-center text-sm font-semibold tracking-tight transition-colors hover:text-accent-strong max-sm:min-h-10"
             >
               {card.business_name}
             </Link>
@@ -110,7 +113,7 @@ export const ClientRow = memo(function ClientRow({
             ) : null}
             {snoozeCount >= 2 ? (
               <Badge tone={snoozeCount >= 3 ? "warn" : "neutral"} className="whitespace-nowrap">
-                <span title="Times this client's date was pushed in the last 14 days">
+                <span title="Times this merchant's date was pushed in the last 14 days">
                   snoozed {snoozeCount}×
                 </span>
               </Badge>

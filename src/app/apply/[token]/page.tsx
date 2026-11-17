@@ -1,3 +1,4 @@
+import { merchantMetadata } from "@/lib/title";
 import { ApplicationForm } from "@/components/apply/ApplicationForm";
 import {
   MerchantHeading,
@@ -9,6 +10,8 @@ import { db } from "@/lib/db";
 import { openApplicationPage } from "@/lib/docs/apply";
 
 export const dynamic = "force-dynamic";
+
+export const metadata = merchantMetadata("Your application");
 
 /**
  * The merchant's application page. No sign-in: the token is the key. The owner sees and signs their own

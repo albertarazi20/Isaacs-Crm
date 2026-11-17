@@ -76,7 +76,7 @@ describe("the alert drain", () => {
     const toBoss = send.mock.calls.find((c) => c[0] === "boss@x.com");
     expect(toBoss).toBeDefined();
     const digest = toBoss![1];
-    expect(digest.subject).toMatch(new RegExp(`^${before} things need you — `));
+    expect(digest.subject).toMatch(new RegExp(`^${before} things need you: `));
     expect(digest.text).toContain("Pizza Palace signed the application");
     expect(digest.text).toContain("Taco Town replied");
     expect(digest.text).toContain("https://crm.test/clients/");

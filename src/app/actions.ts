@@ -126,7 +126,7 @@ export async function sendEmailAction(input: unknown): Promise<ActionResult<Card
     const client = await db.withUser(session.userId, (q) =>
       m.assertContactAllowed(q, i.clientId, "email"),
     );
-    if (!client.email.trim()) throw new m.UserError("This client has no email address yet");
+    if (!client.email.trim()) throw new m.UserError("This merchant has no email address yet");
     await db.withUser(session.userId, (q) => m.assertEmailQuota(q));
     try {
       await sendEmailAsUser(session.userId, {
@@ -184,7 +184,7 @@ export async function sendTestReminderAction(): Promise<
   if (!e.RESEND_API_KEY || !e.RESEND_FROM) {
     return {
       ok: false,
-      error: "Reminder emails aren't set up yet — add RESEND_API_KEY and RESEND_FROM on the server",
+      error: "Reminder emails aren't set up yet. Add RESEND_API_KEY and RESEND_FROM on the server",
     };
   }
   const cfg = { apiKey: e.RESEND_API_KEY, from: e.RESEND_FROM };

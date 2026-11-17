@@ -1,3 +1,5 @@
+import type { Metadata } from "next";
+import { ruleLabel } from "@/components/followup/bucketCopy";
 import { ScoresCard } from "@/components/settings/ScoresCard";
 import { SequenceEditor } from "@/components/settings/SequenceEditor";
 import { SettingsCard } from "@/components/settings/primitives";
@@ -19,6 +21,8 @@ export const dynamic = "force-dynamic";
 
 const UUID = /^[0-9a-f-]{36}$/;
 const SCORE_DAYS = 90;
+
+export const metadata: Metadata = { title: "Buckets & templates" };
 
 export default async function BucketsSettingsPage({
   searchParams,
@@ -88,7 +92,7 @@ export default async function BucketsSettingsPage({
                   {x.owner_id ? "mine" : "shop"}
                 </Badge>
                 {!x.owner_id && x.key && x.rule ? (
-                  <Badge tone="info">rule: {x.rule.replace(/_/g, " ")}</Badge>
+                  <Badge tone="info">{ruleLabel(x.rule)}</Badge>
                 ) : null}
                 {!x.active ? <Badge tone="warn">off</Badge> : null}
               </>

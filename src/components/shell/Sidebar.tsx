@@ -247,7 +247,7 @@ function SidebarBody({
             onNavigate?.();
             openSearch();
           }}
-          aria-label="Find a client"
+          aria-label="Find a merchant"
           aria-keyshortcuts="Control+K Meta+K"
           className="flex h-10 w-full items-center gap-2.5 rounded-full border border-border bg-surface-3/60 pr-2 pl-3.5 text-[13px] text-muted shadow-[inset_0_1px_2px_var(--shadow-c1)] transition duration-150 hover:border-border-strong hover:text-text lg:h-9"
         >
@@ -514,7 +514,7 @@ export function Sidebar(props: SidebarProps) {
         </button>
         <button
           type="button"
-          aria-label="Find a client"
+          aria-label="Find a merchant"
           onClick={openSearch}
           className="inline-flex size-10 items-center justify-center rounded-full text-text-2 transition hover:bg-surface-2 active:scale-95"
         >

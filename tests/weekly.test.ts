@@ -21,7 +21,7 @@ describe("buildScorecard", () => {
     expect(m.subject).toBe("Your week: 80% on time · Oct 19 – Oct 25");
     expect(m.text).toContain("80% of 10 follow-ups that came due were done on the day");
     expect(m.text).toContain("4 new merchants added.");
-    expect(m.text).toContain("Mike's Pizza, wants $50k — 6 days overdue");
+    expect(m.text).toContain("Mike's Pizza, wants $50k: 6 days overdue");
     expect(m.text).toContain("https://app.test/clients/c1");
     expect(m.text).toContain("…and 5 more overdue.");
     expect(m.html).toContain('href="https://app.test/clients/c1"');

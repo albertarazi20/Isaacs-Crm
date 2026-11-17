@@ -48,7 +48,7 @@ function ContactStatusDialog({ card, onClose }: { card: ClientCard; onClose: () 
     setBusy(true);
     const ok = await run(
       setContactStatusAction({ clientId: card.id, status, note }),
-      status === "dnc" ? "Marked do-not-contact — all reminders cancelled" : "Contact status saved",
+      status === "dnc" ? "Marked do-not-contact. All reminders cancelled" : "Contact status saved",
     );
     setBusy(false);
     if (ok) onClose();

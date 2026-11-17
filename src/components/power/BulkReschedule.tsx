@@ -90,7 +90,7 @@ function BulkDialog({ overdue, onClose }: { overdue: ClientCard[]; onClose: () =
             Cancel
           </Button>
           <Button variant="primary" disabled={busy || n === 0} onClick={() => void submit()}>
-            {busy ? "Rescheduling…" : `Reschedule ${n} client${n === 1 ? "" : "s"}`}
+            {busy ? "Rescheduling…" : `Reschedule ${n} merchant${n === 1 ? "" : "s"}`}
           </Button>
         </>
       }

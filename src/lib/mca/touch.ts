@@ -14,7 +14,7 @@ export const OUTCOME_LABELS: Record<TouchOutcome, string> = {
 const TEXT_LABELS: Record<TouchOutcome, string> = {
   reached: "They replied",
   no_answer: "No reply",
-  left_message: "Sent — no reply yet",
+  left_message: "Sent, no reply yet",
   bad_number: "Bad number",
 };
 

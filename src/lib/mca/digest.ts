@@ -62,14 +62,14 @@ function line(t: DueTimer, today: ISODate, appUrl: string): { text: string; html
   const late = diffDays(t.dueOn, today);
   const when = late > 0 ? `${late}d overdue` : "today";
   const label = `${timerLabel(t.kind)} · ${stageDef(t.stage).label}`;
-  const who = `${t.businessName} — ${t.contactName}`;
+  const who = `${t.businessName}, ${t.contactName}`;
   const href = `${appUrl}/clients/${t.clientId}`;
   const phone = t.phone ? formatUS(t.phone) : "";
   return {
     text: `• ${who} ${phone} [${label}, ${when}]\n  ${href}${t.note ? `\n  ${t.note}` : ""}`,
-    html: `<li><a href="${esc(href)}"><strong>${esc(t.businessName)}</strong></a> — ${esc(
+    html: `<li><a href="${esc(href)}"><strong>${esc(t.businessName)}</strong></a>, ${esc(
       t.contactName,
-    )} ${esc(phone)}<br><small>${esc(label)}, ${esc(when)}${t.note ? ` — ${esc(t.note)}` : ""}</small></li>`,
+    )} ${esc(phone)}<br><small>${esc(label)}, ${esc(when)}${t.note ? `: ${esc(t.note)}` : ""}</small></li>`,
   };
 }
 
@@ -95,7 +95,7 @@ export function buildDigest(
       ? `${overdue.length} overdue follow-up${overdue.length === 1 ? "" : "s"}`
       : overdue.length === 0
         ? `${plural(dueToday.length, "follow-up")} due today`
-        : `${dueToday.length} due today, ${overdue.length} overdue — follow-ups`;
+        : `Follow-ups: ${dueToday.length} due today, ${overdue.length} overdue`;
   const section = (title: string, rows: DueTimer[]) => {
     if (rows.length === 0) return { text: "", html: "" };
     const lines = rows.map((r) => line(r, today, appUrl));
@@ -141,8 +141,8 @@ export function buildCallReminder(c: CallReminderInput, appUrl: string): Omit<Di
   ].filter(Boolean);
   return {
     subject: oneLine(`${what} at ${c.callTime}: ${c.businessName}`),
-    text: `${what} at ${c.callTime} — ${c.businessName} (${c.contactName || "merchant"}), ${phone}\n${facts.join("\n")}${facts.length ? "\n" : ""}\n${href}\n`,
-    html: `<div style="font-family:system-ui,sans-serif"><h3>${what} at ${esc(c.callTime)}</h3><p><a href="${esc(href)}"><strong>${esc(c.businessName)}</strong></a> — ${esc(
+    text: `${what} at ${c.callTime}: ${c.businessName} (${c.contactName || "merchant"}), ${phone}\n${facts.join("\n")}${facts.length ? "\n" : ""}\n${href}\n`,
+    html: `<div style="font-family:system-ui,sans-serif"><h3>${what} at ${esc(c.callTime)}</h3><p><a href="${esc(href)}"><strong>${esc(c.businessName)}</strong></a>, ${esc(
       c.contactName || "merchant",
     )}<br>${esc(phone)}</p>${facts.length ? `<ul>${facts.map((f) => `<li>${esc(f)}</li>`).join("")}</ul>` : ""}</div>`,
   };
@@ -160,16 +160,16 @@ export interface NewLeadInput {
 /** The instant alert for a new inbound lead — short enough to read from a phone's lock screen. */
 export function buildNewLeadAlert(l: NewLeadInput, appUrl: string): Omit<Digest, "count"> {
   const href = `${appUrl}/clients/${l.clientId}`;
-  const phone = l.phone ? formatUS(l.phone) : "no phone — email only";
+  const phone = l.phone ? formatUS(l.phone) : "no phone, email only";
   const facts = [
     l.contactName ? `Contact: ${l.contactName}` : "",
     l.wantedAmount ? `Wants ${l.wantedAmount}` : "",
     l.source ? `From: ${l.source}` : "",
   ].filter(Boolean);
   return {
-    subject: oneLine(`New lead: ${l.businessName} — call now`),
-    text: `New lead — ${l.businessName}\n${phone}\n${facts.join("\n")}${facts.length ? "\n" : ""}\n${href}\n`,
-    html: `<div style="font-family:system-ui,sans-serif"><h3>New lead — call now</h3><p><a href="${esc(href)}"><strong>${esc(
+    subject: oneLine(`New lead: ${l.businessName}. Call now`),
+    text: `New lead: ${l.businessName}\n${phone}\n${facts.join("\n")}${facts.length ? "\n" : ""}\n${href}\n`,
+    html: `<div style="font-family:system-ui,sans-serif"><h3>New lead. Call now</h3><p><a href="${esc(href)}"><strong>${esc(
       l.businessName,
     )}</strong></a><br>${esc(phone)}</p>${facts.length ? `<ul>${facts.map((f) => `<li>${esc(f)}</li>`).join("")}</ul>` : ""}</div>`,
   };

@@ -266,7 +266,10 @@ describe("values too long for the server are cut, not allowed to sink the whole 
     const { rows, problems } = buildRows([["Alpha", "3055550001", "s".repeat(150), ""]], m, opts);
     expect(rows[0]?.source).toHaveLength(100);
     expect(problems).toEqual([
-      { line: 2, message: '"Where they came from" is longer than 100 characters — cut to fit' },
+      {
+        line: 2,
+        message: '"Where they came from" is longer than 100 characters, so it was cut to fit',
+      },
     ]);
   });
   it("reports each cut value once, even though it is read more than once", () => {
@@ -310,14 +313,17 @@ describe("secrets in a sheet are left out of the row, not the whole import", () 
       ["Beta", "wants 30k"],
     ]);
     expect(problems).toEqual([
-      { line: 2, message: '"Notes" looks like it holds a Social Security number — left out' },
+      {
+        line: 2,
+        message: '"Notes" looks like it holds a Social Security number, so it was left out',
+      },
     ]);
   });
   it("a card number in the business-name column drops the name, so the row is skipped", () => {
     const { rows, problems } = buildRows([["4111 1111 1111 1111", "3055550003", ""]], m, opts);
     expect(rows).toEqual([]);
     expect(problems.map((p) => p.message)).toEqual([
-      '"Business name" looks like it holds a card number — left out',
+      '"Business name" looks like it holds a card number, so it was left out',
       "No business name",
     ]);
   });

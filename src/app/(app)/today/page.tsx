@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { CountUp } from "@/components/fx";
 import { TodayLists } from "@/components/power/TodayLists";
 import { Glyph } from "@/components/shell/icons";
@@ -43,6 +44,8 @@ function Figure({
     </div>
   );
 }
+
+export const metadata: Metadata = { title: "Call list" };
 
 export default async function TodayPage() {
   const session = await requireSession();

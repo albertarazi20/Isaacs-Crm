@@ -190,7 +190,7 @@ export default async function wireSettings({ email }) {
     const prow = page.locator(`[data-template="${t2.id}"]`);
     check(
       "a template the engine paused shows the bounce-spike badge and the reason",
-      (await prow.getByText("paused automatically — bounce spike").isVisible()) &&
+      (await prow.getByText("paused automatically: bounce spike").isVisible()) &&
         (await prow.innerText()).includes("6 of the last 20 emails bounced"),
     );
     await prow.getByRole("button", { name: "Approve again" }).click();

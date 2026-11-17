@@ -14,7 +14,7 @@ import { formatDate, timeAgo } from "@/lib/format";
 import { addDays, type ISODate } from "@/lib/mca/dates";
 import type { MemberMeta } from "@/lib/messaging/memberMeta";
 import { formatMoneyCompact } from "@/lib/money";
-import { stepNote, stepTitle } from "./bucketCopy";
+import { memberMergeValues, stepNote, stepTitle } from "./bucketCopy";
 import { Ico, MemberChips, NEXT_TONE, copyUploadLink, nextUp } from "./memberParts";
 
 export interface MemberActions {
@@ -95,6 +95,7 @@ function Body({
   const [moveTo, setMoveTo] = useState("");
   const [link, setLink] = useState<"idle" | "busy" | "copied" | string>("idle");
   const next = nextUp(m, steps, today);
+  const values = memberMergeValues(m);
   const done = Math.min(steps.length, Math.max(0, m.next_step - 1));
 
   return (
@@ -210,7 +211,7 @@ function Body({
                         state === "later" ? "text-text-2" : "text-text",
                       )}
                     >
-                      {stepTitle(s)}
+                      {stepTitle(s, values)}
                     </p>
                     <p className="truncate text-xs text-muted">
                       Day {s.day_offset} · {stepNote(s)}

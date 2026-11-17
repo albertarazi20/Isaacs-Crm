@@ -42,20 +42,20 @@ export function findSensitive(text: string): SensitiveHit | null {
     return {
       kind: "ssn",
       message:
-        "That looks like a Social Security number. We don't store those — take it out and save again.",
+        "That looks like a Social Security number. We don't store those. Take it out and save again.",
     };
   }
   if (EIN_WORD.test(text)) {
     return {
       kind: "ssn",
       message:
-        "That looks like a full tax ID. We only keep the last 4 digits — take the rest out and save again.",
+        "That looks like a full tax ID. We only keep the last 4 digits. Take the rest out and save again.",
     };
   }
   if (CARD_GROUPED.test(text) || CARD_WORD.test(text)) {
     return {
       kind: "card",
-      message: "That looks like a card number. We never store those — take it out and save again.",
+      message: "That looks like a card number. We never store those. Take it out and save again.",
     };
   }
   for (const m of text.matchAll(CARD_RUN)) {
@@ -63,8 +63,7 @@ export function findSensitive(text: string): SensitiveHit | null {
     if (digits.length >= 13 && digits.length <= 19 && luhn(digits)) {
       return {
         kind: "card",
-        message:
-          "That looks like a card number. We never store those — take it out and save again.",
+        message: "That looks like a card number. We never store those. Take it out and save again.",
       };
     }
   }
@@ -72,7 +71,7 @@ export function findSensitive(text: string): SensitiveHit | null {
     return {
       kind: "account",
       message:
-        "That looks like a bank account or routing number. We don't store those — take it out and save again.",
+        "That looks like a bank account or routing number. We don't store those. Take it out and save again.",
     };
   }
   return null;

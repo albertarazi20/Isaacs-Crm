@@ -317,7 +317,7 @@ export default async function powerFlow({ email }) {
   await page.getByLabel("Reason for snoozing (one line)").fill("Waiting on his Q3 tax returns");
   await page.getByRole("button", { name: /^Snooze until/ }).click();
   await page
-    .getByText(new RegExp(`${esc(uw.business_name)} — snoozed until`))
+    .getByText(new RegExp(`${esc(uw.business_name)} : snoozed until`))
     .waitFor({ timeout: 8000 });
   const afterGuard = await openTimers(uw.id);
   const note = await one(
@@ -342,7 +342,7 @@ export default async function powerFlow({ email }) {
   await rowOf(uw2.business_name).locator("summary", { hasText: "Snooze" }).click();
   await rowOf(uw2.business_name).getByRole("button", { name: "1 week" }).click();
   await page
-    .getByText(new RegExp(`${esc(uw2.business_name)} — snoozed until`))
+    .getByText(new RegExp(`${esc(uw2.business_name)} : snoozed until`))
     .waitFor({ timeout: 8000 });
   check(
     "a week or less on a merchant whose application is in does not ask",
@@ -353,7 +353,7 @@ export default async function powerFlow({ email }) {
   await rowOf(early.business_name).locator("summary", { hasText: "Snooze" }).click();
   await rowOf(early.business_name).getByRole("button", { name: "1 month" }).click();
   await page
-    .getByText(new RegExp(`${esc(early.business_name)} — snoozed until`))
+    .getByText(new RegExp(`${esc(early.business_name)} : snoozed until`))
     .waitFor({ timeout: 8000 });
   check(
     "an early-stage client is never asked, whatever the length",
@@ -458,7 +458,7 @@ export default async function powerFlow({ email }) {
   // 4. Global search + inbound-call lookup
   await page.goto(`${BASE}/today`, { waitUntil: "networkidle" });
   await page.keyboard.press("Control+K");
-  const palette = page.getByRole("dialog", { name: "Find a client" });
+  const palette = page.getByRole("dialog", { name: "Find a merchant" });
   await palette.waitFor({ timeout: 5000 });
   const box = palette.getByRole("combobox");
   check(
@@ -501,7 +501,7 @@ export default async function powerFlow({ email }) {
   check(
     "a full phone number shows 'Calling you: …' first, with stage, last call and what he wants",
     firstText.startsWith(
-      `Calling you: ${rivera.contact_name} — Rivera Auto Repair · Interested · last call `,
+      `Calling you: ${rivera.contact_name}, Rivera Auto Repair · Interested · last call `,
     ) && firstText.includes("wants $60k"),
     firstText,
   );
@@ -511,7 +511,7 @@ export default async function powerFlow({ email }) {
   check("Enter opens the client page", true);
 
   await page.goto(`${BASE}/today`, { waitUntil: "networkidle" });
-  await page.locator("aside").getByRole("button", { name: "Find a client" }).click();
+  await page.locator("aside").getByRole("button", { name: "Find a merchant" }).click();
   await palette.waitFor();
   await palette.getByRole("combobox").fill("hartman");
   await palette.getByRole("option").first().waitFor({ timeout: 8000 });
@@ -522,7 +522,7 @@ export default async function powerFlow({ email }) {
   );
   await page.keyboard.press("Escape");
   await page.waitForFunction(
-    () => !document.querySelector("dialog[aria-label='Find a client'][open]"),
+    () => !document.querySelector("dialog[aria-label='Find a merchant'][open]"),
   );
   check("Escape closes it", true);
 
@@ -575,7 +575,7 @@ export default async function powerFlow({ email }) {
 
   // Search still works over the full-screen dial, and Tab stays inside it (the app header is inert).
   await page.keyboard.press("Control+K");
-  const dialPalette = page.getByRole("dialog", { name: "Find a client" });
+  const dialPalette = page.getByRole("dialog", { name: "Find a merchant" });
   await dialPalette.waitFor({ timeout: 5000 });
   await dialPalette.getByRole("combobox").fill("hartman");
   await dialPalette.getByRole("option").first().waitFor({ timeout: 8000 });
@@ -620,7 +620,7 @@ export default async function powerFlow({ email }) {
   );
   await page.getByRole("button", { name: "Reached" }).click();
   await page.getByRole("button", { name: "Log it" }).click();
-  await page.getByText(/Logged — next follow-up/).waitFor({ timeout: 8000 });
+  await page.getByText(/Logged\. Next follow-up/).waitFor({ timeout: 8000 });
   await page.waitForFunction(
     (prev) => document.querySelector('[aria-label="Power dial"] h1')?.textContent !== prev,
     b,
@@ -659,7 +659,7 @@ export default async function powerFlow({ email }) {
   await page.getByRole("button", { name: "No answer" }).click();
   await page.getByRole("button", { name: "Log it" }).click();
   await page
-    .getByText(/Logged — next follow-up/)
+    .getByText(/Logged\. Next follow-up/)
     .first()
     .waitFor({ timeout: 8000 });
   await page.waitForFunction(
@@ -733,7 +733,7 @@ export default async function powerFlow({ email }) {
   await page.emulateMedia({ colorScheme: "dark" });
   await shot(page, "today-dark");
   await page.keyboard.press("Control+K");
-  await page.getByRole("dialog", { name: "Find a client" }).getByRole("combobox").fill("305555");
+  await page.getByRole("dialog", { name: "Find a merchant" }).getByRole("combobox").fill("305555");
   await shot(page, "palette-dark");
   await page.keyboard.press("Escape");
   await page.goto(`${BASE}/dial`, { waitUntil: "networkidle" });
@@ -764,9 +764,9 @@ export default async function powerFlow({ email }) {
       els.map((e) => (e.getAttribute("aria-label") ?? e.textContent ?? "").trim()),
     );
   check(
-    "the bar holds: Menu, the brand, Find a client, Alerts, New lead",
+    "the bar holds: Menu, the brand, Find a merchant, Alerts, New lead",
     labels.map((l) => l.replace(/, \d+ unread$/, "")).join("|") ===
-      "Menu|Selective CRM home|Find a client|Alerts|New lead",
+      "Menu|Selective CRM home|Find a merchant|Alerts|New lead",
     labels.join("|"),
   );
   const vp = mp.viewportSize();
@@ -780,7 +780,7 @@ export default async function powerFlow({ email }) {
   check(
     "brand, search and New lead are in the bar",
     (await bar.getByRole("link", { name: "Selective CRM home" }).isVisible()) &&
-      (await bar.getByRole("button", { name: "Find a client" }).isVisible()) &&
+      (await bar.getByRole("button", { name: "Find a merchant" }).isVisible()) &&
       (await bar.getByRole("button", { name: "New lead" }).isVisible()),
   );
   const firstTop = (await mp.getByRole("heading", { level: 1 }).first().boundingBox())?.y ?? 0;

@@ -70,10 +70,10 @@ export default async function shellFlow({ email }) {
 
   // ---- search
   await page.keyboard.press("Control+k");
-  const palette = page.getByRole("dialog", { name: "Find a client" });
+  const palette = page.getByRole("dialog", { name: "Find a merchant" });
   check("Ctrl+K opens the search palette", await until(() => palette.isVisible()));
   await page.keyboard.press("Escape");
-  await rail.getByRole("button", { name: "Find a client" }).click();
+  await rail.getByRole("button", { name: "Find a merchant" }).click();
   check(
     "the sidebar's search field opens the same palette",
     await until(() => palette.isVisible()),
