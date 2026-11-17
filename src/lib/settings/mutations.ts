@@ -8,6 +8,8 @@ export async function saveShopSettings(q: Db, i: ShopSettingsInput): Promise<voi
             sequences_enabled = $6, send_window_start = $7, send_window_end = $8, send_on_weekends = $9,
             per_merchant_daily = $10, per_merchant_weekly = $11, automation_from = $12, automation_reply_to_rep = $13,
             send_on_holidays = coalesce($14::boolean, send_on_holidays),
+            open_nudge_since = case when coalesce($15::boolean, open_nudge) and not open_nudge then now()
+                                    else open_nudge_since end,
             open_nudge = coalesce($15::boolean, open_nudge)`,
     [
       i.shopName,

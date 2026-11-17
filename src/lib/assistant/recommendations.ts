@@ -247,7 +247,7 @@ export async function loadRecommendationFacts(
            and not exists (select 1 from activities a where a.client_id = c.id and a.kind = 'call')
            and not exists (select 1 from trashed_clients t where t.client_id = c.id)) as new_leads,
        (select count(*)::int from clients c
-         where c.email_bounced_at is not null and c.brought_in_at is null
+         where c.email_bounced_at is not null and c.brought_in_at is null and c.contact_status <> 'dnc'
            and not exists (select 1 from trashed_clients t where t.client_id = c.id)) as bounced`,
   );
   const queue: Partial<Record<QueueKind, number>> = {
@@ -263,7 +263,7 @@ export async function loadRecommendationFacts(
        join clients c on c.id = e.client_id
       where e.stopped_at is null
         and b.key in ('missing_app', 'missing_statements', 'missing_newest', 'missing_id')
-        and c.brought_in_at is null
+        and c.brought_in_at is null and c.contact_status <> 'dnc' and not c.email_opt_out
         and not exists (select 1 from trashed_clients t where t.client_id = c.id)
         and coalesce((select max(a.created_at) from activities a
                        where a.client_id = c.id and a.kind in ('call', 'text', 'email', 'note')), c.created_at)

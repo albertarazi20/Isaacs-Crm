@@ -13,6 +13,8 @@ const body = z.object({
   threadId: z.string().uuid().nullable(),
   /** null continues a turn the last request handed back */
   message: z.string().max(6000).nullable(),
+  /** The label on the button that asked, for the conversation's name in the history list. */
+  title: z.string().max(200).nullable().optional(),
 });
 
 function apiErrorWords(e: InstanceType<typeof Anthropic.APIError>): string {
@@ -65,6 +67,7 @@ export async function POST(req: Request) {
           userId: session.userId,
           threadId: parsed.data.threadId,
           message: parsed.data.message,
+          title: parsed.data.title ?? null,
           keySet: Boolean(env().ANTHROPIC_API_KEY),
           caller: anthropicCaller(),
           events: {

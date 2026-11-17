@@ -605,7 +605,7 @@ describe("a turn", () => {
     expect(r.more).toBe(true);
     expect(dropped).toBe(1);
     const logged = await one<{ n: number; cost: string }>(
-      "select count(*)::int as n, max(cost_cents)::text as cost from ai_runs where purpose = 'assistant' and output->>'stop_reason' = 'unfinished'",
+      "select count(*)::int as n, max(cost_cents)::text as cost from ai_runs where purpose = 'assistant' and output->>'stop_reason' = 'timed_out'",
     );
     expect(logged!.n).toBe(1);
     expect(Number(logged!.cost)).toBeGreaterThan(0);
@@ -615,6 +615,103 @@ describe("a turn", () => {
     );
     // only the question: the cut-off answer is not part of the history the next request continues from
     expect(saved!.messages.map((m) => m.role)).toEqual(["user"]);
+  });
+
+  it("two stops at the time limit in a row: the second try thinks less, then the person is asked for a shorter question", async () => {
+    const stopped = () => {
+      throw new run.UnfinishedCallError(new Error("aborted"), undefined, true);
+    };
+    const efforts: string[] = [];
+    const caller = async (p: StreamParams): Promise<Message> => {
+      efforts.push(String((p as { output_config?: { effort?: string } }).output_config?.effort));
+      return stopped();
+    };
+    const first = await run.runAssistantTurn({
+      userId: rita,
+      threadId: null,
+      message: "Everything about every merchant",
+      keySet: true,
+      caller,
+      events: recorder().events,
+    });
+    expect(first.more).toBe(true);
+    const timeouts = async () =>
+      (await one<{ n: number }>("select timeouts as n from assistant_threads where id = $1", [
+        first.threadId,
+      ]))!.n;
+    expect(await timeouts()).toBe(1);
+    const second = await run.runAssistantTurn({
+      userId: rita,
+      threadId: first.threadId,
+      message: null,
+      keySet: true,
+      caller,
+      events: recorder().events,
+    });
+    expect(second.more).toBe(true);
+    expect(efforts).toEqual(["high", "medium"]);
+    expect(await timeouts()).toBe(2);
+    const rec = recorder();
+    const third = await run.runAssistantTurn({
+      userId: rita,
+      threadId: first.threadId,
+      message: null,
+      keySet: true,
+      caller,
+      events: rec.events,
+    });
+    expect(third.more).toBe(false);
+    expect(efforts).toHaveLength(2); // no third paid call
+    expect(rec.log.notices.join(" ")).toMatch(/too long to write in one go/);
+    expect(await timeouts()).toBe(0);
+  });
+
+  it("tools asked for too late in a request run first in the next one", async () => {
+    const s = script([
+      () => ({ stop_reason: "tool_use", content: [use("late1", "get_overview", {})] }),
+      () => ({ content: [text("Done with the overview.")] }),
+    ]);
+    const first = await run.runAssistantTurn({
+      userId: rita,
+      threadId: null,
+      message: "Overview please",
+      title: "Overview: today",
+      keySet: true,
+      caller: s.caller,
+      events: recorder().events,
+      toolsByMs: 0,
+    });
+    expect(first.more).toBe(true);
+    const saved = await one<{ messages: { role: string }[]; title: string }>(
+      "select messages, title from assistant_threads where id = $1",
+      [first.threadId],
+    );
+    // the call is kept, its tools not yet run; the conversation is named by the button's label
+    expect(saved!.messages.map((m) => m.role)).toEqual(["user", "assistant"]);
+    expect(saved!.title).toBe("Overview: today");
+    const rec = recorder();
+    const second = await run.runAssistantTurn({
+      userId: rita,
+      threadId: first.threadId,
+      message: null,
+      keySet: true,
+      caller: s.caller,
+      events: rec.events,
+    });
+    expect(second.more).toBe(false);
+    expect(rec.log.tools).toEqual(["get_overview"]);
+    expect(rec.log.text).toBe("Done with the overview.");
+    expect(s.sent[1]!.messages.map((m) => m.role)).toEqual(["user", "assistant", "user"]);
+  });
+
+  it("a stopped call's cost counts the time it ran, not only the text it showed (thinking is billed unseen)", () => {
+    const m = {
+      model: "claude-opus-5-5",
+      usage: { input_tokens: 100, output_tokens: 1 },
+      content: [{ type: "thinking", thinking: "", signature: "" }],
+    } as unknown as Message;
+    expect(run.partialUsage(m, 30_000).usage.output_tokens).toBeGreaterThanOrEqual(1500);
+    expect(run.partialUsage(m, 0).usage.output_tokens).toBeGreaterThanOrEqual(1);
   });
 
   it("a tool input the stream could not parse is asked for again (the SDK's own error, not an API error)", async () => {

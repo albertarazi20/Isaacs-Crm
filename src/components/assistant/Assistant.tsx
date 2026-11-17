@@ -452,7 +452,7 @@ export function AssistantProvider({
           const res = await fetch("/api/assistant", {
             method: "POST",
             headers: { "content-type": "application/json" },
-            body: JSON.stringify({ threadId: thread, message: next }),
+            body: JSON.stringify({ threadId: thread, message: next, title: label ?? null }),
             signal: controller.signal,
           });
           if (!res.ok || !res.body) {

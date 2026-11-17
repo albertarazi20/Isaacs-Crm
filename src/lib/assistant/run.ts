@@ -25,7 +25,11 @@ const MAX_CALLS_PER_REQUEST = 6;
 /** No new model call starts after this; the browser continues in a fresh request (a hosted request has 60 s). */
 const START_BUDGET_MS = 30_000;
 /** A call still running at this point is stopped (its spend counted) and re-run by the browser's continue. */
-const HARD_STOP_MS = 54_000;
+const HARD_STOP_MS = 52_000;
+/** Tools asked for after this run in the next request instead: a slow read must not push past the 60 s limit. */
+const TOOLS_BY_MS = 44_000;
+/** Output the stopped call is assumed to have written per second it ran (thinking is billed but not streamed). */
+const TOKENS_PER_SECOND = 60;
 
 type MessageParam = Anthropic.Beta.Messages.BetaMessageParam;
 type Message = Anthropic.Beta.Messages.BetaMessage;
@@ -98,6 +102,8 @@ export function anthropicCaller(client: Anthropic = new Anthropic()): ModelCalle
     try {
       return await stream.finalMessage();
     } catch (e) {
+      // the SDK reports an unreadable tool input without closing the stream: stop it so it is not billed on
+      stream.abort();
       throw new UnfinishedCallError(e, stream.currentMessage, timedOut);
     } finally {
       if (timer) clearTimeout(timer);
@@ -116,15 +122,31 @@ export function isToolJsonError(e: unknown): boolean {
 }
 
 /**
- * The usage of a call that stopped part way. Output tokens are only reported at the end of a stream, so they are
- * estimated from what was produced (about four characters a token) when that is more.
+ * The usage of a call that stopped part way. Output tokens are only reported at the end of a stream, and thinking
+ * is billed but not streamed, so the count is the most of: what the API reported, what was produced (about four
+ * characters a token), and the time the call ran at a steady writing speed. A budget guard should err high.
  */
-export function partialUsage(m: Message): Message {
-  const produced = Math.ceil(JSON.stringify(m.content ?? []).length / 4);
-  return { ...m, usage: { ...m.usage, output_tokens: Math.max(m.usage.output_tokens, produced) } };
+export function partialUsage(m: Message, elapsedMs = 0): Message {
+  let chars = 0;
+  for (const b of m.content ?? []) {
+    try {
+      if (b.type === "text") chars += b.text.length;
+      else if (b.type === "thinking") chars += b.thinking.length;
+      // an unfinished tool input can fail to parse when it is read: it then counts by time alone
+      else chars += JSON.stringify(b).length;
+    } catch {
+      // nothing to add
+    }
+  }
+  const byTime = Math.ceil((Math.max(0, elapsedMs - 2000) / 1000) * TOKENS_PER_SECOND);
+  const output = Math.max(m.usage?.output_tokens ?? 0, Math.ceil(chars / 4), byTime);
+  return { ...m, usage: { ...m.usage, output_tokens: output } };
 }
 
-export function buildParams(messages: MessageParam[]): StreamParams {
+export function buildParams(
+  messages: MessageParam[],
+  effort: "high" | "medium" = "high",
+): StreamParams {
   return {
     model: ASSISTANT_MODEL,
     max_tokens: 32000,
@@ -132,7 +154,7 @@ export function buildParams(messages: MessageParam[]): StreamParams {
     system: [{ type: "text", text: SYSTEM_PROMPT, cache_control: { type: "ephemeral" } }],
     tools: ASSISTANT_TOOLS,
     thinking: { type: "adaptive" },
-    output_config: { effort: "high" },
+    output_config: { effort },
     // a declined request is re-run on the model the API picks for that kind of refusal, inside the same call
     betas: ["server-side-fallback-2026-07-01"],
     fallbacks: "default",
@@ -144,11 +166,13 @@ export function buildParams(messages: MessageParam[]): StreamParams {
 interface Thread {
   id: string;
   messages: MessageParam[];
+  /** Calls stopped at the time limit in a row (0551). */
+  timeouts: number;
 }
 
 async function loadThread(q: Db, id: string): Promise<Thread> {
-  const { rows } = await q.query<{ id: string; messages: MessageParam[] }>(
-    "select id, messages from assistant_threads where id = $1",
+  const { rows } = await q.query<Thread>(
+    "select id, messages, timeouts from assistant_threads where id = $1",
     [id],
   );
   if (!rows[0]) throw new UserError("That conversation is gone. Start a new one.");
@@ -157,10 +181,10 @@ async function loadThread(q: Db, id: string): Promise<Thread> {
 
 async function saveThread(q: Db, t: Thread, title: string | null): Promise<void> {
   await q.query(
-    `update assistant_threads set messages = $2::jsonb, updated_at = now(),
+    `update assistant_threads set messages = $2::jsonb, updated_at = now(), timeouts = $4,
             title = case when title = '' and $3::text is not null then $3 else title end
       where id = $1`,
-    [t.id, JSON.stringify(t.messages), title],
+    [t.id, JSON.stringify(t.messages), title, t.timeouts],
   );
 }
 
@@ -230,6 +254,8 @@ export interface TurnInput {
   threadId: string | null;
   /** The person's message; null continues a turn that was handed back ("continue"). */
   message: string | null;
+  /** The short label the person saw on the button that asked (names the conversation in the history list). */
+  title?: string | null;
   keySet: boolean;
   caller: ModelCaller;
   events: TurnEvents;
@@ -238,6 +264,8 @@ export interface TurnInput {
   budgetMs?: number;
   /** Stop a call still running at this many milliseconds; the browser's continue runs it again. */
   hardStopMs?: number;
+  /** Tools asked for after this many milliseconds run in the next request instead. */
+  toolsByMs?: number;
 }
 
 export interface TurnResult {
@@ -262,7 +290,7 @@ export async function runAssistantTurn(input: TurnInput): Promise<TurnResult> {
       const { rows } = await q.query<{ id: string }>(
         "insert into assistant_threads default values returning id",
       );
-      thread = { id: rows[0]!.id, messages: [] };
+      thread = { id: rows[0]!.id, messages: [], timeouts: 0 };
     }
     return { ctx, thread };
   });
@@ -284,81 +312,14 @@ export async function runAssistantTurn(input: TurnInput): Promise<TurnResult> {
         { type: "text", text },
       ],
     });
-    if (thread.messages.length === 1) title = threadTitle(text);
+    if (thread.messages.length === 1) title = threadTitle(input.title?.trim() || text);
+    thread.timeouts = 0;
     await db.withUser(input.userId, (q) => saveThread(q, thread, title));
-  } else {
-    const last = thread.messages[thread.messages.length - 1];
-    if (!last || last.role !== "user") return { threadId: thread.id, more: false }; // nothing left to continue
   }
 
-  // every call is counted against the daily budget, finished or not
-  const logRun = (m: Message, outcome: string) =>
-    db.withUser(input.userId, (q) =>
-      q.query("select app.log_ai_run('assistant', $1, $2, $3, $4, $5, $6, $7::jsonb, null)", [
-        m.model,
-        ASSISTANT_PROMPT_VERSION,
-        createHash("sha256").update(thread.id).digest("hex"),
-        m.usage.input_tokens + (m.usage.cache_read_input_tokens ?? 0),
-        m.usage.output_tokens,
-        callCostCents(m),
-        JSON.stringify({ thread: thread.id, stop_reason: outcome }),
-      ]),
-    );
-
-  // 2. the loop: call, read tools, call again, until an answer or the time budget is spent
-  let parseRetries = 0;
-  for (let calls = 0; ;) {
-    if (calls >= MAX_CALLS_PER_REQUEST || Date.now() - started > budgetMs)
-      return { threadId: thread.id, more: true };
-    let message: Message;
-    try {
-      message = await input.caller(buildParams(thread.messages), input.events.text, { deadline });
-    } catch (raw) {
-      const unfinished = raw instanceof UnfinishedCallError ? raw : null;
-      const e = unfinished ? unfinished.reason : raw;
-      if (unfinished?.partial) await logRun(partialUsage(unfinished.partial), "unfinished");
-      // stopped at the request's time limit: nothing of it is kept, the browser continues in a fresh request
-      if (unfinished?.timedOut) {
-        input.events.discard?.();
-        return { threadId: thread.id, more: true };
-      }
-      // a tool input the stream could not parse at all: re-issue the same turn, at most twice
-      if (isToolJsonError(e) && parseRetries++ < 2) {
-        input.events.discard?.();
-        calls++;
-        continue;
-      }
-      throw e;
-    }
-    calls++;
-    parseRetries = 0;
-
-    await logRun(message, message.stop_reason ?? "unknown");
-
-    if (message.stop_reason === "refusal") {
-      input.events.notice("The assistant can't help with that one. Try asking it another way.");
-      return { threadId: thread.id, more: false };
-    }
-
-    thread.messages.push({ role: "assistant", content: message.content });
-    const uses = message.content.filter(
-      (b): b is Anthropic.Beta.Messages.BetaToolUseBlock => b.type === "tool_use",
-    );
-
-    if (message.stop_reason === "max_tokens" && uses.length > 0) {
-      // a tool call cut off mid-input is never run
-      thread.messages.pop();
-      await db.withUser(input.userId, (q) => saveThread(q, thread, null));
-      input.events.notice("The answer ran too long. Ask for a shorter plan.");
-      return { threadId: thread.id, more: false };
-    }
-    if (message.stop_reason !== "tool_use" || uses.length === 0) {
-      await db.withUser(input.userId, (q) => saveThread(q, thread, null));
-      return { threadId: thread.id, more: false };
-    }
-
-    // 3. run the tools (reads under the person's row security; proposals checked, then shown). Each runs behind its
-    // own savepoint: one that fails (a statement timeout) must not abort the transaction the others share.
+  // 3 (as a function): run the tools a call asked for, under the person's row security, and save the results.
+  // Each runs behind its own savepoint: one that fails (a statement timeout) must not abort the others' transaction.
+  const runTools = async (uses: readonly { id: string; name: string; input: unknown }[]) => {
     const results: Anthropic.Beta.Messages.BetaToolResultBlockParam[] = [];
     await db.withUser(input.userId, async (q) => {
       for (const use of uses) {
@@ -406,6 +367,118 @@ export async function runAssistantTurn(input: TurnInput): Promise<TurnResult> {
     });
     thread.messages.push({ role: "user", content: results });
     await db.withUser(input.userId, (q) => saveThread(q, thread, null));
+  };
+  const toolUses = (m: MessageParam) =>
+    Array.isArray(m.content)
+      ? m.content.flatMap((b) =>
+          b.type === "tool_use" ? [{ id: b.id, name: b.name, input: b.input }] : [],
+        )
+      : [];
+
+  if (input.message === null) {
+    const last = thread.messages[thread.messages.length - 1];
+    if (!last) return { threadId: thread.id, more: false };
+    if (last.role === "assistant") {
+      // the last request ran out of time after the call: its tools run first
+      const pending = toolUses(last);
+      if (pending.length === 0) return { threadId: thread.id, more: false }; // nothing left to continue
+      await runTools(pending);
+    }
+  }
+
+  // every call is counted against the daily budget, finished or not
+  const logRun = (m: Message, outcome: string) =>
+    db.withUser(input.userId, (q) =>
+      q.query("select app.log_ai_run('assistant', $1, $2, $3, $4, $5, $6, $7::jsonb, null)", [
+        m.model,
+        ASSISTANT_PROMPT_VERSION,
+        createHash("sha256").update(thread.id).digest("hex"),
+        m.usage.input_tokens + (m.usage.cache_read_input_tokens ?? 0),
+        m.usage.output_tokens,
+        callCostCents(m),
+        JSON.stringify({ thread: thread.id, stop_reason: outcome }),
+      ]),
+    );
+
+  // 2. the loop: call, read tools, call again, until an answer or the time budget is spent
+  let parseRetries = 0;
+  for (let calls = 0; ;) {
+    if (calls >= MAX_CALLS_PER_REQUEST || Date.now() - started > budgetMs)
+      return { threadId: thread.id, more: true };
+    // twice stopped at the time limit in a row: running it again would only pay for the same stop
+    if (thread.timeouts >= 2) {
+      thread.timeouts = 0;
+      await db.withUser(input.userId, (q) => saveThread(q, thread, null));
+      input.events.notice(
+        "That answer is too long to write in one go. Ask for a shorter plan, or about fewer merchants at a time.",
+      );
+      return { threadId: thread.id, more: false };
+    }
+    let message: Message;
+    const callStarted = Date.now();
+    try {
+      // after a stop at the time limit, the next try thinks less so it fits
+      const effort = thread.timeouts > 0 ? "medium" : "high";
+      message = await input.caller(buildParams(thread.messages, effort), input.events.text, {
+        deadline,
+      });
+    } catch (raw) {
+      const unfinished = raw instanceof UnfinishedCallError ? raw : null;
+      const e = unfinished ? unfinished.reason : raw;
+      if (unfinished?.partial)
+        await logRun(
+          partialUsage(unfinished.partial, Date.now() - callStarted),
+          unfinished.timedOut ? "timed_out" : "unfinished",
+        );
+      // stopped at the request's time limit: nothing of it is kept, the browser continues in a fresh request
+      if (unfinished?.timedOut) {
+        thread.timeouts += 1;
+        await db.withUser(input.userId, (q) => saveThread(q, thread, null));
+        input.events.discard?.();
+        return { threadId: thread.id, more: true };
+      }
+      // a tool input the stream could not parse at all: re-issue the same turn, at most twice
+      if (isToolJsonError(e) && parseRetries++ < 2) {
+        input.events.discard?.();
+        calls++;
+        continue;
+      }
+      throw e;
+    }
+    calls++;
+    parseRetries = 0;
+    thread.timeouts = 0;
+
+    await logRun(message, message.stop_reason ?? "unknown");
+
+    if (message.stop_reason === "refusal") {
+      input.events.notice("The assistant can't help with that one. Try asking it another way.");
+      return { threadId: thread.id, more: false };
+    }
+
+    thread.messages.push({ role: "assistant", content: message.content });
+    const uses = message.content.filter(
+      (b): b is Anthropic.Beta.Messages.BetaToolUseBlock => b.type === "tool_use",
+    );
+
+    if (message.stop_reason === "max_tokens" && uses.length > 0) {
+      // a tool call cut off mid-input is never run
+      thread.messages.pop();
+      await db.withUser(input.userId, (q) => saveThread(q, thread, null));
+      input.events.notice("The answer ran too long. Ask for a shorter plan.");
+      return { threadId: thread.id, more: false };
+    }
+    if (message.stop_reason !== "tool_use" || uses.length === 0) {
+      await db.withUser(input.userId, (q) => saveThread(q, thread, null));
+      return { threadId: thread.id, more: false };
+    }
+
+    // no time left to run the tools safely in this request: save the call, the next request runs them first
+    if (Date.now() - started > (input.toolsByMs ?? TOOLS_BY_MS)) {
+      await db.withUser(input.userId, (q) => saveThread(q, thread, null));
+      return { threadId: thread.id, more: true };
+    }
+    await runTools(uses);
   }
 }
 

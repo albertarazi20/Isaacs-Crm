@@ -168,7 +168,9 @@ export default async function assistantFlow({ email }) {
     );
     check(
       "every model call is logged against the daily cap and the conversation is saved (database)",
-      runsAfter.n - runsBefore.n === 3 && thread?.n === 6 && thread.title.startsWith("I have"),
+      runsAfter.n - runsBefore.n === 3 &&
+        thread?.n === 6 &&
+        /^Clear \d+ overdue/.test(thread.title),
       JSON.stringify({ runs: runsAfter.n - runsBefore.n, thread }),
     );
     check(
@@ -188,7 +190,7 @@ export default async function assistantFlow({ email }) {
       await panel.getByText("What should we work on?").isVisible(),
     );
     await panel.getByRole("button", { name: "Past conversations" }).click();
-    await panel.getByRole("button", { name: /^I have \d+ follow-ups? past due/ }).click();
+    await panel.getByRole("button", { name: /^Clear \d+ overdue follow-ups?/ }).click();
     check(
       "a past conversation reopens with its answer and its buttons",
       (await until(() => panel.getByText(/You have \d+ overdue/).isVisible())) &&

@@ -31,6 +31,8 @@ export async function listCardMeta(q: Db): Promise<Record<string, CardMeta>> {
             e.bucket_id, e.bucket_name,
             greatest(
               (select max(ie.received_at) from inbound_emails ie where ie.client_id = c.id),
+              (select max(a.occurred_at) from activities a
+                where a.client_id = c.id and a.kind = 'email' and a.body like 'Merchant replied%'),
               (select max(lo.opened_at) from link_opens lo where lo.client_id = c.id),
               (select max(d.created_at) from documents d
                 where d.client_id = c.id and d.deleted_at is null and d.source in ('upload_link', 'email')),

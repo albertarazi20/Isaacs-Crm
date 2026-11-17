@@ -60,6 +60,8 @@ interface Job {
   client_trashed: boolean;
   /** The bucket enrolment this step belongs to is paused (a rep's Pause, or a merchant's "not now"). */
   enrollment_paused: boolean;
+  /** A nudge after an open that something since made wrong to send (app.nudge_overtaken). */
+  nudge_overtaken: boolean;
   client_state: string | null;
   suppressed: boolean;
   unsubscribe_token: string | null;
@@ -130,6 +132,7 @@ export async function drainOutbox(args: {
            exists (select 1 from trashed_clients tc where tc.client_id = o.client_id) as client_trashed,
            exists (select 1 from enrollments e where e.client_id = o.client_id and e.stopped_at is null and e.paused
                       and o.source like 'bucket:' || e.bucket_id::text || ':%') as enrollment_paused,
+           (o.source like 'nudge:%' and app.nudge_overtaken(o.client_id, o.created_at)) as nudge_overtaken,
            (select state from clients c where c.id = o.client_id) as client_state,
            app.is_suppressed('email', o.to_address) as suppressed,
            (select unsubscribe_token from clients c where c.id = o.client_id) as unsubscribe_token,
@@ -170,6 +173,8 @@ export async function drainOutbox(args: {
       if (job.suppressed) return (skip("suppressed"), false);
       if (job.client_opt_out) return (skip("opted_out"), false);
       if (job.client_dnc) return (skip("dnc"), false);
+      // a nudge after an open goes only if nothing happened since it was queued (0552)
+      if (job.nudge_overtaken) return (cancel("overtaken"), false);
       const bulk = job.lane === "sequence" || job.lane === "blast";
       if (bulk && job.enrollment_paused) {
         // the rep pressed Pause (or the merchant said "not now"): the step waits, it is not lost

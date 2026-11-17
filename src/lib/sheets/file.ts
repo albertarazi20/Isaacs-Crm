@@ -1,4 +1,5 @@
 import { applyLink } from "../docs/applyLink";
+import { missingDocsFor } from "../docs/missing";
 import type { Db, DbAccess } from "../db";
 import { toActionError } from "../data/errors";
 import { createClient, stampClientTimezone } from "../data/mutations";
@@ -314,8 +315,10 @@ export async function sendWelcome(
     application_token: string;
     signature: string;
     token: string;
+    bucket_key: string | null;
   }>(
-    `select t.id as template_id, t.subject, t.body, c.contact_name, c.business_name, u.name as sender_name, u.application_link, c.application_token, u.signature, c.upload_token as token
+    `select t.id as template_id, t.subject, t.body, c.contact_name, c.business_name, u.name as sender_name, u.application_link, c.application_token, u.signature, c.upload_token as token,
+            (select b.key from buckets b where b.id = s.bucket_id) as bucket_key
        from bucket_steps s join templates t on t.id = s.template_id
        join clients c on c.id = $1 join app_users u on u.id = c.user_id
       where s.bucket_id = $2 and s.action = 'email' and app.template_may_auto_send(t.id)
@@ -331,6 +334,7 @@ export async function sendWelcome(
     applicationLink: r.application_link || applyLink(appUrl, r.application_token),
     wantedAmountCents: null,
     uploadLink: `${appUrl}/upload/${r.token}`,
+    missingDocs: await missingDocsFor(q, clientId, r.bucket_key),
   });
   const body = resolveMergeFields(r.body, values);
   const subject = resolveMergeFields(r.subject, values);

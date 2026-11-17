@@ -1,4 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { drainOutbox, type Deliverer } from "@/lib/send/worker";
 import { runOpenNudges } from "@/lib/system/openNudge";
 import { createTestDb, insertUser, type TestDb } from "./helpers/db";
 
@@ -10,18 +11,25 @@ import { createTestDb, insertUser, type TestDb } from "./helpers/db";
 
 let t: TestDb;
 let rep: string;
+let boss: string;
 const APP = "https://crm.example.com";
 
 const one = async <T>(sql: string, params: unknown[] = []) =>
   (await t.pool.query(sql, params)).rows[0] as T | undefined;
 
 let n = 0;
+/** A merchant being chased: in the Interested bucket (the nudge is only for merchants in a live bucket). */
 async function merchant(): Promise<string> {
   n += 1;
-  return (await one<{ id: string }>(
+  const id = (await one<{ id: string }>(
     "insert into clients (user_id, business_name, contact_name, phone, email, state) values ($1, $2, 'Rosa Diaz', $3, $4, 'FL') returning id",
     [rep, `Shop ${n}`, `30555501${String(n).padStart(2, "0")}`, `owner${n}@shop${n}.com`],
   ))!.id;
+  await t.pool.query(
+    "select enroll_in_bucket($1, (select id from buckets where key = 'interested'))",
+    [id],
+  );
+  return id;
 }
 const opened = (id: string, kind: "upload" | "apply", hoursAgo: number) =>
   t.pool.query(
@@ -47,6 +55,8 @@ const switchOn = (on: boolean) => t.pool.query("update shop_settings set open_nu
 beforeAll(async () => {
   t = await createTestDb();
   rep = await insertUser(t.pool, "rep@x.com");
+  boss = await insertUser(t.pool, "boss@x.com");
+  await t.pool.query("update app_users set role = 'manager' where id = $1", [boss]);
 });
 afterAll(async () => {
   await t.drop();
@@ -163,6 +173,80 @@ describe("the open nudge", () => {
     await t.pool.query(
       "update templates set archived = false where id = (select open_nudge_upload_template from shop_settings)",
     );
+  });
+
+  it("never for a merchant out of follow-up, one whose file is complete, or an application already signed", async () => {
+    await switchOn(true);
+    const removed = await merchant();
+    await opened(removed, "upload", 30);
+    await t.pool.query("select stop_enrollment($1, 'removed')", [removed]);
+    const complete = await merchant();
+    await t.db.withUser(rep, (q) =>
+      q.query("select add_stips($1, $2::jsonb)", [
+        complete,
+        JSON.stringify([{ kind: "bank_statement", period: "2026-10-01", required: true }]),
+      ]),
+    );
+    await t.pool.query("update stips set received_at = now() where client_id = $1", [complete]);
+    await opened(complete, "upload", 30);
+    const signed = await merchant();
+    await t.db.withUser(rep, (q) =>
+      q.query("select add_stips($1, $2::jsonb)", [
+        signed,
+        JSON.stringify([{ kind: "signed_application", period: null, required: true }]),
+      ]),
+    );
+    await t.pool.query(
+      "update stips set received_at = now() - interval '3 days' where client_id = $1",
+      [signed],
+    );
+    await opened(signed, "apply", 30);
+    // a rep emailed them by hand after the open
+    const emailed = await merchant();
+    await opened(emailed, "upload", 30);
+    await t.pool.query(
+      "insert into activities (user_id, client_id, kind, body) values ($1, $2, 'email', 'Email sent: checking in')",
+      [rep, emailed],
+    );
+    await run();
+    for (const id of [removed, complete, signed, emailed]) expect(await nudges(id)).toHaveLength(0);
+  });
+
+  it("only opens after the switch was turned on count", async () => {
+    await switchOn(false);
+    const old = await merchant();
+    await opened(old, "upload", 30);
+    await t.db.withUser(boss, (q) =>
+      q.query("update shop_settings set open_nudge_since = now(), open_nudge = true"),
+    );
+    await run();
+    expect(await nudges(old)).toHaveLength(0);
+    await t.pool.query("update shop_settings set open_nudge_since = null");
+  });
+
+  it("a queued nudge is cancelled by the worker when the merchant replies before it goes", async () => {
+    await switchOn(true);
+    const id = await merchant();
+    await opened(id, "upload", 26);
+    await run();
+    expect(await nudges(id)).toHaveLength(1);
+    await t.pool.query(
+      "insert into activities (user_id, client_id, kind, body) values ($1, $2, 'email', 'Merchant replied: sending tonight')",
+      [rep, id],
+    );
+    await t.pool.query(
+      "update outbox set not_before = now() - interval '1 minute' where client_id = $1 and source like 'nudge:%'",
+      [id],
+    );
+    let k = 0;
+    const deliver: Deliverer = { gmail: async () => `g_${++k}`, resend: async () => `r_${++k}` };
+    await drainOutbox({ db: t.db, deliver, now: new Date(), appUrl: APP });
+    const row = await one<{ status: string; skip_reason: string }>(
+      "select status, skip_reason from outbox where client_id = $1 and source like 'nudge:%'",
+      [id],
+    );
+    expect(row).toMatchObject({ status: "cancelled", skip_reason: "overtaken" });
+    expect(k).toBe(0);
   });
 
   it("a manager's switch in Settings is what turns it off", async () => {

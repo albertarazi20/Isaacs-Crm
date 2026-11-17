@@ -263,7 +263,7 @@ export async function runBucketSteps(args: {
         applicationLink: row.application_link || applyLink(args.appUrl, row.application_token),
         wantedAmountCents: row.wanted_amount_cents,
         uploadLink: `${args.appUrl}/upload/${row.upload_token}`,
-        missingDocs: await missingDocsFor(q, row.client_id),
+        missingDocs: await missingDocsFor(q, row.client_id, row.bucket_key),
       });
       const body = resolveMergeFields(wording.body, values);
       const subject = resolveMergeFields(wording.subject, values);

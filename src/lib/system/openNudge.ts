@@ -6,11 +6,13 @@ import { enqueueEmail } from "../send/enqueue";
 import type { LinkKind } from "./linkSignals";
 
 /**
- * The "opened but did not finish" nudge (db/migrations/0548_open_nudge.sql). Hourly, when a manager has switched it
- * on: a merchant whose latest open of their upload link or application was 20 to 72 hours ago, and who has not
- * finished since, gets that link again in one short email at their next sending window. Never twice in a week, and
- * not at all when anything since the open says a person or the merchant already moved: a document or signature, a
- * reply, a call, an email that went out, one already waiting to go, a "not now" pause, a hand-off or the trash.
+ * The "opened but did not finish" nudge (db/migrations/0548_open_nudge.sql, 0552). Hourly, when a manager has
+ * switched it on (only opens after that moment count): a merchant in a live, unpaused bucket whose latest open of their
+ * upload link or application was 20 to 72 hours ago, and who still owes what that link is for, gets the link again in
+ * one short email at their next sending window. Never twice in a week, and not at all when anything since the open
+ * says a person or the merchant already moved: a document or signature, a reply, a call, a text, an email (by hand or
+ * automated), one already waiting to go, a hand-off or the trash. A queued nudge that something overtakes before it
+ * goes is cancelled by the worker (app.nudge_overtaken).
  * Opt-outs, bounces and do-not-contact are refused by enqueueEmail; caps and the postal-address gate by the worker.
  */
 
@@ -46,8 +48,14 @@ export async function runOpenNudges(args: {
   const setup = await args.db.withSystem(
     async (q) =>
       (
-        await q.query<{ on: boolean; upload: string | null; apply: string | null }>(
-          `select open_nudge as on, open_nudge_upload_template as upload, open_nudge_apply_template as apply
+        await q.query<{
+          on: boolean;
+          upload: string | null;
+          apply: string | null;
+          since: string | null;
+        }>(
+          `select open_nudge as on, open_nudge_upload_template as upload, open_nudge_apply_template as apply,
+                  open_nudge_since::text as since
              from shop_settings`,
         )
       ).rows[0],
@@ -62,6 +70,7 @@ export async function runOpenNudges(args: {
              select distinct on (lo.client_id) lo.client_id, lo.kind, lo.opened_at
                from link_opens lo
               where lo.opened_at > $1::timestamptz - make_interval(hours => $3)
+                and lo.opened_at > coalesce($4::timestamptz, '-infinity'::timestamptz)
               order by lo.client_id, lo.opened_at desc)
            select l.client_id, c.user_id, l.kind, l.opened_at::text as opened_at, c.contact_name, c.business_name,
                   c.upload_token, c.application_token, u.name as sender_name, u.application_link, u.signature
@@ -71,13 +80,22 @@ export async function runOpenNudges(args: {
             where l.opened_at <= $1::timestamptz - make_interval(hours => $2)
               and c.brought_in_at is null
               and not exists (select 1 from trashed_clients t where t.client_id = c.id)
-              and not exists (select 1 from enrollments e where e.client_id = c.id and e.stopped_at is null and e.paused)
-              and not (l.kind = 'apply' and exists (select 1 from applications a
-                                                     where a.client_id = c.id and a.signed_at >= l.opened_at))
+              -- being chased: in a live, unpaused bucket (a merchant the rep took out of follow-up is theirs)
+              and exists (select 1 from enrollments e where e.client_id = c.id and e.stopped_at is null and not e.paused)
+              -- the checklist says the thing the link is for is still owed
+              and not (l.kind = 'apply' and (
+                    exists (select 1 from applications a where a.client_id = c.id and a.signed_at is not null)
+                 or exists (select 1 from stips s where s.client_id = c.id and s.kind = 'signed_application'
+                               and s.received_at is not null)))
+              and not (l.kind = 'upload' and exists (select 1 from stips s where s.client_id = c.id and s.required)
+                       and not exists (select 1 from stips s where s.client_id = c.id and s.required
+                                          and s.received_at is null))
               and not (l.kind = 'upload' and exists (select 1 from documents d
                                                       where d.client_id = c.id and d.created_at >= l.opened_at))
+              -- nothing happened since the open: a reply, a call, a text or an email (by hand or automated)
+              and not (c.reply_waiting_since is not null and c.reply_waiting_since >= l.opened_at)
               and not exists (select 1 from inbound_emails ie where ie.client_id = c.id and ie.received_at >= l.opened_at)
-              and not exists (select 1 from activities a where a.client_id = c.id and a.kind = 'call'
+              and not exists (select 1 from activities a where a.client_id = c.id and a.kind in ('call', 'text', 'email')
                                  and a.occurred_at >= l.opened_at)
               and not exists (select 1 from outbox o where o.client_id = c.id
                                  and (o.status in ('queued', 'sending')
@@ -85,7 +103,7 @@ export async function runOpenNudges(args: {
                                       or (o.source like 'nudge:%' and o.created_at > $1::timestamptz - interval '7 days')))
             order by l.opened_at
             limit 200`,
-          [now.toISOString(), NUDGE_AFTER_HOURS, NUDGE_WITHIN_HOURS],
+          [now.toISOString(), NUDGE_AFTER_HOURS, NUDGE_WITHIN_HOURS, setup.since],
         )
       ).rows,
   );
