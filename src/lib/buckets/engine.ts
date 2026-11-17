@@ -1,4 +1,5 @@
 import { applyLink } from "../docs/applyLink";
+import { missingDocsFor } from "../docs/missing";
 import type { Db, DbAccess } from "../db";
 import { addDays, todayIn, type ISODate } from "../mca/dates";
 import { effectiveSignature, mergeValues, resolveMergeFields } from "../messaging/merge";
@@ -262,6 +263,7 @@ export async function runBucketSteps(args: {
         applicationLink: row.application_link || applyLink(args.appUrl, row.application_token),
         wantedAmountCents: row.wanted_amount_cents,
         uploadLink: `${args.appUrl}/upload/${row.upload_token}`,
+        missingDocs: await missingDocsFor(q, row.client_id),
       });
       const body = resolveMergeFields(wording.body, values);
       const subject = resolveMergeFields(wording.subject, values);
@@ -368,6 +370,7 @@ export async function queueBlast(
       applicationLink: row.application_link || applyLink(args.appUrl, row.application_token),
       wantedAmountCents: row.wanted_amount_cents,
       uploadLink: `${args.appUrl}/upload/${row.upload_token}`,
+      missingDocs: await missingDocsFor(q, clientId),
     });
     const body = resolveMergeFields(tpl.body, values);
     const subject = resolveMergeFields(tpl.subject, values);

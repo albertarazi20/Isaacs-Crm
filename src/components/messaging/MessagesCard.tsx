@@ -38,6 +38,7 @@ const SAMPLE: Record<MergeField, string> = {
   application_link: "",
   amount_wanted: "$60,000",
   upload_link: "https://crm.selectivecap.com/upload/abc123",
+  missing_docs: "your September bank statement and a voided check",
 };
 
 /** One snippet in the list: name, kind, two lines of the body, and its buttons on the right (under it on a phone). */

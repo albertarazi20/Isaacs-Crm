@@ -1,4 +1,5 @@
 import type { Db } from "../db";
+import { missingDocsFor } from "../docs/missing";
 import type { SnippetKind } from "./defaults";
 
 export interface SnippetRow {
@@ -32,6 +33,8 @@ export async function listSnippets(q: Db): Promise<SnippetRow[]> {
 export interface MessagingContext extends MessageSettings {
   snippets: SnippetRow[];
   wantedAmountCents: number | null;
+  /** The {missing_docs} merge value: what this merchant still owes, in words ("" when nothing). */
+  missingDocs: string;
 }
 
 export async function getMessagingContext(q: Db, clientId: string): Promise<MessagingContext> {
@@ -46,5 +49,6 @@ export async function getMessagingContext(q: Db, clientId: string): Promise<Mess
     ...settings,
     snippets,
     wantedAmountCents: w ? Number(w) : null,
+    missingDocs: await missingDocsFor(q, clientId),
   };
 }

@@ -12,6 +12,7 @@ export const MERGE_FIELDS = [
   "application_link",
   "amount_wanted",
   "upload_link",
+  "missing_docs",
 ] as const;
 export type MergeField = (typeof MERGE_FIELDS)[number];
 
@@ -22,6 +23,8 @@ export const MERGE_FIELD_HELP: Record<MergeField, string> = {
   application_link: "Your application link from Settings",
   amount_wanted: "What they asked for, like $60,000",
   upload_link: "This merchant's personal link to upload statements and documents",
+  missing_docs:
+    "What this merchant still owes, like: your September bank statement and a voided check",
 };
 
 export type MergeValues = Partial<Record<MergeField, string | null | undefined>>;
@@ -96,6 +99,8 @@ export interface MergeContext {
   applicationLink: string;
   wantedAmountCents: number | null;
   uploadLink?: string;
+  /** What is still missing, in words (missingDocsPhrase); empty when nothing is or it is not known here. */
+  missingDocs?: string;
 }
 
 /** The values for one merchant. Empty string means "we don't know" and is reported, not blanked. */
@@ -107,6 +112,7 @@ export function mergeValues(c: MergeContext): Record<MergeField, string> {
     application_link: c.applicationLink.trim(),
     amount_wanted: c.wantedAmountCents ? formatMoney(c.wantedAmountCents) : "",
     upload_link: (c.uploadLink ?? "").trim(),
+    missing_docs: (c.missingDocs ?? "").trim(),
   };
 }
 

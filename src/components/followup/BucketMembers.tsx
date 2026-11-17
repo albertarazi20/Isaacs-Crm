@@ -1,5 +1,7 @@
 "use client";
 
+import { missingDocsPhrase } from "@/lib/mca/stips";
+
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -262,6 +264,7 @@ export function BucketMembers({
             applicationLink: "[application link]",
             wantedAmountCents: blastFirst.wanted_amount_cents,
             uploadLink: "[upload link]",
+            missingDocs: missingDocsPhrase(blastFirst.missing ?? []),
           });
           return {
             subject: resolveMergeFields(blastTemplate.subject, values),

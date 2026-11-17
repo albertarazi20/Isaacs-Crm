@@ -1,4 +1,5 @@
 import type { Db } from "../db";
+import type { StipKind } from "../mca/stips";
 
 export interface BucketRow {
   id: string;
@@ -49,6 +50,8 @@ export interface BucketMember {
   email_opt_out: boolean;
   email_bounced: boolean;
   stips_missing: number;
+  /** The required checklist items not yet in, for the {missing_docs} merge field. */
+  missing: { kind: StipKind; period: string | null }[];
   rep_name: string;
 }
 
@@ -68,6 +71,8 @@ export async function listBucketMembers(q: Db, bucketId: string): Promise<Bucket
               (select max(a.occurred_at) from activities a where a.client_id = c.id and a.kind in ('call', 'text', 'email')) as last_touch_at,
               c.reply_waiting_since is not null as reply_waiting, c.email_opt_out, c.email_bounced_at is not null as email_bounced,
               (select count(*)::int from stips s where s.client_id = c.id and s.required and s.received_at is null) as stips_missing,
+              coalesce((select jsonb_agg(jsonb_build_object('kind', s.kind, 'period', s.period::text) order by s.kind, s.period)
+                          from stips s where s.client_id = c.id and s.required and s.received_at is null), '[]'::jsonb) as missing,
               u.name as rep_name
          from enrollments e join clients c on c.id = e.client_id join app_users u on u.id = c.user_id
         where e.bucket_id = $1 and e.stopped_at is null

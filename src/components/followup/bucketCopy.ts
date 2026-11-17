@@ -1,3 +1,4 @@
+import { missingDocsPhrase } from "@/lib/mca/stips";
 import type { BucketMember, BucketRow } from "@/lib/buckets/queries";
 import type { SequenceStep } from "@/lib/followup/bucketBoard";
 import {
@@ -68,7 +69,10 @@ export function sequenceSummary(steps: readonly SequenceStep[]): string {
  * only known at send time, so they read as placeholders.
  */
 export function memberMergeValues(
-  m: Pick<BucketMember, "contact_name" | "business_name" | "rep_name" | "wanted_amount_cents">,
+  m: Pick<
+    BucketMember,
+    "contact_name" | "business_name" | "rep_name" | "wanted_amount_cents" | "missing"
+  >,
 ): MergeValues {
   return mergeValues({
     contactName: m.contact_name,
@@ -77,6 +81,7 @@ export function memberMergeValues(
     applicationLink: "[application link]",
     wantedAmountCents: m.wanted_amount_cents,
     uploadLink: "[upload link]",
+    missingDocs: missingDocsPhrase(m.missing ?? []),
   });
 }
 

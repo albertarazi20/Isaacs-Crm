@@ -97,3 +97,74 @@ export function stipRollup(stips: readonly StipInput[]): StipRollup {
 export function monthStart(d: Date): ISODate {
   return `${toISODate(d).slice(0, 7)}-01`;
 }
+
+const MONTH_NAMES = [
+  "January",
+  "February",
+  "March",
+  "April",
+  "May",
+  "June",
+  "July",
+  "August",
+  "September",
+  "October",
+  "November",
+  "December",
+];
+
+/** "A", "A and B", "A, B and C". */
+function listInWords(parts: readonly string[]): string {
+  if (parts.length <= 1) return parts[0] ?? "";
+  return `${parts.slice(0, -1).join(", ")} and ${parts[parts.length - 1]}`;
+}
+
+const OWED: Partial<Record<StipKind, string>> = {
+  signed_application: "the signed application",
+  drivers_license: "a photo of your driver's license",
+  voided_check: "a voided check",
+  proof_of_ownership: "proof of ownership",
+  tax_return: "your tax return",
+  lease_letter: "a landlord or lease letter",
+  processing_statement: "your processing statements",
+};
+
+/**
+ * What a merchant still owes, in the words an email uses: "the signed application, your August and September bank
+ * statements and a voided check". The {missing_docs} merge field. Empty when nothing is missing (the field is then
+ * reported, never sent blank). "Other" items have no fixed wording and are left out.
+ */
+export function missingDocsPhrase(missing: readonly Pick<StipInput, "kind" | "period">[]): string {
+  const months = [
+    ...new Set(
+      missing
+        .filter((s) => s.kind === "bank_statement")
+        .map((s) => s.period)
+        .filter((p): p is ISODate => Boolean(p)),
+    ),
+  ].sort();
+  const anyStatement = missing.some((s) => s.kind === "bank_statement");
+  const years = new Set(months.map((p) => p.slice(0, 4)));
+  const monthWord = (p: ISODate) => {
+    const d = parseISODate(p);
+    const name = MONTH_NAMES[d.getUTCMonth()]!;
+    return years.size > 1 ? `${name} ${d.getUTCFullYear()}` : name;
+  };
+  const parts: string[] = [];
+  if (missing.some((s) => s.kind === "signed_application")) parts.push(OWED.signed_application!);
+  if (months.length > 0)
+    parts.push(
+      `your ${listInWords(months.map(monthWord))} bank statement${months.length > 1 ? "s" : ""}`,
+    );
+  else if (anyStatement) parts.push("your recent bank statements");
+  for (const kind of [
+    "drivers_license",
+    "voided_check",
+    "proof_of_ownership",
+    "tax_return",
+    "lease_letter",
+    "processing_statement",
+  ] as const)
+    if (missing.some((s) => s.kind === kind)) parts.push(OWED[kind]!);
+  return listInWords(parts);
+}

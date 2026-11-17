@@ -89,7 +89,10 @@ function Panel({
   flush?: boolean;
 }) {
   return (
-    <section className={cn("flex flex-col rounded-2xl border border-border bg-surface", className)}>
+    <section
+      aria-label={title}
+      className={cn("flex flex-col rounded-2xl border border-border bg-surface", className)}
+    >
       <header className="flex shrink-0 items-center justify-between gap-3 px-4 pt-4 pb-3 sm:px-5">
         <h2 className="text-[15px] font-semibold tracking-tight">{title}</h2>
         {aside}

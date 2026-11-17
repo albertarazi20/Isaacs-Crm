@@ -298,6 +298,7 @@ function TextDialogBody({
     senderName,
     applicationLink: ctx?.applicationLink ?? "",
     wantedAmountCents: ctx?.wantedAmountCents ?? null,
+    missingDocs: ctx?.missingDocs ?? "",
   });
   const leftover = describeLeftovers(message, {
     applicationLinkSet: Boolean(ctx?.applicationLink),
@@ -479,6 +480,7 @@ function EmailDialogBody({
     senderName,
     applicationLink: ctx?.applicationLink ?? "",
     wantedAmountCents: ctx?.wantedAmountCents ?? null,
+    missingDocs: ctx?.missingDocs ?? "",
   });
   const signature = effectiveSignature(ctx?.signature ?? "", senderName);
   // What actually goes out: the message with the signature on the end, once.

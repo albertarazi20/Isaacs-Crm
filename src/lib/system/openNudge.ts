@@ -1,5 +1,6 @@
 import type { DbAccess } from "../db";
 import { applyLink } from "../docs/applyLink";
+import { missingDocsFor } from "../docs/missing";
 import { effectiveSignature, mergeValues, resolveMergeFields } from "../messaging/merge";
 import { enqueueEmail } from "../send/enqueue";
 import type { LinkKind } from "./linkSignals";
@@ -109,6 +110,7 @@ export async function runOpenNudges(args: {
               (c.application_token ? applyLink(args.appUrl, c.application_token) : ""),
             wantedAmountCents: null,
             uploadLink: `${args.appUrl}/upload/${c.upload_token}`,
+            missingDocs: await missingDocsFor(q, c.client_id),
           });
           const body = resolveMergeFields(tpl.body, values);
           const subject = resolveMergeFields(tpl.subject, values);

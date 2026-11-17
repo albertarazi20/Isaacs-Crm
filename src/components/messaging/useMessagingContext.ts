@@ -9,6 +9,7 @@ export const EMPTY_MESSAGING_CONTEXT: MessagingContext = {
   applicationLink: "",
   snippets: [],
   wantedAmountCents: null,
+  missingDocs: "",
 };
 
 /**

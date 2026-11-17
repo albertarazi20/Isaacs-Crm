@@ -62,7 +62,10 @@ export default async function contactFlow({ email }) {
   await page.goto(`${BASE}/`, { waitUntil: "networkidle" });
   check(
     "Today does not list them",
-    (await page.getByRole("link", { name: "Rivera Auto Repair" }).count()) === 0,
+    (await page
+      .getByRole("region", { name: "Do this now" })
+      .getByRole("link", { name: "Rivera Auto Repair" })
+      .count()) === 0,
   );
 
   // Lift it.
