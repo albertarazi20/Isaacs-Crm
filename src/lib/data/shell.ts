@@ -1,4 +1,5 @@
 import { cache } from "react";
+import { unreadAlertCount } from "../alerts/feed";
 import { db } from "../db";
 import { dueCount, userContext } from "./queries";
 
@@ -15,15 +16,13 @@ export const loadShell = cache(async (userId: string) =>
     );
     // the starred merchants ("always on top"): a few ids, so every page can show a star without its own query
     const hot = await q.query<{ id: string }>("select id from clients where hot");
-    const alerts = await q.query<{ n: number }>(
-      "select count(*)::int as n from user_alerts where user_id = app.current_user_id() and read_at is null",
-    );
+    const unreadAlerts = await unreadAlertCount(q);
     return {
       ctx,
       user: rows[0],
       due: await dueCount(q, ctx.today),
       hotIds: hot.rows.map((r) => r.id),
-      unreadAlerts: alerts.rows[0]?.n ?? 0,
+      unreadAlerts,
     };
   }),
 );

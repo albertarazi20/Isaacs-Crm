@@ -17,10 +17,26 @@ export interface AlertFeedRow {
 
 export const ALERT_KIND_LABELS: Record<string, string> = {
   application_signed: "Application signed",
+  brought_in: "Brought in",
   file_complete: "File complete",
   template_paused: "Template paused",
   bounce_spike: "Bounce spike",
 };
+
+/**
+ * The kinds the system writes today. Alerts left over from the removed features (deals, lenders, money) stay in the
+ * table but are not shown or counted.
+ */
+export const LIVE_ALERT_KINDS: readonly string[] = Object.keys(ALERT_KIND_LABELS);
+
+/** How many live alerts the person has not read: the number on the Alerts badge. */
+export async function unreadAlertCount(q: Db): Promise<number> {
+  const { rows } = await q.query<{ n: number }>(
+    "select count(*)::int as n from user_alerts where user_id = app.current_user_id() and read_at is null and kind = any($1::text[])",
+    [LIVE_ALERT_KINDS],
+  );
+  return rows[0]?.n ?? 0;
+}
 
 export async function listAlerts(q: Db, limit = 100): Promise<AlertFeedRow[]> {
   const { rows } = await q.query<AlertFeedRow>(
@@ -29,10 +45,10 @@ export async function listAlerts(q: Db, limit = 100): Promise<AlertFeedRow[]> {
             to_char(a.read_at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') as read_at,
             c.business_name
        from user_alerts a left join clients c on c.id = a.client_id
-      where a.user_id = app.current_user_id()
+      where a.user_id = app.current_user_id() and a.kind = any($2::text[])
       order by a.read_at is not null, a.created_at desc
       limit $1`,
-    [limit],
+    [limit, LIVE_ALERT_KINDS],
   );
   return rows;
 }

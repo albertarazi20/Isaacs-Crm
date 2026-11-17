@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { ALERT_KIND_LABELS, listAlerts } from "@/lib/alerts/feed";
+import { ALERT_KIND_LABELS, listAlerts, unreadAlertCount } from "@/lib/alerts/feed";
 import { queueBlast, runBucketSteps } from "@/lib/buckets/engine";
 import { toActionError } from "@/lib/data/errors";
 import { handOff, undoHandOff } from "@/lib/followup/handoff";
@@ -423,5 +423,21 @@ describe("13: a complete file tells the rep once", () => {
       business_name: "Complete Co",
     });
     expect(ALERT_KIND_LABELS.file_complete).toBe("File complete");
+  });
+
+  it("alerts left over from the removed features are not shown or counted", async () => {
+    await t.pool.query(
+      "insert into user_alerts (user_id, kind, title, body, href, dedupe_key) values ($1, 'stale_deal', 'Sitting with lenders for 4 days', '', '/deals/x', 'old-1')",
+      [rep],
+    );
+    const feed = await t.db.withUser(rep, (q) => listAlerts(q));
+    expect(feed.map((a) => a.kind)).not.toContain("stale_deal");
+    const unread = await t.db.withUser(rep, (q) => unreadAlertCount(q));
+    const live = await t.pool.query<{ n: number }>(
+      "select count(*)::int as n from user_alerts where user_id = $1 and read_at is null and kind = any($2::text[])",
+      [rep, Object.keys(ALERT_KIND_LABELS)],
+    );
+    expect(unread).toBe(live.rows[0]!.n);
+    expect(unread).toBeGreaterThan(0);
   });
 });

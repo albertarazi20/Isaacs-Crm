@@ -44,6 +44,16 @@ export const ALERT_LOOK: Record<
       </svg>
     ),
   },
+  // a merchant handed off (0540): the managers hear once
+  brought_in: {
+    tone: "good",
+    group: "signed",
+    icon: (
+      <svg aria-hidden viewBox="0 0 24 24" className="size-[18px]" {...stroke}>
+        <path d="M5 21V4M5 4h12l-2.5 4 2.5 4H5" />
+      </svg>
+    ),
+  },
   template_paused: {
     tone: "warn",
     group: "sending",
