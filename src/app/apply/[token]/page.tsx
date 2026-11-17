@@ -1,4 +1,10 @@
 import { ApplicationForm } from "@/components/apply/ApplicationForm";
+import {
+  MerchantHeading,
+  MerchantNotice,
+  MerchantShell,
+  shopLabel,
+} from "@/components/upload/MerchantShell";
 import { db } from "@/lib/db";
 import { openApplicationPage } from "@/lib/docs/apply";
 
@@ -13,36 +19,29 @@ export default async function ApplyPage({ params }: { params: Promise<{ token: s
   const a = await openApplicationPage(db, token);
   if (!a) {
     return (
-      <main className="mx-auto max-w-lg px-5 py-16">
-        <h1 className="text-xl font-semibold">This link isn&apos;t valid any more</h1>
-        <p className="mt-2 text-muted">
-          Ask your contact to send a fresh one — it takes them one click.
-        </p>
-      </main>
+      <MerchantShell label="Application">
+        <MerchantNotice icon="link" tone="warn" title="This link isn't valid any more">
+          Ask your contact to send a fresh one. It takes them one click.
+        </MerchantNotice>
+      </MerchantShell>
     );
   }
   if (a.signed_at) {
     return (
-      <main className="mx-auto max-w-lg px-5 py-16">
-        <p className="text-[11px] font-semibold tracking-wide text-muted uppercase">
-          {a.shop_name}
-        </p>
-        <h1 className="mt-1 text-xl font-semibold">Your application is already in</h1>
-        <p className="mt-2 text-muted">
+      <MerchantShell label="Application">
+        <MerchantNotice icon="check" tone="good" title="Your application is already in">
           {a.business_name}&apos;s application was signed on {a.signed_at.slice(0, 10)}.{" "}
           {a.rep_name} has it. If something changed, tell them and they will send a fresh link.
-        </p>
-      </main>
+        </MerchantNotice>
+      </MerchantShell>
     );
   }
   return (
-    <main className="mx-auto max-w-lg px-5 py-10">
-      <p className="text-[11px] font-semibold tracking-wide text-muted uppercase">{a.shop_name}</p>
-      <h1 className="mt-1 text-2xl font-semibold tracking-tight">Funding application</h1>
-      <p className="mt-2 text-sm text-muted">
+    <MerchantShell label="Application" wide>
+      <MerchantHeading eyebrow={shopLabel(a.shop_name)} title="Funding application">
         For {a.business_name}. Five minutes, a soft inquiry only. {a.rep_name} sees it the moment
         you sign.
-      </p>
+      </MerchantHeading>
       <ApplicationForm
         token={a.token}
         prefill={{
@@ -56,6 +55,6 @@ export default async function ApplyPage({ params }: { params: Promise<{ token: s
           amount_requested_dollars: a.wanted_amount_dollars ?? undefined,
         }}
       />
-    </main>
+    </MerchantShell>
   );
 }

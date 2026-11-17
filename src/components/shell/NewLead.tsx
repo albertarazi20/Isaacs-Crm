@@ -130,7 +130,11 @@ export function NewLeadProvider({
                 type="button"
                 role="tab"
                 aria-selected={tab === t.key}
-                onClick={() => setTab(t.key)}
+                onClick={() => {
+                  setTab(t.key);
+                  // opened by address (/?new-lead=1) the rows were never asked for: ask now
+                  if (t.key === "sheet" && !staged) void loadStaged();
+                }}
                 className={cn(
                   "inline-flex h-8 items-center gap-1.5 rounded-full px-3.5 text-[13px] font-medium transition duration-150",
                   tab === t.key

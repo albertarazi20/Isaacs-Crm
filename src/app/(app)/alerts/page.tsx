@@ -22,20 +22,5 @@ export default async function AlertsPage() {
     loadShell(session.userId),
     db.withUser(session.userId, (q) => listAlerts(q)),
   ]);
-  const unread = rows.filter((r) => r.read_at === null).length;
-  return (
-    <div className="mx-auto max-w-3xl space-y-5">
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h1 className="text-xl font-semibold tracking-tight sm:text-2xl">Alerts</h1>
-          <p className="text-sm text-muted">
-            {unread === 0
-              ? "Nothing unread. The hourly email carries these too."
-              : `${unread} unread · the hourly email carries these too.`}
-          </p>
-        </div>
-      </div>
-      <AlertsList rows={rows} timezone={ctx.timezone} />
-    </div>
-  );
+  return <AlertsList rows={rows} timezone={ctx.timezone} today={ctx.today} />;
 }

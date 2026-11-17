@@ -7,18 +7,24 @@ import {
   useEffect,
   useRef,
   useState,
+  type KeyboardEvent as ReactKeyboardEvent,
   type ReactNode,
 } from "react";
 import type { ActionResult } from "@/lib/data/types";
 import { cn } from "./ui";
 
 /**
- * Opens and closes a native <dialog> from a boolean. Every close() we call ourselves still fires a native "close"
- * event, a moment later. If the same dialog has been opened again by then (log a call, start the next at once), that
- * late event would run onClose for the NEW one and wipe it. So each programmatic close counts one event to ignore;
- * only the person's own dismissal (Escape, the backdrop, the X) reaches onClose.
+ * Opens and closes a native <dialog> from a boolean, and keeps the boolean honest.
+ *
+ * The browser's own "close" event can land a good half second after the dialog has gone (measured in Chrome). Until
+ * it lands the app would still believe the dialog is open, so "open it again" does nothing, and when it does land it
+ * can wipe a dialog that was opened in between. So:
+ *   - Escape is handled here, on the key press: it runs onClose at once and the dialog is then closed by us;
+ *   - every close() we call ourselves counts one native event to ignore;
+ *   - a native close event that arrives while the dialog is open is from an earlier close and is ignored.
+ * Returns [ref, onClose handler, onKeyDown handler] for the <dialog>.
  */
-function useModal(open: boolean, onClose: () => void) {
+export function useModal(open: boolean, onClose: () => void) {
   const ref = useRef<HTMLDialogElement>(null);
   const ownCloses = useRef(0);
   useEffect(() => {
@@ -35,9 +41,20 @@ function useModal(open: boolean, onClose: () => void) {
       ownCloses.current -= 1;
       return;
     }
+    if (ref.current?.open) return;
     onClose();
   }, [onClose]);
-  return [ref, onNativeClose] as const;
+  const onKeyDown = useCallback(
+    (e: ReactKeyboardEvent<HTMLDialogElement>) => {
+      if (e.key !== "Escape" || e.defaultPrevented) return;
+      // ours to close: stops the browser closing it behind our back, and an outer sheet from closing too
+      e.preventDefault();
+      e.stopPropagation();
+      onClose();
+    },
+    [onClose],
+  );
+  return [ref, onNativeClose, onKeyDown] as const;
 }
 
 function CloseButton({ onClose }: { onClose: () => void }) {
@@ -78,11 +95,12 @@ export function Dialog({
   footer?: ReactNode;
   wide?: boolean;
 }) {
-  const [ref, onNativeClose] = useModal(open, onClose);
+  const [ref, onNativeClose, onKeyDown] = useModal(open, onClose);
   return (
     <dialog
       ref={ref}
       onClose={onNativeClose}
+      onKeyDown={onKeyDown}
       onClick={(e) => {
         if (e.target === ref.current) onClose();
       }}
@@ -140,12 +158,13 @@ export function Drawer({
   wide?: boolean;
   headerAside?: ReactNode;
 }) {
-  const [ref, onNativeClose] = useModal(open, onClose);
+  const [ref, onNativeClose, onKeyDown] = useModal(open, onClose);
   return (
     <dialog
       ref={ref}
       aria-label={title}
       onClose={onNativeClose}
+      onKeyDown={onKeyDown}
       onClick={(e) => {
         if (e.target === ref.current) onClose();
       }}

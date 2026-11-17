@@ -1,33 +1,14 @@
-import Image from "next/image";
+import {
+  MerchantHeading,
+  MerchantNotice,
+  MerchantShell,
+  shopLabel,
+} from "@/components/upload/MerchantShell";
 import { buttonClass } from "@/components/ui";
 import { db } from "@/lib/db";
 import { resolveUnsubscribe } from "@/lib/system/replies";
 
 export const dynamic = "force-dynamic";
-
-/** The S logomark, the right one for the mode. */
-function Logomark() {
-  return (
-    <>
-      <Image
-        src="/brand/SC-logomark-light-web.png"
-        alt="Selective Capital"
-        width={36}
-        height={42}
-        priority
-        className="only-light h-10 w-auto"
-      />
-      <Image
-        src="/brand/SC-logomark-dark-web.png"
-        alt="Selective Capital"
-        width={36}
-        height={42}
-        priority
-        className="only-dark h-10 w-auto"
-      />
-    </>
-  );
-}
 
 /** The footer link. One button, no sign-in, no other merchant's data. */
 export default async function UnsubscribePage({
@@ -42,59 +23,50 @@ export default async function UnsubscribePage({
   const v = await resolveUnsubscribe(db, token);
   if (!v) {
     return (
-      <main className="mx-auto max-w-md px-5 py-14 sm:py-20">
-        <Logomark />
-        <h1 className="mt-6 text-xl font-semibold tracking-tight">This link isn&apos;t valid</h1>
-        <p className="mt-2 text-sm text-muted">
-          Reply to the email you received and ask to be removed — we will do it by hand.
-        </p>
-      </main>
+      <MerchantShell label="Email preferences">
+        <MerchantNotice icon="link" tone="warn" title="This link isn't valid">
+          Reply to the email you received and ask to be removed. We will do it by hand.
+        </MerchantNotice>
+      </MerchantShell>
     );
   }
   const finished = v.already || done === "1";
+  if (finished) {
+    return (
+      <MerchantShell label="Email preferences">
+        <MerchantNotice icon="check" tone="good" title="You're unsubscribed">
+          {v.maskedEmail || "This address"} will not get automated emails from {v.shopName} about{" "}
+          {v.businessName}. Your rep can still write to you directly.
+        </MerchantNotice>
+      </MerchantShell>
+    );
+  }
   return (
-    <main className="mx-auto max-w-md px-5 py-14 sm:py-20">
-      <div className="flex items-center gap-3">
-        <Logomark />
-        <p className="text-[11px] font-semibold tracking-wide text-muted uppercase">{v.shopName}</p>
-      </div>
-      {finished ? (
-        <>
-          <h1 className="mt-6 text-2xl font-semibold tracking-tight sm:text-3xl">
-            You&apos;re unsubscribed
-          </h1>
-          <p className="mt-2 text-sm text-text-2">
-            {v.maskedEmail || "This address"} will not get automated emails from {v.shopName} about{" "}
-            {v.businessName}. Your rep can still write to you directly.
-          </p>
-        </>
-      ) : (
-        <>
-          <h1 className="mt-6 text-2xl font-semibold tracking-tight sm:text-3xl">
-            Stop these emails?
-          </h1>
-          <p className="mt-2 text-sm text-text-2">
-            {v.maskedEmail || "Your address"} will stop getting automated emails from {v.shopName}{" "}
-            about {v.businessName}.
-          </p>
-          <form
-            method="post"
-            action={`/api/unsubscribe/${encodeURIComponent(token)}`}
-            className="mt-6"
-          >
-            <button
-              type="submit"
-              className={buttonClass(
-                "primary",
-                "md",
-                "h-12 w-full text-base sm:h-11 sm:w-auto sm:px-6",
-              )}
-            >
-              Stop these emails
-            </button>
-          </form>
-        </>
-      )}
-    </main>
+    <MerchantShell label="Email preferences">
+      <MerchantHeading eyebrow={shopLabel(v.shopName)} title="Stop these emails?">
+        {v.maskedEmail || "Your address"} will stop getting automated emails from {v.shopName} about{" "}
+        {v.businessName}.
+      </MerchantHeading>
+      <form
+        method="post"
+        action={`/api/unsubscribe/${encodeURIComponent(token)}`}
+        className="mt-7 rounded-3xl border border-border bg-surface p-5 sm:p-6"
+      >
+        <dl className="space-y-3 text-sm">
+          <div className="flex items-baseline justify-between gap-4">
+            <dt className="text-muted">Address</dt>
+            <dd className="min-w-0 truncate font-medium">{v.maskedEmail || "Your address"}</dd>
+          </div>
+          <div className="flex items-baseline justify-between gap-4 border-t border-border pt-3">
+            <dt className="text-muted">About</dt>
+            <dd className="min-w-0 truncate font-medium">{v.businessName}</dd>
+          </div>
+        </dl>
+        <button type="submit" className={buttonClass("primary", "lg", "mt-5 h-13 w-full")}>
+          Stop these emails
+        </button>
+        <p className="mt-3 text-center text-xs text-muted">One tap. No sign-in needed.</p>
+      </form>
+    </MerchantShell>
   );
 }

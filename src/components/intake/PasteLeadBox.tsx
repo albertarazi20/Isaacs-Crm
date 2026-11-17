@@ -2,9 +2,9 @@
 
 import { useId, useState } from "react";
 import { splitLeadLineAction } from "@/app/intake-actions";
-import { Icon } from "@/components/client/icons";
 import { useCall } from "@/components/overlay";
-import { Badge, Button, Card, Input } from "@/components/ui";
+import { Glyph } from "@/components/shell/icons";
+import { Badge, Button, Input } from "@/components/ui";
 import type { SplitResult } from "@/lib/ai/splitLeadLine";
 import type { AssistantState } from "@/lib/leads/assistant";
 
@@ -18,7 +18,7 @@ export interface PasteSummary {
  * "Paste a lead line": one line of text about a merchant goes to the assistant, which splits it into the form's
  * fields (the server checks the phone and email really are in the text). The form fills in and this box names the
  * fields it filled. Without a model key, with the assistant switched off or over its budget, the box is disabled and
- * says why — typing the lead in by hand below always works.
+ * says why. Typing the lead in by hand below always works.
  */
 export function PasteLeadBox({
   assistant,
@@ -45,22 +45,21 @@ export function PasteLeadBox({
   }
 
   return (
-    <Card className="space-y-2 p-4 sm:p-5">
+    <div className="bg-brand-soft rounded-2xl border border-border p-3.5">
       <form
-        className="space-y-1"
         onSubmit={(e) => {
           e.preventDefault();
           void run();
         }}
       >
-        <label
-          htmlFor={id}
-          className="flex items-center gap-1.5 text-[12px] font-medium text-text-2"
-        >
-          <Icon name="sparkles" className="size-3.5 text-muted" />
-          Paste a lead line
-        </label>
-        <div className="flex flex-col gap-2 sm:flex-row">
+        <div className="flex items-center justify-between gap-3">
+          <label htmlFor={id} className="flex items-center gap-1.5 text-[12px] font-semibold">
+            <Glyph name="sparkles" className="size-3.5 text-accent" />
+            Paste a lead line
+          </label>
+          <span className="text-[11px] text-muted">Optional shortcut</span>
+        </div>
+        <div className="mt-2 flex flex-col gap-2 sm:flex-row">
           <Input
             id={id}
             value={text}
@@ -69,20 +68,20 @@ export function PasteLeadBox({
             maxLength={4000}
             autoComplete="off"
             placeholder="Rosa Lind, Harbor Tacos, (310) 555-0142, rosa@harbortacos.com, CA, wants 60k for a truck"
-            className="min-w-0 sm:flex-1"
+            className="min-w-0 rounded-full bg-surface px-4 sm:flex-1"
           />
           <Button type="submit" disabled={off || busy || text.trim() === ""} className="shrink-0">
             {busy ? "Reading…" : "Fill the form"}
           </Button>
         </div>
-        <p className="text-xs text-muted">
+        <p className="mt-2 text-xs text-muted">
           {off
-            ? `${assistant.reason} — type the lead in below.`
-            : "The phone and email are checked against what you pasted; nothing is saved until you submit."}
+            ? `${assistant.reason}. Type the lead in below.`
+            : "The phone and email are checked against what you pasted. Nothing is saved until you submit."}
         </p>
       </form>
       {summary ? (
-        <div className="space-y-1.5" role="status">
+        <div className="mt-2.5 space-y-1.5 border-t border-border pt-2.5" role="status">
           {summary.filled.length > 0 ? (
             <div className="flex flex-wrap items-center gap-1.5">
               <span className="text-xs text-muted">Filled from the line:</span>
@@ -98,6 +97,6 @@ export function PasteLeadBox({
           {summary.warning ? <p className="text-xs text-warn">{summary.warning}</p> : null}
         </div>
       ) : null}
-    </Card>
+    </div>
   );
 }

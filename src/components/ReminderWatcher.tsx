@@ -4,6 +4,8 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { CHANNEL_LABEL, type ReminderChannel } from "@/lib/mca/reminder";
 import { formatUS } from "@/lib/mca/phone";
+import { Glyph } from "@/components/shell/icons";
+import { buttonClass } from "@/components/ui";
 
 interface Due {
   id: string;
@@ -36,7 +38,7 @@ function writeSeen(seen: Set<string>) {
 }
 
 /**
- * Pops a bright banner when a reminder's time arrives while the app is open, and a system notification if he allowed
+ * Pops a glass banner when a reminder's time arrives while the app is open, and a system notification if he allowed
  * them. Dismissing hides it on this device; the reminder itself stays until he logs that call, text or email.
  */
 export function ReminderWatcher() {
@@ -95,9 +97,15 @@ export function ReminderWatcher() {
     <button
       type="button"
       onClick={() => void askPermission()}
-      className="fixed right-3 bottom-20 z-40 rounded-full bg-[#ffd400] px-3 py-2 text-sm font-bold text-black shadow-lg sm:bottom-3"
+      className="glass-strong fixed right-3 bottom-20 z-40 inline-flex h-10 animate-pop items-center gap-2 rounded-full border border-border pr-4 pl-2 text-[13px] font-medium text-text shadow-pop transition duration-150 hover:border-border-strong active:scale-[0.97] sm:right-5 sm:bottom-5"
     >
-      🔔 Turn on reminder alerts
+      <span
+        aria-hidden
+        className="bg-brand-soft flex size-7 items-center justify-center rounded-full text-accent ring-1 ring-accent/25"
+      >
+        <Glyph name="bell" className="size-3.5" />
+      </span>
+      Turn on reminder alerts
     </button>
   ) : null;
 
@@ -116,28 +124,35 @@ export function ReminderWatcher() {
       <div
         role="alert"
         aria-live="assertive"
-        className="fixed inset-x-3 top-16 z-50 mx-auto flex max-w-md flex-col gap-2"
+        className="fixed inset-x-3 top-16 z-50 mx-auto flex max-w-md flex-col gap-2 lg:top-5"
       >
         {due.map((d) => (
           <div
             key={keyOf(d)}
-            className="flex items-center gap-3 rounded-xl bg-[#ffd400] p-3 text-black shadow-xl"
+            className="ring-brand glass-strong flex animate-pop items-center gap-3 rounded-2xl border border-border py-2.5 pr-2 pl-3 text-text shadow-pop"
           >
-            <span aria-hidden className="text-xl">
-              ⏰
+            <span
+              aria-hidden
+              className="flex size-10 shrink-0 items-center justify-center rounded-full bg-warn-soft text-warn ring-1 ring-warn/25"
+            >
+              <Glyph
+                name={d.channel === "call" ? "phone" : d.channel === "email" ? "mail" : "clock"}
+                className="size-[18px]"
+              />
             </span>
             <div className="min-w-0 flex-1">
-              <p className="truncate font-bold">
+              <p className="truncate text-sm font-semibold tracking-tight">
                 {CHANNEL_LABEL[d.channel]} {d.business_name} now
               </p>
-              <p className="truncate text-xs">
-                {[d.phone ? formatUS(d.phone) : "", d.note].filter(Boolean).join(" · ")}
+              <p className="truncate text-xs text-muted tabular-nums">
+                {[d.phone ? formatUS(d.phone) : "", d.note].filter(Boolean).join(" · ") ||
+                  "Reminder due"}
               </p>
             </div>
             <Link
               href={`/clients/${d.id}`}
               onClick={() => dismiss(d)}
-              className="rounded-lg bg-black px-3 py-1.5 text-sm font-semibold text-white"
+              className={buttonClass("primary", "sm", "shrink-0")}
             >
               Open
             </Link>
@@ -145,9 +160,9 @@ export function ReminderWatcher() {
               type="button"
               aria-label={`Dismiss reminder for ${d.business_name}`}
               onClick={() => dismiss(d)}
-              className="rounded-lg px-2 py-1 text-lg leading-none font-bold hover:bg-black/10"
+              className="inline-flex size-10 shrink-0 items-center justify-center rounded-full text-muted transition duration-150 hover:bg-surface-2 hover:text-text active:scale-95 sm:size-8"
             >
-              ×
+              <Glyph name="x" className="size-4" />
             </button>
           </div>
         ))}

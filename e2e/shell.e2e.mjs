@@ -203,7 +203,7 @@ export default async function shellFlow({ email }) {
   );
   await menu.getByRole("link", { name: /^Overview/ }).click();
   check("choosing a place closes the menu", await until(async () => !(await menu.isVisible())));
-  await p.getByRole("button", { name: "New lead" }).click();
+  await p.getByRole("banner").getByRole("button", { name: "New lead" }).click();
   check(
     "the phone bar's plus opens the New lead sheet",
     await until(() => p.getByRole("dialog", { name: "Bring a merchant in" }).isVisible()),

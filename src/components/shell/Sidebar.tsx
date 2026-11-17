@@ -3,8 +3,9 @@
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useCallback, useState, type ReactNode } from "react";
 import { LogoutButton } from "@/components/LogoutButton";
+import { useModal } from "@/components/overlay";
 import { ThemeSwitch } from "@/components/ThemeSwitch";
 import { Avatar, cn, Kbd } from "@/components/ui";
 import { MERCHANT_VIEWS, SETTINGS_VIEWS } from "@/lib/nav";
@@ -426,13 +427,8 @@ function SidebarBody({
  */
 export function Sidebar(props: SidebarProps) {
   const [open, setOpen] = useState(false);
-  const sheet = useRef<HTMLDialogElement>(null);
-  useEffect(() => {
-    const d = sheet.current;
-    if (!d) return;
-    if (open && !d.open) d.showModal();
-    if (!open && d.open) d.close();
-  }, [open]);
+  const close = useCallback(() => setOpen(false), []);
+  const [sheet, onNativeClose, onKeyDown] = useModal(open, close);
   return (
     <div data-app-header className="contents">
       <aside className="glass fixed inset-y-0 left-0 z-30 hidden w-[272px] border-r border-border lg:block">
@@ -492,13 +488,14 @@ export function Sidebar(props: SidebarProps) {
       <dialog
         ref={sheet}
         aria-label="Menu"
-        onClose={() => setOpen(false)}
+        onClose={onNativeClose}
+        onKeyDown={onKeyDown}
         onClick={(e) => {
-          if (e.target === sheet.current) setOpen(false);
+          if (e.target === sheet.current) close();
         }}
         className="sheet-left glass-strong m-0 h-dvh max-h-none w-[min(86vw,320px)] max-w-none rounded-r-3xl border-r border-border p-0 text-text shadow-pop lg:hidden"
       >
-        {open ? <SidebarBody {...props} onNavigate={() => setOpen(false)} /> : null}
+        {open ? <SidebarBody {...props} onNavigate={close} /> : null}
       </dialog>
     </div>
   );

@@ -17,6 +17,7 @@ import { CONTACT_STATUS_LABELS } from "@/lib/mca/contact";
 import { useApp } from "../app-context";
 import { Glyph, type GlyphName } from "../shell/icons";
 import { useNewLead } from "../shell/NewLead";
+import { useModal } from "../overlay";
 import { Avatar, cn, Kbd } from "../ui";
 import { callingYouLine, detailLine, searchDirectory } from "./search";
 
@@ -138,18 +139,13 @@ function PaletteDialog({
   onClose: () => void;
   children: React.ReactNode;
 }) {
-  const ref = useRef<HTMLDialogElement>(null);
-  useEffect(() => {
-    const d = ref.current;
-    if (!d) return;
-    if (open && !d.open) d.showModal();
-    if (!open && d.open) d.close();
-  }, [open]);
+  const [ref, onNativeClose, onKeyDown] = useModal(open, onClose);
   return (
     <dialog
       ref={ref}
       aria-label="Find a client"
-      onClose={onClose}
+      onClose={onNativeClose}
+      onKeyDown={onKeyDown}
       onClick={(e) => {
         if (e.target === ref.current) onClose();
       }}
