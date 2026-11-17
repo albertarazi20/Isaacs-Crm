@@ -34,6 +34,7 @@ export function ShopSettingsForm({
     perMerchantWeekly: String(s.per_merchant_weekly),
     automationFrom: s.automation_from,
     automationReplyToRep: s.automation_reply_to_rep,
+    openNudge: s.open_nudge,
   }));
   // what the server last accepted, so the bar can say whether anything is waiting to be saved
   const [saved, setSaved] = useState(() => JSON.stringify(v));
@@ -138,6 +139,13 @@ export function ShopSettingsForm({
             hint="Off = the same template every day until they act."
             checked={v.sequencesEnabled}
             onChange={(x) => set("sequencesEnabled", x)}
+            className="py-2"
+          />
+          <Toggle
+            label="Nudge after an open"
+            hint="Opened their link but did not finish? They get it again a day later, once a week at most. Edit the two Nudge templates."
+            checked={v.openNudge}
+            onChange={(x) => set("openNudge", x)}
             className="py-2"
           />
         </div>

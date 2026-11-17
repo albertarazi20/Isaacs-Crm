@@ -14,6 +14,7 @@ const SHOP_COLS = [
   "send_on_holidays",
   "daily_cap",
   "ai_daily_cap_cents",
+  "open_nudge",
 ];
 
 export default async function wireSettings({ email }) {
@@ -38,13 +39,14 @@ export default async function wireSettings({ email }) {
     );
     await page.getByLabel("Daily cap").fill("1450");
     await page.getByLabel("Send on US holidays").check();
+    await page.getByLabel("Nudge after an open").check();
     await page.getByRole("button", { name: "Save settings" }).click();
     await toast(/^Saved$/);
     await page.waitForTimeout(500);
     const saved = await shop();
     check(
-      "the daily cap and the holiday switch reach the database",
-      saved.daily_cap === 1450 && saved.send_on_holidays === true,
+      "the daily cap, the holiday switch and the open nudge reach the database",
+      saved.daily_cap === 1450 && saved.send_on_holidays === true && saved.open_nudge === true,
       JSON.stringify(saved),
     );
 
@@ -362,7 +364,7 @@ export default async function wireSettings({ email }) {
     await tidy("update shop_settings set automation_from = $1", [before.automation_from]);
     await tidy(
       `update shop_settings set dns_ok = $1, dns_checked_at = $2, dns_result = $3::jsonb, send_on_holidays = $4,
-              daily_cap = $5, ai_daily_cap_cents = $6`,
+              daily_cap = $5, ai_daily_cap_cents = $6, open_nudge = $7`,
       [
         before.dns_ok,
         before.dns_checked_at,
@@ -370,6 +372,7 @@ export default async function wireSettings({ email }) {
         before.send_on_holidays,
         before.daily_cap,
         before.ai_daily_cap_cents,
+        before.open_nudge,
       ],
     );
     await browser.close();

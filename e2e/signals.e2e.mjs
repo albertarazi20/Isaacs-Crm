@@ -59,6 +59,15 @@ export default async function signalsFlow({ email }) {
       .getByRole("region", { name: "Recommended next" })
       .getByText(/who just opened their link/);
     check("and a recommendation says to call them", await card.isVisible());
+
+    // a rep checking the merchant's application link in their own signed-in browser is not the merchant
+    await rep.goto(`${BASE}/apply/${m.application_token}`, { waitUntil: "networkidle" });
+    await rep.waitForTimeout(4500);
+    const staffOpens = await one(
+      "select count(*)::int as n from link_opens where client_id = $1 and kind = 'apply'",
+      [m.id],
+    );
+    check("a signed-in rep looking at the link records nothing (database)", staffOpens.n === 0);
   } finally {
     await browser.close();
   }

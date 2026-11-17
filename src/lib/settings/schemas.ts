@@ -22,6 +22,8 @@ export const shopSchema = z.object({
   perMerchantWeekly: z.coerce.number().int().min(1).max(20),
   automationFrom: z.string().trim().max(200).default(""),
   automationReplyToRep: z.boolean(),
+  /** The "opened but did not finish" nudge (0548). Not sent = the stored value stays. */
+  openNudge: z.boolean().optional(),
 });
 export type ShopSettingsInput = z.infer<typeof shopSchema>;
 
