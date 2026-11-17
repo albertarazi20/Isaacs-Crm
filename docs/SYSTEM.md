@@ -19,11 +19,13 @@ the original Isaac deployment, and this repo uses its own Supabase project).
   uses it.
 - **Money is integer cents** end to end. A confirmed funding's terms never change in place; a correction is a new
   dated line.
-- **AI is boxed.** Claude reads lender emails, tags merchant replies, splits pasted lead lines, drafts win-back
-  openers, answers deal questions and transcribes offer screenshots. It never sends mail, never picks which record
-  to write and never applies money by itself: it fills in a form, code checks every quote and every sum, and code
-  decides what applies by itself and what waits for a manager. One switch turns it off; a daily spend cap stops a
-  runaway; every run is logged.
+- **AI is boxed.** Claude tags merchants' replies, splits pasted lead lines and runs the assistant. It never sends
+  mail and never writes a record by itself. The assistant (Claude Opus 5.5, `src/lib/assistant/`) reads the CRM through
+  read-only tools that run under the person's own row security, and proposes actions (set a follow-up, add a note,
+  hand off, pause, move to a bucket, copy a message, open a page) that are checked twice, once when proposed and again
+  by the app's own server action when the person clicks; nothing happens without the click. One switch turns AI off;
+  a daily spend cap (counted shop-wide) stops a runaway; every model call is logged in `ai_runs`. Conversations are
+  private to the person (`assistant_threads`, owner-only row security).
 
 ## 2. The jobs (an outside scheduler calls each with `Authorization: Bearer <CRON_SECRET>`)
 
