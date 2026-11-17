@@ -94,11 +94,13 @@ export function DialRunner({ items }: { items: DialItem[] }) {
   const done = initialIds.filter((id) => !stillThere.has(id)).length;
   const total = initialIds.length + items.filter((i) => !initialSet.has(i.card.id)).length;
 
-  // Full screen means the app header behind it must not be reachable by Tab or a screen reader.
+  // Full screen means the app header (and the skip link before it) must not be reachable by Tab or a screen reader.
   useEffect(() => {
-    const header = document.querySelector("[data-app-header]");
-    header?.setAttribute("inert", "");
-    return () => header?.removeAttribute("inert");
+    const behind = document.querySelectorAll("[data-app-header], [data-skip-link]");
+    for (const el of behind) el.setAttribute("inert", "");
+    return () => {
+      for (const el of behind) el.removeAttribute("inert");
+    };
   }, []);
 
   useEffect(() => {

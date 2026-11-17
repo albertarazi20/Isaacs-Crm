@@ -86,7 +86,7 @@ export default async function powerFlow({ email }) {
 
   const articles = await page.locator("main article >> visible=true").count();
   const stakes = await page
-    .locator('main article button[aria-expanded][title*="priority"] >> visible=true')
+    .locator("main article button[aria-expanded][data-score] >> visible=true")
     .count();
   check(
     "every Today row shows its $ at stake",
@@ -94,14 +94,13 @@ export default async function powerFlow({ email }) {
     `${stakes}/${articles}`,
   );
 
-  const scoreOf = (title) =>
-    Number((/priority ([\d,]+)\./.exec(title ?? "") ?? [])[1]?.replace(/,/g, ""));
+  // the score is not shown to a rep (plain words only); the button carries it for this check
   const overdueScores = async () =>
     (
       await section("Overdue")
-        .locator('article button[aria-expanded][title*="at stake"] >> visible=true')
-        .evaluateAll((els) => els.map((e) => e.title))
-    ).map(scoreOf);
+        .locator("article button[aria-expanded][data-score] >> visible=true")
+        .evaluateAll((els) => els.map((e) => e.getAttribute("data-score")))
+    ).map(Number);
   const overdueAges = async () =>
     await section("Overdue")
       .locator("article")
@@ -318,7 +317,7 @@ export default async function powerFlow({ email }) {
   await page.getByLabel("Reason for snoozing (one line)").fill("Waiting on his Q3 tax returns");
   await page.getByRole("button", { name: /^Snooze until/ }).click();
   await page
-    .getByText(new RegExp(`${esc(uw.business_name)} : snoozed until`))
+    .getByText(new RegExp(`${esc(uw.business_name)}: snoozed until`))
     .waitFor({ timeout: 8000 });
   const afterGuard = await openTimers(uw.id);
   const note = await one(
@@ -343,7 +342,7 @@ export default async function powerFlow({ email }) {
   await rowOf(uw2.business_name).locator("summary", { hasText: "Snooze" }).click();
   await rowOf(uw2.business_name).getByRole("button", { name: "1 week" }).click();
   await page
-    .getByText(new RegExp(`${esc(uw2.business_name)} : snoozed until`))
+    .getByText(new RegExp(`${esc(uw2.business_name)}: snoozed until`))
     .waitFor({ timeout: 8000 });
   check(
     "a week or less on a merchant whose application is in does not ask",
@@ -354,7 +353,7 @@ export default async function powerFlow({ email }) {
   await rowOf(early.business_name).locator("summary", { hasText: "Snooze" }).click();
   await rowOf(early.business_name).getByRole("button", { name: "1 month" }).click();
   await page
-    .getByText(new RegExp(`${esc(early.business_name)} : snoozed until`))
+    .getByText(new RegExp(`${esc(early.business_name)}: snoozed until`))
     .waitFor({ timeout: 8000 });
   check(
     "an early-stage client is never asked, whatever the length",
@@ -408,9 +407,9 @@ export default async function powerFlow({ email }) {
   );
   await dlg.getByRole("checkbox").check();
   await dlg
-    .getByRole("button", { name: new RegExp(`^Reschedule ${moving.length} client`) })
+    .getByRole("button", { name: new RegExp(`^Reschedule ${moving.length} merchant`) })
     .click();
-  await page.getByText(/^Rescheduled \d+ clients?/).waitFor({ timeout: 10000 });
+  await page.getByText(/^Rescheduled \d+ merchants?/).waitFor({ timeout: 10000 });
 
   const slotDays = slots(today, 5);
   const movedRows = await rows(
@@ -770,9 +769,9 @@ export default async function powerFlow({ email }) {
       els.map((e) => (e.getAttribute("aria-label") ?? e.textContent ?? "").trim()),
     );
   check(
-    "the bar holds: Menu, the brand, Find a merchant, Alerts, New lead",
+    "the bar holds: Menu, the brand, the assistant, Find a merchant, Alerts, New lead",
     labels.map((l) => l.replace(/, \d+ unread$/, "")).join("|") ===
-      "Menu|Selective CRM home|Find a merchant|Alerts|New lead",
+      "Menu|Selective CRM home|Ask the assistant|Find a merchant|Alerts|New lead",
     labels.join("|"),
   );
   const vp = mp.viewportSize();

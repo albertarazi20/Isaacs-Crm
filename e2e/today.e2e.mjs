@@ -58,7 +58,7 @@ export default async function todayFlow({ email }) {
   );
   await page.getByRole("button", { name: "No answer" }).click();
   await page.getByRole("button", { name: "Log it" }).click();
-  await page.getByText(/Logged — next follow-up/).waitFor({ timeout: 8000 });
+  await page.getByText(/Logged\. Next follow-up/).waitFor({ timeout: 8000 });
   const act = await withDb((db) =>
     one(
       db,

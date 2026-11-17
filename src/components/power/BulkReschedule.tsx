@@ -70,7 +70,7 @@ function BulkDialog({ overdue, onClose }: { overdue: ClientCard[]; onClose: () =
       message:
         res.moved === 0
           ? "Nothing needed moving"
-          : `Rescheduled ${res.moved} client${res.moved === 1 ? "" : "s"} over ${res.perDay.length} day${res.perDay.length === 1 ? "" : "s"}` +
+          : `Rescheduled ${res.moved} merchant${res.moved === 1 ? "" : "s"} over ${res.perDay.length} day${res.perDay.length === 1 ? "" : "s"}` +
             (first
               ? `: ${first.count} ${first.date === today ? "today" : `on ${dayLabel(first.date, today)}`}`
               : ""),
@@ -192,7 +192,7 @@ function BulkDialog({ overdue, onClose }: { overdue: ClientCard[]; onClose: () =
           </p>
         ) : null}
         <p className="text-xs text-muted">
-          Each client gets a new follow-up date and the note “Rescheduled in bulk”. All of them
+          Each merchant gets a new follow-up date and the note “Rescheduled in bulk”. All of them
           move, or none do.
         </p>
       </div>

@@ -27,6 +27,8 @@ function Stake({ priority }: { priority: Priority }) {
         type="button"
         aria-expanded={open}
         title={priority.explanation}
+        // the order's working, for the browser tests only: a rep reads plain words, not a score
+        data-score={Math.round(priority.score)}
         onClick={() => setOpen((v) => !v)}
         // on a phone the button is a 40px tall target; the pill inside keeps its size
         className="group/stake inline-flex items-center rounded-full transition duration-150 active:scale-[0.97] max-sm:min-h-10"

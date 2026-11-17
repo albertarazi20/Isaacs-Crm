@@ -59,7 +59,7 @@ export default async function settingsFlow({ email }) {
   await page.getByRole("button", { name: "+ Template" }).click();
   const dialog = page.getByRole("dialog");
   await dialog.waitFor();
-  await dialog.getByPlaceholder("Interested — follow up").fill(`E2E welcome ${stamp}`);
+  await dialog.getByPlaceholder("Interested, follow up").fill(`E2E welcome ${stamp}`);
   await dialog
     .getByPlaceholder(/your statements for/)
     .fill("{first_name}, quick one about {business}");

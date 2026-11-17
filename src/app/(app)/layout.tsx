@@ -75,7 +75,8 @@ export default async function AppLayout({ children }: { children: React.ReactNod
             <ReminderWatcher />
             <a
               href="#content"
-              className="sr-only z-50 rounded-full bg-surface px-4 py-2 text-sm font-semibold shadow-pop focus:not-sr-only focus:fixed focus:top-3 focus:left-3"
+              data-skip-link
+              className="sr-only z-50 rounded-full bg-surface text-sm font-semibold shadow-pop focus:not-sr-only focus:fixed focus:top-3 focus:left-3 focus:inline-flex focus:h-10 focus:items-center focus:px-4 focus:whitespace-nowrap"
             >
               Skip to content
             </a>

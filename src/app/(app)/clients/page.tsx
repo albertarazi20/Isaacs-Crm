@@ -37,7 +37,7 @@ export default async function ClientsPage() {
         description={
           cards.length === 0
             ? "Your book is empty. Add a lead and it shows up here with its first follow-up."
-            : `Your whole book in one place. ${overdue} ${overdue === 1 ? "is" : "are"} past their follow-up date and ${brought} ${brought === 1 ? "has" : "have"} been brought in.`
+            : `Your whole book: ${overdue} overdue, ${brought} brought in.`
         }
         actions={
           <>
