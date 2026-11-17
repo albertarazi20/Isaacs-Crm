@@ -3,9 +3,11 @@
 import Link from "next/link";
 import { useState } from "react";
 import { useApp } from "@/components/app-context";
+import { useAssistant } from "@/components/assistant/Assistant";
 import { Glyph, type GlyphName } from "@/components/shell/icons";
 import { NewLeadButton } from "@/components/shell/NewLead";
 import { cn, EmptyState } from "@/components/ui";
+import { queueBrief } from "@/lib/assistant/prompts";
 import { timeAgo } from "@/lib/format";
 import type { QueueItem, QueueKind } from "@/lib/followup/overview";
 
@@ -58,6 +60,7 @@ const ORDER: QueueKind[] = ["reply", "opened", "call_now", "ready", "upload", "b
 /** "Do this now": the ranked list of merchants that need a person, with a filter by why they are on it. */
 export function QueueList({ items }: { items: QueueItem[] }) {
   const { nowMs } = useApp();
+  const ask = useAssistant();
   const [kind, setKind] = useState<QueueKind | "all">("all");
   const counts = new Map<QueueKind, number>();
   for (const it of items) counts.set(it.kind, (counts.get(it.kind) ?? 0) + 1);
@@ -111,11 +114,15 @@ export function QueueList({ items }: { items: QueueItem[] }) {
       <ul className="max-h-[540px] min-h-0 flex-1 divide-y divide-border overflow-y-auto border-t border-border xl:max-h-none">
         {shown.map((it) => {
           const k = KIND[it.kind];
+          const brief = queueBrief(it.kind, it.businessName || it.contactName, it.clientId);
           return (
-            <li key={`${it.kind}-${it.clientId}`}>
+            <li
+              key={`${it.kind}-${it.clientId}`}
+              className="flex items-center transition duration-150 hover:bg-surface-2/50"
+            >
               <Link
                 href={`/clients/${it.clientId}`}
-                className="group flex items-center gap-3 px-4 py-3 transition duration-150 hover:bg-surface-2/50 sm:px-5"
+                className="group flex min-w-0 flex-1 items-center gap-3 py-3 pl-4 sm:pl-5"
               >
                 <span
                   aria-hidden
@@ -156,6 +163,15 @@ export function QueueList({ items }: { items: QueueItem[] }) {
                   className="size-4 shrink-0 -translate-x-1 text-muted opacity-0 transition duration-200 group-hover:translate-x-0 group-hover:opacity-100 max-sm:hidden"
                 />
               </Link>
+              <button
+                type="button"
+                onClick={() => ask({ ...brief, send: true, fresh: true })}
+                aria-label={brief.label}
+                title={brief.label}
+                className="mx-2 flex size-10 shrink-0 items-center justify-center rounded-xl text-muted transition duration-150 hover:bg-brand-soft hover:text-accent active:scale-[0.95] sm:mr-3"
+              >
+                <Glyph name="sparkles" className="size-4" />
+              </button>
             </li>
           );
         })}

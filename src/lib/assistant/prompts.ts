@@ -27,3 +27,52 @@ export const STARTERS: readonly { label: string; prompt: string }[] = [
       "How am I doing this month compared with last month? Tell me what is going well, what is slipping, and the one change that would bring in the most merchants.",
   },
 ];
+
+/** Why a merchant is on the "Do this now" list (mirrors QueueKind in src/lib/followup/overview.ts). */
+export type QueueReason =
+  "reply" | "opened" | "call_now" | "ready" | "upload" | "bounced" | "overdue";
+
+const QUEUE_ASK: Record<QueueReason, { label: string; task: string }> = {
+  reply: {
+    label: "Draft my reply",
+    task: "replied. Read their latest email and the file, then draft my answer: short, plain, and aimed at getting the next document or the signed application. Set it up as an email I can review and send.",
+  },
+  opened: {
+    label: "Nudge them",
+    task: "opened their link but has not finished. Say what they still owe, then write a short nudge email that makes the next step easy, and a one-line call opener. Set up the actions.",
+  },
+  call_now: {
+    label: "Prep the call",
+    task: "is on my call list. Give me a 20-second brief for the call: who they are, what they said last, what is missing, and the one ask to make. Set up the follow-up for after the call.",
+  },
+  ready: {
+    label: "Check the file",
+    task: "looks complete. Check the file: is every required document in and readable? If yes, say so and set up the hand-off; if not, say exactly what is missing and write the email asking for it.",
+  },
+  upload: {
+    label: "What came in?",
+    task: "just sent documents. Say what came in, what is still missing, and write the short thank-you email asking for the rest. Set up the actions.",
+  },
+  bounced: {
+    label: "Fix the email",
+    task: "has an email address that bounced. Look for another way to reach them in the file, tell me what to check, and set up a follow-up so this does not get lost.",
+  },
+  overdue: {
+    label: "Catch up",
+    task: "has a follow-up that is past due. Read the file and tell me the best move right now, then set up the actions.",
+  },
+};
+
+/** The brief behind the sparkles button on a "Do this now" row. */
+export function queueBrief(
+  reason: QueueReason,
+  business: string,
+  id: string,
+): { prompt: string; label: string } {
+  const name = business.trim() || "This merchant";
+  const ask = QUEUE_ASK[reason];
+  return {
+    prompt: `${name} (merchant_id ${id}) ${ask.task}`,
+    label: `${ask.label}: ${name}`,
+  };
+}

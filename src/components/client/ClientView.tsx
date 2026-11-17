@@ -55,7 +55,11 @@ export function ClientView({
           />
           <div className="contents xl:flex xl:min-w-0 xl:flex-col xl:gap-5">
             <NotesPanel card={card} activities={detail.activities} className="order-1" />
-            <Timeline activities={detail.activities} className="order-5" />
+            <Timeline
+              activities={detail.activities}
+              merchant={{ id: card.id, name: card.business_name || card.contact_name }}
+              className="order-5"
+            />
           </div>
           <div className="contents xl:flex xl:min-w-0 xl:flex-col xl:gap-5">
             <FollowUpPanel detail={detail} application={application} className="order-2" />

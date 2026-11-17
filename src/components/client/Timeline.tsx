@@ -2,6 +2,9 @@
 
 import { useState } from "react";
 import { addNoteAction, setFollowUpAction } from "@/app/actions";
+import { useAssistant } from "@/components/assistant/Assistant";
+import { Glyph } from "@/components/shell/icons";
+import { queueBrief } from "@/lib/assistant/prompts";
 import type { ActivityRow, ClientCard } from "@/lib/data/types";
 import { formatDate, timeAgo } from "@/lib/format";
 import { diffDays, type ISODate } from "@/lib/mca/dates";
@@ -112,12 +115,18 @@ function dayLabel(day: ISODate, today: ISODate): string {
 
 export function Timeline({
   activities,
+  merchant,
   className,
 }: {
   activities: ActivityRow[];
+  /** The merchant's name and id: the newest reply gets a "Draft my reply" button for the assistant. */
+  merchant?: { id: string; name: string };
   className?: string;
 }) {
   const { timezone, today } = useApp();
+  const latestReplyId = merchant
+    ? activities.find((a) => look(a).label === "Reply")?.id
+    : undefined;
   const [filter, setFilter] = useState<TimelineFilter>("all");
   const [limit, setLimit] = useState(PAGE);
   const counts = countByFilter(activities);
@@ -181,7 +190,11 @@ export function Timeline({
               </h3>
               <ol className="relative before:absolute before:top-2 before:bottom-2 before:left-[13px] before:w-px before:bg-border">
                 {d.items.map((a) => (
-                  <Entry key={a.id} a={a} />
+                  <Entry
+                    key={a.id}
+                    a={a}
+                    merchant={a.id === latestReplyId ? merchant : undefined}
+                  />
                 ))}
               </ol>
             </div>
@@ -340,8 +353,9 @@ function NoteComposer({ card }: { card: ClientCard }) {
   );
 }
 
-function Entry({ a }: { a: ActivityRow }) {
+function Entry({ a, merchant }: { a: ActivityRow; merchant?: { id: string; name: string } }) {
   const { timezone, today } = useApp();
+  const ask = useAssistant();
   const nowMs = useNowMs();
   // older rows can hold a kind the removed features wrote (funding): show it as a plain update
   const meta = look(a);
@@ -390,6 +404,18 @@ function Entry({ a }: { a: ActivityRow }) {
           >
             {body}
           </p>
+        ) : null}
+        {merchant ? (
+          <button
+            type="button"
+            onClick={() =>
+              ask({ ...queueBrief("reply", merchant.name, merchant.id), send: true, fresh: true })
+            }
+            className="mt-1.5 inline-flex h-10 items-center gap-1.5 rounded-lg px-2 text-[12.5px] font-medium text-accent transition duration-150 hover:bg-brand-soft active:scale-[0.97] sm:h-8"
+          >
+            <Glyph name="sparkles" className="size-3.5" />
+            Draft my reply
+          </button>
         ) : null}
       </div>
     </li>
