@@ -205,7 +205,7 @@ export function BucketBoard({
               {buckets.length === 1 ? "bucket" : "buckets"}
             </p>
           </div>
-          <dl className="grid min-w-0 flex-1 grid-cols-2 gap-x-8 gap-y-5 sm:grid-cols-4">
+          <dl className="grid w-full min-w-0 grid-cols-2 gap-x-8 gap-y-5 sm:w-auto sm:flex-1 sm:grid-cols-4">
             <Figure
               label="Due today"
               value={String(due)}

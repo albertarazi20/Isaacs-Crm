@@ -258,7 +258,7 @@ function Activity({ events, now }: { events: ActivityEvent[]; now: Date }) {
       {events.map((e, i) => {
         const a = ACT[e.kind];
         return (
-          <li key={`${e.at}-${e.clientId}-${i}`}>
+          <li key={`${e.at}-${e.clientId}-${i}`} className={i >= 6 ? "max-sm:hidden" : undefined}>
             <Link
               href={`/clients/${e.clientId}`}
               className="relative flex items-start gap-3 rounded-xl py-2 pr-2 transition duration-150 hover:bg-surface-2/50"
