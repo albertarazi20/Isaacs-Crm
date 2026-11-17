@@ -38,7 +38,7 @@ export const MERCHANT_VIEWS: readonly NavItem[] = [
 export const SETTINGS_VIEWS: readonly (NavItem & { manager?: boolean })[] = [
   { href: "/settings", label: "My account" },
   { href: "/settings/buckets", label: "Buckets & templates" },
-  { href: "/settings/sheets", label: "Google Sheets" },
+  { href: "/settings/sheets", label: "Lead sources" },
   { href: "/settings/email", label: "Email", manager: true },
   { href: "/settings/team", label: "Team", manager: true },
   { href: "/settings/ai", label: "AI assistant", manager: true },

@@ -176,13 +176,13 @@ body::after {
 body::before {
   background:
     radial-gradient(
-      58% 46% at 8% -8%,
-      light-dark(rgb(46 123 255 / 0.11), rgb(46 123 255 / 0.2)),
+      62% 50% at 12% -6%,
+      light-dark(rgb(46 123 255 / 0.12), rgb(46 123 255 / 0.26)),
       transparent 62%
     ),
     radial-gradient(
-      46% 42% at 104% -4%,
-      light-dark(rgb(168 85 247 / 0.1), rgb(168 85 247 / 0.2)),
+      50% 46% at 100% -2%,
+      light-dark(rgb(168 85 247 / 0.11), rgb(168 85 247 / 0.26)),
       transparent 62%
     ),
     radial-gradient(

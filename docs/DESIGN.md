@@ -1,84 +1,68 @@
-# Selective CRM — the design system
+# Selective CRM — the design system ("Obsidian")
 
-The look every page follows. Decided with the owner on 2026-11-16: **precise and minimal** (Linear / Attio
-register), **light by default with a dark switch**, **compact** lists, the **Selective Capital brand** (Geist,
-the S logomark, the blue → violet → fuchsia gradient), **top bar** navigation. Premium means quiet: hairline
-borders, one accent, numbers that line up, nothing decorative.
+The look every page follows. Rebuilt on 2026-11-16 after the owner rejected the first, minimal pass as plain:
+the product must **feel expensive**. So: **dark by default** (light is the same system on paper), a near-black
+canvas lit by the brand's own blue, violet and fuchsia in the corners, panels that read as smoked glass, pill
+controls, and one gradient that only the primary action, the logo and the headline figures carry.
+
+## Structure
+
+- **Four places, each a dropdown in the left sidebar** (`src/lib/nav.ts`, `src/components/shell/Sidebar.tsx`):
+  Overview, Follow Up (every bucket with its live count), Merchants (all merchants, call list, power dial,
+  import, trash), Settings (my account, buckets and templates, lead sources, email, team, AI). Alerts and the
+  account (colour mode, log out) sit at the foot. Under 1024px the rail becomes a top bar whose menu button
+  slides the same rail in.
+- **Adding a lead is a button, never a page.** `NewLeadProvider` (`src/components/shell/NewLead.tsx`) holds one
+  slide-over sheet that every "New lead" button opens over the page you are on. Press **N** anywhere. The old
+  `/lead-intake` address redirects to `/?new-lead=1`, which opens it.
+- **Search is ⌘K** (`GlobalSearch`); the sidebar field and the phone bar's button open the same palette.
+- **Work stays on the page.** Detail and edit flows open in a `Drawer` (right slide-over); `Dialog` is for
+  confirmations and short forms.
 
 ## Tokens (src/app/globals.css)
 
-Every colour is `light-dark(light, dark)`; the `html[data-theme]` attribute (cookie `theme`: light | dark |
-system) sets `color-scheme`, so one token set serves both modes. Components use the Tailwind names, never hex.
+Every colour is `light-dark(light, dark)`; `html[data-theme]` (cookie `theme`: light | dark | system, default
+dark) sets `color-scheme`, so one token set serves both modes. Components use the Tailwind names, never hex.
 
-| Use                           | Class                              | Light                            | Dark             |
-| ----------------------------- | ---------------------------------- | -------------------------------- | ---------------- |
-| Page background               | `bg-bg`                            | #f6f6f8                          | #0a0a0f          |
-| Card / popover                | `bg-surface`                       | #ffffff                          | #13131a          |
-| Inset, hover, pill            | `bg-surface-2`                     | #f1f1f5                          | #1b1b24          |
-| Row hover                     | `bg-surface-3`                     | #f8f8fa                          | #17171f          |
-| Hairline                      | `border-border`                    | #e5e5ec                          | #272730          |
-| Hover / focus border          | `border-border-strong`             | #cfcfda                          | #3a3a46          |
-| Primary text                  | `text-text`                        | #0a0a10                          | #ededf2          |
-| Secondary text                | `text-text-2`                      | #45454f                          | #c3c3cd          |
-| Labels, meta                  | `text-muted`                       | #6e6e7e                          | #8f8f9f          |
-| Accent (links, active, focus) | `text-accent` `bg-accent`          | #7c3aed                          | #a78bfa          |
-| Accent tint                   | `bg-accent-soft`                   | #f2ecff                          | #241d3b          |
-| Good / warn / bad / info      | `text-good` … with `-soft` tints   | green / amber / red / blue       | lighter variants |
-| The brand gradient            | `bg-[image:var(--brand-gradient)]` | primary button and logomark only | same             |
+| Use                      | Class                            | Light   | Dark    |
+| ------------------------ | -------------------------------- | ------- | ------- |
+| Canvas                   | `bg-bg`                          | #f2f2f7 | #06060b |
+| Panel                    | `bg-surface`                     | #ffffff | #0e0e16 |
+| Inset, hover, pill       | `bg-surface-2`                   | #ededf3 | #191923 |
+| Field, quiet fill        | `bg-surface-3`                   | #f7f7fb | #13131c |
+| Hairline                 | `border-border`                  | #e2e2ea | #22222e |
+| Hover / focus border     | `border-border-strong`           | #c9c9d6 | #363647 |
+| Primary text             | `text-text`                      | #0b0b12 | #f4f4f9 |
+| Secondary text           | `text-text-2`                    | #3f3f4c | #c4c4d1 |
+| Labels, meta             | `text-muted`                     | #6a6a7b | #8c8ca0 |
+| Accent                   | `text-accent` `bg-accent`        | #7c3aed | #a78bfa |
+| Accent tint              | `bg-accent-soft`                 | #f1eaff | #1f1838 |
+| Good / warn / bad / info | `text-good` … with `-soft` tints | deeper  | lighter |
 
-Radius: controls `rounded-lg` (10px), cards `rounded-xl` (14px), sheets and the login card `rounded-2xl` (18px),
-badges `rounded-md`. Shadows: `shadow-card` (whisper, every card gets it automatically), `shadow-lift` (hover on
-link cards), `shadow-pop` (menus, dialogs). Focus: 2px accent outline for the keyboard; inputs get a `ring-ring`.
+Material classes: `glass` / `glass-strong` (the rail, sticky bars, sheets, toasts), `bg-brand` + `shadow-glow`
+(the one primary action), `bg-brand-soft`, `text-gradient` (headline figures), `ring-brand` (the one hero panel),
+`eyebrow` (small-caps labels), `lift`, `stagger`, `skeleton`, `live-dot`. Shadows: `shadow-card` (every panel
+gets it, with an inner top highlight), `shadow-lift`, `shadow-pop`, `shadow-glow`. Radius: panels `rounded-2xl`
+(20px), sheets `rounded-3xl`, controls and badges are full pills, fields `rounded-xl`.
 
-Type: Geist. Page title `text-xl font-semibold tracking-tight` (phone) / `text-2xl` (desktop). Section title
-`text-[13px] font-semibold`. Body `text-sm`. Meta `text-xs text-muted`. Table text `text-[13px]`. KPI numbers
-`text-[26px] font-semibold tabular-nums`. Labels over numbers `text-[11px] font-semibold uppercase
-tracking-wide text-muted`. All numbers in columns: `tabular-nums` (tables get it automatically).
+A panel is written `rounded-2xl border border-border bg-surface`; the stylesheet adds the sheen, the inner
+highlight and the depth to every element with those three classes.
 
-## Primitives (src/components/ui.tsx, overlay.tsx)
+## Primitives
 
-- `Button` variants: `primary` (gradient; one per screen), `secondary` (bordered), `ghost`, `danger`. Sizes
-  `md` (36px desktop / 40px phone) and `sm` (32 / 40). Pressed states dim; nothing moves.
-- `Input`, `Select`, `Textarea`, `Field` (label above, hint below). `Badge` tones neutral / good / warn / bad /
-  accent / info. `Card`, `SectionTitle`, `EmptyState`, `LinkButton`.
-- `Dialog` (centred on desktop, bottom sheet on phones), toasts bottom-centre, `useToast`.
+`src/components/ui.tsx`: `Button` / `buttonClass` (primary, secondary, ghost, danger; sm, md, lg), `IconButton`,
+`Input`, `Textarea`, `Select`, `Field`, `Badge`, `Card`, `SectionTitle`, `EmptyState`, `PageHeader`, `Kbd`,
+`Avatar`, `Sparkline`, `ProgressRing`, `Meter`, `Delta`, `StatCard`, `Segmented`, `Skeleton`.
+`src/components/overlay.tsx`: `Dialog`, `Drawer`, toasts (`useToast`, `useCall`).
+`src/components/fx.tsx`: `CountUp`. `src/components/shell/icons.tsx`: `Glyph`, the app's line icons.
 
-## Page anatomy
+## Rules
 
-1. **Page header**: title left, one-line context under it (date, count, who), actions right (one primary at
-   most). `flex items-end justify-between gap-4`, `mb-5`.
-2. **Toolbar** (lists only): filter chips with counts as `Badge`-sized pills (`h-8 rounded-full border px-3
-text-[13px]`, active = `bg-text text-bg` or `bg-accent-soft text-accent`), search on the right, sort as a
-   `Select`. Sticky under the header on long lists.
-3. **Content**: a `Card` for each block; tables inside cards with `p-0`; sections 24px apart (`space-y-6`).
-4. **Side rail** (dashboard, deal page): `xl:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]`, every grid child
-   `min-w-0` (nothing scrolls sideways on a phone).
-
-## Lists and tables
-
-- Compact rows: 40px desktop (`py-2`), 48px phone. `divide-y divide-border`. Hover `bg-surface-3`. The row is
-  a link where it opens something; row actions appear on hover (`group-hover:opacity-100`) on desktop and are
-  always visible on phones.
-- Header row: `text-[11px] font-semibold uppercase tracking-wide text-muted`, `bg-surface-2/60`, sticky.
-- Money right-aligned, tabular. Status as a `Badge`, never colour alone (the word is always there).
-- Phone: tables become stacked cards (`sm:table`), or scroll inside their card (`overflow-x-auto` on the card,
-  never on the page).
-
-## Forms and dialogs
-
-- Labels above fields, 12px. Errors below the field in `text-bad`. One primary button, right-aligned, with the
-  ghost Cancel to its left. Destructive actions are `danger` and sit apart.
-- Dialogs: `max-w-lg`, `rounded-2xl`, `shadow-pop`, title `text-base font-semibold`, body `p-5`. On a phone a
-  dialog is a bottom sheet with a grab handle and safe-area padding.
-
-## Motion
-
-150–200ms, `transition` on colour and shadow only. Toasts slide 8px. No entrance animations on lists. Reduced
-motion is honoured globally.
-
-## Do not
-
-- No raw hex in components. No emoji as icons (inline SVG from the Lucide set, 16px, `stroke-width 1.75`).
-- No uppercase section titles (that was the old look); uppercase is for the 11px labels over numbers only.
-- No second gradient, no coloured card backgrounds, no shadows heavier than `shadow-pop`.
-- No layout that moves on hover or press.
+- One primary (gradient) action per view. Everything else is glass or ghost.
+- Every page opens with `PageHeader`: eyebrow, title, one line of what the page is for, its actions.
+- Dense but calm: 13px in lists, `tabular-nums` for figures, rows about 48px, table headers in `eyebrow`.
+- Motion is transform and opacity only, 150 to 300ms, and everything clickable answers the press
+  (`active:scale-[0.97]`). Dialogs and sheets arrive with a short ease-out; nothing loops. `prefers-reduced-motion`
+  and `prefers-reduced-transparency` are honoured in the stylesheet.
+- No page scrolls sideways at 390px. Tables stack or scroll inside their own panel.
+- Icon-only buttons carry an `aria-label`; focus rings are never removed.
