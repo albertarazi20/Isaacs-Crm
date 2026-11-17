@@ -99,6 +99,7 @@ export function Dialog({
   return (
     <dialog
       ref={ref}
+      aria-label={title}
       onClose={onNativeClose}
       onKeyDown={onKeyDown}
       onClick={(e) => {
