@@ -98,7 +98,10 @@ export function Dialog({
     >
       {open ? (
         <div className="flex max-h-[85vh] flex-col">
-          <div className="mx-auto mt-2 h-1 w-10 rounded-full bg-border-strong sm:hidden" aria-hidden />
+          <div
+            className="mx-auto mt-2 h-1 w-10 rounded-full bg-border-strong sm:hidden"
+            aria-hidden
+          />
           <header className="flex items-center justify-between gap-3 border-b border-border px-5 py-3.5 sm:px-6">
             <h2 className="text-base font-semibold tracking-tight">{title}</h2>
             <CloseButton onClose={onClose} />
@@ -220,7 +223,15 @@ export function ToastProvider({ children }: { children: ReactNode }) {
                     : "bg-accent-soft text-accent",
               )}
             >
-              <svg viewBox="0 0 16 16" className="size-3.5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <svg
+                viewBox="0 0 16 16"
+                className="size-3.5"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
                 {t.tone === "error" ? (
                   <path d="M8 4.5v4M8 11.2v.3" />
                 ) : t.tone === "success" ? (

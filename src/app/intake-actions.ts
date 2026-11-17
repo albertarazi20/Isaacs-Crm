@@ -18,6 +18,7 @@ import { env } from "@/lib/env";
 import { assistantRefusal, ASSISTANT_REFUSALS } from "@/lib/leads/assistant";
 import { intakeLead, intakeSchema, type IntakeOutcome } from "@/lib/leads/form";
 import { lookupLeadOwner, ownedElsewhereMessage } from "@/lib/leads/owner";
+import { listStagedRows, type StagedRow } from "@/lib/leads/staged";
 
 export type { IntakeOutcome } from "@/lib/leads/form";
 
@@ -137,6 +138,19 @@ export async function intakeLeadAction(input: unknown): Promise<ActionResult<Int
       intakeLead(q, i, env().APP_URL, new Date(), { allowDuplicate: override }),
     );
     revalidatePath("/", "layout");
+    return { ok: true, data };
+  } catch (e) {
+    return { ok: false, error: toActionError(e) };
+  }
+}
+
+/** The sheet rows waiting to be filed, for the New lead sheet's "From your sheets" tab (read when it opens). */
+export async function loadStagedRowsAction(): Promise<
+  ActionResult<{ rows: StagedRow[]; total: number }>
+> {
+  const session = await requireSession();
+  try {
+    const data = await db.withUser(session.userId, (q) => listStagedRows(q));
     return { ok: true, data };
   } catch (e) {
     return { ok: false, error: toActionError(e) };

@@ -74,7 +74,8 @@
   --shadow-lift:
     inset 0 1px 0 var(--hairline), 0 2px 6px var(--shadow-c1), 0 22px 44px -18px var(--shadow-c3);
   --shadow-pop:
-    inset 0 1px 0 var(--hairline), 0 0 0 1px light-dark(rgb(16 16 32 / 0.04), rgb(255 255 255 / 0.04)),
+    inset 0 1px 0 var(--hairline),
+    0 0 0 1px light-dark(rgb(16 16 32 / 0.04), rgb(255 255 255 / 0.04)),
     0 28px 70px -20px var(--shadow-c3), 0 10px 24px -12px var(--shadow-c2);
   --shadow-glow:
     inset 0 1px 0 rgb(255 255 255 / 0.45), inset 0 -1px 0 rgb(7 7 13 / 0.2),
@@ -192,7 +193,10 @@ body::before {
 }
 body::after {
   background-image:
-    linear-gradient(light-dark(rgb(16 16 32 / 0.035), rgb(255 255 255 / 0.028)) 1px, transparent 1px),
+    linear-gradient(
+      light-dark(rgb(16 16 32 / 0.035), rgb(255 255 255 / 0.028)) 1px,
+      transparent 1px
+    ),
     linear-gradient(
       90deg,
       light-dark(rgb(16 16 32 / 0.035), rgb(255 255 255 / 0.028)) 1px,

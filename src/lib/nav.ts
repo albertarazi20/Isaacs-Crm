@@ -1,19 +1,19 @@
-/** The main navigation. Pure, shared by the header, the phone tab bar and the tests. */
+/**
+ * The navigation: four places, each a dropdown in the sidebar. Pure, shared by the sidebar and the tests.
+ * Adding a lead is not a place: it is the "New lead" button, which opens over whatever page you are on.
+ */
 
 export interface NavItem {
   href: string;
   label: string;
-  /** Short label for the phone tab bar. */
-  short?: string;
 }
 
 /** Reps and managers see the same pages; an ops account (the role stays in the database) is shown them too. */
 const ITEMS: readonly NavItem[] = [
-  { href: "/", label: "Dashboard", short: "Home" },
-  { href: "/lead-intake", label: "Lead Intake", short: "Intake" },
-  { href: "/follow-up", label: "Follow Up", short: "Follow" },
-  { href: "/clients", label: "Merchants", short: "Merchants" },
-  { href: "/settings", label: "Settings", short: "Settings" },
+  { href: "/", label: "Overview" },
+  { href: "/follow-up", label: "Follow Up" },
+  { href: "/clients", label: "Merchants" },
+  { href: "/settings", label: "Settings" },
 ];
 
 /** Whether a path is a top-level page of the nav (the nav is the source of truth). */
@@ -22,19 +22,24 @@ export function pageAllowed(href: string): boolean {
 }
 
 export function navFor(): NavItem[] {
-  return ITEMS.map(({ href, label, short }) => ({ href, label, short }));
+  return ITEMS.map(({ href, label }) => ({ href, label }));
 }
 
-/** The four that fit a phone's tab bar; the rest go under "More". */
-export function phoneTabsFor(): { tabs: NavItem[]; more: NavItem[] } {
-  const items = navFor();
-  const primary = items.filter((n) => n.href !== "/settings").slice(0, 4);
-  const more = [
-    ...items.filter((n) => !primary.includes(n)),
-    { href: "/alerts", label: "Alerts" },
-    { href: "/today", label: "Today's calls" },
-    { href: "/dial", label: "Power dial" },
-    { href: "/trash", label: "Trash" },
-  ];
-  return { tabs: primary, more };
-}
+/** What sits under Merchants. */
+export const MERCHANT_VIEWS: readonly NavItem[] = [
+  { href: "/clients", label: "All merchants" },
+  { href: "/today", label: "Call list" },
+  { href: "/dial", label: "Power dial" },
+  { href: "/import", label: "Import a file" },
+  { href: "/trash", label: "Trash" },
+];
+
+/** What sits under Settings; `manager` marks the ones only a manager is shown. */
+export const SETTINGS_VIEWS: readonly (NavItem & { manager?: boolean })[] = [
+  { href: "/settings", label: "My account" },
+  { href: "/settings/buckets", label: "Buckets & templates" },
+  { href: "/settings/sheets", label: "Google Sheets" },
+  { href: "/settings/email", label: "Email", manager: true },
+  { href: "/settings/team", label: "Team", manager: true },
+  { href: "/settings/ai", label: "AI assistant", manager: true },
+];

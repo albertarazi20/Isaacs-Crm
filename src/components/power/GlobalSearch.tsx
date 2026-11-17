@@ -29,14 +29,6 @@ const useMounted = () =>
     () => true,
     () => false,
   );
-/** Server and first paint say ⌘K; a non-Mac browser corrects to Ctrl K right after hydration. */
-const useIsMac = () =>
-  useSyncExternalStore(
-    noop,
-    () => /Mac|iPhone|iPad/.test(navigator.platform),
-    () => true,
-  );
-
 function SearchIcon() {
   return (
     <svg
@@ -55,7 +47,7 @@ function SearchIcon() {
 }
 
 /**
- * Header search + ⌘K / Ctrl+K command palette over ALL clients. The lightweight client list is fetched when
+ * The ⌘K / Ctrl+K command palette over ALL clients (the shell's search field and button open it too). The lightweight client list is fetched when
  * the palette first opens and kept for the session (per mounted layout, so it can never outlive a log out).
  * Typing a whole phone number answers "who is calling me?" first.
  */
@@ -71,7 +63,6 @@ export function GlobalSearch() {
   useEffect(() => {
     fetchedAt.current = 0;
   }, [nowMs]);
-  const isMac = useIsMac();
   const mounted = useMounted();
 
   const load = useCallback(async () => {
@@ -106,24 +97,16 @@ export function GlobalSearch() {
       }
     };
     window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
+    // the sidebar's search field and the phone bar's search button ask for the palette with this event
+    window.addEventListener("crm:search", show);
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      window.removeEventListener("crm:search", show);
+    };
   }, [show]);
 
   return (
     <>
-      <button
-        type="button"
-        onClick={show}
-        aria-label="Find a client"
-        aria-keyshortcuts="Control+K Meta+K"
-        className="inline-flex h-10 items-center gap-2 rounded-lg px-2.5 text-[13px] text-muted transition hover:bg-surface-2 hover:text-text sm:h-9 lg:w-44 lg:border xl:w-60 lg:border-border lg:bg-surface-2/60 lg:px-3 lg:hover:border-border-strong lg:hover:bg-surface"
-      >
-        <SearchIcon />
-        <span className="hidden flex-1 text-left lg:inline">Find a client…</span>
-        <kbd className="hidden rounded border border-border bg-surface px-1.5 font-sans text-[11px] text-muted lg:inline">
-          {isMac ? "⌘K" : "Ctrl K"}
-        </kbd>
-      </button>
       {/* In the body, not the header: power-dial mode makes the header inert, and search must still work there. */}
       {mounted
         ? createPortal(
@@ -168,7 +151,7 @@ function PaletteDialog({
       onClick={(e) => {
         if (e.target === ref.current) onClose();
       }}
-      className="mx-auto mt-[8vh] mb-auto w-[calc(100%-1rem)] max-w-xl rounded-2xl border border-border bg-surface p-0 text-text shadow-2xl backdrop:bg-black/50"
+      className="glass-strong mx-auto mt-[10vh] mb-auto w-[calc(100%-1rem)] max-w-xl rounded-3xl border border-border p-0 text-text shadow-pop"
     >
       {children}
     </dialog>
