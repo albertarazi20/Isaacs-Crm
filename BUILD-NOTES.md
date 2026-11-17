@@ -393,3 +393,20 @@ next one sends." The owner will send the final designs; their drafts (four email
   send), `app.approval_of`.
 - **Sending HTML:** the worker sends a designed email as it is (its own footer and unsubscribe link, required when it
   is saved) with the legal footer on the plain-text part; Gmail sends multipart/alternative (`buildRawEmail`).
+- **Two fresh reviewers** (backend; screens) found real problems before it shipped, all fixed with tests: approvals
+  kept sending as an offboarded rep (a trigger now moves an open approval and refills a queued email with the new
+  rep); one bad approval row could stop the whole outbox (the worker checks each approval under a savepoint and the
+  cron's approval pass is time-boxed and caught); a retry could land at night (the worker re-checks the merchant's
+  day); switching the emails off, changing the address, or replacing a design left an already queued email to go
+  (each now takes it back); approvals went out through the shop's domain with no way for a reply to stop them (they
+  go from the rep's own Gmail, replies always reach the rep); a design without the postal address now gets the
+  legal footer; an unsubscribe link hidden in a comment, or a banned word in the hidden preview line, is refused;
+  a reply to the last email was never flagged (`app.approval_needs_call`); Undo after Pitched restores the emails;
+  the "more" menu was hidden behind the next card; the edit dialog never closed; the hold date was pre-filled with a
+  guess that went in the emails (now empty, and the form says which email quotes it).
+- **Known and left:** the worker sends inside an open transaction, so a function killed after the provider accepted
+  a message could send it twice (true of every lane; the approval pass runs first and is time-boxed to keep that
+  unlikely); the hold countdown uses the rep's today while the stop uses the merchant's.
+- **Live:** main `82b87ba`, Netlify deploy 6afcd89833ce10d94baef5b1, Supabase `aztoxzcmnvqaypjuuuwj` through 0553 (92
+  migrations; the four email slots are empty, so nothing sends until the designs are uploaded). Unit 107 files /
+  1,472 tests; browser run 565 checks plus 22 (approvals) and 11 (approval settings); `pnpm build` passes.
