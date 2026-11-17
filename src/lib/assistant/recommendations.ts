@@ -23,6 +23,7 @@ export type RecommendationIcon =
   | "mail"
   | "sparkles"
   | "trend"
+  | "zap"
   | "merchants";
 
 export interface Recommendation {
@@ -92,6 +93,19 @@ export function buildRecommendations(f: RecommendationFacts): Recommendation[] {
       href: "/",
       prompt: `${plural(f.replyWaiting, "merchant")} wrote back and ${f.replyWaiting === 1 ? "is" : "are"} waiting for an answer. Read each reply and the merchant's file, tell me who to answer first and why, write a short answer for each that asks for exactly what is still missing, and set up the actions (a note with the answer to copy, and the next follow-up date).`,
       weight: 90,
+    });
+
+  if (q("opened") > 0)
+    out.push({
+      id: "opened",
+      title: `Call ${plural(q("opened"), "merchant")} who just opened their link`,
+      why: "They looked at the application or the upload page and stopped. Call while it is fresh.",
+      count: q("opened"),
+      tone: "warn",
+      icon: "zap",
+      href: "/",
+      prompt: `${plural(q("opened"), "merchant")} opened their application or upload link in the last two days and did not finish. Find them (the overview's do-this-now list marks them "opened"), read each file, tell me who to call first and what to say so they finish it on the call, and set up the actions.`,
+      weight: 88,
     });
 
   if (f.readyToHandOff > 0)
@@ -215,8 +229,16 @@ export async function loadRecommendationFacts(
     manager: args.manager,
   });
   // counted on their own: the "do this now" list is capped at 25 and shows one reason per merchant
-  const counts = await q.query<{ new_leads: number; bounced: number }>(
+  const counts = await q.query<{ new_leads: number; bounced: number; opened: number }>(
     `select
+       (select count(distinct c.id)::int from clients c
+          join link_opens o on o.client_id = c.id and o.opened_at > now() - interval '48 hours'
+         where c.brought_in_at is null
+           and not exists (select 1 from trashed_clients t where t.client_id = c.id)
+           and not (o.kind = 'apply' and exists (select 1 from applications a
+                                                  where a.client_id = c.id and a.signed_at >= o.opened_at))
+           and not (o.kind = 'upload' and exists (select 1 from documents d where d.client_id = c.id
+                                                   and d.deleted_at is null and d.created_at >= o.opened_at))) as opened,
        (select count(*)::int from clients c
          where c.brought_in_at is null and c.created_at > now() - interval '24 hours'
            and not exists (select 1 from activities a where a.client_id = c.id and a.kind = 'call')
@@ -226,6 +248,7 @@ export async function loadRecommendationFacts(
            and not exists (select 1 from trashed_clients t where t.client_id = c.id)) as bounced`,
   );
   const queue: Partial<Record<QueueKind, number>> = {
+    opened: counts.rows[0]?.opened ?? 0,
     call_now: counts.rows[0]?.new_leads ?? 0,
     bounced: counts.rows[0]?.bounced ?? 0,
   };

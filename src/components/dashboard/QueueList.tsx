@@ -16,6 +16,12 @@ const KIND: Record<QueueKind, { label: string; icon: GlyphName; chip: string; in
     chip: "bg-accent-soft text-accent ring-accent/25",
     ink: "text-accent",
   },
+  opened: {
+    label: "Opened link",
+    icon: "zap",
+    chip: "bg-warn-soft text-warn ring-warn/20",
+    ink: "text-warn",
+  },
   call_now: {
     label: "Call now",
     icon: "phone",
@@ -47,7 +53,7 @@ const KIND: Record<QueueKind, { label: string; icon: GlyphName; chip: string; in
     ink: "text-warn",
   },
 };
-const ORDER: QueueKind[] = ["reply", "call_now", "ready", "upload", "bounced", "overdue"];
+const ORDER: QueueKind[] = ["reply", "opened", "call_now", "ready", "upload", "bounced", "overdue"];
 
 /** "Do this now": the ranked list of merchants that need a person, with a filter by why they are on it. */
 export function QueueList({ items }: { items: QueueItem[] }) {

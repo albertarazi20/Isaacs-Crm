@@ -42,7 +42,7 @@ export const ASSISTANT_TOOLS: AssistantTool[] = [
   {
     name: "get_merchant",
     description:
-      "One merchant's whole file: contact details, stage, bucket, owner, documents required and received (and which are missing), the signed application, open follow-ups, whether they replied, the latest things they wrote, and the last 15 timeline entries. Read this before advising on a specific merchant.",
+      "One merchant's whole file: contact details, stage, bucket, owner, documents required and received (and which are missing), the signed application, when they last opened their application or upload link, open follow-ups, whether they replied, the latest things they wrote, and the last 15 timeline entries. Read this before advising on a specific merchant.",
     input_schema: obj({ merchant_id: { type: "string", description: "The merchant's id" } }, [
       "merchant_id",
     ]),
@@ -372,6 +372,11 @@ export async function runReadTool(
         order by received_at desc limit 2`,
       [c.id],
     );
+    const opens = await q.query<{ kind: string; at: string }>(
+      `select kind, max(opened_at) as at from link_opens where client_id = $1
+        group by kind order by max(opened_at) desc`,
+      [c.id],
+    );
     const app = await q.query<{ signed_at: string | null }>(
       "select max(signed_at) as signed_at from applications where client_id = $1",
       [c.id],
@@ -399,6 +404,10 @@ export async function runReadTool(
       last_call: c.last_call_at,
       last_call_note: clip(c.last_call_note, 300),
       application_signed_at: app.rows[0]?.signed_at ?? null,
+      last_opened_their_links: opens.rows.map((o) => ({
+        link: o.kind === "apply" ? "application" : "upload link",
+        at: o.at,
+      })),
       documents: d.stips.map((s) => ({
         what: stipLabel(s),
         required: s.required,

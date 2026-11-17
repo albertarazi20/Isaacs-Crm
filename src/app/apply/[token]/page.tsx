@@ -7,6 +7,7 @@ import {
 } from "@/components/upload/MerchantShell";
 import { db } from "@/lib/db";
 import { openApplicationPage } from "@/lib/docs/apply";
+import { SeenBeacon } from "@/components/upload/SeenBeacon";
 
 export const dynamic = "force-dynamic";
 
@@ -55,6 +56,7 @@ export default async function ApplyPage({ params }: { params: Promise<{ token: s
           amount_requested_dollars: a.wanted_amount_dollars ?? undefined,
         }}
       />
+      <SeenBeacon kind="apply" token={token} />
     </MerchantShell>
   );
 }

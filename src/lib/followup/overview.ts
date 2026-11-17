@@ -56,7 +56,8 @@ export interface BucketCount {
   name: string;
   count: number;
 }
-export type QueueKind = "reply" | "call_now" | "ready" | "upload" | "bounced" | "overdue";
+export type QueueKind =
+  "reply" | "opened" | "call_now" | "ready" | "upload" | "bounced" | "overdue";
 export interface QueueItem {
   kind: QueueKind;
   clientId: string;
@@ -189,7 +190,7 @@ const BUCKETS_SQL = `
   where b.active
   order by (b.key is null), b.sort, lower(b.name)`;
 
-// Six lists in rank order; each already sorted the way its kind wants (ord ascending).
+// Seven lists in rank order; each already sorted the way its kind wants (ord ascending).
 const QUEUE_SQL = `${BASE}, q as (
     (select 1 as rank, 'reply' as kind, c.id as client_id, c.business_name, c.contact_name, c.user_id,
             coalesce(nullif(btrim(c.reply_waiting_subject), ''), 'The merchant wrote back') as detail,
@@ -197,7 +198,23 @@ const QUEUE_SQL = `${BASE}, q as (
        from live c where c.reply_waiting_since is not null
       order by c.reply_waiting_since desc limit 25)
     union all
-    (select 2, 'call_now', c.id, c.business_name, c.contact_name, c.user_id,
+    -- opened the upload link or the application in the last two days and has not finished: the warmest call there is
+    (select 2, 'opened', c.id, c.business_name, c.contact_name, c.user_id,
+            case o.kind when 'apply' then 'Opened the application, not signed yet'
+                        else 'Opened the upload link, nothing sent yet' end,
+            o.at, -extract(epoch from o.at)
+       from live c
+       join lateral (select lo.kind, max(lo.opened_at) as at from link_opens lo
+                      where lo.client_id = c.id and lo.opened_at > now() - interval '48 hours'
+                      group by lo.kind order by max(lo.opened_at) desc limit 1) o on true
+      where c.brought_in_at is null
+        and not (o.kind = 'apply' and exists (select 1 from applications a
+                                               where a.client_id = c.id and a.signed_at >= o.at))
+        and not (o.kind = 'upload' and exists (select 1 from documents d
+                                                where d.client_id = c.id and d.deleted_at is null and d.created_at >= o.at))
+      order by o.at desc limit 25)
+    union all
+    (select 3, 'call_now', c.id, c.business_name, c.contact_name, c.user_id,
             'New lead' || case when btrim(c.looking_for) <> '' then ' · wants ' || left(btrim(c.looking_for), 60) else '' end,
             c.created_at, -extract(epoch from c.created_at)
        from live c
@@ -205,7 +222,7 @@ const QUEUE_SQL = `${BASE}, q as (
         and not exists (select 1 from activities a where a.client_id = c.id and a.kind = 'call')
       order by c.created_at desc limit 25)
     union all
-    (select 3, 'ready', c.id, c.business_name, c.contact_name, c.user_id,
+    (select 4, 'ready', c.id, c.business_name, c.contact_name, c.user_id,
             'File complete · ready to hand off', e.entered_at, extract(epoch from e.entered_at)
        from live c
        join enrollments e on e.client_id = c.id and e.stopped_at is null
@@ -213,7 +230,7 @@ const QUEUE_SQL = `${BASE}, q as (
       where c.brought_in_at is null
       order by e.entered_at limit 25)
     union all
-    (select 4, 'upload', c.id, c.business_name, c.contact_name, c.user_id,
+    (select 5, 'upload', c.id, c.business_name, c.contact_name, c.user_id,
             'Uploaded ' || left(d.filename, 80) || ' · not opened yet', d.at, -extract(epoch from d.at)
        from live c
        join lateral (
@@ -225,12 +242,12 @@ const QUEUE_SQL = `${BASE}, q as (
       where c.brought_in_at is null
       order by d.at desc limit 25)
     union all
-    (select 5, 'bounced', c.id, c.business_name, c.contact_name, c.user_id,
+    (select 6, 'bounced', c.id, c.business_name, c.contact_name, c.user_id,
             'Email bounced · fix the address', c.email_bounced_at, -extract(epoch from c.email_bounced_at)
        from live c where c.email_bounced_at is not null and c.brought_in_at is null
       order by c.email_bounced_at desc limit 25)
     union all
-    (select 6, 'overdue', c.id, c.business_name, c.contact_name, c.user_id,
+    (select 7, 'overdue', c.id, c.business_name, c.contact_name, c.user_id,
             'Follow-up was due ' || to_char(t.due_on, 'FMMon FMDD'), t.due_on::timestamptz, extract(epoch from t.due_on::timestamptz)
        from live c
        join lateral (select min(t.due_on) as due_on from timers t

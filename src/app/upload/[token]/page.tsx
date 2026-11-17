@@ -7,6 +7,7 @@ import {
 import { UploadForm } from "@/components/upload/UploadForm";
 import { db } from "@/lib/db";
 import { openUploadPage } from "@/lib/docs/upload";
+import { SeenBeacon } from "@/components/upload/SeenBeacon";
 import { todayIn } from "@/lib/mca/dates";
 
 export const dynamic = "force-dynamic";
@@ -37,6 +38,7 @@ export default async function UploadPage({ params }: { params: Promise<{ token: 
         each. Files go straight to {s.rep_name || "your rep"} and nobody else.
       </MerchantHeading>
       <UploadForm token={s.token} wanted={s.wanted} />
+      <SeenBeacon kind="upload" token={token} />
       <p className="mt-8 text-center text-xs leading-relaxed text-pretty text-muted">
         This link works for two hours. Everything you send is stored privately and shared only with
         the people working on your file.
