@@ -9,8 +9,12 @@
  * element's color-scheme (from the theme cookie) picks the side, so nothing is written twice.
  *
  * Components never use raw colours; they use the Tailwind names mapped in @theme below.
+ *
+ * `.paper` (the merchant's offer page) is always light: it declares the same tokens again under its own light
+ * colour-scheme, so they resolve to their light side there whatever the CRM's mode.
  */
-:root {
+:root,
+.paper {
   /* canvas and panels */
   --bg: light-dark(#f2f2f7, #06060b);
   --surface: light-dark(#ffffff, #0e0e16);
@@ -94,6 +98,9 @@
 html[data-theme="light"] {
   color-scheme: light;
 }
+.paper {
+  color-scheme: light;
+}
 html[data-theme="dark"],
 html:not([data-theme]) {
   color-scheme: dark;
@@ -130,6 +137,7 @@ html[data-theme="system"] {
     var(--font-geist), ui-sans-serif, -apple-system, BlinkMacSystemFont, "SF Pro Text", "Inter",
     "Segoe UI", Roboto, system-ui, sans-serif;
   --font-mono: var(--font-geist-mono), ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --font-serif: var(--font-offer-serif), "Source Serif 4", Georgia, "Times New Roman", serif;
   --radius-sm: 7px;
   --radius-md: 10px;
   --radius-lg: 12px;

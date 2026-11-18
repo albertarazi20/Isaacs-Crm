@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { MerchantNotice, MerchantShell } from "@/components/upload/MerchantShell";
+import { offerSerif } from "@/components/offers/fonts";
 import { OfferView } from "@/components/offers/OfferView";
 import { getSession } from "@/lib/auth/server";
 import { requestTimeMs } from "@/lib/server-time";
@@ -23,7 +24,7 @@ export default async function OfferPageRoute({ params }: { params: Promise<{ tok
   const offer = await openOffer(token);
   if (!offer) {
     return (
-      <MerchantShell label="Your offer">
+      <MerchantShell label="Private offer" paper className={offerSerif.variable}>
         <MerchantNotice icon="link" tone="warn" title="This link isn't valid">
           Ask your contact to send the offer again. It takes them one click.
         </MerchantNotice>
@@ -31,7 +32,7 @@ export default async function OfferPageRoute({ params }: { params: Promise<{ tok
     );
   }
   return (
-    <MerchantShell label="Your offer" wide>
+    <MerchantShell label="Private offer" wide paper className={offerSerif.variable}>
       <OfferView
         offer={offer}
         token={token}

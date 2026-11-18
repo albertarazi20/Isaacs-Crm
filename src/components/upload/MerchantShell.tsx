@@ -34,22 +34,49 @@ export function BrandLogo({ className }: { className?: string }) {
 export function MerchantShell({
   label,
   wide,
+  paper,
+  className,
   children,
 }: {
   /** What this page is, in a word or two ("Documents"). */
   label?: string;
   wide?: boolean;
+  /** Always light, on warm paper under a near-black bar, whatever the CRM's own mode (the offer page). */
+  paper?: boolean;
+  className?: string;
   children: ReactNode;
 }) {
   const column = wide ? "max-w-2xl" : "max-w-lg";
   return (
-    <div className="flex min-h-dvh flex-col">
-      <header className="glass sticky top-0 z-20 border-b border-border">
-        <div className={cn("mx-auto flex h-14 items-center justify-between gap-4 px-5", column)}>
-          <BrandLogo className="h-[22px]" />
-          {label ? <p className="eyebrow truncate">{label}</p> : null}
-        </div>
-      </header>
+    <div
+      className={cn("flex min-h-dvh flex-col", paper && "paper bg-[#f6f5f1] text-text", className)}
+    >
+      {paper ? (
+        <header className="sticky top-0 z-20 border-b border-white/10 bg-[#0b0b12]">
+          <div className={cn("mx-auto flex h-16 items-center justify-between gap-4 px-5", column)}>
+            <Image
+              src="/brand/SC-horizontal-dark-web.png"
+              alt="Selective Capital"
+              width={800}
+              height={129}
+              priority
+              className="h-[22px] w-auto"
+            />
+            {label ? (
+              <p className="truncate text-[11px] font-semibold tracking-[0.22em] text-violet-300 uppercase">
+                {label}
+              </p>
+            ) : null}
+          </div>
+        </header>
+      ) : (
+        <header className="glass sticky top-0 z-20 border-b border-border">
+          <div className={cn("mx-auto flex h-14 items-center justify-between gap-4 px-5", column)}>
+            <BrandLogo className="h-[22px]" />
+            {label ? <p className="eyebrow truncate">{label}</p> : null}
+          </div>
+        </header>
+      )}
       <main
         className={cn(
           "mx-auto w-full flex-1 animate-rise px-5 pt-8 pb-[max(2.5rem,env(safe-area-inset-bottom))] sm:pt-12",

@@ -120,11 +120,12 @@ export default async function offersFlow({ email }) {
     await mp.goto(url, { waitUntil: "networkidle" });
     const terms = mp.getByRole("region", { name: "Your funding offer" });
     check(
-      "the merchant's page shows who it is for, the terms and the countdown",
+      "the merchant's page shows who it is for, the terms (no final payment), same-day funding and the countdown",
       (await mp.getByRole("heading", { name: m.business_name }).count()) === 1 &&
         (await terms.innerText()).includes("$80,850") &&
         (await terms.innerText()).includes("$4,197.98") &&
-        (await terms.innerText()).includes("Final payment") &&
+        !(await terms.innerText()).includes("Final payment") &&
+        (await terms.innerText()).includes("Same-day funding available") &&
         (await terms.innerText()).includes("1.350") &&
         /\d+[dhm]( \d+[hm])? (left|remaining)/i.test(
           await mp.getByRole("region", { name: "How long the offer stands" }).innerText(),

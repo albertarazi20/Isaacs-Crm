@@ -45,7 +45,6 @@ export function OfferView({
   const left = timeLeft(offer.expiresAt, now);
   const running = state === "open" && left !== null;
   const freq = FREQUENCY_WORDS[offer.frequency];
-  const uneven = offer.finalPaymentCents !== offer.paymentCents;
 
   // the merchant has the page in front of them: told to their rep once (a mail scanner fetching the link is not)
   useEffect(() => {
@@ -75,19 +74,20 @@ export function OfferView({
         <p className="text-[11.5px] font-semibold tracking-[0.22em] text-accent uppercase">
           Prepared for
         </p>
-        <h1 className="mt-2 text-[32px] leading-[1.08] font-semibold tracking-[-0.03em] text-balance sm:text-[40px]">
+        <h1 className="mt-2 font-serif text-[36px] leading-[1.08] font-medium tracking-[-0.015em] text-balance sm:text-[44px]">
           {offer.businessName}
         </h1>
-        <p className="mt-6 text-[11.5px] font-semibold tracking-[0.22em] text-muted uppercase">
-          From {offer.repName ? `${offer.repName} at ` : ""}
+        <p className="mt-7 text-[11.5px] font-semibold tracking-[0.22em] text-muted uppercase">
+          {offer.repName ? `From ${offer.repName} · ` : ""}
           {offer.shopName}
         </p>
-        <h2 className="mt-2 text-[26px] leading-tight font-semibold tracking-[-0.02em] sm:text-[30px]">
-          Your custom funding offer.
+        <h2 className="mt-2 font-serif text-[30px] leading-tight font-medium tracking-[-0.01em] sm:text-[34px]">
+          Your funding offer is ready.
         </h2>
-        <p className="mt-3 text-[15px] leading-relaxed text-pretty text-text-2">
-          {offer.firstName ? `${offer.firstName}, here` : "Here"} are the terms we put together for
-          you. Review the details below and accept when you&apos;re ready to move forward.
+        <p className="mt-3 text-[15.5px] leading-relaxed text-pretty text-text-2">
+          {offer.firstName ? `${offer.firstName}, here` : "Here"} are the terms we put together for{" "}
+          {offer.businessName}. Look them over, upload your documents and accept below. Accept early
+          in the day and you can be funded the same day.
         </p>
       </header>
 
@@ -117,7 +117,7 @@ export function OfferView({
                 ? "No longer available"
                 : "This offer has ended"}
         </p>
-        <p className="mt-1 text-[17px] font-medium">{offer.validThrough}</p>
+        <p className="mt-1 font-serif text-[19px] font-medium">{offer.validThrough}</p>
         {running ? (
           <p className="mt-1.5 text-[12px] font-semibold tracking-[0.16em] text-text-2 uppercase tabular-nums">
             {left} remaining
@@ -138,7 +138,7 @@ export function OfferView({
           <p className="relative text-[11px] font-semibold tracking-[0.22em] text-violet-200 uppercase">
             Your funding offer
           </p>
-          <p className="relative mt-2 text-[44px] leading-none font-semibold tracking-[-0.035em] tabular-nums">
+          <p className="relative mt-2 font-serif text-[52px] leading-none font-medium tracking-[-0.02em] tabular-nums">
             {exactMoney(offer.fundedCents)}
           </p>
           {running ? (
@@ -148,11 +148,7 @@ export function OfferView({
             </p>
           ) : null}
           <div className="relative mt-4 flex flex-wrap gap-2">
-            {[
-              `${offer.payments} payments`,
-              freq.label,
-              termWords(offer.frequency, offer.payments),
-            ].map((t) => (
+            {[freq.label, termWords(offer.frequency, offer.payments)].map((t) => (
               <span
                 key={t}
                 className="rounded-lg border border-white/15 bg-white/10 px-2.5 py-1 text-[12.5px] font-medium"
@@ -168,7 +164,7 @@ export function OfferView({
               <p className="text-[11px] font-semibold tracking-[0.2em] text-muted uppercase">
                 {freq.payment}
               </p>
-              <p className="mt-1.5 text-[34px] leading-none font-semibold tracking-[-0.03em] tabular-nums">
+              <p className="mt-1.5 font-serif text-[38px] leading-none font-medium tracking-[-0.015em] tabular-nums">
                 {exactMoney(offer.paymentCents)}
               </p>
             </div>
@@ -181,7 +177,6 @@ export function OfferView({
               ["Factor rate", factorWords(offer.factorRate)],
               ["Funded amount", exactMoney(offer.fundedCents)],
               ["Total payback", exactMoney(offer.paybackCents)],
-              ...(uneven ? [["Final payment", exactMoney(offer.finalPaymentCents)]] : []),
               ["Term", termWords(offer.frequency, offer.payments)],
             ].map(([k, v]) => (
               <div key={k} className="flex items-center justify-between gap-3 py-3.5">
@@ -190,12 +185,6 @@ export function OfferView({
               </div>
             ))}
           </dl>
-          {uneven ? (
-            <p className="mt-1 text-[12.5px] text-muted">
-              The final payment carries the few cents left over, so the payments add up to the total
-              payback exactly.
-            </p>
-          ) : null}
         </div>
       </section>
 
@@ -266,7 +255,7 @@ function Accepted({ offer }: { offer: OfferPage }) {
       <span className="mx-auto flex size-14 animate-pop items-center justify-center rounded-full bg-good-soft text-good ring-1 ring-good/25">
         <Glyph name="check" className="size-6" strokeWidth={2.2} />
       </span>
-      <h2 className="mt-4 text-[22px] font-semibold tracking-tight">Offer accepted</h2>
+      <h2 className="mt-4 font-serif text-[26px] font-medium tracking-[-0.01em]">Offer accepted</h2>
       <p className="mt-2 text-[15px] leading-relaxed text-text-2">
         Thank you{offer.firstName ? `, ${offer.firstName}` : ""}. {offer.repName || "Your contact"}{" "}
         will review your documents and be in touch about next steps.
@@ -388,11 +377,11 @@ function AcceptForm({
       className="overflow-hidden rounded-3xl border border-border bg-surface shadow-card"
     >
       <div className="border-b border-border px-6 py-5">
-        <h2 className="text-[22px] font-semibold tracking-tight">Accept your offer</h2>
+        <h2 className="font-serif text-[26px] font-medium tracking-[-0.01em]">Accept your offer</h2>
         <p className="mt-1 text-[14.5px] text-text-2">
           {n === 0
-            ? "Confirm your details to move forward."
-            : `Confirm your details and upload the ${n === 1 ? "document" : `${n} documents`} needed to move forward.`}
+            ? "Confirm your details and accept. We take it from there."
+            : `Upload the ${n === 1 ? "document" : `${n} documents`} below and accept. We take it from there.`}
         </p>
       </div>
       <div className="space-y-4 px-6 py-5">
@@ -471,7 +460,7 @@ function AcceptForm({
                       aria-label={`Upload your ${d.label.toLowerCase()}`}
                       disabled={s === "sending" || !offer.uploadToken || preview}
                       onClick={() => inputs.current[d.kind]?.click()}
-                      className={buttonClass("primary", "md", "h-11 shrink-0 px-5")}
+                      className="inline-flex h-11 shrink-0 items-center justify-center rounded-xl bg-[#0b0b12] px-5 text-[14px] font-semibold text-white transition hover:bg-[#1c1c28] active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
                     >
                       {s === "sending" ? "Sending…" : s === "error" ? "Try again" : "Upload"}
                     </button>
@@ -498,7 +487,7 @@ function AcceptForm({
           type="button"
           disabled={!ready || busy || preview}
           onClick={() => void accept()}
-          className="h-14 w-full rounded-2xl bg-linear-to-r from-violet-600 to-fuchsia-600 text-[16px] font-semibold text-white shadow-glow transition active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-50"
+          className="h-14 w-full rounded-2xl bg-linear-to-r from-[#2e7bff] to-[#7c3aed] text-[16px] font-semibold text-white shadow-glow transition active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-50"
         >
           {busy ? "Accepting…" : n > 0 ? "Accept offer & submit documents" : "Accept offer"}
         </button>
