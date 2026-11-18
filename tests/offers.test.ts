@@ -141,11 +141,11 @@ describe("making an offer", () => {
     });
     expect(mail.subject).toBe("Your funding offer for Winchester Creek Farm is ready");
     expect(mail.html_body).toContain(`/offer/${token}`);
-    // the email carries the database's numbers and links the page to accept
+    // the email shows the amount and links the page; the payment and the other terms are only on the page
     expect(mail.text_body).toContain(`/offer/${token}`);
     expect(mail.html_body).toContain("$80,850");
-    expect(mail.html_body).toContain("$4,197.98");
-    expect(mail.text_body).toContain("$4,197.98");
+    expect(mail.html_body).not.toContain("$4,197.98");
+    expect(mail.text_body).not.toContain("$4,197.98");
     const line = await one<{ body: string }>(
       "select body from activities where client_id = $1 and body like 'Offer emailed%'",
       [ritaMerchant],

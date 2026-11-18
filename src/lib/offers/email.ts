@@ -1,16 +1,17 @@
 /**
- * The email that carries an offer: the first design the owner picked (a white card, the dark offer box, the terms
- * in rows, a violet button), polished: the real logo, Inter with tabular figures (Helvetica/Arial where a mail app
+ * The email that carries an offer: the first design the owner picked (a white card, the dark offer box, a violet
+ * button), showing only the amount, same-day funding and how long it stands; the rest is on the offer page. Polished: the real logo, Inter with tabular figures (Helvetica/Arial where a mail app
  * will not load a web font), and the brand glow in the offer box. A plain-text part says the same.
  */
 import { formatMoney } from "../money";
-import { exactMoney, FREQUENCY_WORDS, factorWords, termWords, type Frequency } from "./terms";
+import type { Frequency } from "./terms";
 
 export interface OfferEmailInput {
   number: string;
   firstName: string;
   businessName: string;
   shopName: string;
+  /** The amount is shown; the other terms are kept for the CRM's record and stay on the offer page. */
   fundedCents: number;
   paymentCents: number;
   /** The last payment when it carries the leftover cents; omitted or equal when it does not. */
@@ -44,12 +45,6 @@ const NUM = "font-variant-numeric:tabular-nums;font-feature-settings:'tnum' 1";
 
 export function offerEmail(o: OfferEmailInput): { subject: string; text: string; html: string } {
   const amount = formatMoney(o.fundedCents);
-  const payment = exactMoney(o.paymentCents);
-  const final =
-    o.finalPaymentCents !== undefined && o.finalPaymentCents !== o.paymentCents
-      ? exactMoney(o.finalPaymentCents)
-      : null;
-  const freq = FREQUENCY_WORDS[o.frequency];
   const hi = o.firstName.trim() ? `Hi ${o.firstName.trim()},` : "Hi,";
   const shop = o.shopName.trim() || "Selective Capital";
   const business = o.businessName.trim() || "your business";
@@ -62,13 +57,14 @@ export function offerEmail(o: OfferEmailInput): { subject: string; text: string;
   const text = [
     hi,
     "",
-    "Following up on our call, here are the terms we put together for you.",
+    "Following up on our call, here is the offer we put together for you.",
     "",
     `Funding: ${amount}`,
-    `${freq.payment}: ${payment} (${o.payments} payments${final ? `, final payment ${final}` : ""})`,
-    `Factor rate: ${factorWords(o.factorRate)}`,
-    `Term: ${termWords(o.frequency, o.payments)}`,
     `Valid through: ${o.validThrough}`,
+    "",
+    "Same-day funding available.",
+    "",
+    "Everything is on your private offer page: review the terms, upload your documents and accept online. Accept early in the day and you can be funded the same day.",
     "",
     `View and accept your offer: ${o.url}`,
     ...(note ? ["", note] : []),
@@ -98,20 +94,18 @@ export function offerEmail(o: OfferEmailInput): { subject: string; text: string;
 <tr><td style="background:#ffffff;border:1px solid #ebe9e3;border-radius:20px;padding:34px 32px 12px">
 <p style="margin:0 0 10px;font:600 11px ${FONT};letter-spacing:2.2px;text-transform:uppercase;color:#7c3aed">Prepared for ${esc(business)}</p>
 <h1 style="margin:0 0 14px;font:700 28px/1.2 ${FONT};letter-spacing:-0.6px;color:#16121f">Your funding offer is ready</h1>
-<p style="margin:0 0 24px;font:400 15px/1.65 ${FONT};color:#3f3f4e">${esc(hi)} following up on our call, here are the terms we put together for you.</p>
+<p style="margin:0 0 24px;font:400 15px/1.65 ${FONT};color:#3f3f4e">${esc(hi)} following up on our call, here is the offer we put together for you.</p>
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" bgcolor="#16121f" style="background:#16121f url('${esc(o.heroUrl)}') center/cover no-repeat;border-radius:16px">
 <tr><td style="padding:26px 26px 24px">
 <p style="margin:0;font:600 11px ${FONT};letter-spacing:2.2px;text-transform:uppercase;color:#c4b5fd">Your funding offer</p>
 <p style="margin:8px 0 0;font:700 44px/1.05 ${FONT};letter-spacing:-1.4px;color:#ffffff;${NUM}">${esc(amount)}</p>
-<p style="margin:12px 0 0;font:500 14px/1.5 ${FONT};color:#d4d4e2;${NUM}">${esc(`${freq.payment}: ${payment} · ${o.payments} payments`)}</p>
+<table role="presentation" cellpadding="0" cellspacing="0" style="margin-top:16px"><tr><td style="background:#16203f;border:1px solid #3b6cf5;border-radius:999px;padding:6px 13px 6px 11px;font:600 13px ${FONT};color:#e3e9ff"><span style="color:#60a5fa">&#9679;</span>&nbsp; Same-day funding available</td></tr></table>
 </td></tr></table>
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-top:16px">
-${row("Factor rate", factorWords(o.factorRate))}
-${final ? row("Final payment", final) : ""}
-${row("Term", termWords(o.frequency, o.payments))}
 ${row("Valid through", o.validThrough)}
 </table>
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:26px 0 24px"><tr><td align="center">
+<p style="margin:22px 0 0;font:400 15px/1.65 ${FONT};color:#3f3f4e">Everything is on your private offer page: review the terms, upload your documents and accept online. Accept early in the day and you can be funded the same day.</p>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:24px 0 24px"><tr><td align="center">
 <table role="presentation" cellpadding="0" cellspacing="0"><tr><td bgcolor="#7c3aed" style="background:#7c3aed;background-image:linear-gradient(135deg,#6d4af0,#7c3aed);border-radius:999px">
 <a href="${esc(o.url)}" style="display:block;padding:15px 34px;font:600 15px ${FONT};color:#ffffff;text-decoration:none;letter-spacing:0.1px">View and accept your offer</a>
 </td></tr></table>

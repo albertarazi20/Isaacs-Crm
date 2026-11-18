@@ -141,6 +141,12 @@ export function OfferView({
           <p className="relative mt-2 text-[44px] leading-none font-semibold tracking-[-0.035em] tabular-nums">
             {exactMoney(offer.fundedCents)}
           </p>
+          {running ? (
+            <p className="relative mt-3 inline-flex items-center gap-2 rounded-full border border-[#3b6cf5] bg-[#16203f] py-1.5 pr-3.5 pl-3 text-[13px] font-semibold text-[#e3e9ff]">
+              <span aria-hidden className="size-2 rounded-full bg-[#60a5fa]" />
+              Same-day funding available
+            </p>
+          ) : null}
           <div className="relative mt-4 flex flex-wrap gap-2">
             {[
               `${offer.payments} payments`,

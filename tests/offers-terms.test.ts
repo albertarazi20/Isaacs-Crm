@@ -120,12 +120,14 @@ describe("the email", () => {
     for (const part of [mail.text, mail.html]) {
       expect(part).toContain("https://crm.example.com/offer/abc");
       expect(part).toContain("Thursday, November 19 at 4:32 PM EST");
-      for (const term of ["$80,850", "$954.93", "$955.08", "1.500", "127 payments"])
-        expect(part, term).toContain(term);
+      expect(part).toContain("$80,850");
+      // payment, final payment, factor, payback and count stay on the page
+      for (const term of ["$954.93", "$955.08", "$121,275", "1.500", "127"])
+        expect(part, term).not.toContain(term);
     }
     expect(mail.text.startsWith("Hi Gayle,")).toBe(true);
     expect(mail.text).toContain(
-      "Following up on our call, here are the terms we put together for you.",
+      "Following up on our call, here is the offer we put together for you.",
     );
     expect(mail.text).toContain("Josh Miller\nSelective Capital\n(305) 555-0100\njosh@example.com");
     expect(mail.html).toMatch(
@@ -133,13 +135,13 @@ describe("the email", () => {
     );
     expect(mail.html).toContain("View and accept your offer");
     expect(mail.html).toContain("Inter,");
+    for (const part of [mail.text, mail.html]) {
+      expect(part).toContain("Same-day funding available");
+      expect(part).toContain("Everything is on your private offer page");
+    }
   });
-  it("leaves out the final payment when it is the same as the others", () => {
-    const even = offerEmail({ ...input, finalPaymentCents: 95_493 });
-    expect(even.text).not.toContain("final payment");
-    expect(even.html).not.toContain("Final payment");
-    const bare = offerEmail({ ...input, firstName: " " });
-    expect(bare.text.startsWith("Hi,")).toBe(true);
+  it("greets without a name when there is none", () => {
+    expect(offerEmail({ ...input, firstName: " " }).text.startsWith("Hi,")).toBe(true);
   });
   it("never lets a merchant's own name write HTML", () => {
     expect(mail.html).toContain("Winchester &lt;Creek&gt; &quot;Farm&quot;");
