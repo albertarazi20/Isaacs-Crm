@@ -115,31 +115,31 @@ describe("the email", () => {
     repEmail: "josh@example.com",
   };
   const mail = offerEmail(input);
-  it("shows the amount and same-day funding, links the page and says how long it stands, without the other terms", () => {
-    expect(mail.subject).toBe("Gayle, you're approved for $80,850");
+  it("shows the terms, links the page to accept, and says how long it stands, in both parts", () => {
+    expect(mail.subject).toBe('Your funding offer for Winchester <Creek> "Farm" is ready');
     for (const part of [mail.text, mail.html]) {
       expect(part).toContain("https://crm.example.com/offer/abc");
       expect(part).toContain("Thursday, November 19 at 4:32 PM EST");
-      expect(part).toContain("$80,850");
-      expect(part).toMatch(/[Ss]ame.day/);
-      // payment, factor, payback and count stay on the page
-      for (const term of ["$954.92", "$955.08", "$121,275", "1.500", "127"])
-        expect(part, term).not.toContain(term);
+      for (const term of ["$80,850", "$954.93", "$955.08", "1.500", "127 payments"])
+        expect(part, term).toContain(term);
     }
-    expect(mail.text.startsWith("Hey Gayle,")).toBe(true);
+    expect(mail.text.startsWith("Hi Gayle,")).toBe(true);
+    expect(mail.text).toContain(
+      "Following up on our call, here are the terms we put together for you.",
+    );
     expect(mail.text).toContain("Josh Miller\nSelective Capital\n(305) 555-0100\njosh@example.com");
-    // the button, plus the pasteable link under the card
     expect(mail.html).toMatch(
       /<a href="https:\/\/crm\.example\.com\/offer\/abc" style="display:block/,
     );
-    expect(mail.html).toContain("See my offer &nbsp;&rarr;");
-    expect(mail.html).toContain("https://crm.example.com/brand/offer-hero.png");
+    expect(mail.html).toContain("View and accept your offer");
+    expect(mail.html).toContain("Inter,");
   });
-  it("still reads right with no first name or rep phone", () => {
-    const bare = offerEmail({ ...input, firstName: " ", repPhone: "" });
-    expect(bare.subject).toBe('Winchester <Creek> "Farm" is approved for $80,850');
-    expect(bare.text.startsWith("Hi there,")).toBe(true);
-    expect(bare.text).toContain("Questions? Just reply.\n");
+  it("leaves out the final payment when it is the same as the others", () => {
+    const even = offerEmail({ ...input, finalPaymentCents: 95_493 });
+    expect(even.text).not.toContain("final payment");
+    expect(even.html).not.toContain("Final payment");
+    const bare = offerEmail({ ...input, firstName: " " });
+    expect(bare.text.startsWith("Hi,")).toBe(true);
   });
   it("never lets a merchant's own name write HTML", () => {
     expect(mail.html).toContain("Winchester &lt;Creek&gt; &quot;Farm&quot;");

@@ -83,11 +83,11 @@ export function OfferView({
           {offer.shopName}
         </p>
         <h2 className="mt-2 text-[26px] leading-tight font-semibold tracking-[-0.02em] sm:text-[30px]">
-          {offer.firstName ? `Here's your offer, ${offer.firstName}.` : "Here's your offer."}
+          Your custom funding offer.
         </h2>
         <p className="mt-3 text-[15px] leading-relaxed text-pretty text-text-2">
-          Upload your documents and hit Accept. Done early in the day, you can be funded the same
-          day.
+          {offer.firstName ? `${offer.firstName}, here` : "Here"} are the terms we put together for
+          you. Review the details below and accept when you&apos;re ready to move forward.
         </p>
       </header>
 
@@ -134,19 +134,13 @@ export function OfferView({
         aria-label="Your funding offer"
         className="overflow-hidden rounded-3xl border border-border bg-surface shadow-card"
       >
-        <div className="relative overflow-hidden bg-[#0b0b12] bg-[url(/brand/offer-hero.png)] bg-cover bg-top px-6 py-6 text-white">
+        <div className="relative overflow-hidden bg-[#16121f] bg-[url(/brand/offer-hero.png)] bg-cover bg-center px-6 py-6 text-white">
           <p className="relative text-[11px] font-semibold tracking-[0.22em] text-violet-200 uppercase">
             Your funding offer
           </p>
           <p className="relative mt-2 text-[44px] leading-none font-semibold tracking-[-0.035em] tabular-nums">
             {exactMoney(offer.fundedCents)}
           </p>
-          {running ? (
-            <p className="relative mt-3 inline-flex items-center gap-2 rounded-full border border-[#3b6cf5] bg-[#16203f] py-1.5 pr-3.5 pl-3 text-[13px] font-semibold text-[#e3e9ff]">
-              <span aria-hidden className="size-2 rounded-full bg-[#60a5fa]" />
-              Same-day funding available
-            </p>
-          ) : null}
           <div className="relative mt-4 flex flex-wrap gap-2">
             {[
               `${offer.payments} payments`,

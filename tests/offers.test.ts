@@ -139,14 +139,13 @@ describe("making an offer", () => {
       user_id: rita,
       status: "queued",
     });
-    expect(mail.subject).toMatch(/approved for \$80,850$/);
+    expect(mail.subject).toBe("Your funding offer for Winchester Creek Farm is ready");
     expect(mail.html_body).toContain(`/offer/${token}`);
-    // the email shows the amount and links the page; the payment and the rest of the terms are only on the page
+    // the email carries the database's numbers and links the page to accept
     expect(mail.text_body).toContain(`/offer/${token}`);
     expect(mail.html_body).toContain("$80,850");
-    expect(mail.html_body).toContain("/brand/offer-hero.png");
-    expect(mail.text_body).not.toContain("$4,197.98");
-    expect(mail.html_body).not.toContain("$4,197.98");
+    expect(mail.html_body).toContain("$4,197.98");
+    expect(mail.text_body).toContain("$4,197.98");
     const line = await one<{ body: string }>(
       "select body from activities where client_id = $1 and body like 'Offer emailed%'",
       [ritaMerchant],
