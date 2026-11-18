@@ -13,7 +13,22 @@ export interface RawEmail {
   references?: readonly string[];
   /** Extra headers, e.g. List-Unsubscribe. Names are validated; values may not break lines. */
   headers?: Readonly<Record<string, string>>;
+  /** Files carried with the message (an accepted offer's documents to the rep). */
+  attachments?: readonly Attachment[];
 }
+
+export interface Attachment {
+  filename: string;
+  contentType: string;
+  bytes: Uint8Array;
+}
+
+/** A file name safe inside a MIME header: printable ASCII, no quotes or line breaks. */
+const headerFilename = (name: string) =>
+  name
+    .replace(/[^\x20-\x7e]/g, "_")
+    .replace(/["\\]/g, "_")
+    .slice(0, 120) || "file";
 
 function assertHeaderSafe(name: string, value: string): void {
   if (/[\r\n]/.test(value)) throw new Error(`${name} contains a line break`);
@@ -80,7 +95,53 @@ export function buildRawEmail(m: RawEmail): string {
     "MIME-Version: 1.0",
   ];
   let message: string;
-  if (m.html !== undefined && m.html.trim() !== "") {
+  if (m.attachments && m.attachments.length > 0) {
+    // multipart/mixed: the readable part (text, or text and HTML) first, then each file
+    const stamp = `${Buffer.from(m.subject + m.to)
+      .toString("hex")
+      .slice(0, 16)}_${Date.now().toString(36)}`;
+    const mixed = `=_mix_${stamp}`;
+    const alt = `=_alt_${stamp}`;
+    const readable =
+      m.html !== undefined && m.html.trim() !== ""
+        ? [
+            `Content-Type: multipart/alternative; boundary="${alt}"`,
+            "",
+            `--${alt}`,
+            'Content-Type: text/plain; charset="UTF-8"',
+            "Content-Transfer-Encoding: base64",
+            "",
+            b64(m.text),
+            `--${alt}`,
+            'Content-Type: text/html; charset="UTF-8"',
+            "Content-Transfer-Encoding: base64",
+            "",
+            b64(m.html),
+            `--${alt}--`,
+          ].join("\r\n")
+        : [
+            'Content-Type: text/plain; charset="UTF-8"',
+            "Content-Transfer-Encoding: base64",
+            "",
+            body,
+          ].join("\r\n");
+    const files = m.attachments.map((a) => {
+      if (!/^[\w.+-]+\/[\w.+-]+$/.test(a.contentType)) throw new Error("bad attachment type");
+      const name = headerFilename(a.filename);
+      return [
+        `--${mixed}`,
+        `Content-Type: ${a.contentType}; name="${name}"`,
+        `Content-Disposition: attachment; filename="${name}"`,
+        "Content-Transfer-Encoding: base64",
+        "",
+        Buffer.from(a.bytes)
+          .toString("base64")
+          .replace(/(.{76})/g, "$1\r\n"),
+      ].join("\r\n");
+    });
+    headers.push(`Content-Type: multipart/mixed; boundary="${mixed}"`);
+    message = `${headers.join("\r\n")}\r\n\r\n--${mixed}\r\n${readable}\r\n${files.join("\r\n")}\r\n--${mixed}--\r\n`;
+  } else if (m.html !== undefined && m.html.trim() !== "") {
     // a boundary that cannot occur in base64 parts (it has characters base64 never uses)
     const boundary = `=_alt_${Buffer.from(m.subject + m.to)
       .toString("hex")

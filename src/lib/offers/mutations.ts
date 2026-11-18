@@ -9,6 +9,7 @@ import {
   computeTerms,
   factorWords,
   finalPayment,
+  offerNumber,
   validThroughWords,
   type OfferInput,
 } from "./terms";
@@ -68,11 +69,12 @@ export async function createOffer(q: Db, i: OfferInput, ctx: OfferCtx): Promise<
     token: string;
     payment_cents: string;
     payback_cents: string;
+    created_at: string;
   }>(
     `insert into merchant_offers (client_id, approval_id, funded_cents, factor_rate, frequency, payments, funder, message,
                                   docs, expires_at)
      values ($1, $2, $3, $4, $5, $6, $7, $8, $9::text[], $10)
-     returning id, token, payment_cents::text, payback_cents::text`,
+     returning id, token, payment_cents::text, payback_cents::text, created_at::text`,
     [
       i.clientId,
       i.approvalId ?? null,
@@ -95,6 +97,10 @@ export async function createOffer(q: Db, i: OfferInput, ctx: OfferCtx): Promise<
   let email: EnqueueResult | null = null;
   if (i.send) {
     const mail = offerEmail({
+      number: offerNumber(o.id, o.created_at),
+      message: i.message,
+      paybackCents: Number(o.payback_cents),
+      logoUrl: `${ctx.appUrl.replace(/\/+$/, "")}/brand/SC-horizontal-dark-web.png`,
       firstName: c.contact_name.trim().split(/\s+/)[0] ?? "",
       businessName: c.business_name,
       shopName: c.shop_name,

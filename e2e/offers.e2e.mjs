@@ -2,6 +2,7 @@
 // the email is queued, the rep's own preview of the page counts nothing, and the merchant (signed out) opens it, uploads
 // the two documents into their slots and accepts. Every step is read back from the DATABASE.
 // Run: pnpm e2e offers
+import { readFileSync } from "node:fs";
 import { BASE, check, openBrowser, withDb } from "./lib.mjs";
 import { chromium } from "playwright-core";
 
@@ -20,6 +21,10 @@ const PNG = Buffer.from(
   "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==",
   "base64",
 );
+
+const cronSecret = () =>
+  process.env.CRON_SECRET ??
+  /^CRON_SECRET=(.*)$/m.exec(readFileSync(new URL("../.env.local", import.meta.url), "utf8"))?.[1];
 
 export default async function offersFlow({ email }) {
   const me = await one("select id from app_users where email = $1", [email]);
@@ -121,7 +126,7 @@ export default async function offersFlow({ email }) {
         (await terms.innerText()).includes("$4,197.98") &&
         (await terms.innerText()).includes("Final payment") &&
         (await terms.innerText()).includes("1.350") &&
-        /remaining/i.test(
+        /\d+[dhm]( \d+[hm])? left/i.test(
           await mp.getByRole("region", { name: "How long the offer stands" }).innerText(),
         ),
     );
@@ -184,13 +189,32 @@ export default async function offersFlow({ email }) {
       (await mp.getByRole("heading", { name: "Offer accepted" }).count()) === 1,
     );
 
+    // the outbox job scans the uploads, then sends the rep their copy (here without a mailbox: it says why)
+    const job = await fetch(`${BASE}/api/cron/outbox`, {
+      headers: { authorization: `Bearer ${cronSecret()}` },
+    });
+    check(
+      "the outbox job runs and reports the rep's copies",
+      job.status === 200 || job.status === 502,
+    );
     // back on the CRM
     await page.goto(`${BASE}/clients/${m.id}`, { waitUntil: "networkidle" });
+    const card = await page.getByRole("region", { name: "Offers" }).innerText();
     check(
-      "the merchant's page now shows it accepted",
-      /Accepted[\s\S]*Accepted (just now|.+ago)/.test(
-        await page.getByRole("region", { name: "Offers" }).innerText(),
-      ),
+      "the merchant's page shows it accepted, that it was opened, and whether your copy went",
+      /Accepted/.test(card) &&
+        /Opened (once|\d+ times) · first /.test(card) &&
+        /Your copy (with the documents went to your email|didn't send)/.test(card),
+      card.replace(/\s+/g, " ").slice(0, 300),
+    );
+    const notice = await one(
+      "select accept_notice_attempts as attempts, accept_notified_at is not null as done, accept_notice_error as error from merchant_offers where id = $1",
+      [o.id],
+    );
+    check(
+      "accepting tried to email the rep their copy, and kept the answer (database)",
+      notice.attempts >= 1 && (notice.done || notice.error.length > 0),
+      JSON.stringify(notice),
     );
   } finally {
     await merchant?.close();

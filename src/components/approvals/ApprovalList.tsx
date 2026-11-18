@@ -290,6 +290,38 @@ function ApprovalItem({
                 .filter(Boolean)
                 .join(" · ")}
             </p>
+            {row.offer ? (
+              <p
+                className={cn(
+                  "mt-1.5 inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11.5px] font-semibold ring-1 ring-inset",
+                  row.offer.state === "accepted"
+                    ? "bg-good-soft text-good ring-good/25"
+                    : row.offer.state === "sent" && row.offer.views > 0
+                      ? "bg-accent-soft text-accent ring-accent/30"
+                      : "bg-surface-2 text-muted ring-border",
+                )}
+              >
+                <Glyph
+                  name={
+                    row.offer.state === "accepted"
+                      ? "check"
+                      : row.offer.state === "sent" && row.offer.views > 0
+                        ? "eye"
+                        : "send"
+                  }
+                  className="size-3.5"
+                />
+                {row.offer.state === "accepted"
+                  ? `Offer of ${formatMoney(row.offer.funded_cents)} accepted`
+                  : row.offer.state === "sent"
+                    ? row.offer.views > 0 && row.offer.last_viewed_at
+                      ? `Offer opened ${row.offer.views === 1 ? "once" : `${row.offer.views}×`} · ${timeAgo(row.offer.last_viewed_at, new Date(nowMs))}`
+                      : "Offer sent · not opened yet"
+                    : row.offer.state === "expired"
+                      ? "Offer expired"
+                      : "Offer withdrawn"}
+              </p>
+            ) : null}
           </div>
           <Badge tone={status.tone === "neutral" ? "neutral" : status.tone}>{status.label}</Badge>
         </div>

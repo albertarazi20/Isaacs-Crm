@@ -463,7 +463,8 @@ export async function runReadTool(
       last_call_note: clip(c.last_call_note, 300),
       application_signed_at: app.rows[0]?.signed_at ?? null,
       last_opened_their_links: opens.rows.map((o) => ({
-        link: o.kind === "apply" ? "application" : "upload link",
+        link:
+          o.kind === "apply" ? "application" : o.kind === "offer" ? "funding offer" : "upload link",
         at: o.at,
       })),
       documents: d.stips.map((s) => ({

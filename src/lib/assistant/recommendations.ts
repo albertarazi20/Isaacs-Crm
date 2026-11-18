@@ -236,8 +236,10 @@ export async function loadRecommendationFacts(
           join lateral (select lo.kind, max(lo.opened_at) as at from link_opens lo
                          where lo.client_id = c.id and lo.opened_at > now() - interval '48 hours'
                          group by lo.kind order by max(lo.opened_at) desc limit 1) o on true
-         where c.brought_in_at is null and c.contact_status <> 'dnc'
+         where (c.brought_in_at is null or o.kind = 'offer') and c.contact_status <> 'dnc'
            and not exists (select 1 from trashed_clients t where t.client_id = c.id)
+           and not (o.kind = 'offer' and not exists (select 1 from merchant_offers mo
+                                              where mo.client_id = c.id and mo.status = 'sent' and mo.expires_at > now()))
            and not (o.kind = 'apply' and exists (select 1 from applications a
                                                   where a.client_id = c.id and a.signed_at >= o.at))
            and not (o.kind = 'upload' and exists (select 1 from documents d where d.client_id = c.id

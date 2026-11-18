@@ -51,7 +51,8 @@ export async function POST(req: Request, { params }: Params) {
       req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ??
       "";
     const r = await acceptOffer(token, { ...parsed.data, ip });
-    return NextResponse.json(r);
+    // the rep hears at once (an alert); their copy with the documents goes from the outbox job, after the scan
+    return NextResponse.json({ acceptedAt: r.acceptedAt });
   } catch (e) {
     return NextResponse.json({ error: toActionError(e) }, { status: 409 });
   }

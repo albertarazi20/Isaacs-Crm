@@ -1,5 +1,5 @@
 import { decryptSecret } from "../crypto";
-import { buildRawEmail } from "./raw";
+import { type Attachment, buildRawEmail } from "./raw";
 
 type Fetch = typeof fetch;
 
@@ -69,6 +69,7 @@ export interface OutgoingMessage {
   /** Gmail thread to append to (a chase on the same thread). */
   threadId?: string;
   headers?: Readonly<Record<string, string>>;
+  attachments?: readonly Attachment[];
 }
 
 export async function sendViaGmail(
@@ -88,13 +89,26 @@ export async function sendViaGmail(
     inReplyTo: message.inReplyTo,
     references: message.references,
     headers: message.headers,
+    attachments: message.attachments,
   });
-  const res = await fetchImpl("https://gmail.googleapis.com/gmail/v1/users/me/messages/send", {
-    method: "POST",
-    headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
-    signal: AbortSignal.timeout(10_000),
-    body: JSON.stringify(message.threadId ? { raw, threadId: message.threadId } : { raw }),
-  });
+  // a message with files goes to the upload address as the message itself: the JSON send takes small bodies only,
+  // and base64url on top of the files' own base64 would push documents past it
+  const res = message.attachments?.length
+    ? await fetchImpl(
+        "https://gmail.googleapis.com/upload/gmail/v1/users/me/messages/send?uploadType=media",
+        {
+          method: "POST",
+          headers: { authorization: `Bearer ${token}`, "content-type": "message/rfc822" },
+          signal: AbortSignal.timeout(45_000),
+          body: Buffer.from(raw, "base64url"),
+        },
+      )
+    : await fetchImpl("https://gmail.googleapis.com/gmail/v1/users/me/messages/send", {
+        method: "POST",
+        headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+        signal: AbortSignal.timeout(10_000),
+        body: JSON.stringify(message.threadId ? { raw, threadId: message.threadId } : { raw }),
+      });
   if (!res.ok) {
     const err = (await res.json().catch(() => ({}))) as {
       error?: { message?: string; errors?: { reason?: string }[] };

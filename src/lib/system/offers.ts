@@ -11,6 +11,7 @@ import {
   type Frequency,
   type OfferDoc,
   validThroughWords,
+  offerNumber,
 } from "../offers/terms";
 
 /**
@@ -22,6 +23,8 @@ const TOKEN = /^[a-f0-9]{64}$/;
 
 export interface OfferPage {
   id: string;
+  /** "SC-2026-1F3A9C": what the merchant and the rep can both say on the phone. */
+  number: string;
   state: "open" | "accepted" | "withdrawn" | "expired";
   businessName: string;
   contactName: string;
@@ -74,6 +77,7 @@ interface Row {
   accepted_name: string;
   views: number;
   approval_id: string | null;
+  created_at: string;
 }
 
 const ROW_SQL = `
@@ -82,7 +86,7 @@ const ROW_SQL = `
          coalesce(u.name, '') as rep_name, coalesce(u.phone, '') as rep_phone, u.email as rep_email,
          o.funded_cents::text, o.factor_rate::text, o.frequency, o.payments, o.payback_cents::text, o.payment_cents::text,
          o.message, o.docs, o.expires_at::text as expires_at, o.accepted_at::text as accepted_at, o.accepted_name, o.views,
-         o.approval_id
+         o.approval_id, o.created_at::text as created_at
     from merchant_offers o join clients c on c.id = o.client_id join app_users u on u.id = c.user_id
    where o.token = $1 and not exists (select 1 from trashed_clients t where t.client_id = c.id)`;
 
@@ -138,6 +142,7 @@ export async function openOffer(
     }
     return {
       id: r.id,
+      number: offerNumber(r.id, r.created_at),
       state,
       businessName: r.business_name,
       contactName: r.contact_name,
@@ -177,6 +182,14 @@ export async function recordOfferView(token: string, access: DbAccess = defaultD
       `update merchant_offers set views = views + 1, first_viewed_at = coalesce(first_viewed_at, now()),
                                   last_viewed_at = now() where id = $1`,
       [r.id],
+    );
+    // the same signal as an opened upload link: "Do this now" shows it while the offer waits on them
+    // at most one signal every half hour, like the upload link's (src/lib/system/linkSignals.ts)
+    await q.query(
+      `insert into link_opens (client_id, kind)
+       select $1, 'offer' where not exists (select 1 from link_opens where client_id = $1 and kind = 'offer'
+                                             and opened_at > now() - interval '30 minutes')`,
+      [r.client_id],
     );
     if (r.views > 0) return;
     await q.query(
@@ -230,13 +243,14 @@ export async function acceptOffer(
   token: string,
   a: { name: string; email: string; ip: string },
   access: DbAccess = defaultDb,
-): Promise<{ acceptedAt: string }> {
+): Promise<{ acceptedAt: string; offerId: string; already?: boolean }> {
   if (!TOKEN.test(token)) throw new UserError("This link is not valid");
   return access.withSystem(async (q) => {
     const r = (await q.query<Row>(`${ROW_SQL} for update of o`, [token])).rows[0];
     if (!r) throw new UserError("This link is not valid");
     const state = stateOf(r);
-    if (state === "accepted") return { acceptedAt: r.accepted_at ?? "" };
+    if (state === "accepted")
+      return { acceptedAt: r.accepted_at ?? "", offerId: r.id, already: true };
     if (state === "withdrawn") throw new UserError("This offer is no longer available");
     if (state === "expired")
       throw new UserError("This offer has expired. Contact us and we'll see what we can do");
@@ -281,6 +295,6 @@ export async function acceptOffer(
       if (ap.rows[0] && (ap.rows[0].emails === "running" || ap.rows[0].emails === "paused"))
         await stopApprovalEmails(q, r.approval_id, "stopped", "offer_accepted");
     }
-    return { acceptedAt: done.rows[0]!.accepted_at };
+    return { acceptedAt: done.rows[0]!.accepted_at, offerId: r.id };
   });
 }

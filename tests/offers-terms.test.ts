@@ -94,6 +94,11 @@ describe("the form", () => {
 
 describe("the email", () => {
   const mail = offerEmail({
+    number: "SC-2026-1F3A9C",
+    message: "Great speaking with you <today>.",
+    paybackCents: 12_127_500,
+    finalPaymentCents: 95_508,
+    logoUrl: "https://crm.example.com/brand/SC-horizontal-dark-web.png",
     firstName: "Gayle",
     businessName: 'Winchester <Creek> "Farm"',
     shopName: "Selective Capital",
@@ -111,7 +116,7 @@ describe("the email", () => {
   it("says the terms and links the page, in both parts", () => {
     expect(mail.subject).toBe('Your funding offer for Winchester <Creek> "Farm" is ready');
     for (const part of [mail.text, mail.html]) {
-      expect(part).toContain("$80,850");
+      expect(part).toContain("$80,850.00");
       expect(part).toContain("$954.93");
       expect(part).toContain("1.500");
       expect(part).toContain("https://crm.example.com/offer/abc");
@@ -123,6 +128,13 @@ describe("the email", () => {
   it("never lets a merchant's own name write HTML", () => {
     expect(mail.html).toContain("Winchester &lt;Creek&gt; &quot;Farm&quot;");
     expect(mail.html).not.toContain("<Creek>");
+  });
+  it("carries the offer number, the rep's note (escaped) and the logo", () => {
+    expect(mail.html).toContain("No. SC-2026-1F3A9C");
+    expect(mail.html).toContain("Great speaking with you &lt;today&gt;.");
+    expect(mail.text).toContain("Great speaking with you <today>.");
+    expect(mail.html).toContain('src="https://crm.example.com/brand/SC-horizontal-dark-web.png"');
+    expect(mail.text).toContain("final payment $955.08");
   });
   it("says it is a summary, not a contract", () => {
     expect(mail.html).toContain("not a contract");

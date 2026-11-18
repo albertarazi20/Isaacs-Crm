@@ -500,3 +500,26 @@ page like that. Built in Selective Capital's own look, not the other company's.
   asks twice; the slots read well to a screen reader; a rep's preview cannot upload or accept.
 - **Left:** an email the worker has already picked up cannot be taken back by Withdraw; Netlify functions take about 6 MB
   per request, so a very large phone photo is refused with "too big" (the page asks for a smaller file).
+
+## Offers, part two, 2026-11-18
+
+The owner asked for the offer to look "very professional… a financial font… stand out", for the accepted documents to
+be "sent to my email", and to see whether the merchant opened the link.
+
+- **Look:** the page is always on paper (its own shell, `color-scheme: light` on the whole document, theme colour
+  #f4f2ec), Source Serif 4 (next/font) for headings and figures, an ink header with the offer number (`offerNumber`,
+  "SC-2026-1F3A9C"), a double-ruled term sheet with the amount to the cent. The email matches: the light-text wordmark in
+  an ink header (so Gmail's dark mode cannot hide it), Source Serif 4 where the client loads it, Times for figures
+  elsewhere (Georgia's numerals dip), Outlook-safe table layout (a fixed 600 wrapper, padding on cells, no div rules).
+- **The rep's copy:** `src/lib/system/offerNotice.ts` emails the merchant's rep (their notify address, else their email)
+  the terms, who accepted, and the documents attached (multipart/mixed in `buildRawEmail`; Gmail's upload endpoint for
+  messages with files; Resend's attachments). It is sent by the outbox job right after the scan, never with a file that
+  has not passed it; a sender claims the offer first so two never both send; three tries, then "Email me the documents"
+  on the card. From the rep's own Gmail, else the shop's Resend domain, else the error says what to connect (0556).
+- **Opens:** the badge says "Opened" (eye) with how many times and when, on the merchant page card and on the Open
+  approvals card; an open also lands in link_opens kind `offer`, so "Do this now" lists "Opened their offer, not accepted
+  yet" (also after a hand-off) while it waits; the open nudge ignores it.
+- **Reviews:** two fresh reviews found the unscanned-attachment hole, a double-send race, the copy going to the offer's
+  maker rather than the merchant's rep, the Gmail body limit, the page's dark browser chrome and invisible focus ring,
+  the email's width on phones and in Outlook, Georgia's old-style figures, faint grey text, "26 every two weeks
+  payments": all fixed with tests.

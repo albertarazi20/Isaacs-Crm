@@ -179,3 +179,17 @@ export function validThroughWords(iso: string, timezone: string): string {
   };
   return `${fmt({ weekday: "long", month: "long", day: "numeric" })} at ${fmt({ hour: "numeric", minute: "2-digit", timeZoneName: "short" })}`;
 }
+
+/** A reference a merchant and a rep can both say on the phone: "SC-2026-1F3A9C" (the year it was made, six of its id). */
+export const offerNumber = (id: string, createdAt: string): string =>
+  `SC-${createdAt.slice(0, 4)}-${id.replace(/-/g, "").slice(0, 6).toUpperCase()}`;
+
+/** "26 weekly payments", "26 payments every two weeks". */
+export function paymentsWords(payments: number, frequency: Frequency): string {
+  const n = `${payments} ${payments === 1 ? "payment" : "payments"}`;
+  if (frequency === "biweekly") return `${n} every two weeks`;
+  return `${payments} ${FREQUENCY_WORDS[frequency].label.toLowerCase()} ${payments === 1 ? "payment" : "payments"}`;
+}
+
+/** Money on a term sheet: always to the cent, $80,850.00. */
+export const sheetMoney = (cents: number): string => formatMoney(cents, { cents: true });

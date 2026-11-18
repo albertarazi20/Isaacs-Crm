@@ -41,6 +41,13 @@ export interface ApprovalRow {
   last_call_at: string | null;
   /** The merchant answered since the emails started and nobody has called since: the rep's next call. */
   needs_call: boolean;
+  /** The merchant's newest offer, if any: where it stands and whether they opened it. */
+  offer: {
+    state: "sent" | "accepted" | "withdrawn" | "expired";
+    views: number;
+    last_viewed_at: string | null;
+    funded_cents: number;
+  } | null;
   steps: SentStep[];
 }
 
@@ -55,6 +62,11 @@ const SELECT = `
          (select max(x.created_at)::text from activities x
            where x.client_id = a.client_id and x.kind = 'call' and x.created_at >= a.created_at) as last_call_at,
          coalesce(app.approval_needs_call(a.id), false) as needs_call,
+         (select json_build_object('state', case when mo.status = 'sent' and mo.expires_at <= now() then 'expired' else mo.status end,
+                                   'views', mo.views, 'last_viewed_at', mo.last_viewed_at, 'funded_cents', mo.funded_cents::float8)
+            from merchant_offers mo where mo.client_id = a.client_id
+           order by (mo.approval_id is not distinct from a.id) desc, mo.created_at desc limit 1) as offer,
+         
          coalesce((select json_agg(json_build_object('step', s.step, 'status', s.status, 'at', s.at) order by s.step)
                      from (select distinct on (split_part(o.source, ':', 4)::int)
                                   split_part(o.source, ':', 4)::int as step, o.status,

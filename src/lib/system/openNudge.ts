@@ -69,7 +69,8 @@ export async function runOpenNudges(args: {
           `with latest as (
              select distinct on (lo.client_id) lo.client_id, lo.kind, lo.opened_at
                from link_opens lo
-              where lo.opened_at > $1::timestamptz - make_interval(hours => $3)
+              where lo.kind in ('upload', 'apply')
+                and lo.opened_at > $1::timestamptz - make_interval(hours => $3)
                 and lo.opened_at > coalesce($4::timestamptz, '-infinity'::timestamptz)
               order by lo.client_id, lo.opened_at desc)
            select l.client_id, c.user_id, l.kind, l.opened_at::text as opened_at, c.contact_name, c.business_name,

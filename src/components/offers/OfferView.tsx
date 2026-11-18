@@ -2,9 +2,16 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Glyph } from "@/components/shell/icons";
-import { buttonClass, cn } from "@/components/ui";
+import { cn } from "@/components/ui";
 import { formatUS } from "@/lib/mca/phone";
-import { exactMoney, FREQUENCY_WORDS, factorWords, termWords, timeLeft } from "@/lib/offers/terms";
+import {
+  FREQUENCY_WORDS,
+  factorWords,
+  paymentsWords,
+  sheetMoney,
+  termWords,
+  timeLeft,
+} from "@/lib/offers/terms";
 import type { OfferPage } from "@/lib/system/offers";
 
 type Slot = "waiting" | "sending" | "done" | "error";
@@ -23,9 +30,19 @@ function useServerClock(serverNow: number): number {
   return now;
 }
 
+const SERIF = { fontFamily: "var(--font-offer-serif), Georgia, 'Times New Roman', serif" };
+const EYEBROW = "text-[10.5px] font-semibold tracking-[0.24em] uppercase";
+const CARD =
+  "rounded-[20px] border border-[#e5e2d9] bg-white shadow-[0_1px_2px_rgba(14,20,36,0.04),0_12px_32px_-12px_rgba(14,20,36,0.12)]";
+const INPUT =
+  "h-12 w-full rounded-xl border border-[#d9d5ca] bg-white px-3.5 text-[16px] text-[#0e1424] placeholder:text-[#9a9ea9] focus:border-[#0e1424] focus:ring-[3px] focus:ring-[#0e1424]/10 focus:outline-none";
+const INK_BUTTON =
+  "inline-flex items-center justify-center gap-2 rounded-xl bg-[#0e1424] font-semibold text-white transition hover:bg-[#1c2438] active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-40";
+
 /**
- * What the merchant sees: who it is for, how long it stands, the terms, and the form to accept with the documents it
- * needs. The numbers are the database's, so they match the email and the CRM to the cent.
+ * What the merchant sees: who it is for, how long it stands, the terms as a term sheet, and the form to accept with
+ * the documents it needs. Always on paper (light) with a text face for the figures. The numbers are the database's,
+ * so they match the email and the CRM to the cent.
  */
 export function OfferView({
   offer,
@@ -47,7 +64,7 @@ export function OfferView({
   const freq = FREQUENCY_WORDS[offer.frequency];
   const uneven = offer.finalPaymentCents !== offer.paymentCents;
 
-  // the merchant has the page in front of them: told to their rep once (a mail scanner fetching the link is not)
+  // the merchant has the page in front of them: told to their rep (a mail scanner fetching the link is not)
   useEffect(() => {
     if (preview || offer.state !== "open") return;
     const t = setTimeout(() => {
@@ -63,7 +80,7 @@ export function OfferView({
       {preview ? (
         <p
           role="status"
-          className="rounded-2xl border border-accent/30 bg-accent-soft px-4 py-2.5 text-[13px] font-medium text-accent"
+          className="rounded-2xl border border-[#6d28d9]/25 bg-[#6d28d9]/[0.06] px-4 py-2.5 text-[13px] font-medium text-[#5b21b6]"
         >
           Preview: you&apos;re signed in to the CRM, so this is the merchant&apos;s page as they see
           it. Nothing you do here counts.
@@ -72,22 +89,20 @@ export function OfferView({
 
       {/* who it is for */}
       <header>
-        <p className="text-[11.5px] font-semibold tracking-[0.22em] text-accent uppercase">
-          Prepared for
-        </p>
-        <h1 className="mt-2 text-[32px] leading-[1.08] font-semibold tracking-[-0.03em] text-balance sm:text-[40px]">
+        <p className={cn(EYEBROW, "text-[#6d28d9]")}>Prepared for</p>
+        <h1
+          style={SERIF}
+          className="mt-2.5 text-[36px] leading-[1.05] font-medium tracking-[-0.01em] text-balance sm:text-[46px]"
+        >
           {offer.businessName}
         </h1>
-        <p className="mt-6 text-[11.5px] font-semibold tracking-[0.22em] text-muted uppercase">
-          From {offer.repName ? `${offer.repName} at ` : ""}
+        <p className="mt-4 text-[14px] text-[#5f6370]">
+          From {offer.repName ? `${offer.repName}, ` : ""}
           {offer.shopName}
         </p>
-        <h2 className="mt-2 text-[26px] leading-tight font-semibold tracking-[-0.02em] sm:text-[30px]">
-          Your custom funding offer.
-        </h2>
-        <p className="mt-3 text-[15px] leading-relaxed text-pretty text-text-2">
+        <p className="mt-5 text-[16px] leading-relaxed text-pretty text-[#3d4150]">
           {offer.firstName ? `${offer.firstName}, here` : "Here"} are the terms we put together for
-          you. Review the details below and accept when you&apos;re ready to move forward.
+          you. Review them below, and accept when you&apos;re ready to move forward.
         </p>
       </header>
 
@@ -95,101 +110,106 @@ export function OfferView({
       <section
         aria-label="How long the offer stands"
         className={cn(
-          "rounded-3xl border px-5 py-4",
+          "flex flex-wrap items-center justify-between gap-x-6 gap-y-2 rounded-[18px] border px-5 py-4",
           state === "accepted"
-            ? "border-good/30 bg-good-soft/50"
+            ? "border-[#15803d]/25 bg-[#15803d]/[0.05]"
             : running
-              ? "border-accent/30 bg-accent-soft/40"
-              : "border-warn/30 bg-warn-soft/60",
+              ? "border-[#e5e2d9] bg-white"
+              : "border-[#b45309]/25 bg-[#b45309]/[0.06]",
         )}
       >
-        <p
-          className={cn(
-            "text-[11px] font-semibold tracking-[0.2em] uppercase",
-            state === "accepted" ? "text-good" : running ? "text-accent" : "text-warn",
-          )}
-        >
-          {state === "accepted"
-            ? "Accepted"
-            : running
-              ? "Offer valid through"
-              : state === "withdrawn"
-                ? "No longer available"
-                : "This offer has ended"}
-        </p>
-        <p className="mt-1 text-[17px] font-medium">{offer.validThrough}</p>
+        <div>
+          <p
+            className={cn(
+              EYEBROW,
+              state === "accepted"
+                ? "text-[#15803d]"
+                : running
+                  ? "text-[#5f6370]"
+                  : "text-[#b45309]",
+            )}
+          >
+            {state === "accepted"
+              ? "Accepted"
+              : running
+                ? "Offer valid through"
+                : state === "withdrawn"
+                  ? "No longer available"
+                  : "This offer has ended"}
+          </p>
+          <p style={SERIF} className="mt-1 text-[19px]">
+            {offer.validThrough}
+          </p>
+          {!running && state !== "accepted" ? (
+            <p className="mt-1 text-[13.5px] text-[#3d4150]">
+              Get in touch below and we&apos;ll see what we can do.
+            </p>
+          ) : null}
+        </div>
         {running ? (
-          <p className="mt-1.5 text-[12px] font-semibold tracking-[0.16em] text-text-2 uppercase tabular-nums">
-            {left} remaining
+          <p className="rounded-full bg-[#0e1424] px-3.5 py-1.5 text-[12px] font-semibold tracking-[0.14em] text-white uppercase tabular-nums">
+            {left} left
           </p>
-        ) : state === "accepted" ? null : (
-          <p className="mt-1.5 text-[13.5px] text-text-2">
-            Get in touch below and we&apos;ll see what we can do.
-          </p>
-        )}
+        ) : null}
       </section>
 
-      {/* the terms */}
-      <section
-        aria-label="Your funding offer"
-        className="overflow-hidden rounded-3xl border border-border bg-surface shadow-card"
-      >
-        <div className="relative overflow-hidden bg-[#16121f] px-6 py-6 text-white">
-          <div
-            aria-hidden
-            className="pointer-events-none absolute -top-20 -right-16 size-64 rounded-full bg-violet-500/30 blur-3xl"
-          />
-          <p className="relative text-[11px] font-semibold tracking-[0.22em] text-violet-200 uppercase">
-            Your funding offer
-          </p>
-          <p className="relative mt-2 text-[44px] leading-none font-semibold tracking-[-0.035em] tabular-nums">
-            {exactMoney(offer.fundedCents)}
-          </p>
-          <div className="relative mt-4 flex flex-wrap gap-2">
-            {[
-              `${offer.payments} payments`,
-              freq.label,
-              termWords(offer.frequency, offer.payments),
-            ].map((t) => (
-              <span
-                key={t}
-                className="rounded-lg border border-white/15 bg-white/10 px-2.5 py-1 text-[12.5px] font-medium"
-              >
-                {t}
-              </span>
-            ))}
+      {/* the term sheet */}
+      <section aria-label="Your funding offer" className={cn(CARD, "overflow-hidden p-1.5")}>
+        <div className="rounded-[15px] border border-[#ece9e1]">
+          <div className="px-6 pt-7 pb-6 text-center">
+            <p className={cn(EYEBROW, "text-[#5f6370]")}>Funding offered</p>
+            <p
+              style={SERIF}
+              className="mt-3 text-[52px] leading-none font-medium tracking-[-0.02em] tabular-nums sm:text-[60px]"
+            >
+              {sheetMoney(offer.fundedCents)}
+            </p>
+            <p className="mt-3 text-[13px] text-[#5f6370]">
+              {paymentsWords(offer.payments, offer.frequency)} ·{" "}
+              {termWords(offer.frequency, offer.payments)}
+            </p>
           </div>
-        </div>
-        <div className="px-6 py-5">
-          <div className="flex items-start justify-between gap-3">
-            <div>
-              <p className="text-[11px] font-semibold tracking-[0.2em] text-muted uppercase">
-                {freq.payment}
-              </p>
-              <p className="mt-1.5 text-[34px] leading-none font-semibold tracking-[-0.03em] tabular-nums">
-                {exactMoney(offer.paymentCents)}
-              </p>
-            </div>
-            <span className="rounded-full bg-accent-soft px-3 py-1 text-[12.5px] font-semibold text-accent">
-              {offer.payments} payments
-            </span>
-          </div>
-          <dl className="mt-4 divide-y divide-border border-t border-border">
+          <dl className="grid grid-cols-3 border-y border-[#ece9e1]">
             {[
+              [freq.payment, sheetMoney(offer.paymentCents)],
+              ["Payments", String(offer.payments)],
               ["Factor rate", factorWords(offer.factorRate)],
-              ["Funded amount", exactMoney(offer.fundedCents)],
-              ["Total payback", exactMoney(offer.paybackCents)],
-              ...(uneven ? [["Final payment", exactMoney(offer.finalPaymentCents)]] : []),
+            ].map(([k, v], i) => (
+              <div
+                key={k}
+                className={cn("px-3 py-4 text-center", i > 0 && "border-l border-[#ece9e1]")}
+              >
+                <dt className="text-[10px] leading-tight font-semibold tracking-[0.16em] text-[#5f6370] uppercase">
+                  {k}
+                </dt>
+                <dd style={SERIF} className="mt-1.5 text-[20px] tabular-nums sm:text-[22px]">
+                  {v}
+                </dd>
+              </div>
+            ))}
+          </dl>
+          <dl className="px-6 py-2">
+            {[
+              ["Total payback", sheetMoney(offer.paybackCents)],
+              ...(uneven ? [["Final payment", sheetMoney(offer.finalPaymentCents)]] : []),
               ["Term", termWords(offer.frequency, offer.payments)],
-            ].map(([k, v]) => (
-              <div key={k} className="flex items-center justify-between gap-3 py-3.5">
-                <dt className="text-[14.5px] text-muted">{k}</dt>
-                <dd className="text-[15px] font-semibold tabular-nums">{v}</dd>
+            ].map(([k, v], i) => (
+              <div
+                key={k}
+                className={cn(
+                  "flex items-baseline justify-between gap-3 py-3.5",
+                  i > 0 && "border-t border-[#ece9e1]",
+                )}
+              >
+                <dt className="text-[14.5px] text-[#5f6370]">{k}</dt>
+                <dd style={SERIF} className="text-[18px] tabular-nums">
+                  {v}
+                </dd>
               </div>
             ))}
           </dl>
           {uneven ? (
-            <p className="mt-1 text-[12.5px] text-muted">
+            <p className="border-t border-[#ece9e1] px-6 py-3 text-[12.5px] text-[#5f6370]">
               The final payment carries the few cents left over, so the payments add up to the total
               payback exactly.
             </p>
@@ -198,13 +218,13 @@ export function OfferView({
       </section>
 
       {offer.message ? (
-        <figure className="rounded-3xl border border-border bg-surface px-6 py-5">
-          <blockquote className="text-[15px] leading-relaxed text-text-2">
+        <figure className="border-l-[3px] border-[#6d28d9] py-1 pl-5">
+          <blockquote style={SERIF} className="text-[18px] leading-relaxed text-[#2b2f3c] italic">
             “{offer.message}”
           </blockquote>
           {offer.repName ? (
-            <figcaption className="mt-2 text-[13px] font-medium text-muted">
-              — {offer.repName}
+            <figcaption className="mt-2 text-[13px] font-medium text-[#5f6370]">
+              {offer.repName}, {offer.shopName}
             </figcaption>
           ) : null}
         </figure>
@@ -222,23 +242,27 @@ export function OfferView({
       ) : null}
 
       {/* who to talk to */}
-      <section
-        aria-label="Your contact"
-        className="rounded-3xl border border-border bg-surface px-6 py-5"
-      >
-        <p className="text-[11px] font-semibold tracking-[0.2em] text-muted uppercase">
-          Questions?
+      <section aria-label="Your contact" className={cn(CARD, "px-6 py-5")}>
+        <p className={cn(EYEBROW, "text-[#5f6370]")}>Your contact</p>
+        <p style={SERIF} className="mt-1.5 text-[20px]">
+          {offer.repName || offer.shopName}
         </p>
-        <p className="mt-1.5 text-[15px] font-semibold">{offer.repName || offer.shopName}</p>
-        <div className="mt-2 flex flex-wrap gap-2">
+        <p className="text-[13px] text-[#5f6370]">{offer.shopName}</p>
+        <div className="mt-3 flex flex-wrap gap-2">
           {offer.repPhone ? (
-            <a href={`tel:${offer.repPhone}`} className={buttonClass("secondary", "md", "h-11")}>
+            <a
+              href={`tel:${offer.repPhone}`}
+              className="inline-flex h-11 items-center gap-2 rounded-xl border border-[#d9d5ca] bg-white px-4 text-[14px] font-medium hover:border-[#0e1424]"
+            >
               <Glyph name="phone" className="size-4" />
               {formatUS(offer.repPhone)}
             </a>
           ) : null}
           {offer.repEmail ? (
-            <a href={`mailto:${offer.repEmail}`} className={buttonClass("secondary", "md", "h-11")}>
+            <a
+              href={`mailto:${offer.repEmail}`}
+              className="inline-flex h-11 items-center gap-2 rounded-xl border border-[#d9d5ca] bg-white px-4 text-[14px] font-medium hover:border-[#0e1424]"
+            >
               <Glyph name="mail" className="size-4" />
               {offer.repEmail}
             </a>
@@ -246,10 +270,10 @@ export function OfferView({
         </div>
       </section>
 
-      <p className="text-center text-[12px] leading-relaxed text-pretty text-muted">
+      <p className="px-2 text-center text-[12px] leading-relaxed text-pretty text-[#5f6370]">
         This page is a summary of an offer, not a contract. Final terms, and any disclosures your
         state requires, come with the funding agreement. Your documents are stored privately and
-        shared only with the people working on your file.
+        shared only with the people working on your file. Offer {offer.number}.
       </p>
     </div>
   );
@@ -257,17 +281,16 @@ export function OfferView({
 
 function Accepted({ offer }: { offer: OfferPage }) {
   return (
-    <section
-      aria-label="Accepted"
-      className="rounded-3xl border border-good/30 bg-good-soft/50 px-6 py-8 text-center"
-    >
-      <span className="mx-auto flex size-14 animate-pop items-center justify-center rounded-full bg-good-soft text-good ring-1 ring-good/25">
+    <section aria-label="Accepted" className={cn(CARD, "px-6 py-9 text-center")}>
+      <span className="mx-auto flex size-14 animate-pop items-center justify-center rounded-full bg-[#15803d]/10 text-[#15803d] ring-1 ring-[#15803d]/25">
         <Glyph name="check" className="size-6" strokeWidth={2.2} />
       </span>
-      <h2 className="mt-4 text-[22px] font-semibold tracking-tight">Offer accepted</h2>
-      <p className="mt-2 text-[15px] leading-relaxed text-text-2">
+      <h2 style={SERIF} className="mt-4 text-[28px] font-medium">
+        Offer accepted
+      </h2>
+      <p className="mx-auto mt-2 max-w-md text-[15px] leading-relaxed text-[#3d4150]">
         Thank you{offer.firstName ? `, ${offer.firstName}` : ""}. {offer.repName || "Your contact"}{" "}
-        will review your documents and be in touch about next steps.
+        has your documents, will review them, and will be in touch about next steps.
       </p>
     </section>
   );
@@ -381,13 +404,12 @@ function AcceptForm({
 
   const n = offer.docs.length;
   return (
-    <section
-      aria-label="Accept your offer"
-      className="overflow-hidden rounded-3xl border border-border bg-surface shadow-card"
-    >
-      <div className="border-b border-border px-6 py-5">
-        <h2 className="text-[22px] font-semibold tracking-tight">Accept your offer</h2>
-        <p className="mt-1 text-[14.5px] text-text-2">
+    <section aria-label="Accept your offer" className={cn(CARD, "overflow-hidden")}>
+      <div className="border-b border-[#ece9e1] px-6 py-5">
+        <h2 style={SERIF} className="text-[26px] font-medium">
+          Accept your offer
+        </h2>
+        <p className="mt-1 text-[14.5px] text-[#3d4150]">
           {n === 0
             ? "Confirm your details to move forward."
             : `Confirm your details and upload the ${n === 1 ? "document" : `${n} documents`} needed to move forward.`}
@@ -401,7 +423,7 @@ function AcceptForm({
             onChange={(e) => setName(e.target.value)}
             maxLength={160}
             autoComplete="name"
-            className="h-12 w-full rounded-xl border border-border bg-surface px-3.5 text-[16px] focus:border-accent focus:ring-[3px] focus:ring-ring focus:outline-none"
+            className={INPUT}
           />
         </label>
         <label className="block space-y-1.5">
@@ -413,7 +435,7 @@ function AcceptForm({
             maxLength={254}
             autoComplete="email"
             placeholder="you@business.com"
-            className="h-12 w-full rounded-xl border border-border bg-surface px-3.5 text-[16px] focus:border-accent focus:ring-[3px] focus:ring-ring focus:outline-none"
+            className={INPUT}
           />
         </label>
         {offer.docs.map((d) => {
@@ -423,19 +445,19 @@ function AcceptForm({
               key={d.kind}
               className={cn(
                 "rounded-2xl border px-4 py-3.5",
-                s === "done" ? "border-good/30 bg-good-soft/40" : "border-border",
+                s === "done" ? "border-[#15803d]/30 bg-[#15803d]/[0.05]" : "border-[#e5e2d9]",
               )}
             >
               <div className="flex items-center gap-3">
                 <div className="min-w-0 flex-1">
                   <p className="text-[15px] font-semibold">
                     {d.label}
-                    <span aria-hidden className="ml-0.5 text-bad">
+                    <span aria-hidden className="ml-0.5 text-[#b91c1c]">
                       *
                     </span>
                     <span className="sr-only"> (required)</span>
                   </p>
-                  <p className="text-[13px] text-muted">
+                  <p className="text-[13px] text-[#5f6370]">
                     {s === "done"
                       ? onFileNow.has(d.kind) && d.onFile
                         ? "Already on file. Thank you."
@@ -444,7 +466,7 @@ function AcceptForm({
                   </p>
                 </div>
                 {s === "done" ? (
-                  <span className="flex size-11 items-center justify-center rounded-full bg-good-soft text-good">
+                  <span className="flex size-11 items-center justify-center rounded-full bg-[#15803d]/10 text-[#15803d]">
                     <Glyph name="check" className="size-5" strokeWidth={2.2} />
                   </span>
                 ) : (
@@ -469,7 +491,7 @@ function AcceptForm({
                       aria-label={`Upload your ${d.label.toLowerCase()}`}
                       disabled={s === "sending" || !offer.uploadToken || preview}
                       onClick={() => inputs.current[d.kind]?.click()}
-                      className={buttonClass("primary", "md", "h-11 shrink-0 px-5")}
+                      className={cn(INK_BUTTON, "h-11 shrink-0 px-5 text-[15px]")}
                     >
                       {s === "sending" ? "Sending…" : s === "error" ? "Try again" : "Upload"}
                     </button>
@@ -477,7 +499,7 @@ function AcceptForm({
                 )}
               </div>
               {errors[d.kind] ? (
-                <p role="alert" className="mt-2 text-[13px] text-bad">
+                <p role="alert" className="mt-2 text-[13px] text-[#b91c1c]">
                   {errors[d.kind]}
                 </p>
               ) : null}
@@ -488,7 +510,7 @@ function AcceptForm({
           {said}
         </p>
         {problem ? (
-          <p role="alert" className="text-[14px] text-bad">
+          <p role="alert" className="text-[14px] text-[#b91c1c]">
             {problem}
           </p>
         ) : null}
@@ -496,16 +518,16 @@ function AcceptForm({
           type="button"
           disabled={!ready || busy || preview}
           onClick={() => void accept()}
-          className="h-14 w-full rounded-2xl bg-linear-to-r from-violet-600 to-fuchsia-600 text-[16px] font-semibold text-white shadow-glow transition active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-50"
+          className={cn(INK_BUTTON, "h-14 w-full rounded-2xl text-[16px] tracking-[0.01em]")}
         >
           {busy ? "Accepting…" : n > 0 ? "Accept offer & submit documents" : "Accept offer"}
         </button>
-        <p className="text-center text-[12.5px] text-muted">
+        <p className="text-center text-[12.5px] text-[#5f6370]">
           {preview
             ? "This is a preview: uploading and accepting are for the merchant."
             : ready
-              ? "Everything's in. Press accept and we'll take it from here."
-              : "Upload each document above, then accept."}
+              ? "Everything's in. Accepting is subject to final review and verification."
+              : "Upload each document above, then accept. Subject to final review and verification."}
         </p>
       </div>
     </section>

@@ -201,13 +201,17 @@ const QUEUE_SQL = `${BASE}, q as (
     -- opened the upload link or the application in the last two days and has not finished: the warmest call there is
     (select 2, 'opened', c.id, c.business_name, c.contact_name, c.user_id,
             case o.kind when 'apply' then 'Opened the application, not signed yet'
+                        when 'offer' then 'Opened their offer, not accepted yet'
                         else 'Opened the upload link, nothing sent yet' end,
             o.at, -extract(epoch from o.at)
        from live c
        join lateral (select lo.kind, max(lo.opened_at) as at from link_opens lo
                       where lo.client_id = c.id and lo.opened_at > now() - interval '48 hours'
                       group by lo.kind order by max(lo.opened_at) desc limit 1) o on true
-      where c.brought_in_at is null and c.contact_status <> 'dnc'
+      -- an offer comes after the hand-off as often as before it, and stays on the list while it waits on them
+      where (c.brought_in_at is null or o.kind = 'offer') and c.contact_status <> 'dnc'
+        and not (o.kind = 'offer' and not exists (select 1 from merchant_offers mo
+                                              where mo.client_id = c.id and mo.status = 'sent' and mo.expires_at > now()))
         and not (o.kind = 'apply' and exists (select 1 from applications a
                                                where a.client_id = c.id and a.signed_at >= o.at))
         and not (o.kind = 'upload' and exists (select 1 from documents d

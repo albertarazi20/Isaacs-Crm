@@ -423,6 +423,212 @@ describe("making an offer", () => {
   });
 });
 
+describe("the rep's copy of an accepted offer", () => {
+  it("emails the rep the terms with the documents attached, from their Gmail, once", async () => {
+    const notice = await import("@/lib/system/offerNotice");
+    const made = await db.withUser(rita, (q) =>
+      mutations.createOffer(q, input({ send: false }), ctx(rita)),
+    );
+    await addDoc(ritaMerchant, rita, "drivers_license");
+    await addDoc(ritaMerchant, rita, "voided_check");
+    await system.acceptOffer(made.token, { name: "Gayle Woods", email: "", ip: "5.6.7.8" });
+    const sent: { userId: string; to: string; subject: string; html: string; files: string[] }[] =
+      [];
+    const store = {
+      get: async () => ({ bytes: new Uint8Array([1, 2, 3]), contentType: "application/pdf" }),
+      put: async () => undefined,
+      delete: async () => undefined,
+    } as unknown as Parameters<typeof notice.notifyOfferAccepted>[1]["store"];
+    const senders = {
+      gmail: async (
+        userId: string,
+        m: { to: string; subject: string; html: string; attachments: { filename: string }[] },
+      ) => {
+        sent.push({
+          userId,
+          to: m.to,
+          subject: m.subject,
+          html: m.html,
+          files: m.attachments.map((a) => a.filename),
+        });
+      },
+      resend: null,
+    };
+    const r = await notice.notifyOfferAccepted(made.offerId, {
+      store,
+      senders,
+      appUrl: "https://crm.example.com",
+      db,
+    });
+    expect(r).toEqual({ sent: true });
+    expect(sent).toHaveLength(1);
+    expect(sent[0]).toMatchObject({ userId: rita, to: "rita@x.com" });
+    expect(sent[0]!.subject).toMatch(
+      /^Accepted: Winchester Creek Farm took the \$80,850 offer \(SC-\d{4}-[0-9A-F]{6}\)$/,
+    );
+    expect(sent[0]!.files.sort()).toEqual([
+      "Winchester Creek Farm - Driver's license - ID.pdf",
+      "Winchester Creek Farm - Voided check.pdf",
+    ]);
+    expect(sent[0]!.html).toContain("https://crm.example.com/clients/");
+    const o = await one<{ done: boolean; attempts: number }>(
+      "select accept_notified_at is not null as done, accept_notice_attempts as attempts from merchant_offers where id = $1",
+      [made.offerId],
+    );
+    expect(o).toEqual({ done: true, attempts: 1 });
+    // never twice
+    expect(
+      await notice.notifyOfferAccepted(made.offerId, { store, senders, appUrl: "x", db }),
+    ).toEqual({
+      sent: false,
+      error: "nothing to send",
+    });
+    expect(sent).toHaveLength(1);
+  });
+
+  it("waits for the documents' safety check, and two senders never both send it", async () => {
+    const notice = await import("@/lib/system/offerNotice");
+    const made = await db.withUser(rita, (q) =>
+      mutations.createOffer(q, input({ send: false }), ctx(rita)),
+    );
+    await system.acceptOffer(made.token, { name: "", email: "", ip: "" });
+    const store = {
+      get: async () => ({
+        bytes: new Uint8Array([1]),
+        contentType: "application/pdf; charset=binary",
+      }),
+      put: async () => undefined,
+      delete: async () => undefined,
+    } as unknown as Parameters<typeof notice.notifyOfferAccepted>[1]["store"];
+    let sends = 0;
+    let types: string[] = [];
+    const senders = {
+      gmail: async (_u: string, m: { attachments: { contentType: string }[] }) => {
+        sends++;
+        types = m.attachments.map((x) => x.contentType);
+        await new Promise((r) => setTimeout(r, 50));
+      },
+      resend: null,
+    };
+    // a document still being checked: nothing is sent and no try is used up
+    await t.pool.query(
+      "update documents set scan_status = 'pending' where client_id = $1 and kind = 'voided_check'",
+      [ritaMerchant],
+    );
+    expect(
+      await notice.notifyOfferAccepted(made.offerId, { store, senders, appUrl: "x", db }),
+    ).toEqual({
+      sent: false,
+      error: "nothing to send",
+    });
+    expect(
+      (
+        await one<{ attempts: number }>(
+          "select accept_notice_attempts as attempts from merchant_offers where id = $1",
+          [made.offerId],
+        )
+      ).attempts,
+    ).toBe(0);
+    await t.pool.query(
+      "update documents set scan_status = 'clean' where client_id = $1 and kind = 'voided_check'",
+      [ritaMerchant],
+    );
+    // two at once (the job and a rep pressing "send again"): one sends
+    const both = await Promise.all([
+      notice.notifyOfferAccepted(made.offerId, { store, senders, appUrl: "x", db }),
+      notice.notifyOfferAccepted(made.offerId, { store, senders, appUrl: "x", db }),
+    ]);
+    expect(both.filter((r) => r.sent)).toHaveLength(1);
+    expect(sends).toBe(1);
+    // a stored type with parameters goes as a plain file instead of stopping the email
+    expect(types.every((x) => x === "application/octet-stream")).toBe(true);
+  });
+
+  it("with no mailbox it says why and keeps it for a retry; the shop's domain is used when Gmail is not there", async () => {
+    const notice = await import("@/lib/system/offerNotice");
+    const made = await db.withUser(rita, (q) =>
+      mutations.createOffer(q, input({ send: false }), ctx(rita)),
+    );
+    await system.acceptOffer(made.token, { name: "", email: "", ip: "" });
+    const store = {
+      get: async () => null,
+      put: async () => undefined,
+      delete: async () => undefined,
+    } as unknown as Parameters<typeof notice.notifyOfferAccepted>[1]["store"];
+    const noGmail = async () => {
+      throw new Error("Gmail is not connected");
+    };
+    const r = await notice.notifyOfferAccepted(made.offerId, {
+      store,
+      senders: { gmail: noGmail, resend: null },
+      appUrl: "x",
+      db,
+    });
+    expect(r.sent).toBe(false);
+    expect(r.error).toContain("Gmail is not connected");
+    const o = await one<{ done: boolean; attempts: number; error: string }>(
+      "select accept_notified_at is not null as done, accept_notice_attempts as attempts, accept_notice_error as error from merchant_offers where id = $1",
+      [made.offerId],
+    );
+    expect(o).toMatchObject({ done: false, attempts: 1 });
+    expect(o.error).toContain("Connect Gmail");
+    // the outbox job's retry, now with the shop's domain set up
+    let viaResend = 0;
+    const retried = await notice.retryOfferNotices({
+      store,
+      senders: { gmail: noGmail, resend: async () => void viaResend++ },
+      appUrl: "x",
+      db,
+    });
+    expect(retried.sent).toBeGreaterThanOrEqual(1);
+    expect(viaResend).toBeGreaterThanOrEqual(1);
+    expect(
+      (
+        await one<{ done: boolean }>(
+          "select accept_notified_at is not null as done from merchant_offers where id = $1",
+          [made.offerId],
+        )
+      ).done,
+    ).toBe(true);
+  });
+});
+
+describe("an opened offer is a signal", () => {
+  it("lands in Do this now, also for a merchant who was handed off, and leaves when it is accepted", async () => {
+    const { loadQueue } = await import("@/lib/followup/overview");
+    const made = await db.withUser(rita, (q) =>
+      mutations.createOffer(q, input({ send: false }), ctx(rita)),
+    );
+    await t.pool.query("update clients set brought_in_at = now() where id = $1", [ritaMerchant]);
+    await system.recordOfferView(made.token);
+    expect(
+      (
+        await one<{ kind: string }>(
+          "select kind from link_opens where client_id = $1 order by id desc limit 1",
+          [ritaMerchant],
+        )
+      ).kind,
+    ).toBe("offer");
+    const q1 = await db.withUser(rita, (q) => loadQueue(q, t.today));
+    expect(q1.find((i) => i.clientId === ritaMerchant)).toMatchObject({
+      kind: "opened",
+      detail: "Opened their offer, not accepted yet",
+    });
+    await t.pool.query("delete from documents where client_id = $1", [ritaMerchant]);
+    await addDoc(ritaMerchant, rita, "drivers_license");
+    await addDoc(ritaMerchant, rita, "voided_check");
+    // every open offer of theirs accepted or gone: the line leaves the list
+    await t.pool.query(
+      "update merchant_offers set status = 'withdrawn', withdrawn_at = now() where client_id = $1 and status = 'sent' and id <> $2",
+      [ritaMerchant, made.offerId],
+    );
+    await system.acceptOffer(made.token, { name: "", email: "", ip: "" });
+    const q2 = await db.withUser(rita, (q) => loadQueue(q, t.today));
+    expect(q2.find((i) => i.clientId === ritaMerchant && i.kind === "opened")).toBeUndefined();
+    await t.pool.query("update clients set brought_in_at = null where id = $1", [ritaMerchant]);
+  });
+});
+
 describe("withdrawing and expiry", () => {
   it("withdrawing takes the email back, the page says it is gone, and it cannot come back", async () => {
     const made = await db.withUser(rita, (q) => mutations.createOffer(q, input(), ctx(rita)));

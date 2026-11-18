@@ -8,6 +8,7 @@ import { env } from "@/lib/env";
 import { productionDeliverer } from "@/lib/send/deliver";
 import { drainOutbox } from "@/lib/send/worker";
 import { recordHeartbeat } from "@/lib/system/heartbeat";
+import { productionNoticeSenders, retryOfferNotices } from "@/lib/system/offerNotice";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -38,9 +39,18 @@ async function handle(req: Request): Promise<NextResponse> {
   });
   // merchant uploads wait here until checked; nothing opens before that
   const scan = await scanPending(db, documentStore(e));
+  // a rep's copy of an accepted offer that did not go when it was accepted
+  const offerNotices = await retryOfferNotices({
+    store: documentStore(e),
+    senders: productionNoticeSenders(),
+    appUrl: e.APP_URL,
+  }).catch((err: unknown) => {
+    console.error("offer notices:", err);
+    return { tried: 0, sent: 0 };
+  });
   await recordHeartbeat("outbox");
   return NextResponse.json(
-    { ...summary, scan, approvals },
+    { ...summary, scan, approvals, offerNotices },
     { status: summary.failed > 0 || approvals.errors > 0 ? 502 : 200 },
   );
 }

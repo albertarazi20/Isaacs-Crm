@@ -32,6 +32,9 @@ export interface OfferRow {
   /** Where the email that carried it stands: queued, sent, failed… or null when it was not emailed. */
   email_status: string | null;
   email_note: string | null;
+  /** The rep's copy of an accepted offer: when it went, or why it has not. */
+  accept_notified_at: string | null;
+  accept_notice_error: string;
 }
 
 export const OFFER_SELECT = `
@@ -42,7 +45,8 @@ export const OFFER_SELECT = `
          o.views, o.first_viewed_at::text as first_viewed_at, o.last_viewed_at::text as last_viewed_at,
          o.accepted_at::text as accepted_at, o.accepted_name, o.withdrawn_at::text as withdrawn_at,
          o.created_at::text as created_at, coalesce(nullif(u.name, ''), u.email, '') as created_by_name,
-         ob.status as email_status, coalesce(ob.skip_reason, ob.last_error) as email_note
+         ob.status as email_status, coalesce(ob.skip_reason, ob.last_error) as email_note,
+         o.accept_notified_at::text as accept_notified_at, o.accept_notice_error
     from merchant_offers o
     join app_users u on u.id = o.user_id
     left join outbox ob on ob.id = o.outbox_id`;

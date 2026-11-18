@@ -15,6 +15,7 @@ export async function sendViaResend(
     html: string;
     replyTo?: string;
     headers?: Readonly<Record<string, string>>;
+    attachments?: readonly { filename: string; contentType: string; bytes: Uint8Array }[];
   },
   fetchImpl: Fetch = fetch,
 ): Promise<string> {
@@ -30,6 +31,15 @@ export async function sendViaResend(
       html: message.html,
       ...(message.replyTo ? { reply_to: message.replyTo } : {}),
       ...(message.headers ? { headers: message.headers } : {}),
+      ...(message.attachments?.length
+        ? {
+            attachments: message.attachments.map((a) => ({
+              filename: a.filename,
+              content: Buffer.from(a.bytes).toString("base64"),
+              content_type: a.contentType,
+            })),
+          }
+        : {}),
     }),
   });
   const body = (await res.json().catch(() => ({}))) as { id?: string; message?: string };
