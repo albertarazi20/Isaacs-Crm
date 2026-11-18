@@ -82,12 +82,12 @@ export function OfferView({
           {offer.shopName}
         </p>
         <h2 className="mt-2 font-serif text-[30px] leading-tight font-medium tracking-[-0.01em] sm:text-[34px]">
-          Your funding offer is ready.
+          {offer.firstName ? `Here's your offer, ${offer.firstName}.` : "Here's your offer."}
         </h2>
         <p className="mt-3 text-[15.5px] leading-relaxed text-pretty text-text-2">
-          {offer.firstName ? `${offer.firstName}, here` : "Here"} are the terms we put together for{" "}
-          {offer.businessName}. Look them over, upload your documents and accept below. Once we have
-          your documents, we review them and send your funding agreement.
+          Your full terms are below: what you get, what you pay each time and the total payback.
+          When it looks right, add your documents at the bottom and accept. Your contract comes
+          next.
         </p>
       </header>
 
@@ -239,8 +239,8 @@ export function OfferView({
 
       <p className="text-center text-[12px] leading-relaxed text-pretty text-muted">
         This page is a summary of an offer, not a contract. Final terms, and any disclosures your
-        state requires, come with the funding agreement. Your documents are stored privately and
-        shared only with the people working on your file.
+        state requires, come with your contract. Your documents are stored privately and shared only
+        with the people working on your file.
       </p>
     </div>
   );
@@ -380,8 +380,8 @@ function AcceptForm({
         <h2 className="font-serif text-[26px] font-medium tracking-[-0.01em]">Accept your offer</h2>
         <p className="mt-1 text-[14.5px] text-text-2">
           {n === 0
-            ? "Confirm your details and accept. We review everything and send your funding agreement."
-            : `Upload the ${n === 1 ? "document" : `${n} documents`} below and accept. We review them and send your funding agreement.`}
+            ? "Confirm your details and accept. We'll send your contract to sign."
+            : `Upload your ${n === 1 ? "document" : `${n} documents`} and accept. We'll review them and send your contract to sign.`}
         </p>
       </div>
       <div className="space-y-4 px-6 py-5">

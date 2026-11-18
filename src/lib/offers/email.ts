@@ -53,7 +53,7 @@ export function offerEmail(o: OfferEmailInput): { subject: string; text: string;
   const note = o.message.trim();
   const sign = [o.repName, shop, o.repPhone, o.repEmail].map((x) => x.trim()).filter(Boolean);
   const fine =
-    "This is a summary of an offer, not a contract. Final terms, and any disclosures your state requires, come with the funding agreement.";
+    "This is a summary of an offer, not a contract. Final terms, and any disclosures your state requires, come with your contract.";
 
   const text = [
     hi,
@@ -65,7 +65,7 @@ export function offerEmail(o: OfferEmailInput): { subject: string; text: string;
     "",
     "Same-day funding available.",
     "",
-    "Everything is on your private offer page: review the terms, upload your documents and accept online. Once we have your documents, we review them and send your funding agreement.",
+    "Everything is on your private offer page: review the terms, upload your documents and accept online. Once we have your documents, we review them and send your contract to sign.",
     "",
     `View and accept your offer: ${o.url}`,
     ...(note ? ["", note] : []),
@@ -105,7 +105,7 @@ export function offerEmail(o: OfferEmailInput): { subject: string; text: string;
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-top:16px">
 ${row("Valid through", o.validThrough)}
 </table>
-<p style="margin:22px 0 0;font:400 15px/1.65 ${FONT};color:#3f3f4e">Everything is on your private offer page: review the terms, upload your documents and accept online. Once we have your documents, we review them and send your funding agreement.</p>
+<p style="margin:22px 0 0;font:400 15px/1.65 ${FONT};color:#3f3f4e">Everything is on your private offer page: review the terms, upload your documents and accept online. Once we have your documents, we review them and send your contract to sign.</p>
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:24px 0 24px"><tr><td align="center">
 <table role="presentation" cellpadding="0" cellspacing="0"><tr><td bgcolor="#7c3aed" style="background:#7c3aed;background-image:linear-gradient(135deg,#6d4af0,#7c3aed);border-radius:999px">
 <a href="${esc(o.url)}" style="display:block;padding:15px 34px;font:600 15px ${FONT};color:#ffffff;text-decoration:none;letter-spacing:0.1px">View and accept your offer</a>
