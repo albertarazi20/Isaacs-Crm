@@ -126,7 +126,7 @@ export default async function offersFlow({ email }) {
         (await terms.innerText()).includes("$4,197.98") &&
         (await terms.innerText()).includes("Final payment") &&
         (await terms.innerText()).includes("1.350") &&
-        /\d+[dhm]( \d+[hm])? left/i.test(
+        /\d+[dhm]( \d+[hm])? (left|remaining)/i.test(
           await mp.getByRole("region", { name: "How long the offer stands" }).innerText(),
         ),
     );

@@ -101,6 +101,7 @@ export async function createOffer(q: Db, i: OfferInput, ctx: OfferCtx): Promise<
       message: i.message,
       paybackCents: Number(o.payback_cents),
       logoUrl: `${ctx.appUrl.replace(/\/+$/, "")}/brand/SC-horizontal-dark-web.png`,
+      heroUrl: `${ctx.appUrl.replace(/\/+$/, "")}/brand/offer-hero.png`,
       firstName: c.contact_name.trim().split(/\s+/)[0] ?? "",
       businessName: c.business_name,
       shopName: c.shop_name,

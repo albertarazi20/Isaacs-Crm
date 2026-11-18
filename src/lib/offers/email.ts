@@ -1,8 +1,10 @@
 /**
- * The email that carries an offer. It does not show the terms: it tells the merchant their offer is ready and how
- * long it stands, and links to their private offer page, where the terms are (opening it is what the rep is told
- * about). In the brand's colours, with a serif for the name; a plain-text part says the same.
+ * The email that carries an offer. It shows the amount and that same-day funding is available, in the rep's own
+ * voice, and links to the merchant's private offer page, where the rest of the terms are (opening it is what the rep
+ * is told about). The "brand hero" look the owner picked: a dark glow header with the logo, the amount and a white
+ * button, then a white body. A plain-text part says the same.
  */
+import { formatMoney } from "../money";
 import type { Frequency } from "./terms";
 
 export interface OfferEmailInput {
@@ -10,7 +12,7 @@ export interface OfferEmailInput {
   firstName: string;
   businessName: string;
   shopName: string;
-  /** The terms are kept for the CRM's own record of what was offered; the email itself does not show them. */
+  /** The amount is shown; the other terms are kept for the CRM's record and stay on the offer page. */
   fundedCents: number;
   paymentCents: number;
   finalPaymentCents?: number;
@@ -25,6 +27,8 @@ export interface OfferEmailInput {
   url: string;
   /** The light-text wordmark (an absolute address: an email cannot load a relative one). */
   logoUrl: string;
+  /** The brand glow behind the header (absolute); the header is near-black where images are off. */
+  heroUrl: string;
   repName: string;
   repPhone: string;
   repEmail: string;
@@ -36,96 +40,118 @@ const esc = (s: string) =>
     (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!,
   );
 
-const SERIF = "'Source Serif 4',Georgia,'Times New Roman',serif";
 const SANS = "-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif";
-const INK = "#0b0b12";
-const VIOLET = "#7c3aed";
-const BLUE = "#2e7bff";
-const MUTED = "#5f6370";
-const RULE = "#e3e6ee";
-/** The header: the brand's near-black, as the app's own dark canvas. */
-const GRADIENT = `background-color:#0b0b12`;
-/** The brand's own blue-to-violet (the logo's colours, without its pink end), as a thin rule under the header. */
-const BRAND_RULE = `background-color:${VIOLET};background-image:linear-gradient(90deg,${BLUE} 0%,${VIOLET} 100%)`;
+const font = (weight: number, size: number, line?: number | string) =>
+  `font-family:${SANS};font-weight:${weight};font-size:${size}px${line ? `;line-height:${line}` : ""}`;
+
+const initials = (name: string) =>
+  name
+    .trim()
+    .split(/\s+/)
+    .slice(0, 2)
+    .map((w) => w[0]?.toUpperCase() ?? "")
+    .join("");
 
 export function offerEmail(o: OfferEmailInput): { subject: string; text: string; html: string } {
-  const hi = o.firstName.trim() ? `Hi ${o.firstName.trim()},` : "Hi,";
+  const first = o.firstName.trim();
   const shop = o.shopName.trim() || "Selective Capital";
   const business = o.businessName.trim() || "your business";
-  const subject = `Your funding offer for ${business} is ready`;
-  const sign = [o.repName, shop, o.repPhone, o.repEmail].filter((x) => x.trim());
+  const amount = formatMoney(o.fundedCents);
+  const subject = first
+    ? `${first}, you're approved for ${amount}`
+    : `${business} is approved for ${amount}`;
+  const preheader = `Same-day funding available. Your offer for ${business} is ready to look over.`;
+  const hey = first ? `Hey ${first},` : "Hi there,";
+  const p1 = `Good news: ${business} is approved for ${amount}. I put everything on one page for you: your payments, how long it runs and what it costs, in plain numbers.`;
+  const p2 =
+    "If it looks right, upload the few documents it asks for and hit Accept. Get it done early in the day and the money can be in your account the same day.";
+  const phone = o.repPhone.trim();
+  const ask = phone
+    ? `Questions? Just hit reply, it comes straight to me. Or call me at ${phone}.`
+    : "Questions? Just hit reply, it comes straight to me.";
+  const askHtml = phone
+    ? `Questions? Just hit reply, it comes straight to me. Or call me at <span style="white-space:nowrap">${esc(phone)}</span>.`
+    : esc(ask);
+  const note = o.message.trim();
+  const sign = [o.repName, shop, o.repPhone, o.repEmail].map((x) => x.trim()).filter(Boolean);
+  const fine =
+    "This is an offer summary, not a contract. Final terms, and any disclosures your state requires, come with the funding agreement.";
 
   const text = [
-    hi,
+    hey,
     "",
-    `Your custom funding offer for ${business} is ready (offer ${o.number}).`,
-    "For your privacy the terms are on your own offer page, along with how to accept.",
+    p1,
     "",
-    `View your offer: ${o.url}`,
+    `See your offer: ${o.url}`,
     "",
-    `The offer stands until ${o.validThrough}.`,
-    ...(o.message.trim() ? ["", o.message.trim()] : []),
+    p2,
     "",
-    "Any questions, reply to this email or give me a call.",
+    `Offer good until ${o.validThrough}. Same-day funding available.`,
+    ...(note ? ["", note] : []),
     "",
+    ask,
+    "",
+    "Talk soon,",
     sign.join("\n"),
     "",
-    "This is an offer summary, not a contract. Final terms, and any disclosures your state requires, come with the funding agreement.",
+    `Offer ${o.number}. ${fine}`,
   ].join("\n");
 
-  const html = `<!doctype html>
-<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light"><meta name="supported-color-schemes" content="light">
-<link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&amp;display=swap" rel="stylesheet"><title>${esc(subject)}</title></head>
-<body style="margin:0;padding:0;background:#f3f4f7;color:${INK}">
-<div style="display:none;font-size:1px;line-height:1px;max-height:0;max-width:0;opacity:0;overflow:hidden;mso-hide:all;visibility:hidden">${esc(`${business}: your custom funding offer is ready. It stands until ${o.validThrough}.`)}${"&zwnj;&nbsp;".repeat(60)}</div>
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f3f4f7;padding:32px 12px">
-<tr><td align="center">
-<!--[if mso]><table role="presentation" width="600" align="center" cellpadding="0" cellspacing="0"><tr><td><![endif]-->
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:600px">
+  const label = `margin:0;${font(600, 10)};letter-spacing:1.6px;text-transform:uppercase;color:#8a90a0`;
+  const value = `margin:5px 0 0;${font(600, 14, 1.4)};color:#0b0b12`;
+  const body = `margin:0;${font(400, 16, 1.65)};color:#374151`;
+  const rep = o.repName.trim();
 
-<tr><td bgcolor="#0b0b12" style="${GRADIENT};border-radius:18px 18px 0 0;padding:22px 28px">
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>
-<td valign="middle"><img src="${esc(o.logoUrl)}" alt="${esc(shop)}" width="150" style="display:block;width:150px;height:auto;border:0;color:#ffffff;font:700 14px ${SANS}"></td>
-<td valign="middle" align="right" style="font:700 9.5px ${SANS};letter-spacing:2.2px;text-transform:uppercase;color:#d9dbe8">Private funding offer<br><span style="font:400 12px ${SANS};letter-spacing:0.5px;text-transform:none;color:#a9adc4">No. ${esc(o.number)}</span></td>
+  const html = `<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light"><meta name="supported-color-schemes" content="light"><title>${esc(subject)}</title></head>
+<body style="margin:0;padding:0;background:#eceef4;font-family:${SANS};color:#111827">
+<div style="display:none;font-size:1px;line-height:1px;max-height:0;max-width:0;opacity:0;overflow:hidden;mso-hide:all;visibility:hidden">${esc(preheader)}${"&zwnj;&nbsp;".repeat(60)}</div>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#eceef4;padding:32px 12px 36px">
+<tr><td align="center">
+<!--[if mso]><table role="presentation" width="560" align="center" cellpadding="0" cellspacing="0"><tr><td><![endif]-->
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;background:#ffffff;border-radius:22px;overflow:hidden">
+<tr><td bgcolor="#0b0b12" background="${esc(o.heroUrl)}" style="background:#0b0b12 url('${esc(o.heroUrl)}') center top/cover no-repeat;padding:32px 34px 36px">
+<img src="${esc(o.logoUrl)}" width="160" alt="${esc(shop)}" style="display:block;border:0;width:160px;max-width:100%;height:auto">
+<p style="margin:40px 0 0;${font(600, 11)};letter-spacing:2.5px;text-transform:uppercase;color:#c4b5fd">Funding offer &middot; ${esc(business)}</p>
+<p style="margin:10px 0 0;${font(700, 58, 1)};letter-spacing:-2px;color:#ffffff">${esc(amount)}</p>
+<p style="margin:12px 0 0;${font(400, 17, 1.5)};color:#d6d9ea">You&#39;re approved. It&#39;s ready when you are.</p>
+<table role="presentation" cellpadding="0" cellspacing="0" style="margin-top:18px"><tr><td style="background:#16203f;border:1px solid #3b6cf5;border-radius:999px;padding:7px 14px 7px 12px;${font(700, 13)};color:#e3e9ff"><span style="color:#60a5fa">&#9679;</span>&nbsp; Same-day funding available</td></tr></table>
+<table role="presentation" cellpadding="0" cellspacing="0" style="margin-top:26px"><tr><td bgcolor="#ffffff" style="background:#ffffff;border-radius:999px">
+<a href="${esc(o.url)}" style="display:block;padding:15px 30px;${font(700, 15)};color:#0b0b12;text-decoration:none">See my offer &nbsp;&rarr;</a>
+</td></tr></table>
+</td></tr>
+<tr><td style="padding:30px 34px 0">
+<p style="${body};margin-bottom:14px">${esc(hey)}</p>
+<p style="${body};margin-bottom:14px">${esc(p1)}</p>
+<p style="${body}">${esc(p2)}</p>
+</td></tr>
+<tr><td style="padding:24px 34px 0">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #ececf3;border-radius:14px"><tr>
+<td style="padding:16px 18px"><p style="${label}">Offer good until</p><p style="${value}">${esc(o.validThrough)}</p></td>
 </tr></table>
 </td></tr>
-<tr><td bgcolor="#7c3aed" style="${BRAND_RULE};height:3px;font-size:0;line-height:0">&nbsp;</td></tr>
-
-<tr><td style="background:#ffffff;border:1px solid ${RULE};border-top:0;border-radius:0 0 18px 18px;padding:32px 28px 30px">
-<p style="margin:0;font:700 11px ${SANS};letter-spacing:2.4px;text-transform:uppercase;color:${VIOLET}">Prepared for</p>
-<h1 style="margin:8px 0 0;font:400 32px/1.15 ${SERIF};color:${INK}">${esc(business)}</h1>
-<p style="margin:18px 0 0;font:16px/1.65 ${SANS};color:#3d4150">${esc(hi)} your custom funding offer is ready. For your privacy, the terms are on your own offer page, along with how to accept.</p>
-
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-top:26px"><tr><td style="border:1px solid #cfd5e3;border-radius:16px;padding:3px">
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f8f9fc;border:1px solid ${RULE};border-radius:13px"><tr><td align="center" style="padding:28px 20px 26px">
-<p style="margin:0;font:700 10.5px ${SANS};letter-spacing:2.6px;text-transform:uppercase;color:${BLUE}">Your offer is waiting</p>
-<p style="margin:12px 0 0;font:400 24px/1.3 ${SERIF};color:${INK}">Open your offer to see the terms</p>
-<p style="margin:16px 0 0;font:600 18px ${SANS}"><a href="${esc(o.url)}" style="color:${VIOLET};text-decoration:underline;text-underline-offset:4px">View your offer &rarr;</a></p>
-<p style="margin:18px 0 0;font:13px/1.5 ${SANS};color:${MUTED}">It stands until <strong style="color:${INK}">${esc(o.validThrough)}</strong></p>
-</td></tr></table>
-</td></tr></table>
-
 ${
-  o.message.trim()
-    ? `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-top:24px"><tr><td style="border-left:3px solid ${BLUE};padding:4px 0 4px 16px;font:italic 16px/1.6 ${SERIF};color:#2b2f3c">&ldquo;${esc(o.message.trim())}&rdquo;</td></tr></table>`
+  note
+    ? `<tr><td style="padding:24px 34px 0"><p style="margin:0;padding-left:16px;border-left:3px solid #7c3aed;${font(400, 15, 1.6)};color:#4b5263">${esc(note)}</p></td></tr>`
     : ""
 }
-
-<p style="margin:26px 0 0;font:14px/1.6 ${SANS};color:#3d4150">Any questions, reply to this email or give me a call.</p>
-<p style="margin:10px 0 0;font:12.5px/1.6 ${SANS};color:${MUTED}">If the link doesn't open, paste this into your browser:<br><a href="${esc(o.url)}" style="color:${VIOLET};word-break:break-all">${esc(o.url)}</a></p>
-</td></tr>
-
-<tr><td style="padding:22px 8px 0">
+<tr><td style="padding:24px 34px 0"><p style="${body}">${askHtml}</p><p style="${body};margin-top:14px">Talk soon,</p></td></tr>
+<tr><td style="padding:16px 34px 30px">
 <table role="presentation" cellpadding="0" cellspacing="0"><tr>
-<td style="border-left:3px solid ${VIOLET};padding:2px 0 2px 14px;font:14px/1.65 ${SANS};color:#3d4150">${sign
+${
+  rep
+    ? `<td style="vertical-align:top;padding-right:14px"><div style="width:42px;height:42px;border-radius:42px;background:#7c3aed;background-image:linear-gradient(135deg,#2e7bff,#7c3aed);text-align:center;${font(700, 14, "42px")};color:#ffffff">${esc(initials(rep))}</div></td>`
+    : ""
+}
+<td style="${font(400, 13, 1.55)};color:#6b7280">${sign
     .map((l, i) =>
-      i === 0 ? `<span style="font:400 18px ${SERIF};color:${INK}">${esc(l)}</span>` : esc(l),
+      i === 0 ? `<strong style="font-size:14px;color:#0b0b12">${esc(l)}</strong>` : esc(l),
     )
     .join("<br>")}</td>
 </tr></table>
 </td></tr>
-<tr><td style="padding:18px 8px 0;font:11.5px/1.6 ${SANS};color:${MUTED}">This is an offer summary, not a contract. Final terms, and any disclosures your state requires, come with the funding agreement. Offer ${esc(o.number)}.</td></tr>
 </table>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px"><tr><td style="padding:18px 12px 0;${font(400, 11, 1.6)};color:#8a90a0;text-align:center">Offer ${esc(o.number)} &middot; ${esc(fine)}<br>Button not working? Paste this into your browser: <a href="${esc(o.url)}" style="color:#7c3aed;word-break:break-all">${esc(o.url)}</a></td></tr></table>
 <!--[if mso]></td></tr></table><![endif]-->
 </td></tr></table></body></html>`;
   return { subject, text, html };

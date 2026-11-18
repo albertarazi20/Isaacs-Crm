@@ -93,12 +93,13 @@ describe("the form", () => {
 });
 
 describe("the email", () => {
-  const mail = offerEmail({
+  const input: Parameters<typeof offerEmail>[0] = {
     number: "SC-2026-1F3A9C",
     message: "Great speaking with you <today>.",
     paybackCents: 12_127_500,
     finalPaymentCents: 95_508,
     logoUrl: "https://crm.example.com/brand/SC-horizontal-dark-web.png",
+    heroUrl: "https://crm.example.com/brand/offer-hero.png",
     firstName: "Gayle",
     businessName: 'Winchester <Creek> "Farm"',
     shopName: "Selective Capital",
@@ -112,33 +113,42 @@ describe("the email", () => {
     repName: "Josh Miller",
     repPhone: "(305) 555-0100",
     repEmail: "josh@example.com",
-  });
-  it("links the page and says how long it stands, in both parts, without showing the terms", () => {
-    expect(mail.subject).toBe('Your funding offer for Winchester <Creek> "Farm" is ready');
+  };
+  const mail = offerEmail(input);
+  it("shows the amount and same-day funding, links the page and says how long it stands, without the other terms", () => {
+    expect(mail.subject).toBe("Gayle, you're approved for $80,850");
     for (const part of [mail.text, mail.html]) {
       expect(part).toContain("https://crm.example.com/offer/abc");
       expect(part).toContain("Thursday, November 19 at 4:32 PM EST");
-      // the terms are on the page only: no amount, payment, factor or payback in the email
-      for (const term of ["$80,850", "$954.92", "$955.08", "$121,275", "1.500", "127"])
+      expect(part).toContain("$80,850");
+      expect(part).toContain("Same-day funding available");
+      // payment, factor, payback and count stay on the page
+      for (const term of ["$954.92", "$955.08", "$121,275", "1.500", "127"])
         expect(part, term).not.toContain(term);
     }
-    expect(mail.text.startsWith("Hi Gayle,")).toBe(true);
+    expect(mail.text.startsWith("Hey Gayle,")).toBe(true);
     expect(mail.text).toContain("Josh Miller\nSelective Capital\n(305) 555-0100\njosh@example.com");
-    // a text link, not a button
+    // the button, plus the pasteable link under the card
     expect(mail.html).toMatch(
-      /<a href="https:\/\/crm\.example\.com\/offer\/abc" style="color:#7c3aed;text-decoration:underline/,
+      /<a href="https:\/\/crm\.example\.com\/offer\/abc" style="display:block/,
     );
-    expect(mail.html).toContain("View your offer &rarr;");
+    expect(mail.html).toContain("See my offer &nbsp;&rarr;");
+    expect(mail.html).toContain("https://crm.example.com/brand/offer-hero.png");
+  });
+  it("still reads right with no first name or rep phone", () => {
+    const bare = offerEmail({ ...input, firstName: " ", repPhone: "" });
+    expect(bare.subject).toBe('Winchester <Creek> "Farm" is approved for $80,850');
+    expect(bare.text.startsWith("Hi there,")).toBe(true);
+    expect(bare.text).toContain("Questions? Just hit reply, it comes straight to me.\n");
   });
   it("never lets a merchant's own name write HTML", () => {
     expect(mail.html).toContain("Winchester &lt;Creek&gt; &quot;Farm&quot;");
     expect(mail.html).not.toContain("<Creek>");
   });
-  it("carries the offer number, the rep's note (escaped) and the logo", () => {
-    expect(mail.html).toContain("No. SC-2026-1F3A9C");
+  it("carries the offer number and the rep's note (escaped)", () => {
+    expect(mail.html).toContain("Offer SC-2026-1F3A9C");
     expect(mail.html).toContain("Great speaking with you &lt;today&gt;.");
     expect(mail.text).toContain("Great speaking with you <today>.");
-    expect(mail.html).toContain('src="https://crm.example.com/brand/SC-horizontal-dark-web.png"');
   });
   it("says it is a summary, not a contract", () => {
     expect(mail.html).toContain("not a contract");

@@ -570,10 +570,3 @@ dialog::backdrop {
     backdrop-filter: none;
   }
 }
-
-/* The merchant's offer page is always on paper, whatever the theme cookie says: the page, the browser bar and the
-   overscroll behind it (src/app/offer/[token]/page.tsx marks its wrapper .offer-paper). */
-:root:has(.offer-paper) {
-  color-scheme: light;
-  background: #f4f2ec;
-}
