@@ -121,7 +121,7 @@ describe("the email", () => {
       expect(part).toContain("https://crm.example.com/offer/abc");
       expect(part).toContain("Thursday, November 19 at 4:32 PM EST");
       expect(part).toContain("$80,850");
-      expect(part).toContain("Same-day funding available");
+      expect(part).toMatch(/[Ss]ame.day/);
       // payment, factor, payback and count stay on the page
       for (const term of ["$954.92", "$955.08", "$121,275", "1.500", "127"])
         expect(part, term).not.toContain(term);
@@ -139,7 +139,7 @@ describe("the email", () => {
     const bare = offerEmail({ ...input, firstName: " ", repPhone: "" });
     expect(bare.subject).toBe('Winchester <Creek> "Farm" is approved for $80,850');
     expect(bare.text.startsWith("Hi there,")).toBe(true);
-    expect(bare.text).toContain("Questions? Just hit reply, it comes straight to me.\n");
+    expect(bare.text).toContain("Questions? Just reply.\n");
   });
   it("never lets a merchant's own name write HTML", () => {
     expect(mail.html).toContain("Winchester &lt;Creek&gt; &quot;Farm&quot;");

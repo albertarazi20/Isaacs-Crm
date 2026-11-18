@@ -86,8 +86,8 @@ export function OfferView({
           {offer.firstName ? `Here's your offer, ${offer.firstName}.` : "Here's your offer."}
         </h2>
         <p className="mt-3 text-[15px] leading-relaxed text-pretty text-text-2">
-          Everything is below in plain numbers. If it works for you, upload your documents and hit
-          Accept. Get it done early in the day and the money can be in your account the same day.
+          Upload your documents and hit Accept. Done early in the day, you can be funded the same
+          day.
         </p>
       </header>
 

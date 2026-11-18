@@ -60,17 +60,14 @@ export function offerEmail(o: OfferEmailInput): { subject: string; text: string;
   const subject = first
     ? `${first}, you're approved for ${amount}`
     : `${business} is approved for ${amount}`;
-  const preheader = `Same-day funding available. Your offer for ${business} is ready to look over.`;
+  const preheader = "Same-day funding available.";
   const hey = first ? `Hey ${first},` : "Hi there,";
-  const p1 = `Good news: ${business} is approved for ${amount}. I put everything on one page for you: your payments, how long it runs and what it costs, in plain numbers.`;
-  const p2 =
-    "If it looks right, upload the few documents it asks for and hit Accept. Get it done early in the day and the money can be in your account the same day.";
+  const p1 = `${business} is approved for ${amount}. Open your offer, upload your documents and hit Accept.`;
+  const p2 = "Done early in the day, you can be funded the same day.";
   const phone = o.repPhone.trim();
-  const ask = phone
-    ? `Questions? Just hit reply, it comes straight to me. Or call me at ${phone}.`
-    : "Questions? Just hit reply, it comes straight to me.";
+  const ask = phone ? `Questions? Reply or call ${phone}.` : "Questions? Just reply.";
   const askHtml = phone
-    ? `Questions? Just hit reply, it comes straight to me. Or call me at <span style="white-space:nowrap">${esc(phone)}</span>.`
+    ? `Questions? Reply or call <span style="white-space:nowrap">${esc(phone)}</span>.`
     : esc(ask);
   const note = o.message.trim();
   const sign = [o.repName, shop, o.repPhone, o.repEmail].map((x) => x.trim()).filter(Boolean);
@@ -86,12 +83,11 @@ export function offerEmail(o: OfferEmailInput): { subject: string; text: string;
     "",
     p2,
     "",
-    `Offer good until ${o.validThrough}. Same-day funding available.`,
+    `Offer good until ${o.validThrough}.`,
     ...(note ? ["", note] : []),
     "",
     ask,
     "",
-    "Talk soon,",
     sign.join("\n"),
     "",
     `Offer ${o.number}. ${fine}`,
@@ -114,15 +110,15 @@ export function offerEmail(o: OfferEmailInput): { subject: string; text: string;
 <img src="${esc(o.logoUrl)}" width="160" alt="${esc(shop)}" style="display:block;border:0;width:160px;max-width:100%;height:auto">
 <p style="margin:40px 0 0;${font(600, 11)};letter-spacing:2.5px;text-transform:uppercase;color:#c4b5fd">Funding offer &middot; ${esc(business)}</p>
 <p style="margin:10px 0 0;${font(700, 58, 1)};letter-spacing:-2px;color:#ffffff">${esc(amount)}</p>
-<p style="margin:12px 0 0;${font(400, 17, 1.5)};color:#d6d9ea">You&#39;re approved. It&#39;s ready when you are.</p>
+<p style="margin:12px 0 0;${font(400, 17, 1.5)};color:#d6d9ea">You&#39;re approved.</p>
 <table role="presentation" cellpadding="0" cellspacing="0" style="margin-top:18px"><tr><td style="background:#16203f;border:1px solid #3b6cf5;border-radius:999px;padding:7px 14px 7px 12px;${font(700, 13)};color:#e3e9ff"><span style="color:#60a5fa">&#9679;</span>&nbsp; Same-day funding available</td></tr></table>
 <table role="presentation" cellpadding="0" cellspacing="0" style="margin-top:26px"><tr><td bgcolor="#ffffff" style="background:#ffffff;border-radius:999px">
 <a href="${esc(o.url)}" style="display:block;padding:15px 30px;${font(700, 15)};color:#0b0b12;text-decoration:none">See my offer &nbsp;&rarr;</a>
 </td></tr></table>
 </td></tr>
 <tr><td style="padding:30px 34px 0">
-<p style="${body};margin-bottom:14px">${esc(hey)}</p>
-<p style="${body};margin-bottom:14px">${esc(p1)}</p>
+<p style="${body};margin-bottom:12px">${esc(hey)}</p>
+<p style="${body};margin-bottom:12px">${esc(p1)}</p>
 <p style="${body}">${esc(p2)}</p>
 </td></tr>
 <tr><td style="padding:24px 34px 0">
@@ -135,7 +131,7 @@ ${
     ? `<tr><td style="padding:24px 34px 0"><p style="margin:0;padding-left:16px;border-left:3px solid #7c3aed;${font(400, 15, 1.6)};color:#4b5263">${esc(note)}</p></td></tr>`
     : ""
 }
-<tr><td style="padding:24px 34px 0"><p style="${body}">${askHtml}</p><p style="${body};margin-top:14px">Talk soon,</p></td></tr>
+<tr><td style="padding:24px 34px 0"><p style="${body}">${askHtml}</p></td></tr>
 <tr><td style="padding:16px 34px 30px">
 <table role="presentation" cellpadding="0" cellspacing="0"><tr>
 ${
@@ -151,7 +147,7 @@ ${
 </tr></table>
 </td></tr>
 </table>
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px"><tr><td style="padding:18px 12px 0;${font(400, 11, 1.6)};color:#8a90a0;text-align:center">Offer ${esc(o.number)} &middot; ${esc(fine)}<br>Button not working? Paste this into your browser: <a href="${esc(o.url)}" style="color:#7c3aed;word-break:break-all">${esc(o.url)}</a></td></tr></table>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px"><tr><td style="padding:18px 12px 0;${font(400, 11, 1.6)};color:#8a90a0;text-align:center">Offer ${esc(o.number)} &middot; ${esc(fine)}<br>Link: <a href="${esc(o.url)}" style="color:#7c3aed;word-break:break-all">${esc(o.url)}</a></td></tr></table>
 <!--[if mso]></td></tr></table><![endif]-->
 </td></tr></table></body></html>`;
   return { subject, text, html };
