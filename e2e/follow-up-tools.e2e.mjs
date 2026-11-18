@@ -126,6 +126,13 @@ export default async function followUpTools({ email }) {
       "a bucket's own search finds a number typed with dashes, and the row shows the number",
       await until(async () => (await page.getByText(usUS("+13055559876")).count()) > 0),
     );
+    const row = page.locator("main li", { hasText: usUS("+13055559876") }).first();
+    check(
+      "the number sits in the row itself, with the merchant's own time beside it",
+      (await row.getByRole("button", { name: /^Copy .+'s number/ }).innerText()) ===
+        usUS("+13055559876") &&
+        /\b(ET|CT|MT|PT)\b · \d{1,2}:\d{2} (AM|PM)/.test(await row.innerText()),
+    );
     check(
       "with a search on, the dial list and the file say how many they hold",
       (await page.getByRole("button", { name: /^Dial list, 1 shown/ }).count()) === 1 &&

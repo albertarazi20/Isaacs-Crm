@@ -13,12 +13,13 @@ import {
 } from "@/app/buckets-actions";
 import { handOffAction, undoHandOffAction } from "@/app/followup-actions";
 import { useApp } from "@/components/app-context";
-import { FormDialog, useRun } from "@/components/client/parts";
+import { FormDialog, copyText, useRun } from "@/components/client/parts";
 import { useToast } from "@/components/overlay";
 import { Glyph } from "@/components/shell/icons";
 import { NewLeadButton } from "@/components/shell/NewLead";
 import { Avatar, Button, EmptyState, IconButton, Input, Kbd, Select, cn } from "@/components/ui";
 import { followupCsv, fileSlug } from "@/lib/export/followup";
+import { callWindow, localTime } from "@/lib/followup/dial";
 import { matchesSearch } from "@/lib/followup/search";
 import { formatUS } from "@/lib/mca/phone";
 import type { BucketMember, BucketRow, TemplateRow } from "@/lib/buckets/queries";
@@ -53,7 +54,7 @@ const FILTERS: readonly { id: Filter; label: string }[] = [
 
 /** One grid for the header and every row, so the columns line up. A phone stacks the same cells. */
 const GRID =
-  "grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-x-3 gap-y-1.5 md:grid-cols-[auto_minmax(0,2.1fr)_minmax(0,1.5fr)_minmax(0,0.9fr)_minmax(0,1.7fr)_132px] md:gap-x-4";
+  "grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-x-3 gap-y-1.5 md:grid-cols-[auto_minmax(0,1.9fr)_minmax(0,1.25fr)_minmax(0,1.4fr)_minmax(0,0.9fr)_minmax(0,1.6fr)_132px] md:gap-x-4";
 
 /** Why a blast skipped a merchant, in words (src/lib/send/enqueue.ts and queueBlast give the codes). */
 const SKIP_WORDS: Record<string, string> = {
@@ -101,6 +102,12 @@ export function BucketMembers({
   const [openId, setOpenId] = useState<string | null>(null);
   const [confirmBlast, setConfirmBlast] = useState(false);
   const [dialing, setDialing] = useState(false);
+  // each merchant's own clock beside their number, kept current while the page is open
+  const [clock, setClock] = useState(nowMs);
+  useEffect(() => {
+    const t = setInterval(() => setClock(Date.now()), 20_000);
+    return () => clearInterval(t);
+  }, []);
   const searchRef = useRef<HTMLLabelElement>(null);
 
   // "/" jumps to the search box, unless something is being typed or a sheet is open.
@@ -248,6 +255,14 @@ export function BucketMembers({
     });
     setChecked(new Set());
     router.refresh();
+  }
+
+  async function copyPhone(m: BucketMember) {
+    const ok = await copyText(formatUS(m.phone));
+    toast({
+      message: ok ? `${formatUS(m.phone)} copied` : "Couldn't copy. Select the number yourself",
+      tone: ok ? "success" : "error",
+    });
   }
 
   async function uploadLink(m: BucketMember) {
@@ -437,6 +452,7 @@ export function BucketMembers({
             </span>
             <span className="hidden md:inline">Merchant</span>
           </span>
+          <span className="eyebrow hidden md:block">Phone · their time</span>
           <span className="eyebrow hidden md:block">Status</span>
           <span className="eyebrow hidden md:block">Last touch</span>
           <span className="eyebrow hidden md:block">Next up</span>
@@ -491,9 +507,8 @@ export function BucketMembers({
                         {m.business_name}
                       </p>
                       <p className="truncate text-xs text-muted">
-                        {[m.contact_name, m.phone ? formatUS(m.phone) : "", m.email]
-                          .filter(Boolean)
-                          .join(" · ") || "no email or phone"}
+                        {[m.contact_name, m.email].filter(Boolean).join(" · ") ||
+                          "no contact details"}
                       </p>
                     </div>
                   </div>
@@ -505,19 +520,37 @@ export function BucketMembers({
                     onClick={() => setOpenId(m.client_id)}
                     className="absolute inset-0 cursor-pointer focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none focus-visible:ring-inset"
                   />
+                  <div className="relative z-10 col-span-2 col-start-2 min-w-0 md:col-span-1 md:col-start-3">
+                    {m.phone ? (
+                      <>
+                        <button
+                          type="button"
+                          title="Copy this number"
+                          aria-label={`Copy ${m.business_name}'s number`}
+                          onClick={() => void copyPhone(m)}
+                          className="block max-w-full cursor-copy truncate rounded text-left text-[13px] font-semibold text-text tabular-nums hover:text-accent focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+                        >
+                          {formatUS(m.phone)}
+                        </button>
+                        <MerchantClock m={m} now={new Date(clock)} />
+                      </>
+                    ) : (
+                      <span className="text-xs text-muted">No number</span>
+                    )}
+                  </div>
                   <MemberChips
                     m={m}
                     meta={meta[m.client_id]}
                     today={today}
-                    className="col-span-2 col-start-2 md:col-span-1 md:col-start-3"
+                    className="col-span-2 col-start-2 md:col-span-1 md:col-start-4"
                   />
-                  <div className="hidden min-w-0 md:col-start-4 md:block">
+                  <div className="hidden min-w-0 md:col-start-5 md:block">
                     <p className="truncate text-[13px] text-text-2">{touched}</p>
                     <p className="truncate text-xs text-muted">
                       Added {timeAgo(m.entered_at, new Date(nowMs))}
                     </p>
                   </div>
-                  <div className="col-span-2 col-start-2 min-w-0 md:col-span-1 md:col-start-5">
+                  <div className="col-span-2 col-start-2 min-w-0 md:col-span-1 md:col-start-6">
                     <p className="truncate text-[13px] text-text-2">
                       <span className="font-medium text-text">{next.step}</span> · {next.title}
                     </p>
@@ -528,7 +561,7 @@ export function BucketMembers({
                       <span className="md:hidden"> · {touched.toLowerCase()}</span>
                     </p>
                   </div>
-                  <div className="relative z-10 col-start-3 row-start-1 flex items-center justify-end md:col-start-6">
+                  <div className="relative z-10 col-start-3 row-start-1 flex items-center justify-end md:col-start-7">
                     {ready ? (
                       <Button
                         variant="primary"
@@ -786,4 +819,28 @@ function matches(m: BucketMember, filter: Filter, today: ISODate, nowMs: number)
     default:
       return true;
   }
+}
+
+/** The exact time where the merchant is, beside their number; amber outside the hours a call may go out (8 am to 9 pm). */
+function MerchantClock({ m, now }: { m: BucketMember; now: Date }) {
+  const time = localTime(m.timezone, now);
+  const w = callWindow(m.timezone, now);
+  return (
+    <span
+      className={cn(
+        "block truncate text-xs tabular-nums",
+        w === "early" || w === "late" ? "font-medium text-warn" : "text-muted",
+      )}
+      title={
+        w === "early"
+          ? "Before 8 am there"
+          : w === "late"
+            ? "After 9 pm there"
+            : "Inside calling hours there"
+      }
+    >
+      {m.tz_label} · {time}
+      {w === "early" ? " · too early" : w === "late" ? " · too late" : ""}
+    </span>
+  );
 }
