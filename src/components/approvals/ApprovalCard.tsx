@@ -17,6 +17,7 @@ import {
   offerMoney,
   whenWords,
   type CadenceStep,
+  type Status,
 } from "@/lib/approvals/words";
 import type { ActionResult } from "@/lib/data/types";
 import { timeAgo } from "@/lib/format";
@@ -26,6 +27,8 @@ import { Glyph } from "../shell/icons";
 import { Badge, Button, cn, TONE_TEXT } from "../ui";
 import { ApprovalForm } from "./ApprovalForm";
 import { EmailSteps } from "./EmailSteps";
+import { canRecordFirst, RecordFirstEmailDialog } from "./RecordFirstEmail";
+import { isHandStopped } from "./StopEmails";
 
 /**
  * The approval on a merchant's page. Open: the offer, the hold, where the emails stand, and Pitched. Otherwise a
@@ -47,7 +50,7 @@ export function ApprovalCard({
   const { timezone, nowMs, today } = useApp();
   const call = useCall();
   const toast = useToast();
-  const [form, setForm] = useState<"new" | "edit" | null>(null);
+  const [form, setForm] = useState<"new" | "edit" | "first" | null>(null);
   const [busy, setBusy] = useState(false);
   const fmt = (iso: string) => whenWords(iso, timezone, nowMs);
   const open = approval?.status === "open" ? approval : null;
@@ -81,6 +84,14 @@ export function ApprovalCard({
           merchant={merchant}
           cadence={cadence}
           fmt={fmt}
+        />
+      ) : null}
+      {form === "first" && open ? (
+        <RecordFirstEmailDialog
+          approval={{ id: open.id, name: merchant.name }}
+          cadence={cadence}
+          fmt={fmt}
+          onClose={() => setForm(null)}
         />
       ) : null}
       {form === "edit" && open ? (
@@ -122,7 +133,15 @@ export function ApprovalCard({
     );
   }
 
-  const status = emailsStatus(open, fmt);
+  const handStopped = isHandStopped(open);
+  const status: Status =
+    handStopped && !open.needs_call
+      ? {
+          tone: "bad",
+          label: "Emails stopped for good",
+          detail: "A manager can turn them back on in Settings.",
+        }
+      : emailsStatus(open, fmt);
   const hold = holdWords(open.hold_until, today);
   return (
     <section
@@ -187,9 +206,14 @@ export function ApprovalCard({
             >
               Pause emails
             </Button>
-          ) : canResume(open) ? (
+          ) : !isHandStopped(open) && canResume(open) ? (
             <Button size="sm" variant="ghost" disabled={busy} onClick={() => void resume()}>
               {open.emails_note === "held" ? "Start emails" : "Resume emails"}
+            </Button>
+          ) : null}
+          {canRecordFirst(open) ? (
+            <Button size="sm" variant="ghost" disabled={busy} onClick={() => setForm("first")}>
+              I already sent the first email
             </Button>
           ) : null}
           <Button size="sm" disabled={busy} onClick={() => setForm("edit")}>

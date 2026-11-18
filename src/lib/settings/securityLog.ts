@@ -25,6 +25,8 @@ export const AUDIT_KINDS = [
   "gmail_disconnected",
   "export_download",
   "export_blocked",
+  "merchant_emails_stopped",
+  "merchant_emails_resumed",
 ] as const;
 export type AuditKind = (typeof AUDIT_KINDS)[number];
 
@@ -48,6 +50,8 @@ export const AUDIT_KIND_LABELS: Record<AuditKind, string> = {
   gmail_disconnected: "Gmail disconnected",
   export_download: "Export downloaded",
   export_blocked: "Export refused",
+  merchant_emails_stopped: "Merchant emails stopped",
+  merchant_emails_resumed: "Merchant emails turned back on",
 };
 
 /** The last 200 events are what the page shows. */
@@ -221,6 +225,14 @@ export function describeEvent(r: Pick<AuditRow, "kind" | "email" | "detail">): s
     }
     case "export_blocked":
       return `${who} was refused an export: too many in an hour.`;
+    case "merchant_emails_stopped": {
+      const cancelled = num(d.cancelled);
+      return `${who} stopped all automated emails to a merchant${
+        cancelled ? ` (${cancelled} queued email${cancelled === 1 ? "" : "s"} taken back)` : ""
+      }.`;
+    }
+    case "merchant_emails_resumed":
+      return `${who} turned automated emails back on for a merchant.`;
     default:
       return `${who}: ${r.kind.replaceAll("_", " ")}.`;
   }

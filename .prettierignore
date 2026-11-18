@@ -3,3 +3,6 @@ node_modules
 coverage
 pnpm-lock.yaml
 next-env.d.ts
+# the owner's ready-made email designs: copied byte for byte, and the module generated from them
+src/lib/approvals/stock/*.html
+src/lib/approvals/stock/generated.ts

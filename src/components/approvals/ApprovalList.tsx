@@ -18,6 +18,7 @@ import {
   offerMoney,
   whenWords,
   type CadenceStep,
+  type Status,
 } from "@/lib/approvals/words";
 import type { ActionResult } from "@/lib/data/types";
 import { timeAgo } from "@/lib/format";
@@ -34,6 +35,8 @@ import { Avatar, Badge, Button, buttonClass, cn, Input, TONE_TEXT } from "../ui"
 import { OfferForm } from "../offers/OfferForm";
 import { ApprovalForm } from "./ApprovalForm";
 import { EmailSteps } from "./EmailSteps";
+import { canRecordFirst, RecordFirstEmailDialog } from "./RecordFirstEmail";
+import { isHandStopped, StopEmailsDialog } from "./StopEmails";
 
 const MENU_ITEM =
   "flex min-h-10 w-full items-center gap-2.5 rounded-xl px-3 text-left text-[13px] font-medium text-text-2 transition hover:bg-surface-2 hover:text-text focus-visible:bg-surface-2 focus-visible:outline-none";
@@ -60,6 +63,8 @@ export function ApprovalList({
   const [editing, setEditing] = useState<ApprovalRow | null>(null);
   const [closing, setClosing] = useState<ApprovalRow | null>(null);
   const [offering, setOffering] = useState<ApprovalRow | null>(null);
+  const [stopping, setStopping] = useState<ApprovalRow | null>(null);
+  const [firstSent, setFirstSent] = useState<ApprovalRow | null>(null);
   return (
     <>
       <ul
@@ -77,6 +82,8 @@ export function ApprovalList({
             onEdit={() => setEditing(r)}
             onClose={() => setClosing(r)}
             onOffer={() => setOffering(r)}
+            onStop={() => setStopping(r)}
+            onFirstSent={() => setFirstSent(r)}
           />
         ))}
       </ul>
@@ -90,6 +97,23 @@ export function ApprovalList({
         />
       ) : null}
       {closing ? <CloseDialog row={closing} onDone={() => setClosing(null)} /> : null}
+      {stopping ? (
+        <StopEmailsDialog
+          merchant={{
+            id: stopping.client_id,
+            name: stopping.business_name || stopping.contact_name,
+          }}
+          onClose={() => setStopping(null)}
+        />
+      ) : null}
+      {firstSent ? (
+        <RecordFirstEmailDialog
+          approval={{ id: firstSent.id, name: firstSent.business_name || firstSent.contact_name }}
+          cadence={cadence}
+          fmt={fmt}
+          onClose={() => setFirstSent(null)}
+        />
+      ) : null}
       {offering ? (
         <OfferForm
           merchant={{
@@ -198,6 +222,8 @@ function ApprovalItem({
   onEdit,
   onClose,
   onOffer,
+  onStop,
+  onFirstSent,
 }: {
   row: ApprovalRow;
   cadence: readonly CadenceStep[];
@@ -205,12 +231,23 @@ function ApprovalItem({
   onEdit: () => void;
   onClose: () => void;
   onOffer: () => void;
+  onStop: () => void;
+  onFirstSent: () => void;
 }) {
   const { today, nowMs } = useApp();
   const call = useCall();
   const toast = useToast();
   const [busy, setBusy] = useState(false);
-  const status = emailsStatus(row, fmt);
+  const handStopped = row.status === "open" && isHandStopped(row);
+  // a reply still comes first: the rep's next move is the call
+  const status: Status =
+    handStopped && !row.needs_call
+      ? {
+          tone: "bad",
+          label: "Emails stopped for good",
+          detail: "A manager can turn them back on in Settings.",
+        }
+      : emailsStatus(row, fmt);
   const name = row.business_name || row.contact_name;
   const open = row.status === "open";
   const sent = row.steps.filter((s) => s.status === "sent").length;
@@ -436,11 +473,25 @@ function ApprovalItem({
                   >
                     Pause the emails
                   </button>
-                ) : canResume(row) ? (
+                ) : !handStopped && canResume(row) ? (
                   <button type="button" className={MENU_ITEM} onClick={() => void resume()}>
                     {row.emails_note === "held" ? "Start the emails" : "Resume the emails"}
                   </button>
                 ) : null}
+                {canRecordFirst(row) ? (
+                  <button type="button" className={MENU_ITEM} onClick={onFirstSent}>
+                    I already sent the first email
+                  </button>
+                ) : null}
+                {handStopped ? null : (
+                  <button
+                    type="button"
+                    className={cn(MENU_ITEM, "text-bad hover:text-bad")}
+                    onClick={onStop}
+                  >
+                    Stop emails for good
+                  </button>
+                )}
                 <button type="button" className={MENU_ITEM} onClick={onOffer}>
                   Generate merchant offer
                 </button>

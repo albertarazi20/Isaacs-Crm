@@ -3,6 +3,12 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import type { AdvanceResult } from "@/lib/approvals/engine";
+import { stopEmailsForGood, stopEmailsSchema, turnEmailsBackOn } from "@/lib/approvals/hardStop";
+import {
+  approvalWithFirstSchema,
+  parseSentAt,
+  recordFirstSchema,
+} from "@/lib/approvals/manualFirst";
 import {
   addApprovalStep,
   clearApprovalDesign,
@@ -11,6 +17,7 @@ import {
   editApproval,
   markPitched,
   pauseApprovalEmails,
+  recordFirstEmailSent,
   removeLastApprovalStep,
   reopenApproval,
   resumeApprovalEmails,
@@ -22,13 +29,13 @@ import {
 import {
   approvalEditSchema,
   approvalIdSchema,
-  approvalSchema,
   approvalSettingsSchema,
   closeSchema,
   delaySchema,
   designSchema,
   phoneSchema,
 } from "@/lib/approvals/schemas";
+import { loadStockDesigns, type StockLoadResult } from "@/lib/approvals/stock/load";
 import { CAN } from "@/lib/auth/roles";
 import { advanceApprovalSafely } from "@/lib/system/approvals";
 import { requireRole, requireSession } from "@/lib/auth/server";
@@ -37,7 +44,7 @@ import type { ActionResult } from "@/lib/data/types";
 import { db } from "@/lib/db";
 import { env } from "@/lib/env";
 import { settingsChange, shopSnapshot } from "@/lib/settings/securityLog";
-import { recordAuditHere } from "@/lib/system/audit";
+import { recordAuditHere, requestMeta } from "@/lib/system/audit";
 
 const ctxFor = (userId: string) => ({ userId, now: new Date(), appUrl: env().APP_URL });
 
@@ -46,20 +53,28 @@ function done<T>(data: T): ActionResult<T> {
   return { ok: true, data };
 }
 
-/** "Got an approval": on the Open approvals page, and the first email on its way. */
+/**
+ * "Got an approval": on the Open approvals page, and the first email on its way. `firstEmail: "mine"` (with an
+ * optional `sentAt`): the rep already sent it themselves, so step 1 is recorded as sent and nothing goes on the
+ * outbox; the follow-ups then run on their own.
+ */
 export async function createApprovalAction(
   input: unknown,
-): Promise<ActionResult<{ approvalId: string; first: AdvanceResult | null }>> {
+): Promise<
+  ActionResult<{ approvalId: string; first: AdvanceResult | null; emailsStopped: boolean }>
+> {
   const session = await requireSession();
   try {
-    const parsed = approvalSchema.parse(input);
+    const parsed = approvalWithFirstSchema.parse(input);
     const ctx = ctxFor(session.userId);
-    const { approvalId, started } = await db.withUser(session.userId, (q) =>
-      createApproval(q, parsed, ctx),
+    const firstSentAt =
+      parsed.firstEmail === "mine" ? (parseSentAt(parsed.sentAt) ?? ctx.now) : null;
+    const { approvalId, started, emailsStopped } = await db.withUser(session.userId, (q) =>
+      createApproval(q, { ...parsed, firstSentAt }, ctx),
     );
     // the first email: on the owner connection, after the approval is committed under the rep's own row security
     const first = started ? await advanceApprovalSafely(db, approvalId, ctx) : null;
-    return done({ approvalId, first });
+    return done({ approvalId, first, emailsStopped });
   } catch (e) {
     return { ok: false, error: toActionError(e) };
   }
@@ -151,6 +166,63 @@ export async function resumeApprovalAction(input: unknown): Promise<ActionResult
   }
 }
 
+/** "I already sent the first email", on an approval created with the emails held. */
+export async function recordFirstEmailAction(
+  input: unknown,
+): Promise<ActionResult<{ at: string; next: AdvanceResult }>> {
+  const session = await requireSession();
+  try {
+    const { approvalId, sentAt } = recordFirstSchema.parse(input);
+    const ctx = ctxFor(session.userId);
+    const { at } = await db.withUser(session.userId, (q) =>
+      recordFirstEmailSent(q, approvalId, parseSentAt(sentAt), ctx),
+    );
+    const next = await advanceApprovalSafely(db, approvalId, ctx);
+    return done({ at, next });
+  } catch (e) {
+    return { ok: false, error: toActionError(e) };
+  }
+}
+
+/**
+ * "Stop emails for good": no more automated email to this merchant (approvals, sequences, nudges, the welcome email,
+ * blasts). A rep for their own merchants, a manager for any: the database function decides.
+ */
+export async function stopEmailsAction(
+  input: unknown,
+): Promise<ActionResult<Awaited<ReturnType<typeof stopEmailsForGood>>>> {
+  const session = await requireSession();
+  try {
+    const { clientId } = stopEmailsSchema.parse(input);
+    const data = await stopEmailsForGood(
+      db,
+      { userId: session.userId, email: session.email },
+      clientId,
+      await requestMeta(),
+    );
+    return done(data);
+  } catch (e) {
+    return { ok: false, error: toActionError(e) };
+  }
+}
+
+/** Managers: turn a merchant's emails back on. Nothing restarts by itself. */
+export async function turnEmailsBackOnAction(input: unknown): Promise<ActionResult<null>> {
+  const session = await requireRole(CAN.manageTeam);
+  try {
+    const { clientId } = stopEmailsSchema.parse(input);
+    await turnEmailsBackOn(
+      db,
+      { userId: session.userId, email: session.email },
+      clientId,
+      await requestMeta(),
+    );
+    return done(null);
+  } catch (e) {
+    return { ok: false, error: toActionError(e) };
+  }
+}
+
 // ── Settings ───────────────────────────────────────────────────────────────────────────────────────
 
 export async function saveApprovalDesignAction(
@@ -174,6 +246,27 @@ export async function clearApprovalDesignAction(input: unknown): Promise<ActionR
     const { step } = z.object({ step: z.coerce.number().int().min(1).max(6) }).parse(input);
     await db.withUser(session.userId, (q) => clearApprovalDesign(q, step, session.userId));
     return done(null);
+  } catch (e) {
+    return { ok: false, error: toActionError(e) };
+  }
+}
+
+/**
+ * "Load the Selective Capital designs": the four ready-made emails into slots 1 to 4, with their subjects and waits,
+ * through the same save path as a design saved by hand. Managers only.
+ */
+export async function loadStockDesignsAction(): Promise<ActionResult<StockLoadResult>> {
+  const session = await requireRole(CAN.manageTeam);
+  try {
+    const data = await db.withUser(session.userId, (q) => loadStockDesigns(q, session.userId));
+    if (data.replaced.length > 0 || data.delays.length > 0 || data.added.length > 0)
+      await recordAuditHere({
+        kind: "settings_approvals_saved",
+        userId: session.userId,
+        email: session.email,
+        detail: { changed: ["approval_emails"], values: {} },
+      });
+    return done(data);
   } catch (e) {
     return { ok: false, error: toActionError(e) };
   }

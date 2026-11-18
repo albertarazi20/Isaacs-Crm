@@ -18,6 +18,7 @@ import { Dialog, useCall, useToast } from "../overlay";
 import { searchDirectory } from "../power/search";
 import { Toggle } from "../settings/Toggle";
 import { Avatar, Button, cn, Field, Input, Textarea } from "../ui";
+import { followUpHint, localInputValue } from "./RecordFirstEmail";
 
 /**
  * Mark a merchant approved (from their page, or from Open approvals with a merchant picker), or change an open
@@ -52,6 +53,10 @@ export function ApprovalForm({
   const [funder, setFunder] = useState(editing?.funder ?? "");
   const [note, setNote] = useState(editing?.note ?? "");
   const [startEmails, setStartEmails] = useState(true);
+  // who sends the first email: the system now (the default), or the rep already did from their own mail
+  const [firstEmail, setFirstEmail] = useState<"auto" | "mine">("auto");
+  const [now] = useState(() => new Date());
+  const [sentAt, setSentAt] = useState(() => localInputValue(now));
   const [busy, setBusy] = useState(false);
 
   // the merchant list for the picker, read once when the dialog opens without a merchant
@@ -99,12 +104,18 @@ export function ApprovalForm({
         funder,
         note,
         startEmails,
+        firstEmail,
+        sentAt: firstEmail === "mine" && sentAt ? new Date(sentAt).toISOString() : null,
       }),
     );
     setBusy(false);
     if (!res) return;
     toast({
-      message: `${target.name} is on Open approvals. ${advanceWords(res.first, fmt)}`,
+      message: res.emailsStopped
+        ? `${target.name} is on Open approvals. Their emails are stopped for good, so none go out.`
+        : `${target.name} is on Open approvals. ${
+            firstEmail === "mine" ? "First email recorded as sent. " : ""
+          }${advanceWords(res.first, fmt)}`,
       tone: "success",
     });
     onClose();
@@ -259,6 +270,55 @@ export function ApprovalForm({
         </Field>
 
         {editing ? null : (
+          <fieldset className="rounded-2xl border border-border bg-surface-3/40 px-4 py-3">
+            <legend className="px-1 text-[12px] font-medium text-text-2">First email</legend>
+            <div className="space-y-2.5">
+              {(
+                [
+                  {
+                    value: "auto",
+                    label: "Send it now (automatic)",
+                    hint: "The system sends the first approval email as soon as this is saved, inside the sending window.",
+                  },
+                  {
+                    value: "mine",
+                    label: "I sent it myself",
+                    hint: `You sent it from your own mail. Nothing is sent now. ${followUpHint(cadence)}`,
+                  },
+                ] as const
+              ).map((o) => (
+                <label key={o.value} className="flex cursor-pointer items-start gap-2.5">
+                  <input
+                    type="radio"
+                    name="approval-first-email"
+                    value={o.value}
+                    checked={firstEmail === o.value}
+                    onChange={() => setFirstEmail(o.value)}
+                    className="mt-1 size-4 accent-accent"
+                  />
+                  <span className="min-w-0">
+                    <span className="block text-sm font-medium">{o.label}</span>
+                    <span className="block text-xs text-muted">{o.hint}</span>
+                  </span>
+                </label>
+              ))}
+            </div>
+            {firstEmail === "mine" ? (
+              <div className="mt-3">
+                <Field label="When did you send it?">
+                  <Input
+                    type="datetime-local"
+                    value={sentAt}
+                    max={localInputValue(now)}
+                    onChange={(e) => setSentAt(e.target.value)}
+                  />
+                </Field>
+              </div>
+            ) : null}
+          </fieldset>
+        )}
+
+        {editing || firstEmail === "mine" ? null : (
           <div
             className={cn(
               "rounded-2xl border px-4 py-1",

@@ -62,6 +62,11 @@
       "path": "src/app/icon.svg",
       "url": "http://www.w3.org/2000/svg",
       "reason": "The SVG XML namespace identifier (xmlns). It names the format and is never fetched, so there is no request to downgrade or intercept."
+    },
+    {
+      "path": "src/lib/approvals/stock/",
+      "url": "http://www.w3.org/1999/xhtml",
+      "reason": "The XHTML namespace identifier (xmlns) in the owner's ready-made HTML email designs, kept byte for byte. It names the format and is never fetched, so there is no request to downgrade or intercept."
     }
   ],
   "advisories": []

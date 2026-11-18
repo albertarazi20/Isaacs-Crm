@@ -2,6 +2,7 @@ import { UserError } from "../data/mutations";
 import type { Db } from "../db";
 import { expiryWords, stopApprovalEmails } from "./engine";
 import { checkDesign, subjectFromHtml } from "./html";
+import { checkSentAt } from "./manualFirst";
 import { offerMoney } from "./words";
 import type {
   ApprovalEditInput,
@@ -25,16 +26,35 @@ interface Ctx {
   appUrl: string;
 }
 
-/** A line on the merchant's timeline. It belongs to the merchant's rep; a manager acting on it is named. */
-async function activity(q: Db, userId: string, clientId: string, body: string): Promise<void> {
+/**
+ * A line on the merchant's timeline. It belongs to the merchant's rep; a manager acting on it is named. `at` dates the
+ * line (a first email the rep sent earlier); empty is now.
+ */
+async function activity(
+  q: Db,
+  userId: string,
+  clientId: string,
+  body: string,
+  at: Date | null = null,
+): Promise<void> {
   await q.query(
-    `insert into activities (user_id, client_id, kind, body)
+    `insert into activities (user_id, client_id, kind, body, occurred_at)
      select c.user_id, c.id, 'system',
-            $3 || case when c.user_id <> $1 then coalesce(' (' || nullif(u.name, '') || ')', '') else '' end
+            $3 || case when c.user_id <> $1 then coalesce(' (' || nullif(u.name, '') || ')', '') else '' end,
+            coalesce($4::timestamptz, clock_timestamp())
        from clients c left join app_users u on u.id = $1
       where c.id = $2`,
-    [userId, clientId, body],
+    [userId, clientId, body, at?.toISOString() ?? null],
   );
+}
+
+/** The emails to this merchant were stopped for good by a person (0580): nothing may start them but a manager. */
+async function emailsStoppedFor(q: Db, clientId: string): Promise<boolean> {
+  const { rows } = await q.query(
+    "select 1 from clients where id = $1 and emails_stopped_at is not null",
+    [clientId],
+  );
+  return rows.length > 0;
 }
 
 async function openApproval(q: Db, approvalId: string) {
@@ -63,6 +83,9 @@ async function offerAccepted(q: Db, approvalId: string): Promise<boolean> {
   return rows.length > 0;
 }
 
+/** The timeline line for a first approval email the rep sent from their own mailbox. */
+const FIRST_BY_HAND = "First approval email sent by hand";
+
 const offerWords = (cents: number, holdUntil: string | null) =>
   `${offerMoney(cents)}${holdUntil ? `, held until ${expiryWords(holdUntil)}` : ""}`;
 
@@ -70,27 +93,39 @@ const offerWords = (cents: number, holdUntil: string | null) =>
  * "Got an approval": the merchant goes on the Open approvals page. The action then moves it along on the owner
  * connection (src/lib/system/approvals.ts), which puts the first email on the outbox unless the rep held the emails.
  * The emails come from the merchant's rep.
+ *
+ * `firstSentAt`: the rep already sent the first email themselves (from their own mailbox). Step 1 is then recorded as
+ * sent at that moment with nothing on the outbox, and the follow-ups run on their own (the engine schedules follow-up 1
+ * its delay after it), so the approval always starts running. A merchant whose emails were stopped for good gets the
+ * approval with the emails stopped, whatever was asked.
  */
 export async function createApproval(
   q: Db,
-  input: ApprovalInput,
+  input: ApprovalInput & { firstSentAt?: Date | null },
   ctx: Ctx,
-): Promise<{ approvalId: string; started: boolean }> {
-  const { rows } = await q.query<{ user_id: string; business_name: string }>(
-    "select user_id, business_name from clients where id = $1",
-    [input.clientId],
-  );
+): Promise<{ approvalId: string; started: boolean; emailsStopped: boolean }> {
+  const { rows } = await q.query<{
+    user_id: string;
+    business_name: string;
+    emails_stopped_at: Date | null;
+  }>("select user_id, business_name, emails_stopped_at from clients where id = $1", [
+    input.clientId,
+  ]);
   const client = rows[0];
   if (!client) throw new UserError("That merchant no longer exists");
   const trashed = await q.query("select 1 from trashed_clients where client_id = $1", [
     input.clientId,
   ]);
   if ((trashed.rowCount ?? 0) > 0) throw new UserError("That merchant is in the trash");
+  const firstSentAt = input.firstSentAt ? checkSentAt(input.firstSentAt, ctx.now) : null;
+  const emailsStopped = client.emails_stopped_at !== null;
+  const running = !emailsStopped && (input.startEmails || firstSentAt !== null);
   let approvalId: string;
   try {
     const ins = await q.query<{ id: string }>(
-      `insert into approvals (client_id, user_id, amount_cents, hold_until, funder, note, created_by, emails, emails_note)
-       values ($1, $2, $3, $4, $5, $6, $7, $8, $9) returning id`,
+      `insert into approvals (client_id, user_id, amount_cents, hold_until, funder, note, created_by, emails, emails_note,
+                              first_sent_at, first_sent_by, emails_since)
+       values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, coalesce($10::timestamptz, now())) returning id`,
       [
         input.clientId,
         client.user_id,
@@ -99,8 +134,10 @@ export async function createApproval(
         input.funder,
         input.note,
         ctx.userId,
-        input.startEmails ? "running" : "paused",
-        input.startEmails ? "" : "held",
+        running ? "running" : emailsStopped ? "stopped" : "paused",
+        running ? "" : emailsStopped ? "manual_stop" : "held",
+        firstSentAt?.toISOString() ?? null,
+        firstSentAt ? ctx.userId : null,
       ],
     );
     approvalId = ins.rows[0]?.id ?? "";
@@ -115,7 +152,8 @@ export async function createApproval(
     input.clientId,
     `Approved: ${offerWords(input.amount, input.holdUntil)}${input.funder ? ` (${input.funder})` : ""}`,
   );
-  return { approvalId, started: input.startEmails };
+  if (firstSentAt) await activity(q, ctx.userId, input.clientId, FIRST_BY_HAND, firstSentAt);
+  return { approvalId, started: running, emailsStopped };
 }
 
 /**
@@ -215,7 +253,13 @@ export async function reopenApproval(
   const now = await q.query<{ emails: string }>("select emails from approvals where id = $1", [
     a.id,
   ]);
-  return { running: now.rows[0]?.emails === "running" };
+  const running = now.rows[0]?.emails === "running";
+  // an Undo that would put the emails back on a merchant stopped for good since: they stay stopped
+  if (running && (await emailsStoppedFor(q, a.client_id))) {
+    await stopApprovalEmails(q, a.id, "stopped", "manual_stop");
+    return { running: false };
+  }
+  return { running };
 }
 
 export async function pauseApprovalEmails(q: Db, approvalId: string): Promise<void> {
@@ -238,10 +282,51 @@ export async function resumeApprovalEmails(q: Db, approvalId: string): Promise<v
   if (a.emails === "running") return;
   if (a.emails_note === "offer_accepted" || (await offerAccepted(q, a.id)))
     throw new UserError("The merchant accepted the offer: the emails are done");
+  if (await emailsStoppedFor(q, a.client_id))
+    throw new UserError(
+      `The emails to ${a.business_name} are stopped for good. A manager can turn them back on in Settings`,
+    );
   await q.query(
     "update approvals set emails = 'running', emails_note = '', emails_since = now() where id = $1",
     [a.id],
   );
+}
+
+/**
+ * "I already sent the first email", for an approval created with the emails held: step 1 is recorded as sent at that
+ * moment (the rep's own mailbox: nothing goes on the outbox), the approval starts running, and the engine schedules
+ * follow-up 1 its delay after it. Returns the moment recorded; the action then moves the approval along.
+ */
+export async function recordFirstEmailSent(
+  q: Db,
+  approvalId: string,
+  sentAt: Date | null,
+  ctx: Ctx,
+): Promise<{ at: string }> {
+  const a = await openApproval(q, approvalId);
+  if (a.status !== "open") throw new UserError("That approval is not open any more");
+  const at = checkSentAt(sentAt, ctx.now);
+  const { rows } = await q.query<{ first_sent_at: Date | null }>(
+    "select first_sent_at from approvals where id = $1",
+    [a.id],
+  );
+  if (rows[0]?.first_sent_at) throw new UserError("The first email is already recorded as sent");
+  if (await emailsStoppedFor(q, a.client_id))
+    throw new UserError(
+      `The emails to ${a.business_name} are stopped for good. A manager can turn them back on in Settings`,
+    );
+  if (!(a.emails === "paused" && a.emails_note === "held"))
+    throw new UserError(
+      "The emails already started. This is for an approval created with the emails held",
+    );
+  await q.query(
+    `update approvals set first_sent_at = $2, first_sent_by = $3, emails = 'running', emails_note = '',
+            emails_since = $2, next_step = null, next_email_at = null
+      where id = $1`,
+    [a.id, at.toISOString(), ctx.userId],
+  );
+  await activity(q, ctx.userId, a.client_id, FIRST_BY_HAND, at);
+  return { at: at.toISOString() };
 }
 
 // ── Settings (managers) ───────────────────────────────────────────────────────────────────────────

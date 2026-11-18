@@ -7,6 +7,7 @@ import {
   type ApprovalEmailView,
 } from "@/components/settings/approvalCadence";
 import { ApprovalEmailsEditor } from "@/components/settings/ApprovalEmailsEditor";
+import { StockDesignsPanel } from "@/components/approvals/StockDesignsPanel";
 import { Note } from "@/components/settings/primitives";
 import { SettingsPage } from "@/components/settings/SettingsNav";
 import { getApprovalSettings, listApprovalEmails } from "@/lib/approvals/queries";
@@ -75,9 +76,17 @@ export default async function ApprovalEmailsSettingsPage() {
       role={session.role}
       current="/settings/approvals"
       title="Approval emails"
-      description="When a funder approves a merchant, these emails go to them on their own: the first right away, each follow-up a set time after the one before. They stop when the merchant replies, a rep marks the approval pitched or closed, the merchant unsubscribes, or the hold date passes."
+      description="When a funder approves a merchant, these emails go to them on their own: the first right away, each follow-up sent a set time after the previous email, only if the merchant has not replied. They stop when the merchant replies, a rep marks the approval pitched or closed, the merchant unsubscribes, or the hold date passes."
       notice={notices.length > 0 ? <div className="space-y-2">{notices}</div> : null}
     >
+      <StockDesignsPanel
+        slots={views.map((e) => ({
+          step: e.step,
+          html: e.html,
+          subject: e.subject,
+          delayHours: e.delayHours,
+        }))}
+      />
       <ApprovalEmailsEditor
         emails={views}
         sending={{

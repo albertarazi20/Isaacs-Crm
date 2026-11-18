@@ -66,8 +66,14 @@ describe("approval words", () => {
       "Hold date passed",
     );
     expect(
-      emailsStatus({ ...base, emails_note: "missing:rep_phone,offer_expiry" }, fmt).detail,
-    ).toBe("Needs the rep's phone number (My account) and the hold date.");
+      emailsStatus({ ...base, next_step: 4, emails_note: "missing:rep_phone,offer_expiry" }, fmt)
+        .detail,
+    ).toBe(
+      "Follow-up 3 needs the rep's phone number (My account) and the hold date. Add the date with Change.",
+    );
+    expect(
+      emailsStatus({ ...base, next_step: 4, emails_note: "missing:offer_expiry" }, fmt).detail,
+    ).toBe("Follow-up 3 needs the hold date. Add it with Change.");
     expect(emailsStatus({ ...base, emails_note: "no_design", next_step: 3 }, fmt).detail).toMatch(
       /^Follow-up 2 has no design yet/,
     );
@@ -153,7 +159,7 @@ describe("approval words", () => {
     );
     expect(
       advanceWords({ kind: "waiting", note: "missing:rep_phone", step: 1, at: null }, fmt),
-    ).toBe("Waiting. Needs the rep's phone number (My account).");
+    ).toBe("Waiting. Approval email needs the rep's phone number (My account).");
     expect(advanceWords(null, fmt)).toBe("The emails wait until you start them.");
   });
 });

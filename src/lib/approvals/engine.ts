@@ -22,6 +22,8 @@ export const STOP_NOTES = [
   "bounced",
   "suppressed",
   "send_failed",
+  /** A person pressed "Stop emails for good" (src/lib/approvals/hardStop.ts). */
+  "manual_stop",
 ] as const;
 export type StopNote = (typeof STOP_NOTES)[number];
 const STOPS = new Set<string>(STOP_NOTES);
@@ -50,6 +52,8 @@ interface Row {
   status: string;
   emails: string;
   emails_since: Date;
+  /** When the rep sent step 1 themselves (nothing was on the outbox for it), else null. */
+  first_sent_at: Date | null;
   halt: string | null;
   /** The merchant accepted this approval's offer: no more follow-ups. */
   accepted: boolean;
@@ -160,7 +164,7 @@ export async function advanceApproval(
 ): Promise<AdvanceResult> {
   const { rows } = await q.query<Row>(
     `select a.id, a.client_id, c.user_id as owner_id, a.amount_cents, a.hold_until::text as hold_until, a.status, a.emails,
-            a.emails_since, app.approval_halt(a.id) as halt,
+            a.emails_since, a.first_sent_at, app.approval_halt(a.id) as halt,
             exists (select 1 from merchant_offers o where o.approval_id = a.id and o.status = 'accepted') as accepted,
             c.business_name, c.contact_name, c.email, c.state, c.unsubscribe_token,
             app.client_timezone(c) as tz,
@@ -217,6 +221,16 @@ export async function advanceApproval(
   }
 
   const done = sent.filter((s) => s.status === "sent" && s.sent_at);
+  // the first email the rep sent from their own mailbox: step 1 counts as sent at that moment (it was never on the
+  // outbox, so it is the one step the outbox cannot tell us about). A step 1 the outbox knows about wins.
+  if (a.first_sent_at && !sent.some((s) => s.step === 1 && s.status === "sent"))
+    done.push({
+      step: 1,
+      status: "sent",
+      sent_at: a.first_sent_at,
+      skip_reason: null,
+      created_at: a.first_sent_at,
+    });
   const last = done.reduce<SentRow | null>((m, s) => (m && m.step >= s.step ? m : s), null);
   const next = steps.find((s) => s.step > (last?.step ?? 0));
   if (!next) {

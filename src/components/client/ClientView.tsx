@@ -7,6 +7,7 @@ import type { Freshness } from "@/lib/docs/freshness";
 import type { DocumentRow } from "@/lib/docs/upload";
 import type { MerchantApplication } from "@/lib/leads/application";
 import { ApprovalCard } from "../approvals/ApprovalCard";
+import type { EmailsStopView } from "../approvals/StopEmails";
 import { OffersCard } from "../offers/OffersCard";
 import type { OfferRow } from "@/lib/offers/queries";
 import { ApplicationCard } from "./ApplicationCard";
@@ -40,6 +41,7 @@ export function ClientView({
   bucketId = null,
   offers = [],
   offerTarget = null,
+  emailsStop,
 }: {
   detail: ClientDetail;
   serverNow: number;
@@ -59,6 +61,8 @@ export function ClientView({
   offers?: readonly OfferRow[];
   /** For the offer form: the merchant's zone, and why they cannot be emailed (null when they can). */
   offerTarget?: { timezone: string; emailBlocked: string | null } | null;
+  /** "Stop emails for good": the state, and whether this person (a manager) can turn it back on. */
+  emailsStop?: EmailsStopView;
 }) {
   const { card } = detail;
   return (
@@ -66,7 +70,7 @@ export function ClientView({
       {/* first in the page so the phone's own copy of the buttons is the first one found */}
       <MobileActionBar card={card} />
       <div className="stagger flex min-w-0 flex-col gap-4 max-sm:pb-10 lg:gap-5">
-        <ClientHero detail={detail} buckets={buckets} bucketId={bucketId} />
+        <ClientHero detail={detail} buckets={buckets} bucketId={bucketId} emailsStop={emailsStop} />
         <div className="flex flex-col gap-4 xl:grid xl:grid-cols-[minmax(0,1fr)_minmax(0,420px)] xl:items-start xl:gap-5">
           <BringInStrip
             detail={detail}

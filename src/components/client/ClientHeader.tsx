@@ -25,6 +25,11 @@ import {
 } from "@/lib/mca/stages";
 import { formatMoney } from "@/lib/money";
 import { BucketMover, type BucketOption } from "./BucketMover";
+import {
+  EmailsStoppedBadge,
+  EmailsStopControl,
+  type EmailsStopView,
+} from "../approvals/StopEmails";
 import { ContactStatusButton } from "./ContactStatus";
 import { ContactActions } from "../ContactActions";
 import { toggleHot, useHotIds } from "../power/prefs";
@@ -103,12 +108,15 @@ export function ClientHero({
   className,
   buckets = [],
   bucketId = null,
+  emailsStop,
 }: {
   detail: ClientDetail;
   className?: string;
   /** Every active follow-up bucket, and the one this merchant is in now. */
   buckets?: readonly BucketOption[];
   bucketId?: string | null;
+  /** "Stop emails for good": whether it is on, and whether this person can turn it back on. Absent: no control. */
+  emailsStop?: EmailsStopView;
 }) {
   const { card, bringIn } = detail;
   const { today, timezone } = useApp();
@@ -189,6 +197,7 @@ export function ClientHero({
                   Brought in
                 </Badge>
               ) : null}
+              {emailsStop?.stopped ? <EmailsStoppedBadge stopped={emailsStop.stopped} /> : null}
             </div>
             <p className="mt-1.5 text-sm text-text-2">
               {card.contact_name ? (
@@ -308,6 +317,12 @@ export function ClientHero({
             Edit details
           </Button>
           <ContactStatusButton card={card} />
+          {emailsStop ? (
+            <EmailsStopControl
+              merchant={{ id: card.id, name: card.business_name || card.contact_name }}
+              view={emailsStop}
+            />
+          ) : null}
           <Button
             size="sm"
             variant="ghost"

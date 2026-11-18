@@ -1,8 +1,9 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { ClientView } from "@/components/client/ClientView";
+import { emailsStoppedFor } from "@/lib/approvals/hardStop";
 import { approvalCadence, approvalForClient } from "@/lib/approvals/queries";
-import { requireSession } from "@/lib/auth/server";
+import { CAN, requireSession } from "@/lib/auth/server";
 import { listBuckets } from "@/lib/buckets/queries";
 import { listOffers } from "@/lib/offers/queries";
 import { getClientDetail, userContext } from "@/lib/data/queries";
@@ -52,6 +53,7 @@ export default async function ClientPage({ params }: { params: Promise<{ id: str
       documents: await listDocuments(q, id),
       freshness: await clientFreshness(q, id, today),
       approval: await approvalForClient(q, id),
+      emailsStopped: await emailsStoppedFor(q, id),
       cadence: await approvalCadence(q),
       offers: await listOffers(q, id),
       offerTarget:
@@ -59,6 +61,7 @@ export default async function ClientPage({ params }: { params: Promise<{ id: str
           await q.query<{ timezone: string; blocked: string | null }>(
             `select app.client_timezone(c) as timezone,
                   case when c.contact_status in ('dnc', 'no_email') then 'they asked not to be emailed'
+                       when c.emails_stopped_at is not null then 'their emails were stopped'
                        when c.email_opt_out then 'they unsubscribed'
                        when app.is_suppressed('email', c.email) then 'the address is on the do-not-email list'
                   end as blocked
@@ -92,6 +95,7 @@ export default async function ClientPage({ params }: { params: Promise<{ id: str
       buckets={data.buckets}
       offers={data.offers}
       offerTarget={data.offerTarget}
+      emailsStop={{ stopped: data.emailsStopped, canTurnOn: CAN.manageTeam(session.role) }}
       bucketId={data.bucketId}
     />
   );

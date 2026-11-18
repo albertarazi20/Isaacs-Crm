@@ -57,7 +57,8 @@ async function inboundVerified(
  * A STOP from the merchant's exact address whose sender check failed (a forwarder, a misaligned third-party sender, no
  * Authentication-Results). It is applied anyway: a missed STOP is a compliance problem, a spoofed one costs one lead.
  * Nothing else about the mail is trusted (no reply flag, no attachment filing). The timeline says why the opt-out
- * happened so the rep can undo it if it was forged. Returns false when the merchant was already opted out.
+ * happened so the rep can undo it if it was forged. Returns false when the merchant was already opted out (by their
+ * own wish; a rep's hand stop does not count).
  */
 export async function applyUnverifiedStop(
   q: Db,
@@ -65,8 +66,10 @@ export async function applyUnverifiedStop(
   from: string,
   snippet: string,
 ): Promise<boolean> {
+  // "Already opted out" means the merchant's own wish or a bounce, not a rep's hand stop (0580): that one does not
+  // record what the merchant wants, so a STOP after it still runs the opt-out and becomes the merchant's own
   const { rows } = await q.query<{ user_id: string; email_opt_out: boolean }>(
-    "select user_id, email_opt_out from clients where id = $1",
+    "select user_id, (email_opt_out and not app.hand_stopped_only(id)) as email_opt_out from clients where id = $1",
     [clientId],
   );
   const c = rows[0];
@@ -245,6 +248,7 @@ export interface UnsubscribeView {
   already: boolean;
 }
 
+/** `already` is true once the merchant has opted out themselves; a rep's hand stop (0580) is not their wish, so the link still works. */
 export async function resolveUnsubscribe(
   db: DbAccess,
   token: string,
@@ -258,7 +262,8 @@ export async function resolveUnsubscribe(
       email_opt_out: boolean;
       shop_name: string;
     }>(
-      `select c.id, c.business_name, c.email, c.email_opt_out, (select shop_name from shop_settings) as shop_name
+      `select c.id, c.business_name, c.email, (c.email_opt_out and not app.hand_stopped_only(c.id)) as email_opt_out,
+              (select shop_name from shop_settings) as shop_name
          from clients c where c.unsubscribe_token = $1`,
       [token],
     );

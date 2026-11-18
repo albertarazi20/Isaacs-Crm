@@ -151,6 +151,12 @@ export function emailsStatus(
       };
     case "paused":
       return { tone: "neutral", label: "Paused", detail: "Resume to pick up where it left off." };
+    case "manual_stop":
+      return {
+        tone: "bad",
+        label: "Emails stopped for good",
+        detail: "A manager can turn them back on in Settings.",
+      };
     case "reopened":
       return { tone: "neutral", label: "Emails stopped", detail: "Resume to start them again." };
     default:
@@ -164,10 +170,17 @@ export function emailsStatus(
     };
   if (note.startsWith("missing:")) {
     const fields = note.slice(8).split(",").filter(Boolean);
+    // the hold date is the one a rep can add right on the card; a phone number is added under My account
+    const fix = fields.includes("offer_expiry")
+      ? fields.length === 1
+        ? " Add it with Change."
+        : " Add the date with Change."
+      : "";
     return {
       tone: "warn",
       label: "Waiting",
-      detail: `Needs ${fields.map((f) => FIELD_WORDS[f] ?? f).join(" and ")}.`,
+      // which email is held and how to unstick it: an email with a {{field}} nobody filled never goes out as typed
+      detail: `${stepName(row.next_step ?? 1)} needs ${fields.map((f) => FIELD_WORDS[f] ?? f).join(" and ")}.${fix}`,
     };
   }
   if (row.emails === "finished")
@@ -253,7 +266,14 @@ export function whenWords(iso: string, timezone: string, nowMs: number): string 
 }
 
 /** Stops no Resume can undo: the merchant or the law ended it. A bounce or a missing address can be fixed. */
-const PERMANENT = new Set(["opted_out", "dnc", "suppressed", "trashed", "offer_accepted"]);
+const PERMANENT = new Set([
+  "opted_out",
+  "dnc",
+  "suppressed",
+  "trashed",
+  "offer_accepted",
+  "manual_stop",
+]);
 
 /** Can the rep restart these emails? Not when the merchant unsubscribed or is do-not-contact. */
 export function canResume(

@@ -79,7 +79,8 @@ const REFUSED_REMOVAL: Record<string, string> = {
  * opt-out flag is cleared in the same transaction. Where the merchant themselves asked not to be contacted
  * (unsubscribe, stop reply, do not contact) or their mail provider reported spam (complaint), nothing is removed:
  * one click must not re-enable automated mail to someone who opted out. A hard bounce is only a dead address, so
- * its row can go (the flag is left as it is).
+ * its row can go (the flag is left as it is). A row a "Stop emails for good" wrote is a manual one: removing it turns
+ * the merchant's emails back on (resume_merchant_emails, 0580), and nothing restarts by itself.
  */
 export async function removeSuppression(q: Db, suppressionId: string): Promise<void> {
   const row = (
@@ -94,5 +95,9 @@ export async function removeSuppression(q: Db, suppressionId: string): Promise<v
   await q.query("delete from suppressions where id = $1", [suppressionId]);
   if (row.channel === "email" && row.client_id !== null && row.reason === "manual") {
     await q.query("update clients set email_opt_out = false where id = $1", [row.client_id]);
+    // a "Stop emails for good" (0580) also clears its own marks: the badge, the approval's stop note, and a timeline
+    // line. Nothing restarts: the approval waits for someone to press "Start the emails". Refused (and the whole
+    // removal undone) if the merchant also unsubscribed.
+    await q.query("select public.resume_merchant_emails($1)", [row.client_id]);
   }
 }

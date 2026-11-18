@@ -81,6 +81,32 @@ transaction. Tables from the removed features stay in the schema, unused.
   apply; the sequence frequency limit, the hand-off cancel and the "approved" claim rule do not. A design must hold
   `{{unsubscribe_link}}`; a field with no value (no rep phone, no hold date) holds the email and says why. The engine
   runs at the start of every outbox cron. Code: `src/lib/approvals/`.
+- **Stock approval designs:** the owner's four ready-made HTML emails (the dark approval email and three follow-ups)
+  live byte for byte in `src/lib/approvals/stock/*.html`, embedded as strings in `stock/generated.ts` (regenerate with
+  `node scripts/generate-stock-designs.mjs`; a test fails if the two drift). `src/lib/approvals/stock.ts` names each
+  slot with its subject and wait: follow-up 1 is sent 24 hours after the approval email, follow-up 2 48 hours after
+  follow-up 1, follow-up 3 48 hours after follow-up 2 (about 1, 3 and 5 days), each only if the merchant has not
+  replied. Settings → Approval emails has "Load the Selective Capital designs" (the button says "Replace with…" once a
+  slot holds a design); a manager confirms, and `loadStockDesignsAction` writes slots 1 to 4 in one transaction through
+  `saveApprovalDesign` and `setApprovalDelay` (a second load writes nothing). Every wait stays editable, in hours or
+  days. Follow-up 3 quotes `{{offer_expiry}}`: an approval with no hold date holds that email, and the card says
+  "Follow-up 3 needs the hold date. Add it with Change." The `.html` files and `generated.ts` are in `.prettierignore`.
+  To look at them: `pnpm exec tsx scripts/render-stock-designs.ts <folder>` (PNG and plain text; needs Chrome and the
+  network).
+- **Stop emails for good, and "I sent it myself" (0580):** "Stop emails for good" (a merchant's page, and the menu on
+  each Open approvals card; a confirm dialog first) suppresses the address (reason `manual`), sets
+  `clients.email_opt_out` and `emails_stopped_at`, stops the approval sequence (note `manual_stop`), ends the live bucket
+  enrolment, takes back what is queued on every lane but the rep's own one-off `reply` lane, writes the timeline note
+  "Emails stopped by <name>" and an audit line, in one transaction (`public.stop_merchant_emails`). A rep can stop their
+  own merchants, a manager any. Every automated lane already refuses an opted-out merchant, so nothing else changes;
+  the outbox worker also refuses the `reply` lane while the opt-out stands, so an offer email from the CRM is not
+  sent either (the rep can still write from their own mail). Only a manager turns it back on (the merchant's page, or
+  removing the row in Settings > Suppressions): that clears the flag and the row and nothing else, so the approval
+  waits for someone to press "Start the emails". A merchant who also unsubscribed stays stopped. In the approval form,
+  "First email" is "Send it now (automatic)" (the default) or "I sent it myself" with the time: step 1 is then recorded
+  as sent (`approvals.first_sent_at`, nothing on the outbox) and the engine schedules follow-up 1 its Settings delay
+  after that time; an approval created with the emails held has "I already sent the first email" in its menu. Code:
+  `src/lib/approvals/hardStop.ts`, `manualFirst.ts`, `engine.ts`.
 - **The statement clock:** when a new month's statement becomes due, merchants being chased for documents are asked
   for it and the oldest month still missing drops off.
 - **Sending:** a per-mailbox cap (CRM and outside mail counted), a slice held for intake and replies, the legal

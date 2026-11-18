@@ -69,12 +69,22 @@ const SELECT = `
            order by (mo.approval_id is not distinct from a.id) desc, mo.created_at desc limit 1) as offer,
          
          coalesce((select json_agg(json_build_object('step', s.step, 'status', s.status, 'at', s.at) order by s.step)
-                     from (select distinct on (split_part(o.source, ':', 4)::int)
-                                  split_part(o.source, ':', 4)::int as step, o.status,
-                                  coalesce(o.sent_at, o.not_before)::text as at
-                             from outbox o
-                            where o.lane = 'approval' and o.source like 'approval:' || a.id::text || ':step:%'
-                            order by split_part(o.source, ':', 4)::int, (o.status = 'sent') desc, o.created_at desc) s),
+                     from (select x.step, x.status, x.at
+                             from (select distinct on (split_part(o.source, ':', 4)::int)
+                                          split_part(o.source, ':', 4)::int as step, o.status,
+                                          coalesce(o.sent_at, o.not_before)::text as at
+                                     from outbox o
+                                    where o.lane = 'approval' and o.source like 'approval:' || a.id::text || ':step:%'
+                                    order by split_part(o.source, ':', 4)::int, (o.status = 'sent') desc, o.created_at desc) x
+                            -- the first email the rep sent by hand (approvals.first_sent_at) is step 1 sent, and
+                            -- stands in for a step 1 on the outbox that never went out
+                            where not (x.step = 1 and a.first_sent_at is not null and x.status <> 'sent')
+                           union all
+                           select 1, 'sent', a.first_sent_at::text
+                            where a.first_sent_at is not null
+                              and not exists (select 1 from outbox o2
+                                               where o2.lane = 'approval' and o2.status = 'sent'
+                                                 and o2.source = 'approval:' || a.id::text || ':step:1')) s),
                   '[]'::json) as steps
     from approvals a
     join clients c on c.id = a.client_id

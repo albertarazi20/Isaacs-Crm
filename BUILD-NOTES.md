@@ -411,6 +411,32 @@ next one sends." The owner will send the final designs; their drafts (four email
   migrations; the four email slots are empty, so nothing sends until the designs are uploaded). Unit 107 files /
   1,472 tests; browser run 565 checks plus 22 (approvals) and 11 (approval settings); `pnpm build` passes.
 
+## Stop emails for good, and the first email by hand (2026-11-18)
+
+The owner asked for "an option to hard stop the emails being sent to a merchant", and described the flow as "the rep
+manually sends the initial template, the system then triggers the follow-ups automatically at the delays I set in
+settings if the merchant has not replied".
+
+- **0580** (pending deploy with 0561-0577; every statement is safe on a database with rows): `clients.emails_stopped_at`
+  and `emails_stopped_by`, `approvals.first_sent_at` and `first_sent_by` (nullable, no rewrite), `app.suppress` (the 0564
+  function with one change: a `manual` row's reason becomes the merchant's own when they then unsubscribe, reply stop
+  or complain, so turning emails back on can never undo their wish), and two definer functions with pinned search
+  path and grants to `isaac_app`: `stop_merchant_emails(client)` (the rep's own merchant, or a manager's any, by
+  `app.can_touch_client`) and `resume_merchant_emails(client)` (managers).
+- **Decisions:** the rep's one-off mail through the CRM (the offer email, lane `reply`) stays queued by the stop but the
+  worker refuses it while the opt-out stands (`opted_out`); the rep still emails from their own mail. Allowing it
+  needs a change in `src/lib/send/worker.ts` and `enqueue.ts`: let lane `reply` past `client_opt_out` and `suppressed` when `clients.emails_stopped_at` is set and no suppression with another reason than `manual` exists for the address. Turning
+  back on never restarts anything: the approval's note becomes `reopened` and only "Start the emails" restarts it.
+  A merchant who had already opted out gets no flag (nothing to turn back on). A merchant with no address is flagged
+  without a suppression row (an empty address would match every such merchant).
+- **First email by hand:** nothing goes on the outbox; `approvals.first_sent_at` is read by the engine as step 1 sent
+  at that moment, so "last sent" timing, Pause and Resume work as before. The time must not be in the future or more
+  than 30 days back. Known and left: the approval's step marks (`EmailSteps`, from `queries.ts`) read the outbox only,
+  so step 1 does not show as sent for a hand-sent first email until `queries.ts` reads `first_sent_at`.
+- **Known and left:** an unsubscribe or a "stop" reply that arrives after a hard stop is not recorded as the merchant's
+  own (`resolveUnsubscribe` and `replies.ts` skip a merchant already opted out); `merge_clients` keeps `email_opt_out`
+  but not `emails_stopped_at`. Tests: `tests/hard-stop-db.test.ts`, `tests/approval-manual-first-db.test.ts`.
+
 ## The brain, 2026-11-18
 
 The owner turned the assistant back on (key on Netlify, credit added), asked for the model to be Sonnet 5.5, and for
