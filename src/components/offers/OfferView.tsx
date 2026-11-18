@@ -85,9 +85,8 @@ export function OfferView({
           {offer.firstName ? `Here's your offer, ${offer.firstName}.` : "Here's your offer."}
         </h2>
         <p className="mt-3 text-[15.5px] leading-relaxed text-pretty text-text-2">
-          Your full terms are below: what you get, what you pay each time and the total payback.
-          When it looks right, add your documents at the bottom and accept. Your contract comes
-          next.
+          Your full terms are below: what you get, what you pay each time and the total payback. Add
+          your documents at the bottom and accept. Your contract comes next.
         </p>
       </header>
 

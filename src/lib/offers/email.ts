@@ -123,7 +123,7 @@ ${
       i === 0 ? `<strong style="font-weight:600;color:#16121f">${esc(l)}</strong>` : esc(l),
     )
     .join("<br>")}</td></tr>
-<tr><td style="padding:16px 6px 0;font:400 11px/1.6 ${FONT};color:#9a9aa8">${esc(fine)} Offer ${esc(o.number)}.<br>Button not working? <a href="${esc(o.url)}" style="color:#7c3aed;word-break:break-all">${esc(o.url)}</a></td></tr>
+<tr><td style="padding:16px 6px 0;font:400 11px/1.6 ${FONT};color:#9a9aa8">${esc(fine)} Offer ${esc(o.number)}.</td></tr>
 </table>
 <!--[if mso]></td></tr></table><![endif]-->
 </td></tr></table></body></html>`;
