@@ -2,6 +2,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { z } from "zod";
 import { requireSession } from "@/lib/auth/server";
 import { anthropicCaller, runAssistantTurn } from "@/lib/assistant/run";
+import { apiErrorWords } from "@/lib/assistant/errors";
 import { toActionError } from "@/lib/data/errors";
 import { env } from "@/lib/env";
 
@@ -16,16 +17,6 @@ const body = z.object({
   /** The label on the button that asked, for the conversation's name in the history list. */
   title: z.string().max(200).nullable().optional(),
 });
-
-function apiErrorWords(e: InstanceType<typeof Anthropic.APIError>): string {
-  if (e instanceof Anthropic.RateLimitError)
-    return "The assistant is busy right now. Try again in a minute.";
-  if (e instanceof Anthropic.AuthenticationError || e instanceof Anthropic.PermissionDeniedError)
-    return "The assistant's key was refused. A manager needs to check it in the server settings.";
-  if (e instanceof Anthropic.APIConnectionError)
-    return "Couldn't reach the assistant. Check the connection and try again.";
-  return "The assistant ran into a problem. Try again.";
-}
 
 /**
  * One turn with the assistant, streamed as newline-delimited JSON: {t:"thread"}, {t:"text"}, {t:"tool"},

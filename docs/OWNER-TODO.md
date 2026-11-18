@@ -10,8 +10,10 @@ environment variables; Claude only needs to be told they are set.
 The live site is the Netlify project `selective-capital-crm`; the database is Supabase `aztoxzcmnvqaypjuuuwj`, in step
 with the code (migrations through 0553). What only you can do, most useful first:
 
-1. **Turn the assistant on (on hold since 2026-11-17, the owner's call):** add `ANTHROPIC_API_KEY` in Netlify → Site configuration → Environment variables, marked
-   secret. Until then the panel says it is not set up (the recommendations still link to the pages).
+1. **Add credit to the assistant's Anthropic account (the key is in; 2026-11-18).** The owner's key is set as a secret
+   `ANTHROPIC_API_KEY` on Netlify and signs in, but Anthropic answers every model call with "credit balance is too low".
+   Add credits under Plans & Billing at console.anthropic.com; the assistant then works with no further change. Until
+   then the panel says the account is out of credit.
 2. **Set the shop's postal address** in Settings → Email. Bucket sequences and blasts wait until it is filled (the
    law asks for it in every automated email); welcome emails and replies already go.
 3. **Make the database password and the sign-in passcode random, and mark both secret** in Netlify (they are short
