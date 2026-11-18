@@ -88,6 +88,15 @@ transaction. Tables from the removed features stay in the schema, unused.
   check before the automation domain is used.
 - **The assistant:** Claude (the model chosen in Settings → AI, Sonnet 5.5 by default) reads the CRM under the person's row security and proposes actions as buttons;
   nothing happens until the person clicks; every call is counted against the daily AI budget.
+- **Merchant offers (0555):** "Generate merchant offer" on a merchant's page (and on each Open approvals card) takes the
+  funding terms: amount, factor rate, how often and how many payments, how long it stands, the documents the merchant
+  uploads, a note. The payback and each payment are computed columns of `merchant_offers` (the form previews with the
+  same rule, `computeTerms`). The email is the rep's own (lane `reply`, from their Gmail, with a designed HTML part)
+  and links `/offer/<token>`: a public page with the terms, a countdown, an upload slot per document (filed under that
+  kind) and Accept. Accepting needs every document on file, tells the rep (an alert and the timeline) and stops a
+  linked approval's emails. The merchant's first open alerts the rep; a signed-in rep's preview is not counted.
+  Withdrawing takes back an unsent email; an offer past its time cannot be accepted. Code: `src/lib/offers/`,
+  `src/lib/system/offers.ts`, `src/components/offers/`.
 - **The brain (0554):** every five minutes (`/api/cron/brain`, `src/lib/system/brain.ts`) the assistant looks at each
   rep's own "Do this now" list and prepares the next step for anything new (a reply drafted, a nudge written, the file
   checked), once per trigger (`brain_preps`), plus a plan for the day. The result is an ordinary assistant

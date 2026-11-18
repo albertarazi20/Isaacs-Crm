@@ -462,3 +462,41 @@ it to another bucket" (the merchant page's Move to… menu moved the _stage_, no
   (26 checks, including a rep who gets the dial list and no export). boundaries allow-list for `buckets/queries.ts` is 4.
 - **Left:** texting stays parked (the file is for the owner's own sheet); the dial list does not log a call (the call list
   on Today still does).
+
+## Merchant offers, 2026-11-18
+
+The owner showed another funder's offer page (amount, weekly payment, factor rate, payback, a countdown, "Accept your offer"
+with two document uploads) and asked for "generate merchant offer": the terms in, a professional email out, a link to a
+page like that. Built in Selective Capital's own look, not the other company's.
+
+- **Data** (0555 `merchant_offers`; the old deal-desk `offers` table from the removed lender work is left alone): the
+  payback and the payment are generated columns, so the email, the page and the CRM agree to the cent; a check proves
+  the form's `computeTerms` against the database on edge cases. Reps insert and withdraw (column grants); views,
+  acceptance and the merchant's name are written only by the system side. A trigger keeps an accepted or withdrawn offer
+  final for the app role.
+- **Email:** the outbox can now carry an HTML part on any lane (`enqueueEmail({ html })`; the worker sends a designed body
+  as made). Offer emails ride lane `reply` with source `offer:<id>`, from the rep's Gmail, and expire with the offer.
+- **Page:** `/offer/<token>` (no sign-in, noindex). The upload slots use the existing upload sessions; the upload route
+  takes an optional `kind` limited to the offer documents. Accept checks the documents are on file (not infected or
+  rejected), stamps the name, email and IP, alerts the rep (`offer_accepted`; the first open is `offer_opened`), and stops
+  an approval's emails with note `offer_accepted`.
+- **Also:** the approval card's "Change the offer" is now "Change the approval" (the word offer means the new thing).
+- **Tests:** tests/offers-terms.test.ts (10), tests/offers.test.ts (14, DB-proving), e2e/offers.e2e.mjs (12 checks, the
+  merchant in a signed-out browser uploading and accepting).
+- **Two fresh reviews (backend; screens)** found real problems, fixed before shipping: opening an offer took over the
+  merchant's everyday upload link (offer sessions now have their own purpose, and the everyday link skips them); the same
+  file sent to two slots showed "Received" but never filled the second (a different-kind duplicate is refused with words,
+  an unsorted one takes the slot's label; the page re-reads the slots from the server after every upload and failed
+  accept); a slot the merchant picked was stored as a staff label (now a rule label at 0.7 so the documents card asks for
+  a check, and only on offer sessions, one file at a time); a mail scanner's prefetch counted as the merchant opening it
+  (the open is a beacon from the page after three seconds, never for a signed-in rep, and opening changes nothing); the
+  payments could add up to more than the payback (each payment rounds down, the final one carries the leftover cents, shown
+  as "Final payment"); an accepted or withdrawn offer could still be edited (any change is refused); a document behind an
+  accepted offer that fails its check now alerts the rep; the accepting IP comes from Netlify's own header; designed HTML
+  goes only on the approval and reply lanes; the Upload buttons nearly vanished in one theme (now the app's primary
+  button); the countdown used the phone's clock (now the server's, corrected after load); the form showed terms the server
+  refuses (it runs the same schema and says why), shows the deadline in the merchant's zone, and says up front when a
+  merchant cannot be emailed; wording no longer promises funding ("move forward", "next steps", "accepted as"); Withdraw
+  asks twice; the slots read well to a screen reader; a rep's preview cannot upload or accept.
+- **Left:** an email the worker has already picked up cannot be taken back by Withdraw; Netlify functions take about 6 MB
+  per request, so a very large phone photo is refused with "too big" (the page asks for a smaller file).

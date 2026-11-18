@@ -7,6 +7,8 @@ import type { Freshness } from "@/lib/docs/freshness";
 import type { DocumentRow } from "@/lib/docs/upload";
 import type { MerchantApplication } from "@/lib/leads/application";
 import { ApprovalCard } from "../approvals/ApprovalCard";
+import { OffersCard } from "../offers/OffersCard";
+import type { OfferRow } from "@/lib/offers/queries";
 import { ApplicationCard } from "./ApplicationCard";
 import { BringInStrip } from "./BringIn";
 import { ClientHero, MobileActionBar } from "./ClientHeader";
@@ -36,6 +38,8 @@ export function ClientView({
   cadence = [],
   buckets = [],
   bucketId = null,
+  offers = [],
+  offerTarget = null,
 }: {
   detail: ClientDetail;
   serverNow: number;
@@ -51,6 +55,10 @@ export function ClientView({
   /** The follow-up buckets to move this merchant between, and the one they are in. */
   buckets?: readonly { id: string; name: string }[];
   bucketId?: string | null;
+  /** The merchant's offers, newest first. */
+  offers?: readonly OfferRow[];
+  /** For the offer form: the merchant's zone, and why they cannot be emailed (null when they can). */
+  offerTarget?: { timezone: string; emailBlocked: string | null } | null;
 }) {
   const { card } = detail;
   return (
@@ -71,6 +79,28 @@ export function ClientView({
             approval={approval}
             cadence={cadence}
             broughtIn={detail.bringIn.brought_in_at !== null}
+            className="max-sm:order-2 xl:col-span-2"
+          />
+          {/* offers come after the hand-off as often as before it */}
+          <OffersCard
+            merchant={{
+              id: card.id,
+              name: card.business_name || card.contact_name,
+              email: card.email,
+              timezone: offerTarget?.timezone,
+              emailBlocked: offerTarget?.emailBlocked ?? null,
+            }}
+            offers={offers}
+            approval={
+              approval?.status === "open"
+                ? {
+                    id: approval.id,
+                    amountCents: approval.amount_cents,
+                    holdUntil: approval.hold_until,
+                    funder: approval.funder,
+                  }
+                : null
+            }
             className="max-sm:order-2 xl:col-span-2"
           />
           <div className="contents xl:flex xl:min-w-0 xl:flex-col xl:gap-5">

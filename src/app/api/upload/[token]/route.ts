@@ -5,6 +5,7 @@ import { documentStore } from "@/lib/docs/storage";
 import { acceptUpload, MAX_BYTES, openUploadPage, uploadSessionLive } from "@/lib/docs/upload";
 import { env } from "@/lib/env";
 import { todayIn } from "@/lib/mca/dates";
+import { OFFER_DOCS, type OfferDoc } from "@/lib/offers/terms";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -57,6 +58,14 @@ export async function POST(req: Request, { params }: Params) {
       { error: `Send at most ${MAX_FILES_PER_REQUEST} files at a time` },
       { status: 400 },
     );
+  // the offer page's slots say what each file is (a driver's license, a voided check); anything else is read from the file
+  const asked = form.get("kind");
+  const kind =
+    typeof asked === "string" && (OFFER_DOCS as readonly string[]).includes(asked)
+      ? (asked as OfferDoc)
+      : undefined;
+  if (kind && files.length > 1)
+    return NextResponse.json({ error: "Send one file for each document" }, { status: 400 });
   const store = documentStore(env());
   const today = todayIn("America/New_York");
   const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "";
@@ -75,6 +84,7 @@ export async function POST(req: Request, { params }: Params) {
         bytes,
         today,
         ip,
+        kind,
       });
       results.push({ filename: f.name, ok: true, ...r });
     } catch (e) {

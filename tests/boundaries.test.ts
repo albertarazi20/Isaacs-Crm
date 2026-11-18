@@ -131,6 +131,11 @@ describe("architecture boundaries", () => {
       // ${PENDING_ROW_COLUMNS}: the fixed column list a sheet row is read with before it is filed as a merchant —
       // the daily loop's read, and loadPendingRow (stream 1), which the form and the actions call
       "lib/sheets/file.ts": 2,
+      // ${OFFER_SELECT}: the fixed column list a merchant offer is read with (0555)
+      "lib/offers/queries.ts": 1,
+      // ${ROW_SQL}: the one fixed query the merchant's offer page reads its offer with, locked for the view count and
+      // for accepting
+      "lib/system/offers.ts": 2,
     };
     const counts: Record<string, number> = {};
     for (const f of files) {

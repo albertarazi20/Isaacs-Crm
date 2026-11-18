@@ -161,7 +161,7 @@ export interface UploadSession {
 
 export interface MintArgs {
   clientId: string;
-  purpose?: "documents" | "statements" | "stips" | "application";
+  purpose?: "documents" | "statements" | "stips" | "application" | "offer";
   wanted?: Wanted[];
   createdBy?: string | null;
   hours?: number;
@@ -221,8 +221,10 @@ export async function openUploadPage(
     const clientId = rows[0]?.id;
     if (!clientId) return null;
     // the same visitor refreshing (or a scripted loop) keeps one session; max_files means something again
+    // an offer page's session asks for that offer's documents only: the everyday link never picks it up
     const open = await q.query<{ token: string }>(
       `select token from upload_sessions where client_id = $1 and created_by is null and expires_at > now()
+          and purpose <> 'offer'
         order by created_at desc limit 1`,
       [clientId],
     );
@@ -282,6 +284,8 @@ async function writeDocument(
     source: "upload_link" | "staff" | "email" | "sheet";
     uploadedBy: string | null;
     kind?: DocKind;
+    /** The merchant picked the slot (the offer page): a label to check, not one a person set. */
+    kindByMerchant?: boolean;
     period?: ISODate | null;
     scan: "pending" | "clean";
     today: ISODate;
@@ -300,6 +304,28 @@ async function writeDocument(
     [a.clientId, hash],
   );
   const d0 = dup.rows[0];
+  if (d0 && a.kind && d0.kind !== a.kind) {
+    // the same file again, sent for a different slot: an unsorted one takes the slot's label, anything else is a
+    // different document the merchant has not sent yet (one PDF of a license and a check cannot be both)
+    if (d0.kind !== "other")
+      throw new UserError(
+        `That file is already here as your ${labelOf(d0.kind, d0.period).toLowerCase()}. Send the ${labelOf(a.kind, null).toLowerCase()} as its own file`,
+      );
+    await q.query("select relabel_document($1, $2, null)", [d0.id, a.kind]);
+    await q.query(
+      `update documents set label_by = 'rule', label_confidence = 0.7, label_reason = 'chosen by the merchant on the offer page'
+        where id = $1`,
+      [d0.id],
+    );
+    return {
+      documentId: d0.id,
+      kind: a.kind,
+      period: null,
+      label: labelOf(a.kind, null),
+      confidence: 0.7,
+      duplicate: true,
+    };
+  }
   if (d0) {
     return {
       documentId: d0.id,
@@ -319,8 +345,9 @@ async function writeDocument(
     : kind === "bank_statement"
       ? guess.period
       : null;
-  const labelBy = a.kind ? "human" : "rule";
-  const confidence = a.kind ? 1 : guess.confidence;
+  // a slot the merchant chose is a rule label under the review line (the documents card asks a person to check it)
+  const labelBy = a.kind && !a.kindByMerchant ? "human" : "rule";
+  const confidence = a.kind ? (a.kindByMerchant ? 0.7 : 1) : guess.confidence;
   const { rows } = await q.query<{ id: string }>("select gen_random_uuid() as id");
   const id = rows[0]!.id;
   const key = `${a.clientId}/${id}-${safeName(a.filename)}`;
@@ -345,7 +372,11 @@ async function writeDocument(
         a.uploadedBy,
         labelBy,
         confidence,
-        a.kind ? "set on upload" : guess.reason,
+        a.kind
+          ? a.kindByMerchant
+            ? "chosen by the merchant on the offer page"
+            : "set on upload"
+          : guess.reason,
         a.scan,
       ],
     );
@@ -367,7 +398,7 @@ async function writeDocument(
 export async function acceptUpload(
   db: DbAccess,
   store: BlobStore,
-  a: FileIn & { token: string; today: ISODate; ip?: string },
+  a: FileIn & { token: string; today: ISODate; ip?: string; kind?: DocKind },
 ): Promise<Accepted> {
   return db.withSystem(async (q) => {
     const s = await loadSession(q, a.token);
@@ -384,6 +415,9 @@ export async function acceptUpload(
     if (!userId) throw new UserError("This upload link has expired.");
     const out = await writeDocument(q, store, {
       ...a,
+      // only an offer page's slots name what a file is; every other link reads it from the file
+      kind: s.purpose === "offer" ? a.kind : undefined,
+      kindByMerchant: true,
       clientId: s.client_id,
       userId,
       source: "upload_link",
@@ -631,7 +665,22 @@ export async function scanPending(
         [d.id, verdict.clean ? "clean" : "rejected", verdict.note],
       );
       if (verdict.clean) clean++;
-      else rejected++;
+      else {
+        rejected++;
+        // a document an accepted offer was waiting for turned out not to be one: the rep has to ask again
+        await q.query(
+          `insert into user_alerts (user_id, kind, client_id, title, body, href, dedupe_key)
+           select c.user_id, 'offer_doc_rejected', c.id, c.business_name || ': a document failed its check',
+                  d.filename || ' could not be read safely. Ask for it again before funding.', '/clients/' || c.id,
+                  'offer_doc_rejected:' || d.id
+             from documents d join clients c on c.id = d.client_id
+            where d.id = $1 and exists (select 1 from merchant_offers o
+                                         where o.client_id = d.client_id and o.status = 'accepted'
+                                           and d.kind = any(o.docs))
+           on conflict do nothing`,
+          [d.id],
+        );
+      }
     }
     return { scanned: rows.length, clean, rejected };
   });

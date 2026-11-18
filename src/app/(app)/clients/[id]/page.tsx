@@ -4,6 +4,7 @@ import { ClientView } from "@/components/client/ClientView";
 import { approvalCadence, approvalForClient } from "@/lib/approvals/queries";
 import { requireSession } from "@/lib/auth/server";
 import { listBuckets } from "@/lib/buckets/queries";
+import { listOffers } from "@/lib/offers/queries";
 import { getClientDetail, userContext } from "@/lib/data/queries";
 import { db } from "@/lib/db";
 import { clientFreshness, listDocuments } from "@/lib/docs/upload";
@@ -52,6 +53,19 @@ export default async function ClientPage({ params }: { params: Promise<{ id: str
       freshness: await clientFreshness(q, id, today),
       approval: await approvalForClient(q, id),
       cadence: await approvalCadence(q),
+      offers: await listOffers(q, id),
+      offerTarget:
+        (
+          await q.query<{ timezone: string; blocked: string | null }>(
+            `select app.client_timezone(c) as timezone,
+                  case when c.contact_status in ('dnc', 'no_email') then 'they asked not to be emailed'
+                       when c.email_opt_out then 'they unsubscribed'
+                       when app.is_suppressed('email', c.email) then 'the address is on the do-not-email list'
+                  end as blocked
+             from clients c where c.id = $1`,
+            [id],
+          )
+        ).rows.map((r) => ({ timezone: r.timezone, emailBlocked: r.blocked }))[0] ?? null,
       buckets: (await listBuckets(q)).map((b) => ({ id: b.id, name: b.name })),
       bucketId:
         (
@@ -76,6 +90,8 @@ export default async function ClientPage({ params }: { params: Promise<{ id: str
       approval={data.approval}
       cadence={data.cadence}
       buckets={data.buckets}
+      offers={data.offers}
+      offerTarget={data.offerTarget}
       bucketId={data.bucketId}
     />
   );

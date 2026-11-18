@@ -30,6 +30,7 @@ import { OverflowMenu } from "../OverflowMenu";
 import { Dialog, useCall, useToast } from "../overlay";
 import { Glyph } from "../shell/icons";
 import { Avatar, Badge, Button, buttonClass, cn, Input, TONE_TEXT } from "../ui";
+import { OfferForm } from "../offers/OfferForm";
 import { ApprovalForm } from "./ApprovalForm";
 import { EmailSteps } from "./EmailSteps";
 
@@ -57,6 +58,7 @@ export function ApprovalList({
   const fmt = (iso: string) => whenWords(iso, timezone, nowMs);
   const [editing, setEditing] = useState<ApprovalRow | null>(null);
   const [closing, setClosing] = useState<ApprovalRow | null>(null);
+  const [offering, setOffering] = useState<ApprovalRow | null>(null);
   return (
     <>
       <ul
@@ -73,6 +75,7 @@ export function ApprovalList({
             fmt={fmt}
             onEdit={() => setEditing(r)}
             onClose={() => setClosing(r)}
+            onOffer={() => setOffering(r)}
           />
         ))}
       </ul>
@@ -86,6 +89,23 @@ export function ApprovalList({
         />
       ) : null}
       {closing ? <CloseDialog row={closing} onDone={() => setClosing(null)} /> : null}
+      {offering ? (
+        <OfferForm
+          merchant={{
+            id: offering.client_id,
+            name: offering.business_name || offering.contact_name,
+            email: offering.email,
+            timezone: offering.timezone,
+          }}
+          approval={{
+            id: offering.id,
+            amountCents: offering.amount_cents,
+            holdUntil: offering.hold_until,
+            funder: offering.funder,
+          }}
+          onClose={() => setOffering(null)}
+        />
+      ) : null}
     </>
   );
 }
@@ -176,12 +196,14 @@ function ApprovalItem({
   fmt,
   onEdit,
   onClose,
+  onOffer,
 }: {
   row: ApprovalRow;
   cadence: readonly CadenceStep[];
   fmt: (iso: string) => string;
   onEdit: () => void;
   onClose: () => void;
+  onOffer: () => void;
 }) {
   const { today, nowMs } = useApp();
   const call = useCall();
@@ -386,8 +408,11 @@ function ApprovalItem({
                     {row.emails_note === "held" ? "Start the emails" : "Resume the emails"}
                   </button>
                 ) : null}
+                <button type="button" className={MENU_ITEM} onClick={onOffer}>
+                  Generate merchant offer
+                </button>
                 <button type="button" className={MENU_ITEM} onClick={onEdit}>
-                  Change the offer
+                  Change the approval
                 </button>
                 <Link href={`/clients/${row.client_id}`} className={MENU_ITEM}>
                   Open the merchant

@@ -355,8 +355,12 @@ export async function drainOutbox(args: {
       // has its own footer with the merchant's unsubscribe link in it (checked when it was saved): the HTML is sent
       // as designed and the footer goes on the plain-text part.
       let text = job.text_body;
+      // a designed email (an approval email, an offer on the reply lane) goes as it was made; anything else is the text,
+      // wrapped (the bulk lanes' claim and address checks read the text, so they never send a design)
       const designed =
-        job.lane === "approval" && job.html_body !== null && job.html_body.trim() !== "";
+        (job.lane === "approval" || job.lane === "reply") &&
+        job.html_body !== null &&
+        job.html_body.trim() !== "";
       let html = designed ? (job.html_body ?? "") : textToHtml(job.text_body);
       // RFC 8058 one-click unsubscribe: Gmail and Yahoo require it on bulk mail
       let headers: Record<string, string> | undefined;

@@ -193,7 +193,7 @@ export default async function approvalsFlow({ email }) {
       .getByRole("listitem")
       .first();
     await firstRow.getByRole("button", { name: /^More for/ }).click();
-    await page.getByRole("button", { name: "Change the offer" }).click({ timeout: 5000 });
+    await page.getByRole("button", { name: "Change the approval" }).click({ timeout: 5000 });
     const edit = page.getByRole("dialog");
     await edit.getByRole("textbox", { name: /^Approved amount/ }).fill("99,000");
     await edit.getByRole("button", { name: "Save" }).click();

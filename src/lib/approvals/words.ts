@@ -95,6 +95,12 @@ export function emailsStatus(
         detail: "Emails stopped. Call them now.",
         hot: true,
       };
+    case "offer_accepted":
+      return {
+        tone: "good",
+        label: "Offer accepted",
+        detail: "Emails stopped. Press Pitched once it's moving.",
+      };
     case "expired":
       return { tone: "warn", label: "Hold date passed", detail: "Emails stopped." };
     case "opted_out":

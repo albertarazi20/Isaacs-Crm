@@ -21,6 +21,9 @@ export const ALERT_KIND_LABELS: Record<string, string> = {
   file_complete: "File complete",
   template_paused: "Template paused",
   bounce_spike: "Bounce spike",
+  offer_opened: "Offer opened",
+  offer_accepted: "Offer accepted",
+  offer_doc_rejected: "Offer document failed",
 };
 
 /**

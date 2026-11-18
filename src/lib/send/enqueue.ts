@@ -15,6 +15,8 @@ export interface EnqueueInput {
   expiresInHours?: number;
   /** The template it came from, for the per-template scores and the bounce-spike pause (S1-7). */
   templateId?: string | null;
+  /** A designed HTML part (an offer email); the text part is always sent too. */
+  html?: string | null;
 }
 
 export type EnqueueResult =
@@ -87,8 +89,8 @@ export async function enqueueEmail(
     ? new Date(notBefore.getTime() + input.expiresInHours * 3_600_000)
     : null;
   const ins = await q.query<{ id: string; status: string; skip_reason: string | null }>(
-    `insert into outbox (user_id, client_id, lane, source, to_address, subject, text_body, not_before, expires_at, template_id)
-     values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+    `insert into outbox (user_id, client_id, lane, source, to_address, subject, text_body, not_before, expires_at, template_id, html_body)
+     values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
      on conflict do nothing
      returning id, status, skip_reason`,
     [
@@ -102,6 +104,7 @@ export async function enqueueEmail(
       notBefore.toISOString(),
       expires?.toISOString() ?? null,
       input.templateId ?? null,
+      input.html ?? null,
     ],
   );
   const row = ins.rows[0];

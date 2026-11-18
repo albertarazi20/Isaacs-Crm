@@ -8,7 +8,7 @@ environment variables; Claude only needs to be told they are set.
 ## Selective Capital, as of 2026-11-17 (this is the list that applies now)
 
 The live site is the Netlify project `selective-capital-crm`; the database is Supabase `aztoxzcmnvqaypjuuuwj`, in step
-with the code (migrations through 0554). What only you can do, most useful first:
+with the code (migrations through 0555). What only you can do, most useful first:
 
 1. **The assistant and the brain are on (2026-11-18).** The key is a secret `ANTHROPIC_API_KEY` on Netlify and the account has
    credit. Settings → AI chooses the model (Sonnet 5.5), switches the brain on or off, sets how many things it prepares
