@@ -37,7 +37,9 @@ const CARD =
 const INPUT =
   "h-12 w-full rounded-xl border border-[#d9d5ca] bg-white px-3.5 text-[16px] text-[#0e1424] placeholder:text-[#9a9ea9] focus:border-[#0e1424] focus:ring-[3px] focus:ring-[#0e1424]/10 focus:outline-none";
 const INK_BUTTON =
-  "inline-flex items-center justify-center gap-2 rounded-xl bg-[#0e1424] font-semibold text-white transition hover:bg-[#1c2438] active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-40";
+  "inline-flex items-center justify-center gap-2 rounded-xl bg-[#6d28d9] font-semibold text-white transition hover:bg-[#5b21b6] active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-40";
+const BRAND_BUTTON =
+  "inline-flex items-center justify-center gap-2 bg-linear-to-br from-[#4f46e5] via-[#6d28d9] to-[#c026d3] font-semibold text-white shadow-[0_10px_28px_-10px_rgba(109,40,217,0.7)] transition hover:brightness-110 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-40 disabled:shadow-none";
 
 /**
  * What the merchant sees: who it is for, how long it stands, the terms as a term sheet, and the form to accept with
@@ -147,7 +149,7 @@ export function OfferView({
           ) : null}
         </div>
         {running ? (
-          <p className="rounded-full bg-[#0e1424] px-3.5 py-1.5 text-[12px] font-semibold tracking-[0.14em] text-white uppercase tabular-nums">
+          <p className="rounded-full bg-linear-to-br from-[#4f46e5] via-[#6d28d9] to-[#c026d3] px-3.5 py-1.5 text-[12px] font-semibold tracking-[0.14em] text-white uppercase tabular-nums shadow-[0_6px_18px_-6px_rgba(109,40,217,0.6)]">
             {left} left
           </p>
         ) : null}
@@ -156,15 +158,19 @@ export function OfferView({
       {/* the term sheet */}
       <section aria-label="Your funding offer" className={cn(CARD, "overflow-hidden p-1.5")}>
         <div className="rounded-[15px] border border-[#ece9e1]">
-          <div className="px-6 pt-7 pb-6 text-center">
-            <p className={cn(EYEBROW, "text-[#5f6370]")}>Funding offered</p>
+          <div className="relative overflow-hidden rounded-t-[14px] bg-linear-to-br from-[#4f46e5] via-[#6d28d9] to-[#c026d3] px-6 pt-7 pb-6 text-center text-white">
+            <div
+              aria-hidden
+              className="pointer-events-none absolute -top-24 -right-20 size-64 rounded-full bg-white/15 blur-3xl"
+            />
+            <p className={cn(EYEBROW, "relative text-white/85")}>Funding offered</p>
             <p
               style={SERIF}
-              className="mt-3 text-[52px] leading-none font-medium tracking-[-0.02em] tabular-nums sm:text-[60px]"
+              className="relative mt-3 text-[52px] leading-none font-medium tracking-[-0.02em] tabular-nums sm:text-[60px]"
             >
               {sheetMoney(offer.fundedCents)}
             </p>
-            <p className="mt-3 text-[13px] text-[#5f6370]">
+            <p className="relative mt-3 text-[13px] text-white/85">
               {paymentsWords(offer.payments, offer.frequency)} ·{" "}
               {termWords(offer.frequency, offer.payments)}
             </p>
@@ -218,7 +224,7 @@ export function OfferView({
       </section>
 
       {offer.message ? (
-        <figure className="border-l-[3px] border-[#6d28d9] py-1 pl-5">
+        <figure className="border-l-[3px] border-[#c026d3] py-1 pl-5">
           <blockquote style={SERIF} className="text-[18px] leading-relaxed text-[#2b2f3c] italic">
             “{offer.message}”
           </blockquote>
@@ -518,7 +524,7 @@ function AcceptForm({
           type="button"
           disabled={!ready || busy || preview}
           onClick={() => void accept()}
-          className={cn(INK_BUTTON, "h-14 w-full rounded-2xl text-[16px] tracking-[0.01em]")}
+          className={cn(BRAND_BUTTON, "h-14 w-full rounded-2xl text-[16px] tracking-[0.01em]")}
         >
           {busy ? "Accepting…" : n > 0 ? "Accept offer & submit documents" : "Accept offer"}
         </button>

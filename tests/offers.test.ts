@@ -141,8 +141,10 @@ describe("making an offer", () => {
       subject: "Your funding offer for Winchester Creek Farm is ready",
     });
     expect(mail.html_body).toContain(`/offer/${token}`);
-    expect(mail.text_body).toContain("$4,197.98");
-    expect(mail.text_body).toContain("final payment $4,198");
+    // the email links the page; the terms themselves are only on the page
+    expect(mail.text_body).toContain(`/offer/${token}`);
+    expect(mail.text_body).not.toContain("$4,197.98");
+    expect(mail.html_body).not.toContain("$80,850");
     const line = await one<{ body: string }>(
       "select body from activities where client_id = $1 and body like 'Offer emailed%'",
       [ritaMerchant],
