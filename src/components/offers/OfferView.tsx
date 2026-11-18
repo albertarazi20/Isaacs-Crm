@@ -86,8 +86,8 @@ export function OfferView({
         </h2>
         <p className="mt-3 text-[15.5px] leading-relaxed text-pretty text-text-2">
           {offer.firstName ? `${offer.firstName}, here` : "Here"} are the terms we put together for{" "}
-          {offer.businessName}. Look them over, upload your documents and accept below. Accept early
-          in the day and you can be funded the same day.
+          {offer.businessName}. Look them over, upload your documents and accept below. Once we have
+          your documents, we review them and send your funding agreement.
         </p>
       </header>
 
@@ -380,8 +380,8 @@ function AcceptForm({
         <h2 className="font-serif text-[26px] font-medium tracking-[-0.01em]">Accept your offer</h2>
         <p className="mt-1 text-[14.5px] text-text-2">
           {n === 0
-            ? "Confirm your details and accept. We take it from there."
-            : `Upload the ${n === 1 ? "document" : `${n} documents`} below and accept. We take it from there.`}
+            ? "Confirm your details and accept. We review everything and send your funding agreement."
+            : `Upload the ${n === 1 ? "document" : `${n} documents`} below and accept. We review them and send your funding agreement.`}
         </p>
       </div>
       <div className="space-y-4 px-6 py-5">
@@ -495,7 +495,7 @@ function AcceptForm({
           {preview
             ? "This is a preview: uploading and accepting are for the merchant."
             : ready
-              ? "Everything's in. Press accept and we'll take it from here."
+              ? "Everything's in. Press accept to send it to us for review."
               : "Upload each document above, then accept."}
         </p>
       </div>
