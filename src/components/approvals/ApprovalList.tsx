@@ -17,13 +17,15 @@ import {
   holdWords,
   whenWords,
   type CadenceStep,
-  type Status,
 } from "@/lib/approvals/words";
 import type { ActionResult } from "@/lib/data/types";
 import { timeAgo } from "@/lib/format";
+import { callWindow, localTime } from "@/lib/followup/dial";
+import { diffDays, type ISODate } from "@/lib/mca/dates";
 import { formatUS } from "@/lib/mca/phone";
 import { formatMoney } from "@/lib/money";
 import { useApp } from "../app-context";
+import { copyText } from "../client/parts";
 import { OverflowMenu } from "../OverflowMenu";
 import { Dialog, useCall, useToast } from "../overlay";
 import { Glyph } from "../shell/icons";
@@ -58,7 +60,7 @@ export function ApprovalList({
   return (
     <>
       <ul
-        className="stagger space-y-2.5"
+        className="stagger grid gap-4 lg:grid-cols-2 2xl:grid-cols-3"
         aria-label={
           view === "open" ? "Waiting on a pitch" : view === "pitched" ? "Pitched" : "Closed"
         }
@@ -88,12 +90,83 @@ export function ApprovalList({
   );
 }
 
-function StatusLine({ status }: { status: Status }) {
+/** A merchant's own clock: "EST 2:39 PM", amber outside 8 am to 9 pm there. */
+function TheirTime({ timezone, nowMs }: { timezone: string; nowMs: number }) {
+  const now = new Date(nowMs);
+  const w = callWindow(timezone, now);
+  let zone = "";
+  try {
+    zone =
+      new Intl.DateTimeFormat("en-US", { timeZone: timezone, timeZoneName: "short" })
+        .formatToParts(now)
+        .find((p) => p.type === "timeZoneName")?.value ?? "";
+  } catch {
+    zone = "";
+  }
   return (
-    <p className="mt-1.5 text-xs">
-      <span className={cn("font-semibold", TONE_TEXT[status.tone])}>{status.label}</span>
-      {status.detail ? <span className="text-muted"> {status.detail}</span> : null}
-    </p>
+    <span
+      className={cn(
+        "block text-[11.5px] tabular-nums",
+        w === "early" || w === "late" ? "font-medium text-warn" : "text-muted",
+      )}
+    >
+      {[zone, localTime(timezone, now)].filter(Boolean).join(" ")}
+      {w === "early"
+        ? " · too early to call"
+        : w === "late"
+          ? " · too late to call"
+          : " their time"}
+    </span>
+  );
+}
+
+/** The hold as a ring that empties toward the funder's date. */
+function HoldRing({ row, today }: { row: ApprovalRow; today: ISODate }) {
+  const hold = holdWords(row.hold_until, today);
+  if (!row.hold_until || !hold)
+    return (
+      <div className="flex flex-col items-center text-center">
+        <span className="flex size-[68px] items-center justify-center rounded-full border border-dashed border-border-strong text-[11px] font-medium text-muted">
+          No date
+        </span>
+        <span className="mt-1.5 text-[11px] text-muted">Hold</span>
+      </div>
+    );
+  const left = diffDays(today, row.hold_until as ISODate);
+  const total = Math.max(
+    1,
+    diffDays(row.created_at.slice(0, 10) as ISODate, row.hold_until as ISODate),
+  );
+  const share = Math.max(0, Math.min(1, left / total));
+  const r = 28;
+  const c = 2 * Math.PI * r;
+  const ink = hold.tone === "bad" ? "text-bad" : hold.tone === "warn" ? "text-warn" : "text-accent";
+  return (
+    <div className="flex flex-col items-center text-center" title={`${hold.label} · ${hold.left}`}>
+      <span className={cn("relative flex size-[68px] items-center justify-center", ink)}>
+        <svg aria-hidden viewBox="0 0 68 68" className="absolute inset-0 -rotate-90">
+          <circle cx="34" cy="34" r={r} fill="none" strokeWidth="6" className="stroke-border" />
+          <circle
+            cx="34"
+            cy="34"
+            r={r}
+            fill="none"
+            strokeWidth="6"
+            strokeLinecap="round"
+            stroke="currentColor"
+            strokeDasharray={`${share * c} ${c}`}
+          />
+        </svg>
+        <span className="relative leading-none">
+          <span className="block text-[18px] font-semibold tabular-nums">{Math.max(0, left)}</span>
+          <span className="block text-[9.5px] font-semibold tracking-wide text-muted uppercase">
+            {left === 1 ? "day" : "days"}
+          </span>
+        </span>
+      </span>
+      <span className="mt-1.5 text-[11px] font-medium text-text-2">{hold.label}</span>
+      <span className={cn("text-[11px] font-medium", TONE_TEXT[hold.tone])}>{hold.left}</span>
+    </div>
   );
 }
 
@@ -115,9 +188,10 @@ function ApprovalItem({
   const toast = useToast();
   const [busy, setBusy] = useState(false);
   const status = emailsStatus(row, fmt);
-  const hold = holdWords(row.hold_until, today);
   const name = row.business_name || row.contact_name;
   const open = row.status === "open";
+  const sent = row.steps.filter((s) => s.status === "sent").length;
+  const total = Math.max(cadence.length, ...row.steps.map((s) => s.step), 0);
 
   async function run<T>(p: Promise<ActionResult<T>>, ok?: string) {
     setBusy(true);
@@ -153,118 +227,146 @@ function ApprovalItem({
     });
   }
 
+  async function copyNumber() {
+    const ok = await copyText(formatUS(row.phone));
+    toast({
+      message: ok ? `${formatUS(row.phone)} copied` : "Couldn't copy. Select the number yourself",
+      tone: ok ? "success" : "error",
+    });
+  }
+
   return (
     <li
       className={cn(
         // the open "more" menu (and a focused control) lifts its card above the next one: each card is its own layer
-        "relative rounded-2xl border bg-surface p-4 transition focus-within:z-30 has-[[aria-expanded=true]]:z-30 sm:p-5",
-        status.hot ? "border-accent/45 shadow-glow" : "border-border hover:border-border-strong",
+        "relative flex flex-col rounded-3xl border bg-surface shadow-card transition duration-200 focus-within:z-30 has-[[aria-expanded=true]]:z-30",
+        status.hot
+          ? "border-accent/50 shadow-glow"
+          : "border-border hover:-translate-y-px hover:border-border-strong",
       )}
     >
-      <div className="grid gap-4 lg:grid-cols-[minmax(0,1.35fr)_minmax(0,0.75fr)_minmax(0,0.8fr)_minmax(0,1.25fr)_auto] lg:items-center lg:gap-5">
-        {/* merchant */}
-        <div className="flex min-w-0 items-center gap-3">
-          <Avatar name={name} size={40} />
-          <div className="min-w-0">
-            <p className="flex min-w-0 items-center gap-2">
-              <Link
-                href={`/clients/${row.client_id}`}
-                className="truncate text-[15px] font-semibold tracking-[-0.01em] hover:underline"
-              >
-                {name}
-              </Link>
-              {status.hot ? <Badge tone="accent">Replied</Badge> : null}
-            </p>
+      {status.hot ? (
+        <p className="flex items-center gap-2 rounded-t-3xl bg-accent px-5 py-2 text-[12.5px] font-semibold text-accent-fg">
+          <span className="live-dot" />
+          Replied · {status.detail}
+        </p>
+      ) : null}
+
+      <div className="flex flex-1 flex-col gap-4 p-5">
+        {/* who */}
+        <div className="flex items-start gap-3">
+          <Avatar name={name} size={42} />
+          <div className="min-w-0 flex-1">
+            <Link
+              href={`/clients/${row.client_id}`}
+              className="block truncate text-[15.5px] font-semibold tracking-[-0.01em] hover:underline"
+            >
+              {name}
+            </Link>
             <p className="truncate text-xs text-muted">
               {[row.contact_name, row.rep_name ? `Rep: ${row.rep_name}` : ""]
                 .filter(Boolean)
                 .join(" · ")}
             </p>
           </div>
+          <Badge tone={status.tone === "neutral" ? "neutral" : status.tone}>{status.label}</Badge>
         </div>
 
-        {/* the offer and the hold: side by side on a phone, their own columns on a wide screen */}
-        <div className="grid grid-cols-2 gap-4 lg:contents">
+        {/* the offer, and the hold or what happened to it */}
+        <div className="flex items-center justify-between gap-4">
           <div className="min-w-0">
             <p className="eyebrow">Approved</p>
-            <p className="mt-0.5 text-xl leading-tight font-semibold tracking-[-0.03em] tabular-nums">
+            <p className="mt-1 text-[30px] leading-none font-semibold tracking-[-0.04em] tabular-nums">
               {formatMoney(row.amount_cents)}
             </p>
-            <p className="truncate text-xs text-muted" title={row.note || undefined}>
-              {[row.funder, timeAgo(row.created_at, new Date(nowMs))].filter(Boolean).join(" · ")}
+            <p className="mt-1.5 truncate text-xs text-muted" title={row.note || undefined}>
+              {[row.funder, `approved ${timeAgo(row.created_at, new Date(nowMs))}`]
+                .filter(Boolean)
+                .join(" · ")}
             </p>
           </div>
-
-          {/* the hold, or when it was pitched / closed */}
-          <div className="min-w-0">
-            {open ? (
-              <>
-                <p className="eyebrow">Hold</p>
-                {hold ? (
-                  <>
-                    <p className="mt-0.5 text-sm font-medium">{hold.label}</p>
-                    <p className={cn("text-xs font-medium", TONE_TEXT[hold.tone])}>{hold.left}</p>
-                  </>
-                ) : (
-                  <p className="mt-0.5 text-sm text-muted">No date</p>
-                )}
-              </>
-            ) : row.status === "pitched" && row.pitched_at ? (
-              <>
-                <p className="eyebrow">Pitched</p>
-                <p className="mt-0.5 text-sm font-medium">{fmt(row.pitched_at)}</p>
-                <p className="truncate text-xs text-muted">
-                  {row.pitched_by_name ? `by ${row.pitched_by_name}` : ""}
-                </p>
-              </>
-            ) : row.closed_at ? (
-              <>
-                <p className="eyebrow">Closed</p>
-                <p className="mt-0.5 text-sm font-medium">{fmt(row.closed_at)}</p>
-                <p className="truncate text-xs text-muted" title={row.closed_reason}>
-                  {row.closed_reason}
-                </p>
-              </>
-            ) : null}
-          </div>
+          {open ? (
+            <HoldRing row={row} today={today} />
+          ) : (
+            <div className="shrink-0 text-right">
+              <p className="eyebrow">{row.status === "pitched" ? "Pitched" : "Closed"}</p>
+              <p className="mt-1 text-sm font-medium">
+                {fmt((row.status === "pitched" ? row.pitched_at : row.closed_at) ?? row.created_at)}
+              </p>
+              <p className="max-w-40 truncate text-xs text-muted" title={row.closed_reason}>
+                {row.status === "pitched"
+                  ? row.pitched_by_name
+                    ? `by ${row.pitched_by_name}`
+                    : ""
+                  : row.closed_reason}
+              </p>
+            </div>
+          )}
         </div>
 
         {/* the emails */}
-        <div className="min-w-0">
+        <div className="rounded-2xl border border-border bg-surface-3/50 px-3.5 py-3">
+          <div className="flex items-center justify-between gap-3">
+            <p className="eyebrow">Approval emails</p>
+            <p className="text-[11.5px] text-muted tabular-nums">
+              {sent} of {total} sent
+            </p>
+          </div>
           <EmailSteps
+            className="mt-2.5"
             cadence={cadence}
             steps={row.steps}
             nextStep={row.next_step}
             running={open && row.emails === "running" && !row.halt}
             fmt={fmt}
           />
-          <StatusLine status={status} />
+          <p className="mt-2 text-xs text-muted">
+            {status.hot ? "Emails stop when you press Pitched." : status.detail}
+          </p>
           {row.last_call_at ? (
             <p className="mt-0.5 text-xs text-muted">Last call {fmt(row.last_call_at)}</p>
           ) : null}
         </div>
 
-        {/* what to do */}
-        <div className="flex items-center gap-2 lg:justify-end">
+        {open && row.note ? (
+          <p className="border-l-2 border-accent/40 pl-3 text-xs text-text-2">{row.note}</p>
+        ) : null}
+      </div>
+
+      {/* the number and what to do */}
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-2 border-t border-border px-5 py-3">
+        <div className="min-w-0 flex-1">
+          {row.phone ? (
+            <>
+              <button
+                type="button"
+                onClick={() => void copyNumber()}
+                title="Copy this number"
+                aria-label={`Copy ${name}'s number`}
+                className="block cursor-copy truncate rounded text-[14px] font-semibold tabular-nums hover:text-accent focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+              >
+                {formatUS(row.phone)}
+              </button>
+              <TheirTime timezone={row.timezone} nowMs={nowMs} />
+            </>
+          ) : (
+            <span className="text-xs text-muted">No phone number</span>
+          )}
+        </div>
+        <div className="flex items-center gap-2">
           {open ? (
             <>
               {row.phone ? (
                 <a
                   href={`tel:${row.phone}`}
-                  className={buttonClass("secondary", "sm", "max-lg:flex-1")}
+                  className={buttonClass("secondary", "sm")}
                   aria-label={`Call ${name}, ${formatUS(row.phone)}`}
                 >
                   <Glyph name="phone" className="size-4" />
                   Call
                 </a>
               ) : null}
-              <Button
-                size="sm"
-                variant="primary"
-                className="max-lg:flex-1"
-                disabled={busy}
-                onClick={() => void pitched()}
-              >
+              <Button size="sm" variant="primary" disabled={busy} onClick={() => void pitched()}>
                 <Glyph name="check" className="size-4" />
                 Pitched
               </Button>
@@ -321,9 +423,6 @@ function ApprovalItem({
           )}
         </div>
       </div>
-      {open && row.note ? (
-        <p className="mt-3 border-t border-border pt-3 text-xs text-text-2">{row.note}</p>
-      ) : null}
     </li>
   );
 }

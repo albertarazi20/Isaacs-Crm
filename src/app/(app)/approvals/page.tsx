@@ -2,7 +2,9 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { AddApprovalButton } from "@/components/approvals/AddApprovalButton";
 import { ApprovalList } from "@/components/approvals/ApprovalList";
-import { EmptyState, PageHeader, Segmented, StatCard } from "@/components/ui";
+import { ApprovalsHero } from "@/components/approvals/ApprovalsHero";
+import { Glyph } from "@/components/shell/icons";
+import { EmptyState, PageHeader, Segmented } from "@/components/ui";
 import {
   approvalCadence,
   approvalStats,
@@ -13,8 +15,8 @@ import {
 import { cadenceSummary } from "@/lib/approvals/words";
 import { CAN } from "@/lib/auth/roles";
 import { requirePage } from "@/lib/auth/server";
+import { userContext } from "@/lib/data/queries";
 import { db } from "@/lib/db";
-import { formatMoneyCompact } from "@/lib/money";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Open approvals" };
@@ -39,6 +41,8 @@ export default async function ApprovalsPage({
   const view: ApprovalStatus = raw === "pitched" || raw === "closed" ? raw : "open";
   const data = await db.withUser(session.userId, async (q) => ({
     rows: await listApprovals(q, view),
+    open: view === "open" ? null : await listApprovals(q, "open"),
+    today: (await userContext(q)).today,
     stats: await approvalStats(q),
     cadence: await approvalCadence(q),
     settings: await getApprovalSettings(q),
@@ -64,7 +68,7 @@ export default async function ApprovalsPage({
       <PageHeader
         eyebrow="Funding desk"
         title="Open approvals"
-        description="Merchants with an offer who haven't been pitched yet. The approval emails go out on their own; the call is yours. Press Pitched when you've walked them through it."
+        description="Merchants with an offer who haven't been pitched yet. The emails go out on their own; the call is yours. Press Pitched once you've walked them through it."
         actions={<AddApprovalButton cadence={cadence} />}
       />
 
@@ -72,89 +76,67 @@ export default async function ApprovalsPage({
       !settings.approval_emails_on ||
       settings.postal_address.trim() === "" ||
       !data.myPhone ? (
-        <div className="space-y-2">
-          {!settings.approval_emails_on ? (
-            <Notice>
-              Approval emails are switched off, so nothing goes out on its own.{" "}
-              {manager ? (
-                <Link className="font-semibold underline" href="/settings/approvals">
-                  Turn them on
+        <div
+          role="status"
+          className="rounded-2xl border border-warn/30 bg-warn-soft/60 px-4 py-3 text-sm text-warn"
+        >
+          <p className="flex items-center gap-2 font-semibold">
+            <Glyph name="alert" className="size-4" />
+            Before the approval emails can go out
+          </p>
+          <ul className="mt-1.5 space-y-1 pl-6">
+            {!settings.approval_emails_on ? (
+              <Notice>
+                Approval emails are switched off, so nothing goes out on its own.{" "}
+                {manager ? (
+                  <Link className="font-semibold underline" href="/settings/approvals">
+                    Turn them on
+                  </Link>
+                ) : (
+                  "A manager can turn them on."
+                )}
+              </Notice>
+            ) : null}
+            {unready > 0 ? (
+              <Notice>
+                {unready === cadence.length
+                  ? "The approval emails don't have their designs yet, so approvals wait at the first email."
+                  : `${unready} of the ${cadence.length} approval emails ${unready === 1 ? "has" : "have"} no design yet: approvals wait at that email.`}{" "}
+                {manager ? (
+                  <Link className="font-semibold underline" href="/settings/approvals">
+                    Add them
+                  </Link>
+                ) : (
+                  "A manager adds them in Settings."
+                )}
+              </Notice>
+            ) : null}
+            {settings.postal_address.trim() === "" ? (
+              <Notice>
+                Automated email waits until the shop&apos;s postal address is set.{" "}
+                {manager ? (
+                  <Link className="font-semibold underline" href="/settings/email">
+                    Set it
+                  </Link>
+                ) : (
+                  "A manager sets it in Settings."
+                )}
+              </Notice>
+            ) : null}
+            {needsPhone ? (
+              <Notice>
+                Your approval emails ask the merchant to call you, so they wait for your phone
+                number.{" "}
+                <Link className="font-semibold underline" href="/settings">
+                  Add it in My account
                 </Link>
-              ) : (
-                "A manager can turn them on."
-              )}
-            </Notice>
-          ) : null}
-          {unready > 0 ? (
-            <Notice>
-              {unready === cadence.length
-                ? "The approval emails don't have their designs yet, so approvals wait at the first email."
-                : `${unready} of the ${cadence.length} approval emails ${unready === 1 ? "has" : "have"} no design yet: approvals wait at that email.`}{" "}
-              {manager ? (
-                <Link className="font-semibold underline" href="/settings/approvals">
-                  Add them
-                </Link>
-              ) : (
-                "A manager adds them in Settings."
-              )}
-            </Notice>
-          ) : null}
-          {settings.postal_address.trim() === "" ? (
-            <Notice>
-              Automated email waits until the shop&apos;s postal address is set.{" "}
-              {manager ? (
-                <Link className="font-semibold underline" href="/settings/email">
-                  Set it
-                </Link>
-              ) : (
-                "A manager sets it in Settings."
-              )}
-            </Notice>
-          ) : null}
-          {needsPhone ? (
-            <Notice>
-              Your approval emails ask the merchant to call you, so they wait for your phone number.{" "}
-              <Link className="font-semibold underline" href="/settings">
-                Add it in My account
-              </Link>
-            </Notice>
-          ) : null}
+              </Notice>
+            ) : null}
+          </ul>
         </div>
       ) : null}
 
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <StatCard
-          hero
-          label="Waiting on a pitch"
-          value={stats.open}
-          hint={stats.open === 1 ? "merchant with an offer" : "merchants with an offer"}
-        />
-        <StatCard
-          label="On the table"
-          value={formatMoneyCompact(stats.open_cents)}
-          hint={
-            stats.expiring > 0
-              ? `${stats.expiring} hold${stats.expiring === 1 ? " ends" : "s end"} within 3 days`
-              : "approved, not pitched yet"
-          }
-        />
-        <StatCard
-          label="Replied"
-          value={stats.replied}
-          tone="accent"
-          hint={stats.replied > 0 ? "call them now" : "no replies waiting"}
-        />
-        <StatCard
-          label="Pitched this week"
-          value={stats.pitched_7d}
-          tone="good"
-          hint={
-            stats.pitched_7d > 0
-              ? `${formatMoneyCompact(stats.pitched_cents_7d)} walked through`
-              : "none yet this week"
-          }
-        />
-      </div>
+      <ApprovalsHero stats={stats} open={data.open ?? rows} today={data.today} />
 
       <div className="flex flex-wrap items-center justify-between gap-3">
         <Segmented
@@ -192,9 +174,5 @@ export default async function ApprovalsPage({
 }
 
 function Notice({ children }: { children: React.ReactNode }) {
-  return (
-    <p className="rounded-2xl border border-warn/30 bg-warn-soft px-4 py-2.5 text-sm text-warn">
-      {children}
-    </p>
-  );
+  return <li className="list-disc text-[13px] leading-relaxed text-text-2">{children}</li>;
 }

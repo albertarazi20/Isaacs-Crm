@@ -17,6 +17,8 @@ export interface ApprovalRow {
   contact_name: string;
   phone: string;
   email: string;
+  /** The merchant's own time zone (IANA), for their clock beside the number. */
+  timezone: string;
   amount_cents: number;
   hold_until: string | null;
   funder: string;
@@ -43,7 +45,7 @@ export interface ApprovalRow {
 }
 
 const SELECT = `
-  select a.id, a.client_id, c.business_name, c.contact_name, c.phone, c.email,
+  select a.id, a.client_id, c.business_name, c.contact_name, c.phone, c.email, app.client_timezone(c) as timezone,
          a.amount_cents::float8 as amount_cents, a.hold_until::text as hold_until, a.funder, a.note, a.status, a.emails,
          a.emails_note, app.approval_halt(a.id) as halt, a.next_step, a.next_email_at::text as next_email_at,
          a.created_at::text as created_at, coalesce(cb.name, '') as created_by_name,
