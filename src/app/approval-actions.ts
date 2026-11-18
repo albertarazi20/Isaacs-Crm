@@ -36,6 +36,8 @@ import { toActionError } from "@/lib/data/errors";
 import type { ActionResult } from "@/lib/data/types";
 import { db } from "@/lib/db";
 import { env } from "@/lib/env";
+import { settingsChange, shopSnapshot } from "@/lib/settings/securityLog";
+import { recordAuditHere } from "@/lib/system/audit";
 
 const ctxFor = (userId: string) => ({ userId, now: new Date(), appUrl: env().APP_URL });
 
@@ -212,7 +214,17 @@ export async function setApprovalSettingsAction(input: unknown): Promise<ActionR
   const session = await requireRole(CAN.manageTeam);
   try {
     const parsed = approvalSettingsSchema.parse(input);
-    await db.withUser(session.userId, (q) => setApprovalSettings(q, parsed));
+    const { before, after } = await db.withUser(session.userId, async (q) => {
+      const was = await shopSnapshot(q);
+      await setApprovalSettings(q, parsed);
+      return { before: was, after: await shopSnapshot(q) };
+    });
+    await recordAuditHere({
+      kind: "settings_approvals_saved",
+      userId: session.userId,
+      email: session.email,
+      detail: settingsChange(before, after),
+    });
     return done(null);
   } catch (e) {
     return { ok: false, error: toActionError(e) };

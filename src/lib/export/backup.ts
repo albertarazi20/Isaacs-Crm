@@ -3,6 +3,9 @@ import type { Db } from "../db";
 /** Bump when the shape changes, so a restore can tell which file it is reading. */
 export const BACKUP_VERSION = 1;
 
+/** The `format` of an encrypted backup envelope (see backupCrypto.ts). A plain backup has `app: "isaac"` instead. */
+export const ENCRYPTED_BACKUP_FORMAT = "isaac-backup-encrypted";
+
 /**
  * The merchant columns that are bearer tokens: a backup never carries them. Each opens something to anyone holding it
  * (his documents and upload page, his application), so a restore makes new ones.
@@ -45,13 +48,15 @@ export const BACKUP_TABLES: readonly string[] = [
   "snippets",
 ];
 
+// The profile comes from app.my_user (migration 0576): the caller's own app_users row. A session can no longer read the
+// whole table, only a short column list for teammates, and the view is the one place its own full row is readable.
 const BACKUP_SQL = `
 select jsonb_build_object(
   'profile', (select jsonb_build_object('email', email, 'name', name, 'timezone', timezone,
                                         'digest_enabled', digest_enabled, 'digest_hour', digest_hour,
                                         'notify_email', notify_email, 'signature', signature,
                                         'application_link', application_link)
-                from app_users where id = app.current_user_id()),
+                from app.my_user),
   'clients', (select coalesce(jsonb_agg(to_jsonb(t) - 'upload_token' - 'application_token' order by t.created_at, t.id), '[]') from clients t),
   'trashed_clients', (select coalesce(jsonb_agg(to_jsonb(t) order by t.trashed_at, t.client_id), '[]') from trashed_clients t),
   'client_asks', (select coalesce(jsonb_agg(to_jsonb(t) order by t.created_at, t.id), '[]') from client_asks t),

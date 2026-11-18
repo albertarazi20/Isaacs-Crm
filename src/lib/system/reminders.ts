@@ -65,7 +65,7 @@ export async function runReminders(args: {
   now: Date;
   appUrl: string;
   send: DigestSender;
-  /** Who may still receive email. Taking someone off ALLOWED_EMAILS must stop their reminders too. Default: everyone. */
+  /** An extra rule on who may receive email, on top of `app_users.active` (which every job already requires). Default: everyone. */
   allowed?: (loginEmail: string) => boolean;
 }): Promise<ReminderSummary> {
   const users = await args.db.withSystem(

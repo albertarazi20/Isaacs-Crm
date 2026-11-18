@@ -307,13 +307,34 @@ describe("the hourly cron route", () => {
       expect(await lastRun()).toBeGreaterThan(FIVE_HOURS_AGO.getTime());
     });
 
-    it("a user taken off ALLOWED_EMAILS gets no email through the real route, and the run is still healthy", async () => {
+    it("a disabled account gets no email through the real route, and the run is still healthy", async () => {
       await arrange();
+      await t.pool.query("update app_users set active = false where id = $1", [user]);
       const fetched = vi.fn(
         async () => new Response(JSON.stringify({ id: "re_x" }), { status: 200 }),
       );
       vi.stubGlobal("fetch", fetched);
-      // env() is read once per module load, so load the route fresh with the shorter list.
+      try {
+        const { POST } = await route();
+        const res = await call(POST, AUTH);
+        expect(res.status).toBe(200);
+        expect(await res.json()).toMatchObject({ users: 0, sent: 0, failed: 0 });
+        expect(fetched).not.toHaveBeenCalled();
+        const sent = await t.pool.query("select 1 from reminders_sent where user_id = $1", [user]);
+        expect(sent.rowCount).toBe(0);
+        expect(await lastRun()).toBeGreaterThan(FIVE_HOURS_AGO.getTime());
+      } finally {
+        await t.pool.query("update app_users set active = true where id = $1", [user]);
+      }
+    });
+
+    it("an active account added in Settings > Team, not on ALLOWED_EMAILS, still gets its email", async () => {
+      await arrange();
+      const fetched = vi.fn(
+        async () => new Response(JSON.stringify({ id: "re_team" }), { status: 200 }),
+      );
+      vi.stubGlobal("fetch", fetched);
+      // env() is read once per module load, so load the route fresh with a list that does not name this user.
       const before = process.env.ALLOWED_EMAILS;
       vi.resetModules();
       process.env.ALLOWED_EMAILS = "someone-else@x.com";
@@ -321,8 +342,14 @@ describe("the hourly cron route", () => {
         const { POST } = await route();
         const res = await call(POST, AUTH);
         expect(res.status).toBe(200);
-        expect(await res.json()).toMatchObject({ sent: 0, skipped: 1 });
-        expect(fetched).not.toHaveBeenCalled();
+        expect(await res.json()).toMatchObject({ users: 1, sent: 1, failed: 0 });
+        expect(fetched).toHaveBeenCalledTimes(1);
+        // the claim row in the database carries the provider id: the email really went out and was recorded
+        const sent = await t.pool.query<{ kind: string; provider_id: string }>(
+          "select kind, provider_id from reminders_sent where user_id = $1",
+          [user],
+        );
+        expect(sent.rows).toEqual([{ kind: "digest", provider_id: "re_team" }]);
         expect(await lastRun()).toBeGreaterThan(FIVE_HOURS_AGO.getTime());
       } finally {
         process.env.ALLOWED_EMAILS = before;

@@ -1,3 +1,4 @@
+import { headers } from "next/headers";
 import { merchantMetadata } from "@/lib/title";
 import {
   MerchantHeading,
@@ -7,6 +8,7 @@ import {
 } from "@/components/upload/MerchantShell";
 import { buttonClass } from "@/components/ui";
 import { db } from "@/lib/db";
+import { LIMITS, limitByIp, waitPhrase } from "@/lib/system/ratelimit";
 import { resolveUnsubscribe } from "@/lib/system/replies";
 
 export const dynamic = "force-dynamic";
@@ -23,6 +25,18 @@ export default async function UnsubscribePage({
 }) {
   const { token } = await params;
   const { done } = await searchParams;
+  // A page cannot answer 429, so over the limit it says so in words. The button's own route does answer 429.
+  const over = await limitByIp("unsubscribe", await headers(), LIMITS.unsubscribeIp);
+  if (!over.allowed) {
+    return (
+      <MerchantShell label="Email preferences">
+        <MerchantNotice icon="link" tone="warn" title="Too many requests">
+          Too many requests from your connection. Please wait {waitPhrase(over.retryAfter)} and try
+          again.
+        </MerchantNotice>
+      </MerchantShell>
+    );
+  }
   const v = await resolveUnsubscribe(db, token);
   if (!v) {
     return (

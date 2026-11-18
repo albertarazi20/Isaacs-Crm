@@ -170,6 +170,9 @@ describe("C-6: an older backup still restores after a new column with a default"
       "applications", // 0530: the signed application record; the PDF itself is in documents
       "assistant_threads", // 0541: a person's conversations with the assistant, private to them
       "passcode_attempts", // 0570: failed passcode sign-in counters per address, system-only throwaway state
+      "rate_limits", // 0574: fixed-window hit counters for the public pages, system-only throwaway state
+      "session_activity", // 0575: when each sign-in was last used (idle timeout), system-only throwaway state
+      "audit_events", // 0573: the security audit log, append-only system state, kept 180 days; not merchant data
       "link_opens", // 0547: page-view signals, worth nothing after a few days
       // 0553: the shop's approval emails (shop-level, like templates) and the approvals on them (funding-stage state,
       // like the offers above); both are in the database backup

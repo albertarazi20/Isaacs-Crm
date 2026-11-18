@@ -40,6 +40,36 @@ Supabase project.
 4. A custom domain, when you want one: Domain management → Add a domain, then update `APP_URL`, the Google redirect
    URI and the Resend webhook, and redeploy.
 
+## Deploying the 0561-0577 migrations
+
+Production is at migration 0556. Migrations 0561-0577 and the new code must go out in **one maintenance window**, in
+this order. Do not apply the migrations and leave the old code running, and do not deploy the code first: neither half
+works alone.
+
+1. **Check production first** (read only, before the window). Look at Settings → Team: nobody may be switched off by
+   mistake, because migration 0571 cuts the Gmail connection, the mailbox sync state and the active mailbox of every
+   user who is disabled when it runs (they have to reconnect Gmail after being switched on again). Look at the send
+   window and caps in Settings: migration 0563 rewrites a window whose start is not before its end to 9-11, a reserve
+   that is not below the daily cap to cap minus 1, and an amber line above the cap to the cap.
+2. **Take a backup** (Settings → Your data → Full backup, encrypted) and note the time.
+3. **Apply every migration 0561 to 0577**, all of them, before anything else (`DATABASE_URL=… pnpm migrate`, or the
+   Supabase SQL editor in file order). Stop if one fails; do not deploy.
+4. **Deploy the new code immediately** (Netlify → Deploys → Trigger deploy, or merge to `main`), so the gap between 3
+   and 4 is as short as it can be.
+5. **Smoke test**: sign in (passcode and Google), open the Open approvals page, open a merchant offer link in a private
+   window, and download one CSV export. Then Settings → Security should show your sign-in.
+
+**Why both halves at once.** The new code on the old schema breaks sign-in: every sign-in and every page load reads and
+writes `session_activity` (the idle timeout, 0575), and it does not exist yet; the page layout and the team page read
+the signed-in user's own row from `app.my_user` (0576), which does not exist yet either. The old code on the new schema
+breaks page loads: 0576 takes away the table-level SELECT on `app_users` and grants only a column list, so the old
+queries that read the whole row (`select *`, `notify_email`, `timezone`, `session_epoch` of the signed-in user) are
+refused with "permission denied".
+
+**Cookies issued before the deploy** carry no session id, so they have no idle timeout (they are not in
+`session_activity`) and end only at the 7-day cap. Nobody is signed out by the deploy; everyone's next sign-in gets the
+12-hour idle timeout. To end them all at once, use "Log out everywhere" for each person, or bump `session_epoch`.
+
 ---
 
 # Deploying Isaac (the original notes)
@@ -85,7 +115,7 @@ New hosting project, new database, new Google Cloud project, new Resend domain. 
 | `SESSION_SECRET`                 | 32+ random characters (`openssl rand -base64 48`)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
 | `TOKEN_ENC_KEY`                  | `openssl rand -base64 32` — encrypts the stored Gmail token                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
 | `APP_URL`                        | the public https URL, no trailing slash                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
-| `ALLOWED_EMAILS`                 | Isaac's Google address only. It lets the first sign-in on a fresh install become the manager, is who the passcode signs in as, and (for now) who the reminder emails go to. Other people sign in through accounts a manager creates in Settings > Team; see section 7                                                                                                                                                                                                                                                                       |
+| `ALLOWED_EMAILS`                 | Isaac's Google address only. It lets the first sign-in on a fresh install become the manager, and is who the passcode signs in as. Reminder emails go to every active account, not to this list. Other people sign in through accounts a manager creates in Settings > Team; see section 7                                                                                                                                                                                                                                                  |
 | `GOOGLE_CLIENT_ID` / `_SECRET`   | from the new Google Cloud project; redirect URI `APP_URL/api/auth/callback`                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
 | `RESEND_API_KEY` / `RESEND_FROM` | Resend key; sender on a verified domain, or `onboarding@resend.dev` if the Resend account was created with Isaac's sign-in email (it only delivers to that one address)                                                                                                                                                                                                                                                                                                                                                                     |
 | `CRON_SECRET`                    | 16+ random characters                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
@@ -126,6 +156,6 @@ submissions, funders, stips, positions and timers, and nothing reads them back i
 - To end someone's access, disable their account in Settings > Team (`active = false`): their session ends on its next
   request and their lead token stops working. Removing an address from `ALLOWED_EMAILS` does neither; accounts created
   in Settings > Team are the allowlist. `ALLOWED_EMAILS` now only decides who may become the first manager on a fresh
-  install, which address the passcode signs in as, and who the reminder emails go to (see section 3).
+  install and which address the passcode signs in as. Reminder emails go to every active account.
 - Bank statements are not stored in this app. If uploads are added later they go in private object storage behind
   authenticated URLs, never a public bucket, never git.

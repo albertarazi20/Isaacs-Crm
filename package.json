@@ -18,7 +18,8 @@
     "db:migrate": "tsx scripts/migrate.ts",
     "check": "pnpm typecheck && pnpm lint && pnpm format:check && pnpm test",
     "db:seed": "tsx scripts/seed-dev.ts",
-    "e2e": "node e2e/run.mjs"
+    "e2e": "node e2e/run.mjs",
+    "security": "node scripts/security-scan.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "1.8.0",

@@ -9,7 +9,6 @@ import { Glyph } from "@/components/shell/icons";
 import { Button, IconButton, Input, Kbd, cn } from "@/components/ui";
 import type { BucketMember } from "@/lib/buckets/queries";
 import { followupCsv } from "@/lib/export/followup";
-import { ALL_MEMBERS_MAX } from "@/lib/followup/limits";
 import { matchesSearch } from "@/lib/followup/search";
 import { formatUS } from "@/lib/mca/phone";
 import { DialListDialog } from "./DialList";
@@ -24,9 +23,12 @@ const SHOWN_MAX = 40;
  */
 export function AllMembersSearch({
   members,
+  truncated,
   canExport,
 }: {
   members: readonly BucketMember[];
+  /** The server cut the list at its cap (listAllMembersCapped): more people exist than the search and the file hold. */
+  truncated: boolean;
   canExport: boolean;
 }) {
   const { today } = useApp();
@@ -48,8 +50,7 @@ export function AllMembersSearch({
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, []);
-  // the list stops at ALL_MEMBERS_MAX: from there on, more people may exist than the search and the file have
-  const cut = members.length >= ALL_MEMBERS_MAX;
+  const cut = truncated;
   const needle = query.trim();
   const found = useMemo(
     () => (needle === "" ? [] : members.filter((m) => matchesSearch(m, needle))),

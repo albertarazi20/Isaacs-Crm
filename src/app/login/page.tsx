@@ -37,9 +37,9 @@ function GoogleMark() {
 export default async function LoginPage({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string }>;
+  searchParams: Promise<{ error?: string; reason?: string }>;
 }) {
-  const { error } = await searchParams;
+  const { error, reason } = await searchParams;
   if (!error && (await getSession())) redirect("/");
   const google = googleConfigured();
   const passcode = passcodeConfigured();
@@ -71,6 +71,15 @@ export default async function LoginPage({
               <span>
                 {Object.hasOwn(MESSAGES, error) ? MESSAGES[error] : "Couldn't sign you in."}
               </span>
+            </p>
+          ) : null}
+
+          {!error && reason === "idle" ? (
+            <p
+              role="status"
+              className="mt-6 rounded-2xl border border-border bg-surface px-4 py-3 text-sm text-text-2"
+            >
+              You were signed out for inactivity. Sign in again to pick up where you left off.
             </p>
           ) : null}
 

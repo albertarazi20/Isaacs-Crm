@@ -288,8 +288,8 @@ page the Clients list and slim the card payload. Reports and win-back stay fast 
 - **Do-not-contact is enforced where it is read:** the morning email, the booked-call email, the Today badge and the
   Monday scorecard all skip a do-not-contact merchant, whatever timer a later drag or "set follow-up" gave them.
   (The database still allows the timer; refusing it there would also block moving a merchant to "Not interested".)
-- **Off the allowlist means off the email too:** the three email jobs skip anyone not on `ALLOWED_EMAILS` (the
-  cron route passes the same rule sign-in uses). The unit tests call the jobs without a rule, so they serve everyone.
+- **Off the allowlist means off the email too:** the email jobs skip anyone the rule rejects. (Superseded 2026-11-18:
+  the rule is now "has an active account", not `ALLOWED_EMAILS`; see the 2026-11-18 entry at the end.)
 - **A booked call today is an appointment** however it ties with an older follow-up: Today and the dial classify by
   `scheduled_call_at` in the user's time zone, show "Call at 3:00 PM", and replace Snooze (which can't move an
   appointment) with "Move the call".
@@ -412,8 +412,19 @@ section 5. The earlier line in `docs/OWNER-TODO.md` ("nothing is merged or deplo
 Sign-in only admits an account a manager created in Settings > Team and left active (`loginUser`). A session lives while
 its user is active and its epoch matches (`currentSessionEpoch`); `POST /api/leads` needs only a lead token that belongs
 to an active user. So **disabling an account (`active = false`) ends its sessions and switches its lead tokens off**, and
-removing an address from `ALLOWED_EMAILS` does neither. `ALLOWED_EMAILS` still has three jobs: on a fresh install, who may
-become the first manager (required in production, fail closed); which address the passcode signs in as (the first one);
-and the reminder jobs' send rule in `src/app/api/cron/reminders/route.ts`, which is still the old list (an account that is
-not on it gets no digest, call reminder, scorecard or alert email; open question for the owner: should that follow
-`active` too). This replaces the 2026-10-23 lines that said the list ends sessions and lead tokens.
+removing an address from `ALLOWED_EMAILS` does neither. `ALLOWED_EMAILS` still has two jobs: on a fresh install, who may
+become the first manager (required in production, fail closed), and which address the passcode signs in as (the first one). The reminder jobs (digest, call reminder, Monday scorecard, alert bundle) follow accounts too: they
+send to every `app_users` row with `active = true` and `digest_enabled`, whatever `ALLOWED_EMAILS` says, so an account
+added in Settings > Team gets its email and a disabled account gets none (`src/app/api/cron/reminders/route.ts` passes no
+extra rule; proved in `tests/power-heartbeat.test.ts`). This replaces the 2026-10-23 lines that said the list ends
+sessions, lead tokens and email.
+
+## 2026-11-18 — the security audit log (0573)
+
+A new append-only table, `audit_events`, rather than more `access_log` actions: `access_log` is per-merchant contact tracing
+with a fixed action list and a `user_id not null`, and it cannot hold a failed sign-in (nobody is signed in) or a settings
+change. The new table has no foreign keys on purpose (a line must outlive the person or merchant it is about), the app role
+can only `select` it, and managers read it on Settings > Security. Everything written to it goes through
+`src/lib/system/audit.ts`, which never throws into a request. The export limit (20 an hour per person) is counted from the
+same table rather than a counter of its own. No 2-step login was added: the alerts (new device, big or frequent export,
+repeated failed sign-ins) are the owner's chosen answer. Details: `docs/SECURITY.md`, "Audit log".

@@ -5,7 +5,7 @@ import { PDFDocument } from "pdf-lib";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { signSession } from "@/lib/auth/session";
 import { LocalStore } from "@/lib/docs/storage";
-import { addDocument } from "@/lib/docs/upload";
+import { addDocument, scanPending } from "@/lib/docs/upload";
 import { createTestDb, insertClient, insertUser, type TestDb } from "./helpers/db";
 
 // The route reads the session cookie through next/headers; outside a Next request there is none, so the cookie jar
@@ -46,9 +46,10 @@ beforeAll(async () => {
   const pdf = await PDFDocument.create();
   pdf.addPage();
   original = await pdf.save();
+  const store = new LocalStore(dir);
   docId = (
     await t.db.withUser(rep, (q) =>
-      addDocument(q, new LocalStore(dir), {
+      addDocument(q, store, {
         clientId: pizza,
         filename: "Chase_Statement.pdf",
         contentType: "application/pdf",
@@ -58,6 +59,8 @@ beforeAll(async () => {
       }),
     )
   ).documentId;
+  // a rep's upload starts pending like every outside file; the scan makes it openable
+  await scanPending(t.db, store);
 });
 afterAll(async () => {
   const g = globalThis as unknown as { __isaacPool?: { end(): Promise<void> } };

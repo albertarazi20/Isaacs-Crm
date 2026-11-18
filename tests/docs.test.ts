@@ -246,7 +246,7 @@ describe("the document pipeline", () => {
     ).rejects.toThrow(/expired/);
   });
 
-  it("staff uploads are clean at once, visible under RLS, and a relabel moves the checklist", async () => {
+  it("staff uploads start pending (the database insists), clean once scanned, visible under RLS, and a relabel moves the checklist", async () => {
     const r = await t.db.withUser(rep, (q) =>
       addDocument(q, store, {
         clientId: pizza,
@@ -258,6 +258,15 @@ describe("the document pipeline", () => {
       }),
     );
     expect(r.kind).toBe("other");
+    expect(
+      (await t.db.withUser(rep, (q) => listDocuments(q, pizza))).map((d) => d.scan_status),
+    ).toEqual(["clean", "pending"]);
+    expect(await scanPending(t.db, store, undefined, 50, [r.documentId])).toEqual({
+      scanned: 1,
+      clean: 1,
+      rejected: 0,
+      errors: 0,
+    });
     expect(
       (await t.db.withUser(rep, (q) => listDocuments(q, pizza))).map((d) => d.scan_status),
     ).toEqual(["clean", "clean"]);

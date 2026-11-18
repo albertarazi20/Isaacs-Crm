@@ -1,12 +1,13 @@
 import { NextResponse } from "next/server";
 import { toActionError } from "@/lib/data/errors";
 import { db } from "@/lib/db";
-import { clientIp } from "@/lib/docs/clientIp";
+import { exactClientIp } from "@/lib/docs/clientIp";
 import { documentStore } from "@/lib/docs/storage";
 import { acceptUpload, MAX_BYTES, openUploadPage, uploadSessionLive } from "@/lib/docs/upload";
 import { env } from "@/lib/env";
 import { todayIn } from "@/lib/mca/dates";
 import { OFFER_DOCS, type OfferDoc } from "@/lib/offers/terms";
+import { LIMITS, limitByIp, limitByToken, tooManyRequests } from "@/lib/system/ratelimit";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -18,10 +19,17 @@ const MAX_BODY_BYTES = MAX_FILES_PER_REQUEST * MAX_BYTES + 1024 * 1024;
 type Params = { params: Promise<{ token: string }> };
 
 /** What this link is asking for, for the upload page's script. */
-export async function GET(_req: Request, { params }: Params) {
+export async function GET(req: Request, { params }: Params) {
   const { token } = await params;
   const s = await openUploadPage(db, token, todayIn("America/New_York"));
-  if (!s) return NextResponse.json({ error: "This link is not valid" }, { status: 404 });
+  // Only a link that exists counts against the address's roomy bucket; a guess counts in the small invalid bucket.
+  if (!s) {
+    const bad = await limitByIp("upload-invalid", req.headers, LIMITS.invalidLinkIp);
+    if (!bad.allowed) return tooManyRequests(bad.retryAfter);
+    return NextResponse.json({ error: "This link is not valid" }, { status: 404 });
+  }
+  const over = await limitByIp("upload-info", req.headers, LIMITS.uploadInfoIp);
+  if (!over.allowed) return tooManyRequests(over.retryAfter);
   return NextResponse.json({
     token: s.token,
     business_name: s.business_name,
@@ -35,9 +43,19 @@ export async function GET(_req: Request, { params }: Params) {
 /** The merchant's files, as multipart form data under `file`. One result per file, in order. */
 export async function POST(req: Request, { params }: Params) {
   const { token } = await params;
-  // The token is checked before the body is read: a stranger's multi-gigabyte post is refused for free.
-  if (!(await uploadSessionLive(db, token)))
+  // The token is checked before the body is read: a stranger's multi-gigabyte post is refused for free. A link that
+  // does not exist counts only in the small invalid-link bucket for the address (it must not eat the shared room, and
+  // a guess must not get a counter of its own).
+  if (!(await uploadSessionLive(db, token))) {
+    const bad = await limitByIp("upload-invalid", req.headers, LIMITS.invalidLinkIp);
+    if (!bad.allowed) return tooManyRequests(bad.retryAfter);
     return NextResponse.json({ error: "This link is not valid" }, { status: 404 });
+  }
+  // A real link: per address (roomy, an office shares one) then per link (what actually protects it).
+  const byIp = await limitByIp("upload", req.headers, LIMITS.uploadIp);
+  if (!byIp.allowed) return tooManyRequests(byIp.retryAfter);
+  const byToken = await limitByToken("upload", token, LIMITS.uploadToken);
+  if (!byToken.allowed) return tooManyRequests(byToken.retryAfter);
   const declared = Number(req.headers.get("content-length") ?? "0");
   if (Number.isFinite(declared) && declared > MAX_BODY_BYTES)
     return NextResponse.json(
@@ -69,7 +87,7 @@ export async function POST(req: Request, { params }: Params) {
     return NextResponse.json({ error: "Send one file for each document" }, { status: 400 });
   const store = documentStore(env());
   const today = todayIn("America/New_York");
-  const ip = clientIp(req.headers);
+  const ip = exactClientIp(req.headers);
   const results = [];
   for (const f of files) {
     try {

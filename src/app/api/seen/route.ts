@@ -2,6 +2,7 @@ import { z } from "zod";
 import { getSession } from "@/lib/auth/server";
 import { db } from "@/lib/db";
 import { recordLinkOpen } from "@/lib/system/linkSignals";
+import { LIMITS, limitByIp, tooManyRequests } from "@/lib/system/ratelimit";
 
 export const dynamic = "force-dynamic";
 
@@ -25,6 +26,9 @@ export async function POST(req: Request) {
   const origin = req.headers.get("origin");
   if (origin && !sameHost(origin, req.headers.get("host")))
     return new Response(null, { status: 403 });
+  // Shares its bucket with the offer page's own beacon: both are the same "a person is looking" signal.
+  const over = await limitByIp("seen", req.headers, LIMITS.seenIp);
+  if (!over.allowed) return tooManyRequests(over.retryAfter, "text");
   const parsed = body.safeParse(await req.json().catch(() => null));
   if (parsed.success) {
     try {

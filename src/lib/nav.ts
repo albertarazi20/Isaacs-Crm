@@ -45,4 +45,5 @@ export const SETTINGS_VIEWS: readonly (NavItem & { manager?: boolean })[] = [
   { href: "/settings/approvals", label: "Approval emails", manager: true },
   { href: "/settings/team", label: "Team", manager: true },
   { href: "/settings/ai", label: "AI assistant", manager: true },
+  { href: "/settings/security", label: "Security", manager: true },
 ];

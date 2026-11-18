@@ -4,6 +4,7 @@ import {
   BACKUP_VERSION,
   CLIENT_KEPT_TOKEN_COLUMN,
   CLIENT_SECRET_COLUMNS,
+  ENCRYPTED_BACKUP_FORMAT,
   type Backup,
 } from "./backup";
 
@@ -19,6 +20,8 @@ const RESTORE_ORDER = [
 /** Throws RestoreError with a sentence for a person if this is not a backup this version can read. */
 export function checkBackup(file: unknown): Backup {
   const b = file as Partial<Backup> | null;
+  if (b && typeof b === "object" && (b as { format?: unknown }).format === ENCRYPTED_BACKUP_FORMAT)
+    throw new RestoreError("That backup is encrypted. Open it with its passphrase first");
   if (!b || typeof b !== "object" || b.app !== "isaac" || typeof b.tables !== "object" || !b.tables)
     throw new RestoreError("That file is not a Selective CRM backup");
   if (b.version !== BACKUP_VERSION)

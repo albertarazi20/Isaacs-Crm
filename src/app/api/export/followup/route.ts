@@ -2,6 +2,7 @@ import { CAN, getSession } from "@/lib/auth/server";
 import { listAllMembersCapped, listBucketMembers } from "@/lib/buckets/queries";
 import { db } from "@/lib/db";
 import { fileSlug, followupCsv } from "@/lib/export/followup";
+import { recordExportDownload, refuseIfOverExportLimit, requestMeta } from "@/lib/system/audit";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -11,7 +12,8 @@ const UUID = /^[0-9a-f-]{36}$/;
 /**
  * One bucket (?bucket=<id>) or every bucket (?bucket=all) as a spreadsheet for a sheet and a text blast. Runs as the
  * signed-in manager, so row-level security applies; do-not-contact merchants are left out (their number is in the
- * x-left-out header). An all-buckets file that hit the cap says so in x-truncated.
+ * x-left-out header). An all-buckets file that hit the cap says so in x-truncated. Each download is written to the
+ * audit log (who, how many rows); 20 an hour per person is the most.
  */
 export async function GET(req: Request) {
   const session = await getSession();
@@ -21,6 +23,9 @@ export async function GET(req: Request) {
   const which = new URL(req.url).searchParams.get("bucket") ?? "all";
   if (which !== "all" && !UUID.test(which)) return new Response("Unknown bucket", { status: 400 });
 
+  const who = { userId: session.userId, email: session.email, ...(await requestMeta(req.headers)) };
+  const refused = await refuseIfOverExportLimit(who);
+  if (refused) return refused;
   const found = await db.withUser(session.userId, async (q) => {
     if (which === "all") {
       const all = await listAllMembersCapped(q);
@@ -39,6 +44,12 @@ export async function GET(req: Request) {
   if (!found) return new Response("Unknown bucket", { status: 404 });
 
   const { csv, left } = followupCsv(found.members);
+  const over = await recordExportDownload({
+    ...who,
+    what: which === "all" ? "follow-up (all buckets)" : "follow-up (one bucket)",
+    rows: found.members.length - left,
+  });
+  if (over) return over;
   const day = new Date().toISOString().slice(0, 10);
   return new Response(csv, {
     headers: {

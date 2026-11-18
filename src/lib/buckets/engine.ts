@@ -334,17 +334,13 @@ export async function runBucketSteps(args: {
         );
         return;
       }
-      // a template with a blank field never goes out half-filled: skip and flag it on the enrolment
-      if (body.missing.length > 0 || subject.missing.length > 0) {
-        summary.skipped += 1;
-        await q.query("update enrollments set paused = true where id = $1", [row.enrollment_id]);
-        await q.query(
-          "insert into activities (user_id, client_id, kind, body) values ($1, $2, 'system', $3)",
-          [
-            row.user_id,
-            row.client_id,
-            `Bucket email paused: the template needs ${[...body.missing, ...subject.missing].join(", ")}`,
-          ],
+      // a template with a blank field never goes out half-filled: the step is held like any other that cannot go out
+      // today (retried daily, since the field may get filled in; skipped after the limit) and the pause flag, which is
+      // the rep's and the merchant's, is never set
+      const blank = [...new Set([...body.missing, ...subject.missing])];
+      if (blank.length > 0) {
+        await holdStep(
+          `Bucket email on hold: step ${step.step_no} (${row.bucket_name}) not sent: the template needs ${blank.join(", ")}, which this merchant does not have yet. It is tried again daily.`,
         );
         return;
       }
@@ -408,7 +404,7 @@ export async function queueBlast(
   const day = (
     await q.query<{ d: string }>(
       `select ($1::timestamptz at time zone coalesce(
-                 (select nullif(u.timezone, '') from app_users u where u.id = app.current_user_id()),
+                 (select nullif(timezone, '') from app.my_user),
                  'America/New_York'))::date::text as d`,
       [now.toISOString()],
     )

@@ -3,8 +3,8 @@
 import { revalidatePath } from "next/cache";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import { SESSION_COOKIE } from "@/lib/auth/session";
-import { requireSession } from "@/lib/auth/server";
+import { SESSION_COOKIE, verifySession } from "@/lib/auth/session";
+import { getSession, requireSession } from "@/lib/auth/server";
 import { db, type Db } from "@/lib/db";
 import { GmailReconnectError } from "@/lib/email/gmail";
 import { toActionError } from "@/lib/data/errors";
@@ -25,6 +25,8 @@ import { refuseAnotherRepsOnEdit } from "@/lib/leads/editOwner";
 import { refuseAnotherReps } from "@/lib/leads/owner";
 import { sendViaResend } from "@/lib/email/resend";
 import { disconnectGmail, sendEmailAsUser } from "@/lib/system/gmail";
+import { recordAuditHere } from "@/lib/system/audit";
+import { endAllSessions, endSession } from "@/lib/system/sessions";
 import { bumpSessionEpoch } from "@/lib/system/users";
 import { sendTestDigest } from "@/lib/system/reminders";
 
@@ -201,6 +203,11 @@ export async function disconnectGmailAction(): Promise<ActionResult<null>> {
   const session = await requireSession();
   try {
     await disconnectGmail(session.userId);
+    await recordAuditHere({
+      kind: "gmail_disconnected",
+      userId: session.userId,
+      email: session.email,
+    });
     revalidatePath("/settings");
     return { ok: true, data: null };
   } catch (e) {
@@ -251,11 +258,28 @@ export async function sendTestReminderAction(): Promise<
 export async function logoutEverywhereAction(): Promise<void> {
   const session = await requireSession();
   await bumpSessionEpoch(session.userId);
+  // the epoch already refuses every old cookie; the rows go too, so nothing is left to roll or sweep
+  await endAllSessions(session.userId);
+  await recordAuditHere({
+    kind: "signout_everywhere",
+    userId: session.userId,
+    email: session.email,
+  });
   (await cookies()).delete(SESSION_COOKIE);
   redirect("/login");
 }
 
 export async function logoutAction(): Promise<void> {
-  (await cookies()).delete(SESSION_COOKIE);
+  // no redirect to the sign-in page when the cookie is already dead: there is just nobody to record
+  const session = await getSession();
+  if (session)
+    await recordAuditHere({ kind: "signout", userId: session.userId, email: session.email });
+  // Clearing the browser's cookie is not enough: a copy of it must stop working too, so the sign-in's row goes. Read
+  // from the cookie itself (genuine signature) rather than the session, so a session that is refused for another
+  // reason is cleaned up as well.
+  const store = await cookies();
+  const own = await verifySession(store.get(SESSION_COOKIE)?.value, env().SESSION_SECRET);
+  if (own?.sid) await endSession(own.sid, own.userId);
+  store.delete(SESSION_COOKIE);
   redirect("/login");
 }

@@ -15,7 +15,7 @@ import { requirePage, requireSession } from "@/lib/auth/server";
 import { CAN } from "@/lib/auth/roles";
 import {
   bucketScores,
-  listAllMembers,
+  listAllMembersCapped,
   listBucketMembers,
   listBuckets,
   listTemplates,
@@ -92,7 +92,7 @@ export default async function FollowUpPage({
     if (!selected) {
       const { today } = await userContext(q);
       const pulse = await bucketPulse(q, today);
-      const everyone = await listAllMembers(q);
+      const everyone = await listAllMembersCapped(q);
       return { buckets, selected, scores, sequences, postal, pulse, everyone };
     }
     const members = await listBucketMembers(q, selected.id);
@@ -132,7 +132,11 @@ export default async function FollowUpPage({
           }
         />
         {hold}
-        <AllMembersSearch members={data.everyone} canExport={CAN.exportData(session.role)} />
+        <AllMembersSearch
+          members={data.everyone.members}
+          truncated={data.everyone.truncated}
+          canExport={CAN.exportData(session.role)}
+        />
         {buckets.length === 0 ? (
           <EmptyState title="No buckets yet" action={<NewBucketButton canShare={manager} />}>
             A bucket is a follow-up list: the merchants in it, and the emails they get.

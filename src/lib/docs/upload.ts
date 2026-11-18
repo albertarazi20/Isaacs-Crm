@@ -484,7 +484,11 @@ export async function fileEmailAttachment(
   });
 }
 
-/** A rep's upload (drag and drop), or an attachment the inbox filed. Runs as the user under RLS. */
+/**
+ * A rep's upload (drag and drop), or an attachment the inbox filed. Runs as the user under RLS, so the row starts
+ * 'pending' like every outside file (the database insists: a signed-in session cannot insert a row as 'clean', 0577);
+ * the caller runs `scanPending` for the returned ids once the transaction has committed.
+ */
 export async function addDocument(
   q: Db,
   store: BlobStore,
@@ -508,7 +512,7 @@ export async function addDocument(
     userId,
     source: a.source ?? "staff",
     uploadedBy: a.uploadedBy,
-    scan: "clean",
+    scan: "pending",
   });
 }
 
@@ -663,6 +667,8 @@ export async function scanPending(
   store: BlobStore,
   scanner: Scanner = builtinScanner,
   max = 50,
+  /** Only these documents (a rep's upload that should open at once); omitted, the oldest pending ones of anyone. */
+  only?: string[],
 ): Promise<{ scanned: number; clean: number; rejected: number; errors: number }> {
   return db.withSystem(async (q) => {
     const { rows } = await q.query<{
@@ -671,8 +677,10 @@ export async function scanPending(
       content_type: string;
       filename: string;
     }>(
-      "select id, storage_key, content_type, filename from documents where scan_status = 'pending' and deleted_at is null order by created_at limit $1",
-      [max],
+      `select id, storage_key, content_type, filename from documents
+        where scan_status = 'pending' and deleted_at is null and ($2::uuid[] is null or id = any($2::uuid[]))
+        order by created_at limit $1`,
+      [max, only ?? null],
     );
     let clean = 0;
     let rejected = 0;

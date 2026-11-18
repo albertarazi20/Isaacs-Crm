@@ -2,8 +2,7 @@ import { timingSafeEqual } from "node:crypto";
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { sendViaResend } from "@/lib/email/resend";
-import { isAllowedEmail } from "@/lib/auth/google";
-import { devLoginEnabled, env } from "@/lib/env";
+import { env } from "@/lib/env";
 import { runUserAlerts } from "@/lib/system/alerts";
 import { recordHeartbeat } from "@/lib/system/heartbeat";
 import { runCallReminders, runReminders } from "@/lib/system/reminders";
@@ -35,13 +34,14 @@ async function handle(req: Request): Promise<NextResponse> {
   const now = new Date();
   const send = (to: string, d: { subject: string; text: string; html: string }) =>
     sendViaResend(cfg, { to, ...d });
-  // The allowlist is the owner's off-switch for a person: off the list means no sign-in AND no more email.
-  const allowed = (email: string) => devLoginEnabled() || isAllowedEmail(email, e.ALLOWED_EMAILS);
-  const digest = await runReminders({ db, now, appUrl: e.APP_URL, send, allowed });
-  const calls = await runCallReminders({ db, now, appUrl: e.APP_URL, send, allowed });
-  const weekly = await runWeeklyScorecards({ db, now, appUrl: e.APP_URL, send, allowed });
+  // Accounts are the allowlist (Settings > Team): a person who has an active account gets email, whatever
+  // ALLOWED_EMAILS says; disabling the account (`active = false`) is the off-switch. Each job reads only
+  // `active` accounts, so no extra rule is passed here.
+  const digest = await runReminders({ db, now, appUrl: e.APP_URL, send });
+  const calls = await runCallReminders({ db, now, appUrl: e.APP_URL, send });
+  const weekly = await runWeeklyScorecards({ db, now, appUrl: e.APP_URL, send });
   // the alert feed, generated then bundled into one email per person at most once an hour
-  const alerts = await runUserAlerts({ db, now, appUrl: e.APP_URL, send, allowed });
+  const alerts = await runUserAlerts({ db, now, appUrl: e.APP_URL, send });
   // A run in which any email failed to send (a wrong RESEND_FROM, a dead key) is not a healthy run: leave the
   // heartbeat alone so the banner fires, and answer 502 so the external scheduler alerts too. The failed sends
   // rolled their claims back, so the next hourly run retries them.

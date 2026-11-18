@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { env } from "@/lib/env";
+import { LIMITS, limitByIp, tooManyRequests } from "@/lib/system/ratelimit";
 import { unsubscribeByToken } from "@/lib/system/replies";
 
 export const dynamic = "force-dynamic";
@@ -9,6 +10,8 @@ type Params = { params: Promise<{ token: string }> };
 
 /** The List-Unsubscribe-Post target (mail clients POST here) and the page's own button. */
 export async function POST(req: Request, { params }: Params) {
+  const over = await limitByIp("unsubscribe", req.headers, LIMITS.unsubscribeIp);
+  if (!over.allowed) return tooManyRequests(over.retryAfter, "text");
   const { token } = await params;
   const oneClick =
     (req.headers.get("content-type") ?? "").includes("application/x-www-form-urlencoded") &&

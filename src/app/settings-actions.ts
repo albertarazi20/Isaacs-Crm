@@ -7,7 +7,7 @@ import { CAN, requireRole } from "@/lib/auth/server";
 import { toActionError } from "@/lib/data/errors";
 import { id } from "@/lib/data/schemas";
 import type { ActionResult } from "@/lib/data/types";
-import { db } from "@/lib/db";
+import { db, type Db } from "@/lib/db";
 import {
   checkAutomationDns,
   describeDnsCheck,
@@ -16,13 +16,34 @@ import {
 } from "@/lib/send/dns";
 import { removeSuppression, saveAiSettings, saveShopSettings } from "@/lib/settings/mutations";
 import { aiSchema, shopSchema } from "@/lib/settings/schemas";
+import { settingsChange, shopSnapshot } from "@/lib/settings/securityLog";
+import { recordAuditHere, type AuditKind } from "@/lib/system/audit";
+
+/** Saves through `save` and writes which settings keys changed (never text values) to the audit log. */
+async function savedWithAudit(
+  session: { userId: string; email: string },
+  kind: AuditKind,
+  save: (q: Db) => Promise<void>,
+): Promise<void> {
+  const { before, after } = await db.withUser(session.userId, async (q) => {
+    const was = await shopSnapshot(q);
+    await save(q);
+    return { before: was, after: await shopSnapshot(q) };
+  });
+  await recordAuditHere({
+    kind,
+    userId: session.userId,
+    email: session.email,
+    detail: settingsChange(before, after),
+  });
+}
 
 /** The shop-wide email rules. One row; managers only (RLS enforces it too). */
 export async function saveShopSettingsAction(input: unknown): Promise<ActionResult<null>> {
   const session = await requireRole(CAN.manageTeam);
   try {
     const i = shopSchema.parse(input);
-    await db.withUser(session.userId, (q) => saveShopSettings(q, i));
+    await savedWithAudit(session, "settings_shop_saved", (q) => saveShopSettings(q, i));
     revalidatePath("/", "layout");
     return { ok: true, data: null };
   } catch (e) {
@@ -59,7 +80,7 @@ export async function saveAiSettingsAction(input: unknown): Promise<ActionResult
   const session = await requireRole(CAN.manageTeam);
   try {
     const i = aiSchema.parse(input);
-    await db.withUser(session.userId, (q) => saveAiSettings(q, i));
+    await savedWithAudit(session, "settings_ai_saved", (q) => saveAiSettings(q, i));
     revalidatePath("/settings/ai");
     return { ok: true, data: null };
   } catch (e) {

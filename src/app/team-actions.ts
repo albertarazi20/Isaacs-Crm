@@ -9,6 +9,7 @@ import { id } from "@/lib/data/schemas";
 import type { ActionResult } from "@/lib/data/types";
 import { db } from "@/lib/db";
 import { listTeam, type TeamMember } from "@/lib/settings/team";
+import { recordAuditHere } from "@/lib/system/audit";
 
 export async function listTeamAction(): Promise<ActionResult<TeamMember[]>> {
   const session = await requireRole(CAN.manageTeam);
@@ -40,6 +41,12 @@ export async function addTeamMemberAction(input: unknown): Promise<ActionResult<
       return rows[0];
     });
     if (!row) throw new Error("add_team_member returned nothing");
+    await recordAuditHere({
+      kind: "team_added",
+      userId: session.userId,
+      email: session.email,
+      detail: { target_email: i.email.toLowerCase(), role: i.role },
+    });
     revalidatePath("/", "layout");
     return { ok: true, data: { id: row.id } };
   } catch (e) {
@@ -52,9 +59,39 @@ export async function setTeamMemberAction(input: unknown): Promise<ActionResult<
   const session = await requireRole(CAN.manageTeam);
   try {
     const i = z.object({ userId: id, role: z.enum(ROLES), active: z.boolean() }).parse(input);
-    await db.withUser(session.userId, (q) =>
-      q.query("select set_team_member($1, $2, $3)", [i.userId, i.role, i.active]),
-    );
+    const { before, after } = await db.withUser(session.userId, async (q) => {
+      const read = () =>
+        q.query<{ email: string; role: string; active: boolean }>(
+          "select email, role, active from app_users where id = $1",
+          [i.userId],
+        );
+      const was = (await read()).rows[0];
+      await q.query("select set_team_member($1, $2, $3)", [i.userId, i.role, i.active]);
+      return { before: was, after: (await read()).rows[0] };
+    });
+    if (before && after) {
+      const base = { userId: session.userId, email: session.email };
+      const target = { target_email: after.email };
+      if (before.role !== after.role)
+        await recordAuditHere({
+          ...base,
+          kind: "team_role_changed",
+          detail: { ...target, from: before.role, to: after.role },
+        });
+      if (before.active !== after.active)
+        await recordAuditHere({
+          ...base,
+          kind: after.active ? "team_enabled" : "team_disabled",
+          detail: target,
+        });
+      // the database ends the person's sessions when they are switched off or their role changes
+      if (!after.active || before.role !== after.role)
+        await recordAuditHere({
+          ...base,
+          kind: "session_killed",
+          detail: { ...target, reason: after.active ? "role_changed" : "disabled" },
+        });
+    }
     revalidatePath("/", "layout");
     return { ok: true, data: null };
   } catch (e) {

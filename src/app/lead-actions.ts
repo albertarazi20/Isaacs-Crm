@@ -8,6 +8,7 @@ import { UserError } from "@/lib/data/mutations";
 import type { ActionResult } from "@/lib/data/types";
 import { db } from "@/lib/db";
 import { generateToken, hashToken, MAX_ACTIVE_TOKENS } from "@/lib/leads/token";
+import { recordAuditHere } from "@/lib/system/audit";
 
 const labelSchema = z.object({ label: z.string().trim().min(1, "Name this connection").max(60) });
 const idSchema = z.object({ id: z.string().uuid() });
@@ -33,6 +34,13 @@ export async function createLeadTokenAction(
         [label, hashToken(token)],
       );
     });
+    // the label only: the token itself is shown once and never written anywhere but its hash
+    await recordAuditHere({
+      kind: "lead_token_created",
+      userId: session.userId,
+      email: session.email,
+      detail: { label },
+    });
     revalidatePath("/settings");
     return { ok: true, data: { token } };
   } catch (e) {
@@ -51,6 +59,12 @@ export async function revokeLeadTokenAction(input: unknown): Promise<ActionResul
       ]),
     );
     if (res.rowCount === 0) throw new UserError("That connection is already off");
+    await recordAuditHere({
+      kind: "lead_token_revoked",
+      userId: session.userId,
+      email: session.email,
+      detail: { token_id: id },
+    });
     revalidatePath("/settings");
     return { ok: true, data: null };
   } catch (e) {

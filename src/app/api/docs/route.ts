@@ -5,7 +5,7 @@ import { userContext } from "@/lib/data/queries";
 import { db } from "@/lib/db";
 import { DOC_KINDS, type DocKind } from "@/lib/docs/label";
 import { documentStore } from "@/lib/docs/storage";
-import { addDocument } from "@/lib/docs/upload";
+import { addDocument, scanPending } from "@/lib/docs/upload";
 import { env } from "@/lib/env";
 
 export const dynamic = "force-dynamic";
@@ -54,5 +54,12 @@ export async function POST(req: Request) {
     }
     return out;
   });
+  // The rows went in 'pending' (a signed-in session cannot insert one as 'clean'). Scan these now, outside the user's
+  // transaction, so the file opens at once instead of waiting for the next cron run; a failure leaves them pending for it.
+  const ids = results.flatMap((r) => (r.ok ? [r.documentId] : []));
+  if (ids.length > 0)
+    await scanPending(db, store, undefined, ids.length, ids).catch((err: unknown) =>
+      console.error("document scan:", err instanceof Error ? err.message : err),
+    );
   return NextResponse.json({ results }, { status: results.some((r) => r.ok) ? 200 : 400 });
 }

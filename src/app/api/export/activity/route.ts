@@ -2,17 +2,24 @@ import { CAN, getSession } from "@/lib/auth/server";
 import { db } from "@/lib/db";
 import { activityRows, ACTIVITY_HEADER, toCsv } from "@/lib/export/csv";
 import type { ActivityRow } from "@/lib/data/types";
+import { recordExportDownload, refuseIfOverExportLimit, requestMeta } from "@/lib/system/audit";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
-/** Every note, call, text and stage move — the backup of what was said. */
+/**
+ * Every note, call, text and stage move — the backup of what was said. Each download is written to the audit log
+ * (who, how many rows); 20 an hour per person is the most.
+ */
 export async function GET() {
   const session = await getSession();
   if (!session) return new Response("Sign in first", { status: 401 });
   // exports are manager-only
   if (!CAN.exportData(session.role))
     return new Response("Exports are for managers", { status: 403 });
+  const who = { userId: session.userId, email: session.email, ...(await requestMeta()) };
+  const refused = await refuseIfOverExportLimit(who);
+  if (refused) return refused;
   const { merchants, activities } = await db.withUser(session.userId, async (q) => ({
     // Every merchant, trashed ones too: this is the record of what was said, and a note with no name is useless.
     merchants: (
@@ -28,6 +35,8 @@ export async function GET() {
       )
     ).rows.map((r) => r.j),
   }));
+  const over = await recordExportDownload({ ...who, what: "notes", rows: activities.length });
+  if (over) return over;
   const names = new Map(
     merchants.map((m) => [m.id, { name: m.business_name, trashed: m.trashed }] as const),
   );

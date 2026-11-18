@@ -7,6 +7,7 @@ import {
   useEffect,
   useRef,
   useState,
+  useSyncExternalStore,
   type HTMLAttributes,
   type KeyboardEvent as ReactKeyboardEvent,
   type MouseEvent as ReactMouseEvent,
@@ -14,6 +15,7 @@ import {
   type ReactNode,
   type SyntheticEvent,
 } from "react";
+import { createPortal } from "react-dom";
 import type { ActionResult } from "@/lib/data/types";
 import { cn } from "./ui";
 
@@ -77,6 +79,45 @@ export function listenEscape(
 }
 
 /**
+ * The modal dialogs that are open, oldest first. showModal() makes everything outside the dialog inert, so a toast
+ * in the top layer would be visible over a dialog but dead to clicks; TopLayer therefore moves into the newest open
+ * modal (the last one shown is the one on top) while one is open. These three are the pure part.
+ */
+export type ModalLike = { open: boolean; isConnected: boolean };
+
+/** `el` is now the newest modal: it goes to the end, once. */
+export function pushModal<T>(stack: readonly T[], el: T): readonly T[] {
+  return [...stack.filter((x) => x !== el), el];
+}
+
+export function dropModal<T>(stack: readonly T[], el: T): readonly T[] {
+  return stack.includes(el) ? stack.filter((x) => x !== el) : stack;
+}
+
+/** The modal on top: the newest one that is really still open (a dialog removed from the page never reported). */
+export function topModal<T extends ModalLike>(stack: readonly T[]): T | null {
+  for (let i = stack.length - 1; i >= 0; i -= 1) {
+    const el = stack[i];
+    if (el && el.open && el.isConnected) return el;
+  }
+  return null;
+}
+
+let openModals: readonly HTMLDialogElement[] = [];
+const modalListeners = new Set<() => void>();
+function setOpenModals(next: readonly HTMLDialogElement[]) {
+  if (next === openModals) return;
+  openModals = next;
+  for (const l of modalListeners) l();
+}
+const subscribeModals = (l: () => void) => {
+  modalListeners.add(l);
+  return () => void modalListeners.delete(l);
+};
+const topModalNow = () => topModal(openModals);
+const noModal = () => null;
+
+/**
  * Opens and closes a native <dialog> from a boolean, and keeps the boolean honest.
  *
  * The browser's own "close" event can land a good half second after the dialog has gone (measured in Chrome). Until
@@ -100,13 +141,29 @@ export function useModal(open: boolean, onClose: () => void) {
       opener.current =
         document.activeElement instanceof HTMLElement ? document.activeElement : null;
       d.showModal();
+      setOpenModals(pushModal(openModals, d));
     }
     if (!open && d.open) {
       ownCloses.current += 1;
       d.close();
+      setOpenModals(dropModal(openModals, d));
       returnFocus(opener);
     }
   }, [open]);
+  // however the dialog closes (our close(), the browser's own, or leaving the page), it stops being the top modal
+  useEffect(() => {
+    const d = ref.current;
+    if (!d) return;
+    // a close event from an earlier close can land after the dialog was opened again: only a dialog that is shut counts
+    const onClose = () => {
+      if (!d.open) setOpenModals(dropModal(openModals, d));
+    };
+    d.addEventListener("close", onClose);
+    return () => {
+      d.removeEventListener("close", onClose);
+      setOpenModals(dropModal(openModals, d));
+    };
+  }, []);
   useEffect(() => () => returnFocus(opener), []);
   const onNativeClose = useCallback(() => {
     if (ownCloses.current > 0) {
@@ -288,7 +345,9 @@ export function Drawer({
  * A box that lives in the browser's top layer. A modal <dialog> puts itself and its backdrop there, and no z-index
  * can lift an ordinary element above it, so anything that must stay visible over a dialog (toasts, the reminder
  * banner) renders through this. Shown on mount and again whenever `bump` changes, so it lands above a dialog that
- * opened after it. Where popovers are unsupported it is just a fixed box, as before.
+ * opened after it. A modal dialog also makes everything outside its own subtree inert, so while one is open the box
+ * is rendered inside the newest open modal: still above it, and clickable (Undo, Dismiss). Where popovers are
+ * unsupported it is just a fixed box, as before.
  */
 export function TopLayer({
   bump,
@@ -301,6 +360,7 @@ export function TopLayer({
   children?: ReactNode;
 } & Omit<HTMLAttributes<HTMLDivElement>, "className" | "children">) {
   const ref = useRef<HTMLDivElement>(null);
+  const modal = useSyncExternalStore(subscribeModals, topModalNow, noModal);
   useEffect(() => {
     const el = ref.current;
     if (!el || typeof el.showPopover !== "function") return;
@@ -310,18 +370,16 @@ export function TopLayer({
     } catch {
       // not allowed right now (detached, or the page is closing): it stays a plain fixed box
     }
-  }, [bump]);
-  useEffect(() => {
-    const el = ref.current;
     return () => {
       try {
-        if (el?.matches(":popover-open")) el.hidePopover();
+        if (el.matches(":popover-open")) el.hidePopover();
       } catch {
         // already gone
       }
     };
-  }, []);
-  return (
+    // `modal`: the box is a new element inside another parent, so it has to be shown again
+  }, [bump, modal]);
+  const box = (
     <div
       ref={ref}
       popover="manual"
@@ -335,6 +393,7 @@ export function TopLayer({
       {children}
     </div>
   );
+  return modal ? createPortal(box, modal) : box;
 }
 
 interface ToastInput {

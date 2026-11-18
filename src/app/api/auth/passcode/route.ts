@@ -3,6 +3,7 @@ import { passcodeMatches } from "@/lib/auth/passcode";
 import { sessionCookie } from "@/lib/auth/server";
 import { clientIp } from "@/lib/docs/clientIp";
 import { env, firstAllowedEmail, passcodeConfigured } from "@/lib/env";
+import { recordAudit } from "@/lib/system/audit";
 import {
   bootstrapFirstManager,
   claimPasscodeAttempt,
@@ -56,7 +57,9 @@ export async function POST(req: NextRequest) {
   const form = await req.formData().catch(() => null);
   if (!form) return new NextResponse("Send the passcode as a form field", { status: 400 });
 
-  const key = passcodeKey(clientIp(req.headers));
+  const ip = clientIp(req.headers);
+  const meta = { ip, userAgent: req.headers.get("user-agent") ?? "" };
+  const key = passcodeKey(ip);
   const claim = await claimPasscodeAttempt(key);
   if (!claim.allowed) return tooMany(claim.retryAfterSeconds);
 
@@ -67,6 +70,14 @@ export async function POST(req: NextRequest) {
     !email ||
     !passcodeMatches(passcode, e.ACCESS_PASSCODE ?? "")
   ) {
+    // A refused attempt (above) is not written down: a locked address could otherwise fill the log. This one was a real
+    // guess, and it is the one that can trip the alert.
+    await recordAudit({
+      kind: "signin_failed",
+      email: email ?? "",
+      ...meta,
+      detail: { method: "passcode", reason: "bad_passcode", locked: claim.retryAfterSeconds > 0 },
+    });
     // That wrong guess was the one that tripped the lock: say so instead of inviting another.
     if (claim.retryAfterSeconds > 0) return tooMany(claim.retryAfterSeconds);
     return NextResponse.redirect(`${e.APP_URL}/login?error=bad_passcode`, 303);
@@ -74,7 +85,22 @@ export async function POST(req: NextRequest) {
   await clearPasscodeAttempts(key);
   const name = email.split("@")[0] ?? "";
   const user = (await loginUser(email, name)) ?? (await bootstrapFirstManager(email, name));
-  if (!user) return NextResponse.redirect(`${e.APP_URL}/login?error=not_allowed`, 303);
+  if (!user) {
+    await recordAudit({
+      kind: "signin_failed",
+      email,
+      ...meta,
+      detail: { method: "passcode", reason: "not_allowed" },
+    });
+    return NextResponse.redirect(`${e.APP_URL}/login?error=not_allowed`, 303);
+  }
+  await recordAudit({
+    kind: "signin_ok",
+    userId: user.id,
+    email: user.email,
+    ...meta,
+    detail: { method: "passcode" },
+  });
   const res = NextResponse.redirect(`${e.APP_URL}/`, 303);
   res.cookies.set(
     await sessionCookie({

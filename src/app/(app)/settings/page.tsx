@@ -10,6 +10,7 @@ import {
   SettingsCard,
   StatusChip,
 } from "@/components/settings/primitives";
+import { BackupRow } from "@/components/settings/BackupPanel";
 import { SettingsPage } from "@/components/settings/SettingsNav";
 import { SettingsPanels } from "@/components/SettingsPanels";
 import { ThemeSwitch } from "@/components/ThemeSwitch";
@@ -56,12 +57,6 @@ const ZONE_LABEL: Record<string, string> = {
 
 const EXPORTS = [
   {
-    href: "/api/export/backup",
-    label: "Download a full backup (.json)",
-    title: "Full backup (.json)",
-    hint: "Merchants, notes, timers and stips in one file. No passwords, Gmail access or tokens.",
-  },
-  {
     href: "/api/export/clients",
     label: "Merchants (.csv)",
     title: "Merchants (.csv)",
@@ -92,9 +87,7 @@ export default async function AccountSettingsPage({
       digest_enabled: boolean;
       digest_hour: number;
       phone: string;
-    }>(
-      "select email, name, timezone, digest_enabled, digest_hour, phone from app_users where id = app.current_user_id()",
-    );
+    }>("select email, name, timezone, digest_enabled, digest_hour, phone from app.my_user");
     return rows[0];
   });
   const gmail = await gmailStatus(session.userId);
@@ -229,6 +222,7 @@ export default async function AccountSettingsPage({
         aside={<StatusChip tone="info">Yours to keep</StatusChip>}
         flush
       >
+        <BackupRow />
         {EXPORTS.map((x) => (
           <SettingRow key={x.href} label={x.title} hint={x.hint}>
             <a

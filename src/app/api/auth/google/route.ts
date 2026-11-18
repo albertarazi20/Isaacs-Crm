@@ -3,10 +3,13 @@ import { NextResponse, type NextRequest } from "next/server";
 import { buildAuthUrl, OAUTH_COOKIE, signOAuthState, type OAuthPurpose } from "@/lib/auth/google";
 import { cookieOptions, getSession } from "@/lib/auth/server";
 import { env, googleConfigured } from "@/lib/env";
+import { LIMITS, limitByIp, tooManyRequests } from "@/lib/system/ratelimit";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(req: NextRequest) {
+  const over = await limitByIp("auth-google", req.headers, LIMITS.authIp);
+  if (!over.allowed) return tooManyRequests(over.retryAfter, "text");
   const e = env();
   const base = e.APP_URL;
   if (!googleConfigured(e) || !e.GOOGLE_CLIENT_ID)

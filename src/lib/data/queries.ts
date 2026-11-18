@@ -8,9 +8,7 @@ import type { ClientBringIn, ClientCard, ClientDetail, UserContext } from "./typ
 import { NAME_KEY_SQL, nameKey } from "./nameKey";
 
 export async function userContext(q: Db, now: Date = new Date()): Promise<UserContext> {
-  const { rows } = await q.query<{ timezone: string }>(
-    "select timezone from app_users where id = app.current_user_id()",
-  );
+  const { rows } = await q.query<{ timezone: string }>("select timezone from app.my_user");
   const timezone = rows[0]?.timezone ?? "UTC";
   return { timezone, today: todayIn(timezone, now) };
 }

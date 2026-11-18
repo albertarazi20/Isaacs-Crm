@@ -105,6 +105,8 @@ describe("resolveSession — every rule that makes a cookie count", () => {
     secret: SECRET2,
     allowed: () => true,
     currentEpoch: async () => 0,
+    // these tokens carry no session id, so the idle store is never asked (tests/security-session-*.test.ts cover it)
+    touch: async () => "ok" as const,
     ...over,
   });
   const token = (epoch?: number) =>

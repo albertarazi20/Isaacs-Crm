@@ -24,6 +24,10 @@ export const ALERT_KIND_LABELS: Record<string, string> = {
   offer_opened: "Offer opened",
   offer_accepted: "Offer accepted",
   offer_doc_rejected: "Offer document failed",
+  // the security audit log (0573): sent to managers, each links to Settings > Security
+  security_new_device: "New device",
+  security_export: "Export",
+  security_failed_signins: "Failed sign-ins",
 };
 
 /**

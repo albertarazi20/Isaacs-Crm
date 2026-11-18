@@ -64,7 +64,7 @@ export function makeDb(pool: pg.Pool): DbAccess {
           // A stored zone Postgres does not know ("EST5EDT-bogus", a restored backup) must not lock the user out of every
           // request: the block falls back to UTC. One static statement, so it costs the same single round trip.
           await db.query(`do $tz$ begin
-            perform set_config('timezone', coalesce((select timezone from app_users where id = current_setting('app.user_id')::uuid), 'UTC'), true);
+            perform set_config('timezone', coalesce((select timezone from app.my_user), 'UTC'), true);
           exception when others then
             perform set_config('timezone', 'UTC', true);
           end $tz$`);
