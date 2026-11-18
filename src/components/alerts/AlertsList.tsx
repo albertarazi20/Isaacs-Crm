@@ -104,7 +104,14 @@ export function AlertsList({
   };
   const markOne = async (id: string) => {
     setJustRead((cur) => new Set(cur).add(id));
-    await call(markAlertsReadAction({ ids: [id] }));
+    const ok = await call(markAlertsReadAction({ ids: [id] }));
+    // the call failed (a toast says so): the alert is still unread on the server, so it must not look read here
+    if (ok === null)
+      setJustRead((cur) => {
+        const next = new Set(cur);
+        next.delete(id);
+        return next;
+      });
     router.refresh();
   };
 

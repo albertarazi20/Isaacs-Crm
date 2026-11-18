@@ -15,6 +15,24 @@ export async function advanceApprovalNow(
   return db.withSystem((q) => advanceApproval(q, approvalId, opts));
 }
 
+/**
+ * The same, for a person's action: their change is already committed, so an engine error here (a bad time zone, a
+ * dropped connection) must not tell them it failed (a retry would say the merchant already has an open approval). The
+ * error is logged and the next cron run picks the approval up.
+ */
+export async function advanceApprovalSafely(
+  db: DbAccess,
+  approvalId: string,
+  opts: { now: Date; appUrl: string },
+): Promise<AdvanceResult> {
+  try {
+    return await advanceApprovalNow(db, approvalId, opts);
+  } catch (e) {
+    console.error(`approval ${approvalId}: first advance failed, the next run retries:`, e);
+    return { kind: "waiting", note: "next_run", step: null, at: null };
+  }
+}
+
 export interface ApprovalRunSummary {
   checked: number;
   queued: number;

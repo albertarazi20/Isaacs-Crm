@@ -12,7 +12,7 @@ import {
   listApprovals,
   type ApprovalStatus,
 } from "@/lib/approvals/queries";
-import { cadenceSummary } from "@/lib/approvals/words";
+import { cadenceSummary, setupNotices } from "@/lib/approvals/words";
 import { CAN } from "@/lib/auth/roles";
 import { requirePage } from "@/lib/auth/server";
 import { userContext } from "@/lib/data/queries";
@@ -55,8 +55,13 @@ export default async function ApprovalsPage({
   const { rows, stats, cadence, settings } = data;
   const manager = CAN.manageTeam(session.role);
   const unready = cadence.filter((s) => !s.ready).length;
-  // only when a design actually asks the merchant to call the rep does a missing phone number hold anything
-  const needsPhone = !data.myPhone && cadence.some((s) => s.uses_phone);
+  const notices = setupNotices({
+    unready,
+    emailsOn: settings.approval_emails_on,
+    postalAddress: settings.postal_address,
+    myPhone: data.myPhone,
+    cadence,
+  });
   const counts: Record<ApprovalStatus, number | undefined> = {
     open: stats.open,
     pitched: undefined,
@@ -72,10 +77,7 @@ export default async function ApprovalsPage({
         actions={<AddApprovalButton cadence={cadence} />}
       />
 
-      {unready > 0 ||
-      !settings.approval_emails_on ||
-      settings.postal_address.trim() === "" ||
-      !data.myPhone ? (
+      {notices.any ? (
         <div
           role="status"
           className="rounded-2xl border border-warn/30 bg-warn-soft/60 px-4 py-3 text-sm text-warn"
@@ -111,7 +113,7 @@ export default async function ApprovalsPage({
                 )}
               </Notice>
             ) : null}
-            {settings.postal_address.trim() === "" ? (
+            {notices.noAddress ? (
               <Notice>
                 Automated email waits until the shop&apos;s postal address is set.{" "}
                 {manager ? (
@@ -123,7 +125,7 @@ export default async function ApprovalsPage({
                 )}
               </Notice>
             ) : null}
-            {needsPhone ? (
+            {notices.needsPhone ? (
               <Notice>
                 Your approval emails ask the merchant to call you, so they wait for your phone
                 number.{" "}

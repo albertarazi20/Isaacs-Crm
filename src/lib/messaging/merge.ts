@@ -75,6 +75,14 @@ export function leftoverFields(text: string): string[] {
   return out;
 }
 
+/**
+ * Everything an email will carry that must hold no {field}: subject, body AND the signature that gets appended.
+ * A signature saved with {tokens} before save-time checks existed would otherwise go out as typed.
+ */
+export function emailLeftoverText(subject: string, body: string, signature: string): string {
+  return `${subject}\n${body}\n${signature}`;
+}
+
 /** Plain words for the warning under a message. */
 export function describeLeftovers(
   text: string,

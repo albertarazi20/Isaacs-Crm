@@ -1,4 +1,5 @@
 import type { Db } from "../db";
+import { fieldsIn } from "./html";
 
 export type ApprovalStatus = "open" | "pitched" | "closed";
 export type EmailsState = "running" | "paused" | "stopped" | "finished";
@@ -129,12 +130,13 @@ export async function approvalStats(q: Db): Promise<ApprovalStats> {
             coalesce(sum(a.amount_cents) filter (where a.status = 'open'), 0)::float8 as open_cents,
             count(*) filter (where a.status = 'open' and coalesce(app.approval_needs_call(a.id), false))::int as replied,
             count(*) filter (where a.status = 'open' and a.hold_until is not null
-                             and a.hold_until <= current_date + 3)::int as expiring,
+                             and a.hold_until <= (now() at time zone app.client_timezone(c))::date + 3)::int as expiring,
             count(*) filter (where a.status = 'pitched' and a.pitched_at > now() - interval '7 days')::int as pitched_7d,
             coalesce(sum(a.amount_cents) filter (where a.status = 'pitched'
                                                  and a.pitched_at > now() - interval '7 days'), 0)::float8
               as pitched_cents_7d
        from approvals a
+       join clients c on c.id = a.client_id
       where not exists (select 1 from trashed_clients t where t.client_id = a.client_id)`,
   );
   return (
@@ -208,11 +210,25 @@ export async function getApprovalSettings(q: Db): Promise<ApprovalSettingsRow> {
 
 /** The emails as a merchant would get them (for the merchant page and the list): step count and the delays. */
 export async function approvalCadence(q: Db): Promise<CadenceRow[]> {
-  const { rows } = await q.query<CadenceRow>(
-    `select step, delay_hours, (btrim(html) <> '' and btrim(subject) <> '') as ready,
-            html ~ '\{\{\s*offer_expiry\s*\}\}' or subject ~ '\{\{\s*offer_expiry\s*\}\}' as uses_expiry,
-            html ~ '\{\{\s*rep_phone\s*\}\}' as uses_phone
+  const { rows } = await q.query<{
+    step: number;
+    delay_hours: number;
+    ready: boolean;
+    subject: string;
+    html: string;
+  }>(
+    `select step, delay_hours, (btrim(html) <> '' and btrim(subject) <> '') as ready, subject, html
        from approval_emails order by step`,
   );
-  return rows;
+  // the engine's own field rule (spaces and any letter case count), not a second one written in SQL
+  return rows.map((r) => {
+    const used = [...fieldsIn(r.html).used, ...fieldsIn(r.subject).used];
+    return {
+      step: r.step,
+      delay_hours: r.delay_hours,
+      ready: r.ready,
+      uses_expiry: used.includes("offer_expiry"),
+      uses_phone: used.includes("rep_phone"),
+    };
+  });
 }

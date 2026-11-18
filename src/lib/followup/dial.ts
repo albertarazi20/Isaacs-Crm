@@ -90,10 +90,20 @@ export function dialList(members: readonly Dialable[]): { rows: DialRow[]; skipp
 export const numbersText = (rows: readonly Pick<DialRow, "phone">[]): string =>
   rows.map((r) => r.phone).join("\n");
 
+/**
+ * One pasted cell: a tab or line break inside a value would split it into the wrong columns or rows, and a value
+ * a sheet reads as a formula (= + - @) gets a leading apostrophe, the same guard the CSV export uses.
+ */
+const sheetCell = (v: string): string => {
+  const flat = v.replace(/[\t\r\n]+/g, " ").trim();
+  // (a plain +13055550100 is only digits after the plus: nothing a sheet could run, and a dialer wants it as it is)
+  return /^[=+\-@]/.test(flat) && !/^\+\d{7,15}$/.test(flat) ? `'${flat}` : flat;
+};
+
 /** Business, contact and number, tab-separated: pasted into a sheet each lands in its own column. */
 export const tableText = (
   rows: readonly Pick<DialRow, "business" | "contact" | "phone">[],
-): string => rows.map((r) => [r.business, r.contact, r.phone].join("\t")).join("\n");
+): string => rows.map((r) => [r.business, r.contact, r.phone].map(sheetCell).join("\t")).join("\n");
 
 /** The merchant's own clock, "9:41 AM". */
 export function localTime(timezone: string, now: Date): string {

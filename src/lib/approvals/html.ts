@@ -57,6 +57,24 @@ export function fieldsIn(html: string): { used: ApprovalField[]; unknown: string
   return { used, unknown };
 }
 
+/**
+ * Braces left over once every well-formed {{field}} is taken out: {{first name}}, {{first-name}}, {{ a.b }}, or a tag
+ * inside the braces. They would go to the merchant as literal text, so a design that has them is refused. Styles and
+ * comments are skipped: CSS ends its blocks in "}}" and a comment is never seen.
+ */
+export function strayBraces(text: string): string[] {
+  const rest = text
+    .replace(/<!--[\s\S]*?-->/g, "")
+    .replace(/<style[\s\S]*?<\/style\s*>/gi, "")
+    .replace(FIELD, "");
+  const out: string[] = [];
+  for (const m of rest.matchAll(/\{\s*\{[^]{0,40}|\}\s*\}/g)) {
+    const bit = m[0].replace(/\s+/g, " ").trim();
+    if (!out.includes(bit)) out.push(bit);
+  }
+  return out;
+}
+
 const escapeHtml = (s: string) =>
   s
     .replaceAll("&", "&amp;")
@@ -67,7 +85,9 @@ const escapeHtml = (s: string) =>
 
 /** "(561) 555-0142" → "+15615550142" for a tel: link; other shapes keep their digits and a leading +. */
 export function telDigits(phone: string): string {
-  const digits = phone.replace(/[^\d+]/g, "").replace(/(?!^)\+/g, "");
+  // an extension ("x12", "ext. 12") cannot be dialled from a link: keep the main line
+  const main = phone.replace(/\s*(?:ext\.?|extension|x|#)\s*\d+\s*$/i, "");
+  const digits = main.replace(/[^\d+]/g, "").replace(/(?!^)\+/g, "");
   if (/^\d{10}$/.test(digits)) return `+1${digits}`;
   if (/^1\d{10}$/.test(digits)) return `+${digits}`;
   return digits;
@@ -78,6 +98,8 @@ export interface FilledEmail {
   html: string;
   /** Fields the design uses that have no value: the email must not go until they do. */
   missing: ApprovalField[];
+  /** Braces in the design that are not a field we can fill: the email must not go until the design is fixed. */
+  unfilled: string[];
 }
 
 /**
@@ -114,7 +136,14 @@ export function fillApprovalEmail(
     if (!isField(name)) return whole;
     return value(name) ?? whole;
   });
-  return { subject: subject.replace(/\s+/g, " ").trim(), html, missing };
+  // read from the design, not the result: a merchant's own name may hold braces
+  const unknown = [...fieldsIn(design.subject).unknown, ...fieldsIn(design.html).unknown].map(
+    (u) => `{{${u}}}`,
+  );
+  const unfilled = [
+    ...new Set([...unknown, ...strayBraces(design.subject), ...strayBraces(design.html)]),
+  ];
+  return { subject: subject.replace(/\s+/g, " ").trim(), html, missing, unfilled };
 }
 
 const ENTITIES: Record<string, string> = {
@@ -285,6 +314,11 @@ export function checkDesign(rawHtml: string, subject: string): DesignCheck {
   if (unknown.length > 0)
     errors.push(
       `Not a field we can fill: ${unknown.map((u) => `{{${u}}}`).join(", ")}. The fields are ${APPROVAL_FIELDS.map((f) => `{{${f}}}`).join(", ")}.`,
+    );
+  const stray = [...new Set([...strayBraces(html), ...strayBraces(subject)])];
+  if (stray.length > 0)
+    errors.push(
+      `Broken field: ${stray.map((b) => `"${b}"`).join(", ")}. A field is written {{name}} with the name exactly as listed, nothing else inside the braces.`,
     );
   // the link has to be where the merchant can click it: not in a comment, the <head> or a hidden block
   if (html.trim() !== "" && !fieldsIn(visibleHtml(html)).used.includes("unsubscribe_link"))

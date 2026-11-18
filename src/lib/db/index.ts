@@ -9,8 +9,15 @@ export interface DbAccess {
   withSystem<T>(fn: (db: Db) => Promise<T>): Promise<T>;
 }
 
+// The owner connection has no role-level cap, so a stuck lock (a migration, a stuck offboard) would hang every request
+// that checks its session through it. Generous enough for the nightly jobs, finite so nothing waits forever.
+const BEGIN_USER = "begin; set local jit = off";
+const BEGIN_SYSTEM =
+  "begin; set local jit = off; set local statement_timeout = '300s'; set local lock_timeout = '30s'";
+
 async function inTransaction<T>(
   pool: pg.Pool,
+  begin: string,
   setup: (db: Db) => Promise<void>,
   fn: (db: Db) => Promise<T>,
 ) {
@@ -27,7 +34,7 @@ async function inTransaction<T>(
   try {
     // JIT compiling a query is a fixed ~0.7 s cost that only pays off on huge scans. Listing 5,000 merchants
     // took 1.04 s with it and 0.27 s without (EXPLAIN ANALYZE on client_cards), so it is off for every request.
-    await db.query("begin; set local jit = off");
+    await db.query(begin);
     await setup(db);
     const result = await fn(db);
     await db.query("commit");
@@ -46,6 +53,7 @@ export function makeDb(pool: pg.Pool): DbAccess {
     withUser: (userId, fn) =>
       inTransaction(
         pool,
+        BEGIN_USER,
         async (db) => {
           // ALTER ROLE ... SET does not apply through SET ROLE, so the cap has to be set here.
           // One round trip, not three (these are plain statements, no parameters).
@@ -53,14 +61,17 @@ export function makeDb(pool: pg.Pool): DbAccess {
           await db.query("select set_config('app.user_id', $1, true)", [userId]);
           // "Today" in SQL (current_date, now()::date, the timers' due dates) is the user's own day, not the server's.
           // Without this a rep in New York at 9pm would get tomorrow's dates from every function that says current_date.
-          await db.query(
-            "select set_config('timezone', coalesce((select timezone from app_users where id = $1::uuid), 'UTC'), true)",
-            [userId],
-          );
+          // A stored zone Postgres does not know ("EST5EDT-bogus", a restored backup) must not lock the user out of every
+          // request: the block falls back to UTC. One static statement, so it costs the same single round trip.
+          await db.query(`do $tz$ begin
+            perform set_config('timezone', coalesce((select timezone from app_users where id = current_setting('app.user_id')::uuid), 'UTC'), true);
+          exception when others then
+            perform set_config('timezone', 'UTC', true);
+          end $tz$`);
         },
         fn,
       ),
-    withSystem: (fn) => inTransaction(pool, async () => undefined, fn),
+    withSystem: (fn) => inTransaction(pool, BEGIN_SYSTEM, async () => undefined, fn),
   };
 }
 

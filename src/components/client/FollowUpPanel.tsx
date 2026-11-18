@@ -316,7 +316,7 @@ function ScheduleCall({ clientId }: { clientId: string }) {
             required
           />
         </Field>
-        <Field label="Time of day">
+        <Field label="Time of day" group>
           <TimeSelect value={time} onChange={setTime} date={date} />
         </Field>
       </div>

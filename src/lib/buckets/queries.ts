@@ -1,4 +1,5 @@
 import type { Db } from "../db";
+import { ALL_MEMBERS_MAX } from "../followup/limits";
 import type { StipKind } from "../mca/stips";
 
 export interface BucketRow {
@@ -37,7 +38,7 @@ export interface BucketMember {
   email: string;
   state: string;
   timezone: string;
-  /** "ET", "CT", "MT", "PT", or the IANA zone when it is none of those. */
+  /** "ET", "CT", "MT", "AZ" (Arizona keeps MST all year), "PT", "AKT", "HT", or the IANA zone when it is none of those. */
   tz_label: string;
   wanted_amount_cents: number | null;
   entered_at: string;
@@ -61,16 +62,20 @@ export interface BucketMember {
   bucket_name: string;
 }
 
+// every zone app_state_tz can return gets a short label: Michigan and Indiana are ET, Idaho is MT (db 0310)
 const TZ_LABEL = `case app.client_timezone(c)
-  when 'America/New_York' then 'ET' when 'America/Chicago' then 'CT' when 'America/Denver' then 'MT'
-  when 'America/Phoenix' then 'MT' when 'America/Los_Angeles' then 'PT' when 'America/Anchorage' then 'AKT'
+  when 'America/New_York' then 'ET' when 'America/Detroit' then 'ET' when 'America/Indiana/Indianapolis' then 'ET'
+  when 'America/Chicago' then 'CT' when 'America/Denver' then 'MT' when 'America/Boise' then 'MT'
+  when 'America/Phoenix' then 'AZ' when 'America/Los_Angeles' then 'PT' when 'America/Anchorage' then 'AKT'
   when 'Pacific/Honolulu' then 'HT' else app.client_timezone(c) end`;
 
 const MEMBER_SELECT = `select e.id as enrollment_id, c.id as client_id, c.business_name, c.contact_name, c.phone, c.email, c.state,
               app.client_timezone(c) as timezone, ${TZ_LABEL} as tz_label,
               (select k.wanted_amount_cents from client_asks k where k.client_id = c.id order by k.created_at desc limit 1) as wanted_amount_cents,
               e.entered_at, e.next_step, e.next_due_on::text as next_due_on, e.steps_sent, e.paused,
-              (select max(a.occurred_at) from activities a where a.client_id = c.id and a.kind in ('call', 'text', 'email')) as last_touch_at,
+              (select max(a.occurred_at) from activities a
+                where a.client_id = c.id and a.kind in ('call', 'text', 'email')
+                  and not (a.kind = 'email' and a.body like 'Merchant replied%')) as last_touch_at,
               c.reply_waiting_since is not null as reply_waiting, c.email_opt_out, c.email_bounced_at is not null as email_bounced,
               (select count(*)::int from stips s where s.client_id = c.id and s.required and s.received_at is null) as stips_missing,
               coalesce((select jsonb_agg(jsonb_build_object('kind', s.kind, 'period', s.period::text) order by s.kind, s.period)
@@ -107,21 +112,33 @@ export async function listBucketMembers(q: Db, bucketId: string): Promise<Bucket
   return rows.map((r) => toMember(r.j));
 }
 
-/** The most lead lines any one list holds (the find-anyone search and the export of every bucket). */
-export const ALL_MEMBERS_MAX = 5000;
+export { ALL_MEMBERS_MAX };
 
-/** Everyone in any bucket, as the signed-in person may see them: a merchant is in one bucket at a time. */
-export async function listAllMembers(q: Db): Promise<BucketMember[]> {
+/**
+ * Everyone in any bucket, as the signed-in person may see them: a merchant is in one bucket at a time. Stops at
+ * ALL_MEMBERS_MAX and says so (`truncated`), because a search or an export that quietly leaves people out reads as
+ * complete: reads one extra row to know whether there were more.
+ */
+export async function listAllMembersCapped(
+  q: Db,
+): Promise<{ members: BucketMember[]; truncated: boolean }> {
   const { rows } = await q.query<{ j: BucketMember }>(
     `select to_jsonb(x) as j from (
        ${MEMBER_SELECT}
         where e.stopped_at is null
           and not exists (select 1 from trashed_clients tc where tc.client_id = c.id)
         order by b.sort, lower(b.name), e.paused, e.next_due_on nulls last, c.business_name
-        limit ${ALL_MEMBERS_MAX}
+        limit ${ALL_MEMBERS_MAX + 1}
      ) x`,
   );
-  return rows.map((r) => toMember(r.j));
+  return {
+    members: rows.slice(0, ALL_MEMBERS_MAX).map((r) => toMember(r.j)),
+    truncated: rows.length > ALL_MEMBERS_MAX,
+  };
+}
+
+export async function listAllMembers(q: Db): Promise<BucketMember[]> {
+  return (await listAllMembersCapped(q)).members;
 }
 
 export interface TemplateRow {

@@ -82,10 +82,12 @@ describe("the outbox, from a real database", () => {
     ).rows[0]?.id as string;
   const outbox = async (id: string) =>
     (
-      await t.pool.query<{ status: string; skip_reason: string | null; lane: string }>(
-        "select status, skip_reason, lane from outbox where id = $1",
-        [id],
-      )
+      await t.pool.query<{
+        status: string;
+        skip_reason: string | null;
+        lane: string;
+        last_error: string | null;
+      }>("select status, skip_reason, lane, last_error from outbox where id = $1", [id])
     ).rows[0];
 
   beforeAll(async () => {
@@ -176,8 +178,9 @@ describe("the outbox, from a real database", () => {
   });
   it("the worker sends due rows through Gmail, writes the ledger and the timeline, appends the footer to bulk mail", async () => {
     // The sequence row was spread at random across the 17:00–19:00Z window (nextSendTime); draining at the window's
-    // end is due for any spread. Draining mid-window made this a coin flip.
-    const now = new Date("2026-11-16T19:00:00Z");
+    // last millisecond is due for any spread and still inside the window (bulk mail goes only inside it). Draining
+    // mid-window made this a coin flip.
+    const now = new Date("2026-11-16T18:59:59.999Z");
     const s = await drainOutbox({ db: t.db, deliver, now, appUrl: "https://crm.test" });
     expect(s.sent).toBe(2);
     expect(sent.map((x) => x.subject).sort()).toEqual(["Statements", "Welcome"]);
@@ -207,18 +210,21 @@ describe("the outbox, from a real database", () => {
           text: "Hi",
           when: "now",
         },
-        new Date("2026-11-16T19:20:00Z"),
+        new Date("2026-11-16T18:50:00Z"),
       ),
     );
     if (!r.queued) throw new Error("not queued");
     const s = await drainOutbox({
       db: t.db,
       deliver,
-      now: new Date("2026-11-16T19:30:00Z"),
+      now: new Date("2026-11-16T18:59:59.999Z"),
       appUrl: "https://crm.test",
     });
     expect(s.deferred).toBe(1);
-    expect((await outbox(r.outboxId))?.status).toBe("queued");
+    expect(await outbox(r.outboxId)).toMatchObject({
+      status: "queued",
+      last_error: "per_merchant_cap",
+    });
   });
   it("the cap: bulk stops at cap minus the reserved slice; intake keeps going until the cap", async () => {
     // 60 cap, 10 reserved → bulk stops at 50 sent in 24h. Pre-fill the ledger to 50.
@@ -227,12 +233,12 @@ describe("the outbox, from a real database", () => {
     );
     for (let i = 0; i < 48; i += 1)
       await t.pool.query(
-        "insert into send_ledger (mailbox_id, lane, sent_at) values ($1, 'sequence', '2026-11-16T19:45:00Z')",
+        "insert into send_ledger (mailbox_id, lane, sent_at) values ($1, 'sequence', '2026-11-16T18:45:00Z')",
         [mb.rows[0]?.id],
       );
     const other = await client("Other Co", "other@x.com");
     // every clock in this test is the pinned one (see the per-merchant test above)
-    const queuedAt = new Date("2026-11-16T19:50:00Z");
+    const queuedAt = new Date("2026-11-16T18:50:00Z");
     const bulk = await t.db.withUser(rep, (q) =>
       enqueueEmail(
         q,
@@ -251,14 +257,17 @@ describe("the outbox, from a real database", () => {
     const s = await drainOutbox({
       db: t.db,
       deliver,
-      now: new Date("2026-11-16T20:00:00Z"),
+      now: new Date("2026-11-16T18:59:59.999Z"),
       appUrl: "https://crm.test",
     });
     expect(s.sent).toBe(1);
     expect(s.deferred).toBe(1);
     expect((await outbox(intake.outboxId))?.status).toBe("sent");
-    expect((await outbox(bulk.outboxId))?.status).toBe("queued");
-    expect((await outbox(bulk.outboxId))?.skip_reason).toBeNull();
+    expect(await outbox(bulk.outboxId)).toMatchObject({
+      status: "queued",
+      skip_reason: null,
+      last_error: "cap",
+    });
   });
   it("cancelQueued drops every queued automated email to a merchant (a reply came in)", async () => {
     const n = await t.db.withUser(rep, (q) => cancelQueued(q, clientId, "replied"));

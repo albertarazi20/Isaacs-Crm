@@ -10,15 +10,15 @@ Legend: **DB** = verify the row. **Both** = verify in light _and_ dark mode and 
 
 ## A. Access and isolation
 
-| #   | Case                                                                | Expected                                                                    |
-| --- | ------------------------------------------------------------------- | --------------------------------------------------------------------------- |
-| A1  | Open `/` signed out                                                 | Redirects to `/login`.                                                      |
-| A2  | Open `/clients/<id of another user's client>`                       | 404, no data leaked. **DB** a second user's rows untouched.                 |
-| A3  | Sign in with an email not in `ALLOWED_EMAILS` (real Google)         | "That Google account isn't allowed", no session cookie, no `app_users` row. |
-| A4  | Tamper with the session cookie                                      | Treated as signed out.                                                      |
-| A5  | Production build: `/api/dev-login`                                  | 404.                                                                        |
-| A6  | `/api/cron/reminders` with no / wrong bearer                        | 401. With right bearer and no Resend keys → 503 with a clear message.       |
-| A7  | Call a server action from the console with another user's client id | "That record no longer exists", **DB** unchanged.                           |
+| #   | Case                                                                       | Expected                                                                        |
+| --- | -------------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
+| A1  | Open `/` signed out                                                        | Redirects to `/login`.                                                          |
+| A2  | Open `/clients/<id of another user's client>`                              | 404, no data leaked. **DB** a second user's rows untouched.                     |
+| A3  | Sign in with an email that has no account, or a disabled one (real Google) | "That Google account isn't allowed", no session cookie, no new `app_users` row. |
+| A4  | Tamper with the session cookie                                             | Treated as signed out.                                                          |
+| A5  | Production build: `/api/dev-login`                                         | 404.                                                                            |
+| A6  | `/api/cron/reminders` with no / wrong bearer                               | 401. With right bearer and no Resend keys → 503 with a clear message.           |
+| A7  | Call a server action from the console with another user's client id        | "That record no longer exists", **DB** unchanged.                               |
 
 ## B. Follow-up timers (the product)
 

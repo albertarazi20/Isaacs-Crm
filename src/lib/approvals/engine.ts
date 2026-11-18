@@ -1,8 +1,8 @@
 import type { Db } from "../db";
 import { greetingName, tidy } from "../mca/templates";
-import { formatMoney } from "../money";
 import { nextSendTime, type WindowInput } from "../send/rules";
 import { approvalClaims, fillApprovalEmail, htmlToText, type ApprovalValues } from "./html";
+import { offerMoney } from "./words";
 
 /**
  * The approval emails, one approval at a time. Step 1 goes when the approval is marked (inside the day, merchant's
@@ -51,6 +51,8 @@ interface Row {
   emails: string;
   emails_since: Date;
   halt: string | null;
+  /** The merchant accepted this approval's offer: no more follow-ups. */
+  accepted: boolean;
   business_name: string;
   contact_name: string;
   email: string;
@@ -105,7 +107,7 @@ export function approvalValues(r: {
   return {
     first_name: tidy(greetingName(r.contact_name)),
     business_name: r.business_name.trim(),
-    offer_amount: r.amount_cents > 0 ? formatMoney(r.amount_cents) : "",
+    offer_amount: r.amount_cents > 0 ? offerMoney(r.amount_cents) : "",
     offer_expiry: r.hold_until ? expiryWords(r.hold_until) : "",
     rep_name: tidy(r.rep_name.trim()),
     rep_phone: r.rep_phone.trim(),
@@ -159,6 +161,7 @@ export async function advanceApproval(
   const { rows } = await q.query<Row>(
     `select a.id, a.client_id, c.user_id as owner_id, a.amount_cents, a.hold_until::text as hold_until, a.status, a.emails,
             a.emails_since, app.approval_halt(a.id) as halt,
+            exists (select 1 from merchant_offers o where o.approval_id = a.id and o.status = 'accepted') as accepted,
             c.business_name, c.contact_name, c.email, c.state, c.unsubscribe_token,
             app.client_timezone(c) as tz,
             coalesce(u.name, '') as rep_name, coalesce(u.email, '') as rep_email, coalesce(u.phone, '') as rep_phone,
@@ -177,6 +180,10 @@ export async function advanceApproval(
   if (a.halt && STOPS.has(a.halt)) {
     await stopApprovalEmails(q, a.id, "stopped", a.halt);
     return { kind: "stopped", note: a.halt };
+  }
+  if (a.accepted) {
+    await stopApprovalEmails(q, a.id, "stopped", "offer_accepted");
+    return { kind: "stopped", note: "offer_accepted" };
   }
   if (!a.approval_emails_on) return wait(q, a.id, "turned_off", null, null);
 
@@ -247,6 +254,8 @@ export async function advanceApproval(
       unsubscribe_url: `${opts.appUrl.replace(/\/$/, "")}/u/${a.unsubscribe_token}`,
     }),
   );
+  if (filled.unfilled.length > 0)
+    return wait(q, a.id, `bad_field:${filled.unfilled.join(" ")}`.slice(0, 200), next.step, null);
   if (filled.missing.length > 0)
     return wait(q, a.id, `missing:${filled.missing.join(",")}`, next.step, null);
   const text = htmlToText(filled.html);

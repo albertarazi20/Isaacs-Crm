@@ -3,9 +3,13 @@ import type { WeekPoint } from "@/lib/followup/overview";
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 const label = (iso: string) => `${MONTHS[Number(iso.slice(5, 7)) - 1]} ${Number(iso.slice(8, 10))}`;
 
-/** Round a maximum up to a tidy axis top (5, 10, 20, 50, 100, 200 ...). */
-function niceTop(n: number): number {
-  if (n <= 5) return 5;
+/**
+ * Round a maximum up to a tidy axis top (4, 6, 10, 20, 50, 100, 200 ...). The middle tick is half the top, and these
+ * are counts of leads, so every top is even or ends in 0: an axis of 0, 2.5, 5 cannot be a number of people.
+ */
+export function niceTop(n: number): number {
+  if (n <= 4) return 4;
+  if (n <= 6) return 6;
   const pow = Math.pow(10, Math.floor(Math.log10(n)));
   const unit = n / pow;
   return (unit <= 1 ? 1 : unit <= 2 ? 2 : unit <= 5 ? 5 : 10) * pow;

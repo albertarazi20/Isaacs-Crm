@@ -171,6 +171,19 @@ describe("the switches", () => {
     await t.pool.query("delete from ai_runs");
     expect(m.used()).toBe(0);
   });
+  it("stops at 70% of the day's cap and keeps the rest for the reps", async () => {
+    await t.pool.query("update shop_settings set ai_daily_cap_cents = 100");
+    // 75 of 100 cents spent: under the cap, over the brain's share
+    await t.pool.query(
+      "select app.log_ai_run('assistant', 'claude-sonnet-5-5', 'x', 'h', 1, 1, 75, '{}'::jsonb, null)",
+    );
+    const m = alwaysText("x");
+    const r = await go(m.caller);
+    expect(r.skipped).toMatch(/its 70% of today's AI budget.*kept for the reps/);
+    expect(m.used()).toBe(0);
+    await t.pool.query("update shop_settings set ai_daily_cap_cents = 5000");
+    await t.pool.query("delete from ai_runs");
+  });
 });
 
 describe("preparing", () => {

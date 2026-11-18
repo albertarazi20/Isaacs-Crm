@@ -83,6 +83,11 @@ beforeAll(async () => {
   await t.pool.query(
     "update shop_settings set postal_address = '1 Main St, Miami FL 33101', per_merchant_daily = 5, per_merchant_weekly = 20",
   );
+  // These tests run on the wall clock and are about pause, claims and DNS, not the window: bulk mail goes only inside
+  // the merchant's window, so it is open all day here (the window itself is tested in send-engine and round4-worker-send).
+  await t.pool.query(
+    "update shop_settings set send_window_start = 0, send_window_end = 24, send_on_weekends = true, send_on_holidays = true",
+  );
 });
 afterAll(async () => {
   await t.drop();

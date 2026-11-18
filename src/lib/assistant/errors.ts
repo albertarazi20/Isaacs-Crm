@@ -12,3 +12,13 @@ export function apiErrorWords(e: InstanceType<typeof Anthropic.APIError>): strin
     return "Couldn't reach the assistant. Check the connection and try again.";
   return "The assistant ran into a problem. Try again.";
 }
+
+/** No Origin header is fine (same-origin requests may omit it); an unreadable one, such as `null`, is not. */
+export function sameOrigin(origin: string | null, host: string | null): boolean {
+  if (!origin) return true;
+  try {
+    return new URL(origin).host === host;
+  } catch {
+    return false;
+  }
+}

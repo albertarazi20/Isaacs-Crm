@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { CHANNEL_LABEL, type ReminderChannel } from "@/lib/mca/reminder";
 import { formatUS } from "@/lib/mca/phone";
 import { Glyph } from "@/components/shell/icons";
+import { TopLayer } from "@/components/overlay";
 import { buttonClass } from "@/components/ui";
 
 interface Due {
@@ -37,6 +38,44 @@ function writeSeen(seen: Set<string>) {
   }
 }
 
+/** The parts of the browser showSystemNotification needs, so it can be tried without one. */
+export interface NotifyEnv {
+  Notification?: new (title: string, options?: NotificationOptions) => unknown;
+  serviceWorker?: {
+    getRegistration: () => Promise<
+      | { showNotification: (title: string, options?: NotificationOptions) => Promise<void> }
+      | undefined
+    >;
+  };
+}
+
+/**
+ * Show a system notification. `new Notification()` throws on Android Chrome (it insists on a service worker), so
+ * that failure must not be swallowed with the network errors: fall back to a registered service worker, and report
+ * false when nothing could show it (the on-page banner is then the only signal).
+ */
+export async function showSystemNotification(
+  title: string,
+  options: NotificationOptions,
+  env: NotifyEnv,
+): Promise<boolean> {
+  try {
+    if (!env.Notification) return false;
+    new env.Notification(title, options);
+    return true;
+  } catch {
+    // fall through to the service worker route
+  }
+  try {
+    const reg = await env.serviceWorker?.getRegistration();
+    if (!reg) return false;
+    await reg.showNotification(title, options);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 /**
  * Pops a glass banner when a reminder's time arrives while the app is open, and a system notification if he allowed
  * them. Dismissing hides it on this device; the reminder itself stays until he logs that call, text or email.
@@ -66,9 +105,11 @@ export function ReminderWatcher() {
           for (const d of fresh) {
             if (told.has(keyOf(d))) continue;
             told.add(keyOf(d));
-            new Notification(`${CHANNEL_LABEL[d.channel]} ${d.business_name} now`, {
-              body: d.note || undefined,
-            });
+            await showSystemNotification(
+              `${CHANNEL_LABEL[d.channel]} ${d.business_name} now`,
+              { body: d.note || undefined },
+              { Notification, serviceWorker: navigator.serviceWorker },
+            );
           }
           sessionStorage.setItem("isaac:reminders:told", JSON.stringify([...told]));
         }
@@ -121,10 +162,11 @@ export function ReminderWatcher() {
   return (
     <>
       {askButton}
-      <div
+      <TopLayer
         role="alert"
         aria-live="assertive"
-        className="fixed inset-x-3 top-16 z-50 mx-auto flex max-w-md flex-col gap-2 lg:top-5"
+        bump={due.map(keyOf).join("|")}
+        className="fixed inset-x-3 top-16 bottom-auto z-50 mx-auto flex max-w-md flex-col gap-2 lg:top-5"
       >
         {due.map((d) => (
           <div
@@ -166,7 +208,7 @@ export function ReminderWatcher() {
             </button>
           </div>
         ))}
-      </div>
+      </TopLayer>
     </>
   );
 }

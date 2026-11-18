@@ -161,7 +161,8 @@ No automatic purge: merchant data stays until the owner empties it, and that is 
 `app_users.session_epoch` (migration 0050); a session token carries the epoch it was issued under and
 `getSession` compares it on every request (one indexed read, cached per request). Bumping it signs out every
 device; a deleted user's tokens die the same way. The app role can read the column but has no UPDATE on it.
-Cost: one extra small query per request. Removing someone from `ALLOWED_EMAILS` still ends their session too.
+Cost: one extra small query per request. (Superseded 2026-11-18: removing someone from `ALLOWED_EMAILS` no longer ends
+their session; disabling the account does. See the 2026-11-18 entry at the end.)
 
 ## 2026-10-23 — hosted Postgres roles are locked out
 
@@ -202,8 +203,8 @@ follow-up to today (review-3A A-10; accepted: the caller already holds the numbe
 would hide a real duplicate from a form that wants to say "we already have you"). Limits: 30 a minute per token (counted on the row, refused tries included),
 20 KB body, a phone or email required, SSN/card guard on notes, unknown fields ignored (no setting a stage or
 owner). A merchant already in the CRM is not duplicated: note + follow-up today, and do-not-contact merchants
-only get the note. Revoking, removing the owner from `ALLOWED_EMAILS`, or deleting the user kills the token at
-once. Not built: instant email/push on a new lead, hosted form page.
+only get the note. Revoking, disabling the owner's account (until 2026-11-18 also removing them from `ALLOWED_EMAILS`), or deleting
+the user kills the token at once. Not built: instant email/push on a new lead, hosted form page.
 
 ## 2026-10-23 — money-first ranking and the power dial
 
@@ -405,3 +406,14 @@ its own pull requests: merge once the checks it ran are green and say plainly wh
 the live database or the live site: those need the owner's OK, a backup, and the migration applied before the code is merged
 (`docs/handoff/README.md`, "Before you touch production"). It also does not cover the "deliberately not built" list in `docs/BACKLOG.md`
 section 5. The earlier line in `docs/OWNER-TODO.md` ("nothing is merged or deployed without you") predates this.
+
+## 2026-11-18 — accounts are the allowlist; what `ALLOWED_EMAILS` still does
+
+Sign-in only admits an account a manager created in Settings > Team and left active (`loginUser`). A session lives while
+its user is active and its epoch matches (`currentSessionEpoch`); `POST /api/leads` needs only a lead token that belongs
+to an active user. So **disabling an account (`active = false`) ends its sessions and switches its lead tokens off**, and
+removing an address from `ALLOWED_EMAILS` does neither. `ALLOWED_EMAILS` still has three jobs: on a fresh install, who may
+become the first manager (required in production, fail closed); which address the passcode signs in as (the first one);
+and the reminder jobs' send rule in `src/app/api/cron/reminders/route.ts`, which is still the old list (an account that is
+not on it gets no digest, call reminder, scorecard or alert email; open question for the owner: should that follow
+`active` too). This replaces the 2026-10-23 lines that said the list ends sessions and lead tokens.

@@ -196,11 +196,18 @@ export function NewLeadProvider({
 export function NewLeadButton({
   variant = "inline",
   className,
+  onOpen,
 }: {
   variant?: "full" | "icon" | "inline";
   className?: string;
+  /** Runs just before the sheet opens: the phone menu closes itself here so it is not left open underneath. */
+  onOpen?: () => void;
 }) {
-  const open = useNewLead();
+  const openSheet = useNewLead();
+  const open = () => {
+    onOpen?.();
+    openSheet();
+  };
   if (variant === "icon")
     return (
       <button

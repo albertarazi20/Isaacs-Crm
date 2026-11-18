@@ -2,8 +2,8 @@ import type { Db } from "../db";
 import { refuseAnotherReps } from "../leads/owner";
 import { normalizeUS } from "../mca/phone";
 import { toActionError } from "./errors";
-import { addNote, createClient } from "./mutations";
-import { newClientSchema, type ImportRowInput } from "./schemas";
+import { addNote, createClient, UserError } from "./mutations";
+import { importRowSchema, newClientSchema, type ImportRowInput } from "./schemas";
 import type { UserContext } from "./types";
 
 import { nameKey } from "./nameKey";
@@ -140,5 +140,37 @@ export async function importClients(
       });
     }
   }
+  return result;
+}
+
+/**
+ * What the import action receives: every row is checked on its own, so one row that fails the schema (a bad value
+ * the review step could not see) lands in `failed` with its file line instead of rejecting the whole batch.
+ */
+export async function importRawRows(
+  q: Db,
+  input: unknown,
+  ctx: UserContext,
+): Promise<ImportResult> {
+  const raw = (input as { rows?: unknown } | null)?.rows;
+  if (!Array.isArray(raw) || raw.length === 0) throw new UserError("Nothing to import");
+  if (raw.length > 2000) throw new UserError("Import up to 2,000 clients at a time");
+  const good: ImportRowInput[] = [];
+  const bad: { line: number; message: string }[] = [];
+  for (const r of raw) {
+    const parsed = importRowSchema.safeParse(r);
+    if (parsed.success) good.push(parsed.data);
+    else {
+      const line = (r as { line?: unknown } | null)?.line;
+      bad.push({
+        line: typeof line === "number" && Number.isInteger(line) ? line : 0,
+        message: toActionError(parsed.error),
+      });
+    }
+  }
+  const result = good.length
+    ? await importClients(q, good, ctx)
+    : { created: 0, skippedExisting: 0, skippedDoNotContact: 0, failed: [] };
+  result.failed.push(...bad);
   return result;
 }

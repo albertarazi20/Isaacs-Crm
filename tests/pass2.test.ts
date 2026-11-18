@@ -61,7 +61,10 @@ describe("pass 2 regressions", () => {
       "insert into gmail_connections (user_id, google_email, refresh_token_enc, scope, status) values ($1, 'rep@selectivecap.com', 'enc', 'send', 'ok')",
       [rep],
     );
-    await t.pool.query("update shop_settings set postal_address = ''");
+    // the window is open all day: this runs on the wall clock and is about the postal address, not the window
+    await t.pool.query(
+      "update shop_settings set postal_address = '', send_window_start = 0, send_window_end = 24, send_on_weekends = true, send_on_holidays = true",
+    );
     const client = (
       await t.pool.query<{ id: string }>(
         "insert into clients (user_id, business_name, contact_name, phone, email, state) values ($1, 'Cali Tacos', 'Owner', '3105550100', 'owner@calitacos.com', 'CA') returning id",

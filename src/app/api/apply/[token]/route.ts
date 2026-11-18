@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { toActionError } from "@/lib/data/errors";
 import { db } from "@/lib/db";
 import { signApplication } from "@/lib/docs/apply";
+import { clientIp } from "@/lib/docs/clientIp";
 import { documentStore } from "@/lib/docs/storage";
 import { env } from "@/lib/env";
 import { todayIn } from "@/lib/mca/dates";
@@ -26,7 +27,7 @@ export async function POST(req: Request, { params }: Params) {
     const out = await signApplication(db, documentStore(env()), {
       token,
       fields: fields as Parameters<typeof signApplication>[2]["fields"],
-      ip: req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "",
+      ip: clientIp(req.headers),
       userAgent: req.headers.get("user-agent") ?? "",
       today: todayIn("America/New_York"),
     });

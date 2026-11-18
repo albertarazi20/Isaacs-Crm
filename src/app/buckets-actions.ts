@@ -5,12 +5,14 @@ import { z } from "zod";
 import { CAN, requireSession } from "@/lib/auth/server";
 import { queueBlast } from "@/lib/buckets/engine";
 import { setTemplateApproved } from "@/lib/buckets/templates";
+import { checkClaims } from "@/lib/messaging/claims";
+import { MERGE_FIELDS, isMergeField, leftoverFields } from "@/lib/messaging/merge";
 import { toActionError } from "@/lib/data/errors";
 import { UserError } from "@/lib/data/mutations";
 import { userContext } from "@/lib/data/queries";
 import { id } from "@/lib/data/schemas";
 import type { ActionResult } from "@/lib/data/types";
-import { db } from "@/lib/db";
+import { db, type Db } from "@/lib/db";
 import { env } from "@/lib/env";
 import { addDays } from "@/lib/mca/dates";
 
@@ -35,6 +37,9 @@ export async function createBucketAction(input: unknown): Promise<ActionResult<{
     revalidatePath("/follow-up");
     return { ok: true, data };
   } catch (e) {
+    // buckets_owner_name_key: the same name twice for one owner
+    if ((e as { code?: string } | null)?.code === "23505")
+      return { ok: false, error: "You already have a bucket with that name" };
     return { ok: false, error: toActionError(e) };
   }
 }
@@ -60,25 +65,62 @@ export async function renameBucketAction(input: unknown): Promise<ActionResult<n
     revalidatePath("/follow-up");
     return { ok: true, data: null };
   } catch (e) {
+    if ((e as { code?: string } | null)?.code === "23505")
+      return { ok: false, error: "You already have a bucket with that name" };
     return { ok: false, error: toActionError(e) };
   }
 }
 
-/** Move the checked merchants into a bucket (their old enrolment stops). */
-export async function moveToBucketAction(input: unknown): Promise<ActionResult<{ moved: number }>> {
+type Skipped = { clientId: string; reason: string };
+
+/**
+ * Run one statement per merchant, each behind its own savepoint: a merchant who was handed off in another tab, or
+ * who is gone, is reported by id and the rest still go through, instead of one failure rolling back the batch.
+ */
+async function eachMerchant(
+  q: Db,
+  clientIds: readonly string[],
+  sql: string,
+  params: (clientId: string) => unknown[],
+): Promise<{ done: number; skipped: Skipped[] }> {
+  const out = { done: 0, skipped: [] as Skipped[] };
+  for (const c of clientIds) {
+    await q.query("savepoint each_merchant");
+    try {
+      await q.query(sql, params(c));
+      await q.query("release savepoint each_merchant");
+      out.done += 1;
+    } catch (e) {
+      await q.query("rollback to savepoint each_merchant");
+      await q.query("release savepoint each_merchant");
+      out.skipped.push({ clientId: c, reason: toActionError(e) });
+    }
+  }
+  return out;
+}
+
+/** Nothing went through: say why, naming the first reason (one merchant is the common case). */
+const allSkipped = (skipped: readonly Skipped[]): string =>
+  skipped.length === 1
+    ? skipped[0]!.reason
+    : `None of the ${skipped.length} merchants could be changed: ${skipped[0]!.reason}`;
+
+/** Move the checked merchants into a bucket (their old enrolment stops). Ones that cannot move are listed, not fatal. */
+export async function moveToBucketAction(
+  input: unknown,
+): Promise<ActionResult<{ moved: number; skipped: Skipped[] }>> {
   const session = await requireSession();
   try {
     const i = z.object({ clientIds: ids, bucketId: id }).parse(input);
-    const moved = await db.withUser(session.userId, async (q) => {
-      let n = 0;
-      for (const c of i.clientIds) {
-        await q.query("select enroll_in_bucket($1, $2, 'moved')", [c, i.bucketId]);
-        n++;
-      }
-      return n;
-    });
+    const r = await db.withUser(session.userId, (q) =>
+      eachMerchant(q, i.clientIds, "select enroll_in_bucket($1, $2, 'moved')", (c) => [
+        c,
+        i.bucketId,
+      ]),
+    );
+    if (r.done === 0) return { ok: false, error: allSkipped(r.skipped) };
     revalidatePath("/follow-up");
-    return { ok: true, data: { moved } };
+    return { ok: true, data: { moved: r.done, skipped: r.skipped } };
   } catch (e) {
     return { ok: false, error: toActionError(e) };
   }
@@ -86,20 +128,16 @@ export async function moveToBucketAction(input: unknown): Promise<ActionResult<{
 
 export async function removeFromBucketAction(
   input: unknown,
-): Promise<ActionResult<{ removed: number }>> {
+): Promise<ActionResult<{ removed: number; skipped: Skipped[] }>> {
   const session = await requireSession();
   try {
     const i = z.object({ clientIds: ids }).parse(input);
-    const removed = await db.withUser(session.userId, async (q) => {
-      let n = 0;
-      for (const c of i.clientIds) {
-        await q.query("select stop_enrollment($1, 'removed')", [c]);
-        n++;
-      }
-      return n;
-    });
+    const r = await db.withUser(session.userId, (q) =>
+      eachMerchant(q, i.clientIds, "select stop_enrollment($1, 'removed')", (c) => [c]),
+    );
+    if (r.done === 0) return { ok: false, error: allSkipped(r.skipped) };
     revalidatePath("/follow-up");
-    return { ok: true, data: { removed } };
+    return { ok: true, data: { removed: r.done, skipped: r.skipped } };
   } catch (e) {
     return { ok: false, error: toActionError(e) };
   }
@@ -165,38 +203,63 @@ export async function blastAction(
   }
 }
 
-const templateSchema = z.object({
-  id: id.optional(),
-  name: z.string().trim().min(1).max(80),
-  subject: z.string().trim().max(200).default(""),
-  body: z.string().trim().min(1).max(5000),
-  shared: z.boolean().default(false),
-});
+const FIELD_LIST = MERGE_FIELDS.map((f) => `{${f}}`).join(", ");
+
+/** A typo like {firstname} would reach the merchant as typed, so a template with an unknown token is not saved. */
+const templateSchema = z
+  .object({
+    id: id.optional(),
+    name: z.string().trim().min(1).max(80),
+    subject: z.string().trim().max(200).default(""),
+    body: z.string().trim().min(1).max(5000),
+    shared: z.boolean().default(false),
+  })
+  .superRefine((v, ctx) => {
+    for (const field of ["subject", "body"] as const) {
+      for (const token of leftoverFields(v[field])) {
+        if (!isMergeField(token.slice(1, -1))) {
+          ctx.addIssue({
+            code: "custom",
+            path: [field],
+            message: `${token} isn't a field I know. The fields are ${FIELD_LIST}.`,
+          });
+          return;
+        }
+      }
+    }
+  });
 
 /** A rep's template waits for a manager's approval before the engine sends it on its own. */
-export async function saveTemplateAction(input: unknown): Promise<ActionResult<{ id: string }>> {
+export async function saveTemplateAction(
+  input: unknown,
+): Promise<ActionResult<{ id: string; claimReasons?: string[] }>> {
   const session = await requireSession();
   try {
     const i = templateSchema.parse(input);
     const manager = CAN.manageTeam(session.role);
     if (i.shared && !manager) throw new UserError("Only a manager can make a shared template");
+    // the claim checker runs on every save, not only on the approve button: a manager's save is never a way around it
+    // (S1-15). A template that fails is still saved, but unapproved, with the reasons handed back.
+    const claims = checkClaims(`${i.subject}\n${i.body}`);
+    const mayApprove = manager && claims.ok;
+    const claimReasons = claims.ok ? undefined : claims.reasons;
     const data = await db.withUser(session.userId, async (q) => {
       if (i.id) {
         const r = await q.query<{ id: string }>(
           `update templates set name = $2, subject = $3, body = $4,
                   approved = case when $5 then approved else false end, approved_by = case when $5 then approved_by end, approved_at = case when $5 then approved_at end
             where id = $1 returning id`,
-          [i.id, i.name, i.subject, i.body, manager],
+          [i.id, i.name, i.subject, i.body, mayApprove],
         );
         if (r.rowCount === 0) throw new UserError("Template not found");
-        return { id: i.id };
+        return { id: i.id, claimReasons };
       }
       const r = await q.query<{ id: string }>(
         `insert into templates (owner_id, name, subject, body, approved, approved_by, approved_at, created_by)
          values ($1, $2, $3, $4, $5, case when $5 then $6::uuid end, case when $5 then now() end, $6) returning id`,
-        [i.shared ? null : session.userId, i.name, i.subject, i.body, manager, session.userId],
+        [i.shared ? null : session.userId, i.name, i.subject, i.body, mayApprove, session.userId],
       );
-      return r.rows[0]!;
+      return { id: r.rows[0]!.id, claimReasons };
     });
     revalidatePath("/", "layout");
     return { ok: true, data };

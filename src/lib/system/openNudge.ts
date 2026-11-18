@@ -2,6 +2,7 @@ import type { DbAccess } from "../db";
 import { applyLink } from "../docs/applyLink";
 import { missingDocsFor } from "../docs/missing";
 import { effectiveSignature, mergeValues, resolveMergeFields } from "../messaging/merge";
+import { noteUnknownFields, unknownFieldsOf } from "../buckets/unknownFields";
 import { enqueueEmail } from "../send/enqueue";
 import type { LinkKind } from "./linkSignals";
 
@@ -133,6 +134,17 @@ export async function runOpenNudges(args: {
           });
           const body = resolveMergeFields(tpl.body, values);
           const subject = resolveMergeFields(tpl.subject, values);
+          // a field that does not exist ({frist_name}) is never sent as typed; the timeline says why, once
+          const unknown = unknownFieldsOf(body, subject);
+          if (unknown.length > 0) {
+            await noteUnknownFields(q, {
+              userId: c.user_id,
+              clientId: c.client_id,
+              what: "Nudge email",
+              names: unknown,
+            });
+            return false;
+          }
           if (body.missing.length || subject.missing.length) return false;
           const r = await enqueueEmail(
             q,

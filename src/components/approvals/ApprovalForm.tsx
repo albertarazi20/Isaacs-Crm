@@ -4,9 +4,15 @@ import { useEffect, useMemo, useState } from "react";
 import { createApprovalAction, editApprovalAction } from "@/app/approval-actions";
 import { loadDirectoryAction } from "@/app/power-actions";
 import type { ApprovalRow } from "@/lib/approvals/queries";
-import { advanceWords, cadenceSummary, stepName, type CadenceStep } from "@/lib/approvals/words";
+import {
+  advanceWords,
+  cadenceSummary,
+  offerMoney,
+  stepName,
+  type CadenceStep,
+} from "@/lib/approvals/words";
 import type { DirectoryRow } from "@/lib/data/overdue";
-import { formatMoney, parseMoney } from "@/lib/money";
+import { parseMoney } from "@/lib/money";
 import { useApp } from "../app-context";
 import { Dialog, useCall, useToast } from "../overlay";
 import { searchDirectory } from "../power/search";
@@ -235,7 +241,7 @@ export function ApprovalForm({
         <p id="approval-amount-hint" className="-mt-2 text-xs text-muted">
           {amount.trim()
             ? parseMoney(amount)
-              ? `Goes in the emails as ${formatMoney(parseMoney(amount))}.`
+              ? `Goes in the emails as ${offerMoney(parseMoney(amount))}.`
               : "That doesn't look like an amount."
             : "Type it any way: 85000, 85k or $85,000."}
         </p>

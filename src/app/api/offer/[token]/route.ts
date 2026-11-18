@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getSession } from "@/lib/auth/server";
+import { clientIp } from "@/lib/docs/clientIp";
 import { toActionError } from "@/lib/data/errors";
-import { acceptOffer, offerDocs } from "@/lib/system/offers";
+import { acceptOffer, offerDocs, offerState } from "@/lib/system/offers";
 
 export const dynamic = "force-dynamic";
 
@@ -45,15 +46,13 @@ export async function POST(req: Request, { params }: Params) {
       { status: 400 },
     );
   try {
-    // Netlify's own header is the connection's address; x-forwarded-for can be written by the client
-    const ip =
-      req.headers.get("x-nf-client-connection-ip") ??
-      req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ??
-      "";
+    const ip = clientIp(req.headers);
     const r = await acceptOffer(token, { ...parsed.data, ip });
     // the rep hears at once (an alert); their copy with the documents goes from the outbox job, after the scan
     return NextResponse.json({ acceptedAt: r.acceptedAt });
   } catch (e) {
-    return NextResponse.json({ error: toActionError(e) }, { status: 409 });
+    // the page hides its form when the offer was withdrawn or ran out while it was open
+    const state = await offerState(token).catch(() => null);
+    return NextResponse.json({ error: toActionError(e), state }, { status: 409 });
   }
 }

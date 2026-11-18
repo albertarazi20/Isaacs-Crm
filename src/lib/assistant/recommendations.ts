@@ -182,7 +182,9 @@ export function buildRecommendations(f: RecommendationFacts): Recommendation[] {
       tone: "info",
       icon: "trend",
       href: `/follow-up?b=${b.id}`,
-      prompt: `The "${b.name}" bucket sent ${plural(b.sent, "email")} in the last 90 days, got ${plural(b.replies, "reply", "replies")} and ${plural(b.docsIn, "merchant")} sent documents. Read its sequence, tell me what is likely not working, and write a better first email (subject and body, under 90 words, plain, one clear ask). I will paste it into the template myself.`,
+      // the bucket is named by id only: a rep can name a bucket anything, and this is the person's own trusted message.
+      // The assistant reads the name through list_buckets, where it is marked as data.
+      prompt: `The bucket with bucket_id ${b.id} sent ${plural(b.sent, "email")} in the last 90 days, got ${plural(b.replies, "reply", "replies")} and ${plural(b.docsIn, "merchant")} sent documents. Read its sequence (list_buckets), tell me what is likely not working, and write a better first email (subject and body, under 90 words, plain, one clear ask). I will paste it into the template myself.`,
       weight: 40,
     });
 
@@ -195,7 +197,8 @@ export function buildRecommendations(f: RecommendationFacts): Recommendation[] {
       tone: "warn",
       icon: "merchants",
       href: "/",
-      prompt: `${f.repBehind.name} has ${plural(f.repBehind.overdue, "follow-up")} past due. Look at the team numbers this month and tell me what is going on with their book compared with the others, and give me three specific things to go over with them.`,
+      // the rep is found in the team numbers, not named here: names are text people wrote about themselves
+      prompt: `One rep has ${plural(f.repBehind.overdue, "follow-up")} past due: the one with the most overdue in the team numbers from get_overview. Look at the team numbers this month and tell me what is going on with their book compared with the others, and give me three specific things to go over with them.`,
       weight: 35,
     });
 

@@ -48,7 +48,9 @@ async function handle(req: Request): Promise<NextResponse> {
   await recordHeartbeat("inbox");
   return NextResponse.json(
     { sync, external, replyTags, alerts },
-    { status: sync.failed.length > 0 || external.failed.length > 0 ? 207 : 200 },
+    {
+      status: sync.failed.length > 0 || external.failed.length > 0 || alerts.failed > 0 ? 207 : 200,
+    },
   );
 }
 

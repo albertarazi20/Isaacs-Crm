@@ -14,7 +14,7 @@ import {
   DnsUnreachableError,
   storeDnsCheck,
 } from "@/lib/send/dns";
-import { saveAiSettings, saveShopSettings } from "@/lib/settings/mutations";
+import { removeSuppression, saveAiSettings, saveShopSettings } from "@/lib/settings/mutations";
 import { aiSchema, shopSchema } from "@/lib/settings/schemas";
 
 /** The shop-wide email rules. One row; managers only (RLS enforces it too). */
@@ -71,9 +71,7 @@ export async function deleteSuppressionAction(input: unknown): Promise<ActionRes
   const session = await requireRole(CAN.manageTeam);
   try {
     const i = z.object({ suppressionId: id }).parse(input);
-    await db.withUser(session.userId, (q) =>
-      q.query("delete from suppressions where id = $1", [i.suppressionId]),
-    );
+    await db.withUser(session.userId, (q) => removeSuppression(q, i.suppressionId));
     revalidatePath("/settings/email");
     return { ok: true, data: null };
   } catch (e) {

@@ -185,24 +185,45 @@ interface Thread {
   messages: MessageParam[];
   /** Calls stopped at the time limit in a row (0551). */
   timeouts: number;
+  /** How many messages the saved row held when this request last read or wrote it (a stale writer is refused). */
+  savedLength?: number;
 }
+
+/** What the person is told when the saved conversation has gone, or changed under this request. */
+export const CONVERSATION_GONE = "That conversation is gone. Start a new one.";
+const CONVERSATION_CHANGED =
+  "This conversation changed in another window. Reload it to see the latest.";
+
+/** The assistant cannot run at all right now (no key, switched off, today's budget spent): every request would meet it. */
+export class AssistantUnavailableError extends UserError {}
+/** The saved conversation no longer exists. */
+export class ConversationGoneError extends UserError {}
 
 async function loadThread(q: Db, id: string): Promise<Thread> {
   const { rows } = await q.query<Thread>(
     "select id, messages, timeouts from assistant_threads where id = $1",
     [id],
   );
-  if (!rows[0]) throw new UserError("That conversation is gone. Start a new one.");
-  return rows[0];
+  if (!rows[0]) throw new ConversationGoneError(CONVERSATION_GONE);
+  return { ...rows[0], savedLength: rows[0].messages.length };
 }
 
 async function saveThread(q: Db, t: Thread, title: string | null): Promise<void> {
-  await q.query(
+  // two requests on one conversation (two tabs, a double click) each read the whole history: the later write must not
+  // overwrite the earlier one, so it is refused when the row no longer holds what this request read
+  const { rowCount } = await q.query(
     `update assistant_threads set messages = $2::jsonb, updated_at = now(), timeouts = $4,
             title = case when title = '' and $3::text is not null then $3 else title end
-      where id = $1`,
-    [t.id, JSON.stringify(t.messages), title, t.timeouts],
+      where id = $1 and ($5::int is null or jsonb_array_length(messages) = $5)`,
+    [t.id, JSON.stringify(t.messages), title, t.timeouts, t.savedLength ?? null],
   );
+  if (rowCount === 0) {
+    const { rows } = await q.query("select 1 from assistant_threads where id = $1", [t.id]);
+    throw rows.length === 0
+      ? new ConversationGoneError(CONVERSATION_GONE)
+      : new UserError(CONVERSATION_CHANGED);
+  }
+  t.savedLength = t.messages.length;
 }
 
 /** The first line of the first question, as the conversation's name in the history list. */
@@ -246,7 +267,7 @@ async function checkBudget(q: Db, keySet: boolean): Promise<AssistantSetup> {
     "select ai_enabled, ai_model, playbook, ai_daily_cap_cents as cap, app.ai_spent_today_cents()::text as spent from shop_settings",
   );
   const s = rows[0];
-  if (!s) throw new UserError(ASSISTANT_REFUSALS.off);
+  if (!s) throw new AssistantUnavailableError(ASSISTANT_REFUSALS.off);
   const refusal = assistantRefusal({
     keySet,
     enabled: s.ai_enabled,
@@ -254,7 +275,7 @@ async function checkBudget(q: Db, keySet: boolean): Promise<AssistantSetup> {
     spentCents: Number(s.spent),
   });
   if (refusal)
-    throw new UserError(
+    throw new AssistantUnavailableError(
       refusal === ASSISTANT_REFUSALS.budget
         ? "The assistant has used today's budget. It is back tomorrow."
         : refusal,
@@ -298,6 +319,13 @@ export interface TurnResult {
   more: boolean;
 }
 
+const toolUses = (m: MessageParam) =>
+  Array.isArray(m.content)
+    ? m.content.flatMap((b) =>
+        b.type === "tool_use" ? [{ id: b.id, name: b.name, input: b.input }] : [],
+      )
+    : [];
+
 export async function runAssistantTurn(input: TurnInput): Promise<TurnResult> {
   const started = Date.now();
   const now = input.now ?? new Date();
@@ -314,7 +342,7 @@ export async function runAssistantTurn(input: TurnInput): Promise<TurnResult> {
       const { rows } = await q.query<{ id: string }>(
         "insert into assistant_threads default values returning id",
       );
-      thread = { id: rows[0]!.id, messages: [], timeouts: 0 };
+      thread = { id: rows[0]!.id, messages: [], timeouts: 0, savedLength: 0 };
     }
     return { ctx, thread, shop };
   });
@@ -329,12 +357,23 @@ export async function runAssistantTurn(input: TurnInput): Promise<TurnResult> {
       throw new UserError("That message is too long: keep it under 6,000 characters");
     if (thread.messages.length >= MAX_THREAD_MESSAGES)
       throw new UserError("This conversation is long. Start a new one to keep the answers sharp.");
+    // a call handed back at the time limit is saved with its tool calls unanswered: the API refuses a thread where a
+    // call has no result straight after it, so a new question answers each one as skipped, in the same message
+    const lastSaved = thread.messages[thread.messages.length - 1];
+    const skipped: Anthropic.Beta.Messages.BetaToolResultBlockParam[] =
+      lastSaved?.role === "assistant"
+        ? toolUses(lastSaved).map((u) => ({
+            type: "tool_result",
+            tool_use_id: u.id,
+            content: JSON.stringify({
+              skipped: "The person asked something else before this ran.",
+            }),
+            is_error: true,
+          }))
+        : [];
     thread.messages.push({
       role: "user",
-      content: [
-        { type: "text", text: ctx.line },
-        { type: "text", text },
-      ],
+      content: [...skipped, { type: "text", text: ctx.line }, { type: "text", text }],
     });
     if (thread.messages.length === 1) title = threadTitle(input.title?.trim() || text);
     thread.timeouts = 0;
@@ -392,13 +431,6 @@ export async function runAssistantTurn(input: TurnInput): Promise<TurnResult> {
     thread.messages.push({ role: "user", content: results });
     await db.withUser(input.userId, (q) => saveThread(q, thread, null));
   };
-  const toolUses = (m: MessageParam) =>
-    Array.isArray(m.content)
-      ? m.content.flatMap((b) =>
-          b.type === "tool_use" ? [{ id: b.id, name: b.name, input: b.input }] : [],
-        )
-      : [];
-
   if (input.message === null) {
     const last = thread.messages[thread.messages.length - 1];
     if (!last) return { threadId: thread.id, more: false };
@@ -438,6 +470,9 @@ export async function runAssistantTurn(input: TurnInput): Promise<TurnResult> {
       );
       return { threadId: thread.id, more: false };
     }
+    // a turn can make several calls: the day's cap is looked at again before each one after the first, so one turn
+    // cannot run far past it (its spend is logged call by call)
+    if (calls > 0) await db.withUser(input.userId, (q) => checkBudget(q, input.keySet));
     let message: Message;
     const callStarted = Date.now();
     try {

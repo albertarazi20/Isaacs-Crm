@@ -573,8 +573,15 @@ describe("the approval emails (database)", () => {
 
   it("stops when the hold date has passed, and for a merchant who opted out", async () => {
     const m1 = await merchant();
-    const a1 = await approve(m1, rep, { holdUntil: "2026-01-02" });
-    expect(a1.first).toMatchObject({ kind: "stopped", note: "expired" });
+    // the schema refuses a hold that is over at creation, so the hold passes while the emails wait
+    const a1 = await approve(m1, rep, { startEmails: false });
+    await t.pool.query("update approvals set hold_until = '2026-01-02' where id = $1", [
+      a1.approvalId,
+    ]);
+    expect(await resume(a1.approvalId, rep, NOW)).toMatchObject({
+      kind: "stopped",
+      note: "expired",
+    });
     expect(await rows(m1)).toHaveLength(0);
     const m2 = await merchant();
     const a2 = await approve(m2);
@@ -737,10 +744,11 @@ describe("the approval emails (database)", () => {
         )
       ).user_id,
     ).toBe(other);
-    // a step queued in the old rep's name that slipped through is not sent: the worker checks the owner too
+    // a step queued in another (active) rep's name that slipped through is not sent: the worker checks the owner too.
+    // (A step in the offboarded leaver's name is never claimed at all: the worker sends nothing for an inactive rep.)
     await t.pool.query(
       "update outbox set user_id = $2 where client_id = $1 and status = 'queued'",
-      [m, leaver],
+      [m, boss],
     );
     await drain(NOW);
     expect((await rows(m)).map((r) => r.skip_reason)).toEqual(["owner_changed", "owner_changed"]);

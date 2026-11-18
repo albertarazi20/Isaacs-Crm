@@ -28,7 +28,8 @@ export async function migrate(client: pg.ClientBase, dir: string): Promise<strin
         await client.query("commit");
         applied.push(file);
       } catch (e) {
-        await client.query("rollback");
+        // A dead connection must not hide the real migration error behind a failed rollback.
+        await client.query("rollback").catch(() => undefined);
         throw new Error(`migration ${file} failed: ${e instanceof Error ? e.message : String(e)}`);
       }
     }

@@ -5,8 +5,10 @@ import { todayIn } from "../mca/dates";
 import { isStopMessage } from "../messaging/stop";
 import { env } from "../env";
 import { googleAccessTokenFor } from "../system/gmail";
+import { applyUnverifiedStop } from "../system/replies";
 import {
   authResults,
+  senderVerified,
   getAttachment,
   getMessage,
   listHistory,
@@ -135,19 +137,21 @@ export async function syncInbox(args: {
         const m = await getMessage(token, meta.id, args.fetchImpl);
         if (!newHistoryId || BigInt(m.historyId) > BigInt(newHistoryId)) newHistoryId = m.historyId;
         const from = parseAddress(m.headers["from"]);
-        const auth = authResults(m.headers["authentication-results"] ?? null);
+        const auth = authResults(m.headers["authentication-results"] ?? null, from.address);
         // Only a merchant's mail is kept; anything else in the mailbox is none of the CRM's business. A From header
-        // is forgeable: the sender counts as the merchant only when SPF and DKIM both pass, so one spoofed email
+        // is forgeable: the sender counts as the merchant only when SPF or DKIM passes aligned with the From domain, so one spoofed email
         // cannot stop a sequence, suppress an address shop-wide or tick a statement as received.
         const sameAddress = await args.db.withSystem(async (q) => {
           const { rows } = await q.query<{ client_id: string }>(
-            `select c.id as client_id from clients c where lower(c.email) = $1 and c.email <> '' limit 1`,
+            `select c.id as client_id from clients c where lower(c.email) = $1 and c.email <> ''
+               and not exists (select 1 from trashed_clients tc where tc.client_id = c.id)
+              order by c.created_at desc limit 1`,
             [from.address],
           );
           return rows[0]?.client_id ?? null;
         });
         if (!sameAddress) continue;
-        const merchant = auth.spf === true && auth.dkim === true ? sameAddress : null;
+        const merchant = senderVerified(auth) ? sameAddress : null;
         if (!merchant) summary.unverified += 1;
         await args.db.withSystem(async (q) => {
           await q.query(
@@ -190,13 +194,22 @@ export async function syncInbox(args: {
               isStopMessage(m.headers["subject"] ?? "", m.text),
             ]);
             summary.merchantReplies.push(merchant);
+          } else if (isStopMessage(m.headers["subject"] ?? "", m.text)) {
+            // not proven to be the merchant, but a STOP is honoured either way: the opt-out is the safe side of a forgery
+            await applyUnverifiedStop(q, sameAddress, from.address, m.snippet);
           }
         });
         // attachments on a merchant's email are documents: the statements they forward
         if (merchant && m.attachments.length > 0) {
           const store = documentStore(env());
+          // anything that is not filed is written on the merchant's timeline: the email is marked as read, so no later
+          // sync looks at it again, and the rep must know to open the attachment in Gmail
+          const notFiled: string[] = [];
           for (const a of m.attachments.slice(0, 10)) {
-            if (a.size > 25 * 1024 * 1024) continue;
+            if (a.size > 25 * 1024 * 1024) {
+              notFiled.push(`${a.filename} (over 25 MB)`);
+              continue;
+            }
             try {
               const bytes = await getAttachment(token, m.id, a.attachmentId, args.fetchImpl);
               const filed = await fileEmailAttachment(args.db, store, {
@@ -208,12 +221,27 @@ export async function syncInbox(args: {
               });
               if (filed && !filed.duplicate) summary.filed += 1;
             } catch (err) {
+              const why = err instanceof Error ? err.message : String(err);
+              notFiled.push(`${a.filename} (${why})`);
               summary.failed.push({
                 userId: mb.user_id,
-                error: `attachment ${a.filename}: ${err instanceof Error ? err.message : String(err)}`,
+                error: `attachment ${a.filename}: ${why}`,
               });
             }
           }
+          if (m.attachments.length > 10)
+            notFiled.push(`${m.attachments.length - 10} more attachment(s) past the first 10`);
+          if (notFiled.length > 0)
+            await args.db.withSystem((q) =>
+              q.query(
+                "insert into activities (user_id, client_id, kind, body) values ($1, $2, 'system', $3)",
+                [
+                  mb.user_id,
+                  merchant,
+                  `Not filed from the merchant's email "${m.headers["subject"] ?? ""}": ${notFiled.join("; ")}. Open the email in Gmail to get them.`,
+                ],
+              ),
+            );
         }
         summary.stored += 1;
       }

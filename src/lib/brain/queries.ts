@@ -55,3 +55,23 @@ export async function openPrep(q: Db, id: string): Promise<string | null> {
   );
   return rows[0]?.thread_id ?? null;
 }
+
+/**
+ * True when what a preparation was made for may have moved on, so its buttons must not be trusted: it is more than a day
+ * old, or the merchant has been handed off, asked not to be contacted, trashed, or has had any activity (a call, a note,
+ * an email either way) since it was made. The server checks each button again on the click; this is the warning.
+ */
+export async function prepIsStale(q: Db, id: string): Promise<boolean> {
+  const { rows } = await q.query<{ stale: boolean }>(
+    `select (p.ready_at is null or p.ready_at < now() - interval '1 day'
+             or (p.client_id is not null and (
+                  c.id is null or c.brought_in_at is not null or c.contact_status = 'dnc'
+                  or exists (select 1 from trashed_clients tc where tc.client_id = c.id)
+                  or exists (select 1 from activities a where a.client_id = c.id and a.occurred_at > p.ready_at)))
+            ) as stale
+       from brain_preps p left join clients c on c.id = p.client_id
+      where p.id = $1`,
+    [id],
+  );
+  return rows[0]?.stale ?? true;
+}

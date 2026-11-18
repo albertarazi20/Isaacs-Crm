@@ -1,7 +1,8 @@
 import { cn } from "@/components/ui";
 import type { ApprovalRow, ApprovalStats } from "@/lib/approvals/queries";
 import { diffDays, type ISODate } from "@/lib/mca/dates";
-import { formatMoney, formatMoneyCompact } from "@/lib/money";
+import { offerMoney } from "@/lib/approvals/words";
+import { formatMoneyCompact } from "@/lib/money";
 
 /** The runway spans at least two weeks, out to the furthest hold (in whole weeks, at most nine). */
 const runwayDays = (max: number) => Math.min(63, Math.max(14, Math.ceil((max + 1) / 7) * 7));
@@ -165,7 +166,7 @@ function Runway({ items }: { items: readonly { r: ApprovalRow; days: number }[] 
         {marks.map(({ r, days, at, level }) => (
           <span
             key={r.id}
-            title={`${r.business_name}: ${formatMoney(r.amount_cents)}, ${days < 0 ? "hold ended" : days === 0 ? "hold ends today" : `${days} day${days === 1 ? "" : "s"} left`}`}
+            title={`${r.business_name}: ${offerMoney(r.amount_cents)}, ${days < 0 ? "hold ended" : days === 0 ? "hold ends today" : `${days} day${days === 1 ? "" : "s"} left`}`}
             className={cn(
               "absolute size-3.5 -translate-x-1/2 rounded-full ring-4 transition hover:scale-125",
               tone(days),

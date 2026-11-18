@@ -208,6 +208,7 @@ export function OfferView({
           token={token}
           preview={preview}
           onAccepted={() => setState("accepted")}
+          onEnded={setState}
         />
       ) : null}
 
@@ -268,11 +269,13 @@ function AcceptForm({
   token,
   preview,
   onAccepted,
+  onEnded,
 }: {
   offer: OfferPage;
   token: string;
   preview: boolean;
   onAccepted: () => void;
+  onEnded: (state: OfferPage["state"]) => void;
 }) {
   const [name, setName] = useState(offer.contactName);
   const [email, setEmail] = useState("");
@@ -356,11 +359,17 @@ function AcceptForm({
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ name, email }),
       });
-      const j = (await r.json().catch(() => ({}))) as { error?: string };
+      const j = (await r.json().catch(() => ({}))) as {
+        error?: string;
+        state?: OfferPage["state"] | null;
+      };
       if (r.ok) onAccepted();
       else {
         setProblem(j.error ?? "That didn't go through. Try again.");
-        await refresh();
+        // withdrawn or expired while the page was open: show that, not a form that can no longer work
+        if (j.state === "accepted") onAccepted();
+        else if (j.state === "withdrawn" || j.state === "expired") onEnded(j.state);
+        else await refresh();
       }
     } catch {
       setProblem("No connection. Try again.");

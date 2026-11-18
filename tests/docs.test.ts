@@ -198,7 +198,12 @@ describe("the document pipeline", () => {
     await expect(t.db.withUser(rep, (q) => openDocument(q, r.documentId))).rejects.toThrow(
       /still being checked/,
     );
-    expect(await scanPending(t.db, store)).toEqual({ scanned: 1, clean: 1, rejected: 0 });
+    expect(await scanPending(t.db, store)).toEqual({
+      scanned: 1,
+      clean: 1,
+      rejected: 0,
+      errors: 0,
+    });
     expect((await t.db.withUser(rep, (q) => openDocument(q, r.documentId))).scan_status).toBe(
       "clean",
     );

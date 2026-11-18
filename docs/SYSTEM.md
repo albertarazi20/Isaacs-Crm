@@ -104,7 +104,10 @@ transaction. Tables from the removed features stay in the schema, unused.
   Nothing is sent or changed by it: the rep reads and clicks. A manager switches it on in Settings → AI, sets how many
   it prepares per rep a day, and writes the shop's house rules (the playbook the assistant reads in every
   conversation). It uses the shop's daily AI cap, gives up on a preparation after three failures, and stops at once
-  when the Anthropic account is out of credit.
+  when the Anthropic account is out of credit. It also stops for the day at 70% of the daily cap (`BRAIN_SHARE` in
+  `brain.ts`, checked before every preparation): the last 30% is kept for the reps' own assistant questions and
+  reply tagging, so the brain can never leave them without. The sweep reports that as "the brain has used its 70% of
+  today's AI budget"; it starts again when the day's spend resets. There is no setting for the share.
 
 ## 6. The screens
 

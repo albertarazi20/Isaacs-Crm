@@ -171,7 +171,17 @@ export async function getMessage(
     payload: Part;
   }>(token, `/messages/${encodeURIComponent(id)}?format=full`, fetchImpl);
   const headers: Record<string, string> = {};
-  for (const h of m.payload.headers ?? []) headers[h.name.toLowerCase()] = h.value;
+  for (const h of m.payload.headers ?? []) {
+    const name = h.name.toLowerCase();
+    // Gmail prepends its own Authentication-Results above everything the sender wrote. Only that first header, with
+    // Google's own authserv-id, counts: a later one (or a duplicate with another id) is the sender's, never ours.
+    if (name === "authentication-results") {
+      if (!("authentication-results" in headers) && authservId(h.value) === "mx.google.com")
+        headers[name] = h.value;
+      continue;
+    }
+    headers[name] = h.value;
+  }
   const out = {
     plain: [] as string[],
     html: [] as string[],
@@ -221,11 +231,69 @@ export function parseAddress(v: string | undefined): { name: string; address: st
   return { name: "", address: s.trim().toLowerCase() };
 }
 
-/** Decode a Gmail Authentication-Results header into pass/fail for SPF and DKIM. */
-export function authResults(header: string | null): { spf: boolean | null; dkim: boolean | null } {
+/** The authserv-id of an Authentication-Results header: the host that wrote it, before the first ";". */
+export function authservId(header: string): string {
+  return (header.split(";")[0] ?? "").trim().split(/\s+/)[0]?.toLowerCase() ?? "";
+}
+
+/** The domain of an "a@b.com", "@b.com" or "b.com" value, lower-cased, without brackets or trailing dots. */
+function domainOf(v: string | undefined): string {
+  const x = (v ?? "").trim().replace(/^["<(]+|[">)]+$/g, "");
+  return (x.includes("@") ? x.slice(x.lastIndexOf("@") + 1) : x).replace(/\.$/, "").toLowerCase();
+}
+
+/** Relaxed DMARC alignment without a public-suffix list: the same domain, or one is a subdomain of the other. */
+function aligned(a: string, b: string): boolean {
+  return a !== "" && b !== "" && (a === b || a.endsWith(`.${b}`) || b.endsWith(`.${a}`));
+}
+
+type Verdict = "pass" | "fail" | null;
+
+/**
+ * Decode an Authentication-Results header into pass/fail for SPF and DKIM. Each result is read as its own clause (so
+ * "spf=pass" inside a comment or another method's text never counts). With `fromAddress`, a pass counts only when the
+ * domain it vouches for (SPF smtp.mailfrom, DKIM header.d / header.i) lines up with the From domain: a message sent
+ * from attacker.com with SPF and DKIM passing for attacker.com is not a message from the merchant.
+ */
+export function authResults(
+  header: string | null,
+  fromAddress?: string,
+): { spf: boolean | null; dkim: boolean | null } {
   if (!header) return { spf: null, dkim: null };
-  const h = header.toLowerCase();
-  const spf = /spf=pass/.test(h) ? true : /spf=(fail|softfail|none|neutral)/.test(h) ? false : null;
-  const dkim = /dkim=pass/.test(h) ? true : /dkim=(fail|none|neutral)/.test(h) ? false : null;
-  return { spf, dkim };
+  const from = fromAddress === undefined ? null : domainOf(fromAddress);
+  let spf: Verdict = null;
+  let dkim: Verdict = null;
+  for (const clause of header.split(";").slice(1)) {
+    const c = clause
+      .replace(/\([^)]*\)/g, " ")
+      .trim()
+      .toLowerCase();
+    const method = /^(spf|dkim)\s*=\s*([a-z]+)/.exec(c);
+    if (!method) continue;
+    const ok = method[2] === "pass";
+    let pass = ok;
+    if (ok && from !== null) {
+      const d =
+        method[1] === "spf"
+          ? domainOf(/smtp\.mailfrom\s*=\s*(\S+)/.exec(c)?.[1])
+          : domainOf(/header\.d\s*=\s*(\S+)/.exec(c)?.[1] ?? /header\.i\s*=\s*(\S+)/.exec(c)?.[1]);
+      pass = aligned(d, from);
+    }
+    const next: Verdict = pass ? "pass" : "fail";
+    if (method[1] === "spf") spf = spf === "pass" ? spf : next;
+    else dkim = dkim === "pass" ? dkim : next;
+  }
+  return {
+    spf: spf === null ? null : spf === "pass",
+    dkim: dkim === null ? null : dkim === "pass",
+  };
+}
+
+/**
+ * The DMARC rule: a sender is verified when at least ONE of SPF or DKIM passes and is aligned with the From domain.
+ * (Third-party senders such as Resend, Mailchimp or a help desk often pass only one of the two aligned: SPF for their
+ * own bounce domain, DKIM for the merchant's.) Pass the result of `authResults(header, fromAddress)`.
+ */
+export function senderVerified(auth: { spf: boolean | null; dkim: boolean | null }): boolean {
+  return auth.spf === true || auth.dkim === true;
 }

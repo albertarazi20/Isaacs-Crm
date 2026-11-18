@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useId, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { logTouchAction, sendEmailAction } from "@/app/actions";
 import type { ISODate } from "@/lib/mca/dates";
 import { formatDate } from "@/lib/format";
@@ -42,6 +42,7 @@ import { recordTextSent, useTextCount } from "./messaging/useTextCount";
 import {
   appendSignature,
   describeLeftovers,
+  emailLeftoverText,
   effectiveSignature,
   leftoverFields,
   mergeValues,
@@ -100,6 +101,27 @@ function readPending(): PendingTouch | null {
   }
 }
 
+/**
+ * What to do when the page learns of a pending touch. A new one opens the prompt with a fresh form; the same one
+ * seen again (the tab came back to the front while the dialog was open, the effect re-ran) or none at all leaves
+ * the open dialog, and what the rep has typed into it, alone.
+ */
+export function pendingChange(
+  shown: PendingTouch | null,
+  incoming: PendingTouch | null,
+): "open" | "keep" {
+  if (!incoming) return "keep";
+  if (shown && shown.clientId === incoming.clientId && shown.at === incoming.at) return "keep";
+  return "open";
+}
+
+/** The toast after the Call button on a desktop: say "copied" only when the clipboard really took the number. */
+export function callToast(e164: string, copied: boolean): string {
+  return copied
+    ? `${e164} copied. Paste it into Google Voice if it doesn't dial`
+    : `Dial ${e164} in Google Voice. It could not be copied`;
+}
+
 const isTouchDevice = () => window.matchMedia("(pointer: coarse)").matches;
 
 async function copy(text: string): Promise<boolean> {
@@ -156,9 +178,10 @@ export function ContactActions({
     if (isTouchDevice()) {
       window.location.href = telHref(e164);
     } else {
-      void copy(e164);
+      // started first, inside the tap, so the browser allows it; the toast waits to see whether it worked
+      const copied = copy(e164);
       window.open(voiceCallHref(e164), "_blank", "noopener");
-      toast({ message: `${e164} copied. Paste it into Google Voice if it doesn't dial` });
+      void copied.then((ok) => toast({ message: callToast(e164, ok) }));
     }
     setPending({
       clientId: client.id,
@@ -485,10 +508,15 @@ function EmailDialogBody({
   const signature = effectiveSignature(ctx?.signature ?? "", senderName);
   // What actually goes out: the message with the signature on the end, once.
   const fullBody = appendSignature(body, signature);
-  const leftoverText = `${subject}\n${body}`;
-  const leftover = describeLeftovers(leftoverText, {
+  const leftoverText = emailLeftoverText(subject, body, signature);
+  const signatureLeft = leftoverFields(signature);
+  const leftoverBase = describeLeftovers(leftoverText, {
     applicationLinkSet: Boolean(ctx?.applicationLink),
   });
+  const leftover =
+    leftoverBase && signatureLeft.length > 0
+      ? `${leftoverBase} ${signatureLeft.join(", ")} is in your signature: fix it in Settings.`
+      : leftoverBase;
   // Until the signature has loaded the email would go out with the stand-in one, so wait for it.
   const loading = ctx === null;
   const blocked = loading || leftoverFields(leftoverText).length > 0;
@@ -498,18 +526,21 @@ function EmailDialogBody({
 
   async function send() {
     setBusy(true);
-    const res = await sendEmailAction({
+    // a rejected action (dropped connection, expired session) is turned into a toast by call(); busy always clears
+    const seen = { reconnect: false };
+    const attempt = sendEmailAction({
       clientId: client.id,
       subject,
       body: fullBody,
       nextDueOn: next,
+    }).then((res) => {
+      if (!res.ok && res.reconnect) seen.reconnect = true;
+      return res;
     });
-    setBusy(false);
-    if (!res.ok && res.reconnect) setReconnect(true);
-    const card = await call(
-      Promise.resolve(res),
-      `Sent. Next follow-up ${formatDate(next, today)}`,
+    const card = await call(attempt, `Sent. Next follow-up ${formatDate(next, today)}`).finally(
+      () => setBusy(false),
     );
+    if (seen.reconnect) setReconnect(true);
     if (card) onClose();
   }
 
@@ -615,7 +646,7 @@ function EmailDialogBody({
               Change it in Settings
             </Link>
           </div>
-          <Field label="Follow up again">
+          <Field label="Follow up again" group>
             <TimerPicker value={next} onChange={setNext} today={today} />
           </Field>
           {reconnect ? (
@@ -648,16 +679,22 @@ export function PendingTouchPrompt() {
   const [next, setNext] = useState<ISODate>(today);
   const [pickedDate, setPickedDate] = useState(false);
   const [busy, setBusy] = useState(false);
+  // what the dialog is open for right now, and the day, read from inside the listeners below without re-running them
+  const shown = useRef<PendingTouch | null>(null);
+  const todayRef = useRef(today);
+  useEffect(() => {
+    todayRef.current = today;
+  }, [today]);
 
   useEffect(() => {
     const show = (p: PendingTouch | null) => {
+      if (pendingChange(shown.current, p) === "keep" || !p) return;
+      shown.current = p;
       setPendingState(p);
-      if (p) {
-        setOutcome(null);
-        setNote("");
-        setPickedDate(false);
-        setNext(suggestNextFollowUp(null, today, p.stage));
-      }
+      setOutcome(null);
+      setNote("");
+      setPickedDate(false);
+      setNext(suggestNextFollowUp(null, todayRef.current, p.stage));
     };
     show(readPending());
     const onEvent = (e: Event) => show((e as CustomEvent<PendingTouch>).detail);
@@ -668,7 +705,7 @@ export function PendingTouchPrompt() {
       window.removeEventListener(PENDING_EVENT, onEvent);
       document.removeEventListener("visibilitychange", onVisible);
     };
-  }, [today]);
+  }, []);
 
   function choose(o: TouchOutcome) {
     setOutcome(o);
@@ -677,6 +714,7 @@ export function PendingTouchPrompt() {
 
   function close() {
     clearPending();
+    shown.current = null;
     setPendingState(null);
   }
 
@@ -753,7 +791,7 @@ export function PendingTouchPrompt() {
             setPickedDate(true);
           }}
         />
-        <Field label="Follow up again">
+        <Field label="Follow up again" group>
           <TimerPicker
             value={next}
             today={today}

@@ -151,10 +151,19 @@ export const offerSchema = z.object({
 });
 export type OfferInput = z.output<typeof offerSchema>;
 
-/** Days, hours and minutes left, "1d 23h", "4h 12m", "12m", or null when it has run out. */
+/**
+ * A timestamp as milliseconds. Accepts ISO and Postgres's text form ("2026-11-19 21:32:00.123456+00": a space and an
+ * hours-only offset), which Safari does not parse. NaN when it is neither.
+ */
+export function instantMs(s: string): number {
+  const iso = s.replace(" ", "T").replace(/([+-]\d{2})$/, "$1:00");
+  return new Date(iso).getTime();
+}
+
+/** Days, hours and minutes left, "1d 23h", "4h 12m", "12m", or null when it has run out (or the time is unreadable). */
 export function timeLeft(expiresAt: string, nowMs: number): string | null {
-  const ms = new Date(expiresAt).getTime() - nowMs;
-  if (ms <= 0) return null;
+  const ms = instantMs(expiresAt) - nowMs;
+  if (!(ms > 0)) return null;
   const m = Math.floor(ms / 60_000);
   const d = Math.floor(m / 1440);
   const h = Math.floor((m % 1440) / 60);

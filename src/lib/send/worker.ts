@@ -54,6 +54,10 @@ interface Settings {
   automation_reply_to_rep: boolean;
   /** The SPF / DKIM / DMARC check on the automation domain passed (S1-4). Resend sends wait until it has. */
   dns_ok: boolean;
+  send_window_start: number;
+  send_window_end: number;
+  send_on_weekends: boolean;
+  send_on_holidays: boolean;
 }
 
 interface Job {
@@ -81,6 +85,8 @@ interface Job {
   /** A nudge after an open that something since made wrong to send (app.nudge_overtaken). */
   nudge_overtaken: boolean;
   client_state: string | null;
+  /** The merchant's own time zone: the send window is theirs. */
+  tz: string | null;
   suppressed: boolean;
   unsubscribe_token: string | null;
   merchant_24h: number;
@@ -101,6 +107,53 @@ interface ApprovalCheck {
 
 const MAX_ATTEMPTS = 3;
 
+/** Socket-level codes where the request may already have reached the provider before the connection died. */
+const AMBIGUOUS_CODES = new Set([
+  "ECONNRESET",
+  "ECONNABORTED",
+  "EPIPE",
+  "ETIMEDOUT",
+  "UND_ERR_SOCKET",
+  "UND_ERR_HEADERS_TIMEOUT",
+  "UND_ERR_BODY_TIMEOUT",
+]);
+
+/**
+ * Did the provider call end without an answer? A timeout or a dropped connection after the request went out says
+ * nothing about whether the email left: sending it again can deliver it twice, so such a row is failed for a person
+ * to check, never retried by itself. A real answer (an error status the provider returned) or a failure before the
+ * request existed (a refused or unresolvable connection, a missing grant) is a plain failure and is retried.
+ */
+export function isAmbiguousSendError(e: unknown): boolean {
+  for (let cur: unknown = e, depth = 0; cur && typeof cur === "object" && depth < 4; depth += 1) {
+    const err = cur as { name?: unknown; code?: unknown; cause?: unknown };
+    if (err.name === "TimeoutError" || err.name === "AbortError") return true;
+    if (typeof err.code === "string" && AMBIGUOUS_CODES.has(err.code)) return true;
+    cur = err.cause;
+  }
+  return false;
+}
+
+/** What the claim step hands to the send step: everything the provider call and the bookkeeping afterwards need. */
+interface Ready {
+  job: Job;
+  mailboxId: string;
+  useResend: boolean;
+  /** When a failed send is tried again: window-aware for the bulk lanes. */
+  retryAt: (attempts: number) => Date;
+  mail: {
+    text: string;
+    html: string;
+    designed: boolean;
+    headers: Record<string, string> | undefined;
+    replyTo: string | undefined;
+  };
+  automated: boolean;
+}
+
+/** A row left in 'sending' this long never got its result written: the provider may or may not have sent it. */
+const STALE_SENDING_MINUTES = 30;
+
 /** The sending identity a ledger row keys on: a user's Gmail or the shop's Resend domain. Upserted, never duplicated. */
 export async function mailboxFor(
   q: Db,
@@ -109,6 +162,22 @@ export async function mailboxFor(
   address: string,
   limit: number,
 ): Promise<string> {
+  if (kind === "gmail") {
+    // One Gmail mailbox per rep (mailboxes_user_gmail_key). A Google account already on the ledger is that mailbox
+    // (two reps on one account share its real daily limit), so it is reused as it is. Otherwise a rep who reconnected
+    // as another account keeps their row, moved to the new address; the limit follows only when the address moves.
+    const held = await q.query<{ id: string }>(
+      "update mailboxes set active = true where kind = 'gmail' and address = $1 returning id",
+      [address],
+    );
+    if (held.rows[0]) return held.rows[0].id;
+    const moved = await q.query<{ id: string }>(
+      `update mailboxes set address = $2, provider_limit = $3, active = true
+        where kind = 'gmail' and user_id = $1 returning id`,
+      [userId, address, limit],
+    );
+    if (moved.rows[0]) return moved.rows[0].id;
+  }
   const { rows } = await q.query<{ id: string }>(
     `insert into mailboxes (kind, user_id, address, provider_limit) values ($1, $2, $3, $4)
      on conflict (kind, address) do update set active = true returning id`,
@@ -132,25 +201,110 @@ export async function drainOutbox(args: {
   appUrl: string;
   /** Stop after this many sends in one run (a scheduled function has a time budget). */
   max?: number;
+  /** Stop claiming new rows after this many milliseconds of wall clock (the scheduled function is killed at 60 s). */
+  budgetMs?: number;
 }): Promise<DrainSummary> {
   const now = args.now ?? new Date();
   const summary: DrainSummary = { claimed: 0, sent: 0, skipped: 0, failed: 0, deferred: 0 };
-  const settings = await args.db.withSystem(
+  const loaded = await args.db.withSystem(
     async (q) => (await q.query<Settings>("select * from shop_settings")).rows[0],
   );
-  if (!settings) throw new Error("shop_settings row missing");
+  if (!loaded) throw new Error("shop_settings row missing");
+  const settings: Settings = loaded;
   const max = args.max ?? 200;
+  const started = Date.now();
+  const budgetMs = args.budgetMs ?? 40_000;
 
-  for (let i = 0; i < max; i += 1) {
-    const done = await args.db.withSystem(async (q) => {
+  // A row stuck in 'sending' is one whose run died. If it carries the 'pending' marker the provider call had started and
+  // its result was never written: it may have gone out, so it is never sent again on a guess but marked failed, for a
+  // person to check against the rep's Sent folder. Without the marker it never reached the provider: it is queued again.
+  const stale = await args.db.withSystem(async (q) => {
+    const interrupted = await q.query(
+      `update outbox set status = 'failed',
+              last_error = 'interrupted while sending: it may have gone out, check the Sent folder before sending again'
+        where status = 'sending' and provider_id = 'pending' and not_before < $1::timestamptz - make_interval(mins => $2)`,
+      [now.toISOString(), STALE_SENDING_MINUTES],
+    );
+    await q.query(
+      `update outbox set status = 'queued', attempts = greatest(attempts - 1, 0),
+              last_error = 'interrupted before sending: queued again'
+        where status = 'sending' and provider_id is distinct from 'pending'
+          and not_before < $1::timestamptz - make_interval(mins => $2)`,
+      [now.toISOString(), STALE_SENDING_MINUTES],
+    );
+    return interrupted;
+  });
+  summary.failed += stale.rowCount ?? 0;
+
+  const bulkWindow = (tz: string | null): WindowInput => ({
+    timezone: tz || "America/New_York",
+    startHour: settings.send_window_start,
+    endHour: settings.send_window_end,
+    weekends: settings.send_on_weekends,
+    holidays: settings.send_on_holidays,
+  });
+  const windowed = (lane: string, tz: string | null, at: Date): Date =>
+    lane === "sequence" || lane === "blast" ? nextSendTime(at, bulkWindow(tz)) : at;
+  let claimed: { id: string; lane: string; tz: string | null } | null = null;
+  for (let i = 0; i < max && Date.now() - started < budgetMs; i += 1) {
+    claimed = null;
+    let done: boolean | Ready;
+    try {
+      done = await claimNext();
+    } catch (e) {
+      // The claim rolled back, so the row is still queued. A refusal that will come again (a zone or mailbox the
+      // database rejects: data and integrity errors) fails it alone; anything else (a dropped connection, a timeout)
+      // counts an attempt and tries again later, so one blip never loses the mail and a bad row never holds up the rest.
+      if (!claimed) throw e;
+      const row: { id: string; lane: string; tz: string | null } = claimed;
+      const code = (e as { code?: unknown }).code;
+      const permanent = typeof code === "string" && /^(22|23)/.test(code);
+      const msg = `could not prepare: ${e instanceof Error ? e.message : String(e)}`.slice(0, 500);
+      await args.db.withSystem(async (q) => {
+        const prior = (
+          await q.query<{ attempts: number }>(
+            "select attempts from outbox where id = $1 and status = 'queued'",
+            [row.id],
+          )
+        ).rows[0];
+        if (!prior) return;
+        const attempts = prior.attempts + 1;
+        if (permanent || attempts >= MAX_ATTEMPTS) {
+          await q.query(
+            "update outbox set status = 'failed', attempts = $2, last_error = $3 where id = $1",
+            [row.id, attempts, msg],
+          );
+          summary.failed += 1;
+        } else {
+          const at = windowed(row.lane, row.tz, new Date(now.getTime() + 15 * 60_000 * attempts));
+          await q.query(
+            "update outbox set attempts = $2, not_before = $3, last_error = $4 where id = $1",
+            [row.id, attempts, at.toISOString(), msg],
+          );
+          summary.deferred += 1;
+        }
+      });
+      continue;
+    }
+    if (done === true) break;
+    if (done === false) continue;
+    await sendAndRecord(done);
+  }
+  return summary;
+
+  /** Claim one due row and run every check; returns true (nothing due), false (handled: skipped, deferred...) or what to send. */
+  async function claimNext(): Promise<boolean | Ready> {
+    return args.db.withSystem(async (q): Promise<boolean | Ready> => {
       const { rows } = await q.query<Job>(
         `with next as (
            select o.id from outbox o
             where o.status = 'queued' and o.not_before <= $1
+              -- a disabled rep sends nothing: the row waits (it goes only if the person is switched on again)
+              and exists (select 1 from app_users u where u.id = o.user_id and u.active)
             order by case o.lane when 'intake' then 0 when 'reply' then 1 when 'system' then 2 when 'approval' then 2 when 'sequence' then 3 else 4 end,
                      o.not_before
             for update skip locked limit 1)
-         update outbox o set status = 'sending', attempts = o.attempts + 1
+         update outbox o set status = 'sending'
            from next where o.id = next.id
          returning o.id, o.user_id, o.client_id, o.lane, o.source, o.to_address, o.subject, o.text_body, o.html_body, o.expires_at, o.attempts,
            o.last_error,
@@ -164,6 +318,7 @@ export async function drainOutbox(args: {
                       and o.source like 'bucket:' || e.bucket_id::text || ':%') as enrollment_paused,
            (o.source like 'nudge:%' and app.nudge_overtaken(o.client_id, o.created_at)) as nudge_overtaken,
            (select state from clients c where c.id = o.client_id) as client_state,
+           (select app.client_timezone(c) from clients c where c.id = o.client_id) as tz,
            app.is_suppressed('email', o.to_address) as suppressed,
            (select unsubscribe_token from clients c where c.id = o.client_id) as unsubscribe_token,
            coalesce((select app.merchant_sent(o.client_id, interval '24 hours', $1::timestamptz)), 0) as merchant_24h,
@@ -172,6 +327,7 @@ export async function drainOutbox(args: {
       );
       const job = rows[0];
       if (!job) return true;
+      claimed = { id: job.id, lane: job.lane, tz: job.tz };
       summary.claimed += 1;
 
       const skip = async (reason: string) => {
@@ -188,10 +344,13 @@ export async function drainOutbox(args: {
         ]);
         summary.skipped += 1;
       };
+      // Sequence and blast mail goes only inside the merchant's send window, however it came to be re-timed (a cap
+      // that rolls off at 03:12, a Pause, a retry): every deferral of such a row lands on the next slot in the window.
+      const inWindow = (at: Date): Date => windowed(job.lane, job.tz, at);
       const defer = async (until: Date, reason: string) => {
         await q.query(
           "update outbox set status = 'queued', not_before = $2, last_error = $3 where id = $1",
-          [job.id, until.toISOString(), reason],
+          [job.id, inWindow(until).toISOString(), reason],
         );
         summary.deferred += 1;
       };
@@ -252,6 +411,13 @@ export async function drainOutbox(args: {
         }
       }
       const bulk = job.lane === "sequence" || job.lane === "blast";
+      // Bulk mail is sent only inside the merchant's window at the moment it goes, not just when it was queued: a row
+      // that waited (a rep switched off and on again, a stale 'sending' row queued again, a late cron run) is held
+      // to the next slot instead of going at whatever hour the worker found it.
+      if (bulk && !inSendWindow(now, bulkWindow(job.tz))) {
+        await defer(now, "outside_window");
+        return false;
+      }
       // mail the engine sends on its own: the sequence lanes and the approval emails
       const automated = bulk || job.lane === "approval";
       if (bulk && job.enrollment_paused) {
@@ -381,62 +547,163 @@ export async function drainOutbox(args: {
           html = withFooter(html, f.html);
       }
 
+      // The provider call is made after this transaction commits (see sendAndRecord): the row stays 'sending', so no
+      // other run claims it, and a database failure afterwards can never send the email a second time. Only a send
+      // that is really about to be tried counts as an attempt (a deferral is not a failure).
+      const marked = await q.query<{ attempts: number }>(
+        "update outbox set attempts = attempts + 1, not_before = $2, provider_id = null where id = $1 returning attempts",
+        [job.id, now.toISOString()],
+      );
+      job.attempts = marked.rows[0]?.attempts ?? job.attempts + 1;
+      return {
+        job,
+        mailboxId,
+        useResend,
+        retryAt: (attempts) => inWindow(new Date(now.getTime() + 15 * 60_000 * attempts)),
+        mail: {
+          text,
+          html,
+          designed,
+          headers,
+          // an approval's reply must reach the rep (and the inbox sync that stops the emails)
+          replyTo:
+            (settings.automation_reply_to_rep || job.lane === "approval") && job.rep_email
+              ? job.rep_email
+              : undefined,
+        },
+        automated,
+      };
+    });
+  }
+
+  /** Make the provider call, then write what happened in a transaction of its own. */
+  async function sendAndRecord(r: Ready): Promise<void> {
+    const { job, mail } = r;
+    // Mark that the provider call is about to start. A row that dies in 'sending' without the mark never reached the
+    // provider and is queued again by the sweep; with it, it may have gone out and is failed for a person to check.
+    try {
+      await args.db.withSystem((q) =>
+        q.query("update outbox set provider_id = 'pending' where id = $1 and status = 'sending'", [
+          job.id,
+        ]),
+      );
+    } catch (e) {
+      // nothing was sent: leave the row for the sweep to queue again rather than send what cannot be tracked
+      console.error(`outbox ${job.id}: could not mark the send, left for the sweep:`, e);
+      return;
+    }
+    let providerId: string;
+    try {
+      providerId = r.useResend
+        ? await args.deliver.resend({
+            to: job.to_address,
+            subject: job.subject,
+            text: mail.text,
+            html: mail.html,
+            replyTo: mail.replyTo,
+            headers: mail.headers,
+          })
+        : await args.deliver.gmail(job.user_id, {
+            to: job.to_address,
+            subject: job.subject,
+            text: mail.text,
+            ...(mail.designed ? { html: mail.html } : {}),
+            headers: mail.headers,
+          });
+    } catch (e) {
+      const msg = (e instanceof Error ? e.message : String(e)).slice(0, 500);
+      // no answer from the provider (a timeout, a dropped connection): it may have gone out, so it is not retried
+      const ambiguous = isAmbiguousSendError(e);
       try {
-        const providerId = useResend
-          ? await args.deliver.resend({
-              to: job.to_address,
-              subject: job.subject,
-              text,
-              html,
-              // an approval's reply must reach the rep (and the inbox sync that stops the emails)
-              replyTo:
-                (settings.automation_reply_to_rep || job.lane === "approval") && job.rep_email
-                  ? job.rep_email
-                  : undefined,
-              headers,
-            })
-          : await args.deliver.gmail(job.user_id, {
-              to: job.to_address,
-              subject: job.subject,
-              text,
-              ...(designed ? { html } : {}),
-              headers,
-            });
+        await args.db.withSystem(async (q) => {
+          if (ambiguous) {
+            await q.query(
+              "update outbox set status = 'failed', provider_id = null, last_error = $2 where id = $1",
+              [
+                job.id,
+                `no answer from the provider, it may have gone out: check the Sent folder before sending again (${msg})`.slice(
+                  0,
+                  500,
+                ),
+              ],
+            );
+            summary.failed += 1;
+          } else if (job.attempts >= MAX_ATTEMPTS) {
+            await q.query(
+              "update outbox set status = 'failed', provider_id = null, last_error = $2 where id = $1",
+              [job.id, msg],
+            );
+            summary.failed += 1;
+          } else {
+            await q.query(
+              "update outbox set status = 'queued', provider_id = null, not_before = $2, last_error = $3 where id = $1",
+              [job.id, r.retryAt(job.attempts).toISOString(), msg],
+            );
+            summary.deferred += 1;
+          }
+        });
+      } catch (e2) {
+        // the database is down while recording the failure: the row stays 'sending' and the sweep deals with it. Say
+        // which one, and let the run go on with the other rows.
+        console.error(
+          `outbox ${job.id}: the provider failed (${msg}), and recording it failed:`,
+          e2,
+        );
+      }
+      return;
+    }
+    // The provider has the email. Whatever happens to the bookkeeping from here, it is never sent again.
+    summary.sent += 1;
+    const sentAt = now.toISOString();
+    try {
+      await args.db.withSystem(async (q) => {
         await q.query(
           "update outbox set status = 'sent', provider = $2, provider_id = $3, sent_at = $4, last_error = null where id = $1",
-          [job.id, useResend ? "resend" : "gmail", providerId, now.toISOString()],
+          [job.id, r.useResend ? "resend" : "gmail", providerId, sentAt],
         );
         await q.query(
           "insert into send_ledger (mailbox_id, outbox_id, client_id, lane, sent_at) values ($1, $2, $3, $4, $5)",
-          [mailboxId, job.id, job.client_id, job.lane, now.toISOString()],
+          [r.mailboxId, job.id, job.client_id, job.lane, sentAt],
         );
         if (job.client_id) {
           await q.query("update clients set last_automated_email_at = $2 where id = $1 and $3", [
             job.client_id,
-            now.toISOString(),
-            automated,
+            sentAt,
+            r.automated,
           ]);
           await q.query(
             `insert into activities (user_id, client_id, kind, body) values ($1, $2, 'email', $3)`,
             [job.user_id, job.client_id, `${job.subject}\n\n${job.text_body}`],
           );
         }
-        summary.sent += 1;
-      } catch (e) {
-        const msg = e instanceof Error ? e.message : String(e);
-        if (job.attempts >= MAX_ATTEMPTS) {
-          await q.query("update outbox set status = 'failed', last_error = $2 where id = $1", [
-            job.id,
-            msg,
-          ]);
-          summary.failed += 1;
-        } else {
-          await defer(new Date(now.getTime() + 15 * 60_000 * job.attempts), msg);
-        }
+      });
+    } catch (e) {
+      // the full bookkeeping failed as one: at least record that it went, so it is neither retried nor swept as unknown
+      console.error(`outbox ${job.id}: sent (provider id ${providerId}), bookkeeping failed:`, e);
+      try {
+        await args.db.withSystem((q) =>
+          q.query(
+            "update outbox set status = 'sent', provider = $2, provider_id = $3, sent_at = $4, last_error = $5 where id = $1",
+            [
+              job.id,
+              r.useResend ? "resend" : "gmail",
+              providerId,
+              sentAt,
+              `sent; bookkeeping failed: ${e instanceof Error ? e.message : String(e)}`.slice(
+                0,
+                500,
+              ),
+            ],
+          ),
+        );
+      } catch (e2) {
+        // the database is still down: the email has gone out and is never sent again (the row stays 'sending' and the
+        // sweep marks it for a person to check). Say which one, and let the run go on with the other rows.
+        console.error(
+          `outbox ${job.id}: sent (provider id ${providerId}), even the fallback write failed:`,
+          e2,
+        );
       }
-      return false;
-    });
-    if (done) break;
+    }
   }
-  return summary;
 }

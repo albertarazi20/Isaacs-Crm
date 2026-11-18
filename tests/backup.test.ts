@@ -83,6 +83,23 @@ describe("full backup", () => {
       "session_epoch",
     ])
       expect(text, bad).not.toContain(bad);
+    // the merchant's own link tokens: upload and application are never in the file, the unsubscribe token is
+    const own = (
+      await t.pool.query<{
+        upload_token: string;
+        application_token: string;
+        unsubscribe_token: string;
+      }>(
+        "select upload_token, application_token, unsubscribe_token from clients where user_id = $1",
+        [a],
+      )
+    ).rows;
+    expect(own.length).toBeGreaterThan(0);
+    for (const r of own) {
+      expect(text).not.toContain(r.upload_token);
+      expect(text).not.toContain(r.application_token);
+      expect(text).toContain(r.unsubscribe_token);
+    }
   });
 
   it("an empty account still backs up (empty tables, not an error)", async () => {

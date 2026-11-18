@@ -17,6 +17,8 @@ import { finalPayment, offerNumber, validThroughWords, type Frequency } from "..
 /** Gmail takes 25 MB a message; base64 grows files by a third. */
 const ATTACH_MAX_BYTES = 17 * 1024 * 1024;
 const MAX_ATTEMPTS = 3;
+// How long an accepted offer waits for a document's safety check before the email goes without it: 1 hour, written
+// out in the two queries below (fixed SQL: nothing is interpolated into a query).
 
 export interface NoticeSenders {
   /** Send from this rep's own Gmail (throws when it is not connected). */
@@ -65,7 +67,8 @@ export async function notifyOfferAccepted(
 ): Promise<{ sent: boolean; error?: string }> {
   const access = deps.db ?? defaultDb;
   const r = await access.withSystem(async (q) => {
-    // every document it asked for must have passed its check before anything is attached (an upload waits for the scan)
+    // a document still in its safety check holds the email for up to an hour; after that the email goes without it
+    // (and says so), so a file whose check keeps failing cannot hold back the rep's acceptance notice
     const { rows } = await q.query<Row>(
       `with claim as (
          update merchant_offers o set accept_notice_claimed_at = now()
@@ -73,7 +76,7 @@ export async function notifyOfferAccepted(
             and (o.accept_notice_claimed_at is null or o.accept_notice_claimed_at < now() - interval '10 minutes')
             and not exists (select 1 from documents d
                              where d.client_id = o.client_id and d.deleted_at is null and d.kind = any(o.docs)
-                               and d.scan_status = 'pending')
+                               and d.scan_status = 'pending' and d.created_at > now() - interval '1 hour')
           returning o.*)
        select o.id, o.client_id, c.user_id, o.created_at::text as created_at, c.business_name, c.contact_name,
               o.funded_cents::text, o.payback_cents::text, o.payment_cents::text, o.payments, o.frequency,
@@ -104,6 +107,16 @@ export async function notifyOfferAccepted(
       [r.client_id, r.docs],
     );
     return rows;
+  });
+  // asked for, never cleared, and past the wait: left off the email, and the rep is told
+  const unscanned = await access.withSystem(async (q) => {
+    const { rows } = await q.query<{ kind: string }>(
+      `select distinct kind from documents
+        where client_id = $1 and deleted_at is null and kind = any($2::text[]) and scan_status = 'pending'
+          and kind <> all($3::text[])`,
+      [r.client_id, r.docs, files.map((f) => f.kind)],
+    );
+    return rows.map((x) => labelOf(x.kind as Parameters<typeof labelOf>[0], null));
   });
   const attachments: Attachment[] = [];
   const attached: string[] = [];
@@ -155,6 +168,7 @@ export async function notifyOfferAccepted(
     attached,
     notAttached,
     unreadable,
+    unscanned,
     merchantUrl: `${deps.appUrl.replace(/\/+$/, "")}/clients/${r.client_id}`,
     acceptedWords: validThroughWords(r.accepted_at, r.rep_tz),
   });
@@ -202,6 +216,11 @@ export async function retryOfferNotices(deps: {
       `select id from merchant_offers
         where status = 'accepted' and accept_notified_at is null and accept_notice_attempts < $1
           and accepted_at > now() - interval '7 days'
+          and (accept_notice_claimed_at is null or accept_notice_claimed_at < now() - interval '10 minutes')
+          and not exists (select 1 from documents d
+                           where d.client_id = merchant_offers.client_id and d.deleted_at is null
+                             and d.kind = any(merchant_offers.docs) and d.scan_status = 'pending'
+                             and d.created_at > now() - interval '1 hour')
         order by accepted_at limit 3`,
       [MAX_ATTEMPTS],
     );

@@ -2,7 +2,7 @@ import { z } from "zod";
 import type { Db } from "../db";
 import { createClient, stampClientTimezone, UserError } from "../data/mutations";
 import { findDuplicates, userContext, type DuplicateMatch } from "../data/queries";
-import { id, optMoney } from "../data/schemas";
+import { id, line, optMoney, text } from "../data/schemas";
 import { stageDef } from "../mca/stages";
 import { fileOneRow, loadPendingRow, sendWelcome } from "../sheets/file";
 import { refuseAnotherReps } from "./owner";
@@ -13,7 +13,6 @@ import { refuseAnotherReps } from "./owner";
  * second merchant. When the phone lookup found the lead on a Google Sheet, that row is filed (and marked).
  */
 
-const line = (n: number) => z.string().trim().max(n);
 const email = z
   .string()
   .trim()
@@ -31,7 +30,7 @@ export const intakeSchema = z.object({
   email2: email.default(""),
   industry: line(100).default(""),
   state: line(40).toUpperCase().default(""),
-  lookingFor: line(1000).default(""),
+  lookingFor: text(1000).default(""),
   wantedAmount: optMoney.optional(),
   bucketId: id.nullable().default(null),
   /** When the phone lookup found the lead on a Google Sheet, file that row (it is then marked on the sheet side). */

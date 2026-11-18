@@ -3,7 +3,7 @@ import { dueFromPreset, validateFollowUpDate, type ISODate } from "../mca/dates"
 import { contactAllowed } from "../mca/contact";
 import { defaultTimers, stageDef, type PlannedTimer } from "../mca/stages";
 import { defaultStips } from "../mca/stips";
-import { suggestNextFollowUp } from "../mca/touch";
+import { suggestAfterEmail, suggestNextFollowUp } from "../mca/touch";
 import { describeEdit } from "./audit";
 import { getCard } from "./queries";
 import type { ClientCard, UserContext } from "./types";
@@ -29,7 +29,7 @@ export class UserError extends Error {}
 const sqlTimers = (timers: PlannedTimer[]) =>
   JSON.stringify(timers.map((t) => ({ kind: t.kind, due_on: t.dueOn, note: t.note })));
 
-function checkDate(dueOn: ISODate, today: ISODate): void {
+export function checkDate(dueOn: ISODate, today: ISODate): void {
   const err = validateFollowUpDate(dueOn, today);
   if (err) throw new UserError(err);
 }
@@ -198,8 +198,13 @@ export async function setContactStatus(
 }
 
 export async function logTouch(q: Db, input: TouchInput, ctx: UserContext): Promise<ClientCard> {
-  await assertContactAllowed(q, input.clientId, input.kind);
-  const next = input.nextDueOn ?? suggestNextFollowUp(input.outcome ?? null, ctx.today);
+  const card = await assertContactAllowed(q, input.clientId, input.kind);
+  // the stage keeps its own pace: an Application-in merchant is not pushed two weeks out by one tap or one email
+  const next =
+    input.nextDueOn ??
+    (input.kind === "email"
+      ? suggestAfterEmail(ctx.today, card.stage)
+      : suggestNextFollowUp(input.outcome ?? null, ctx.today, card.stage));
   checkDate(next, ctx.today);
   await q.query("select * from log_touch($1, $2, $3, $4, $5)", [
     input.clientId,
@@ -377,7 +382,17 @@ export const DAILY_EMAIL_LIMIT = 100;
 
 export async function assertEmailQuota(q: Db, limit: number = DAILY_EMAIL_LIMIT): Promise<void> {
   const { rows } = await q.query<{ n: number }>(
-    "select count(*)::int as n from activities where kind = 'email' and occurred_at > now() - interval '24 hours'",
+    // Only mail the rep sent by hand. Two other things are stored as email activities: a merchant's reply, and the
+    // activity the outbox worker writes for each automated send (same body as the outbox row, written within
+    // seconds of its sent_at). Those are held to the send cap instead and must not use up the manual allowance.
+    `select count(*)::int as n from activities a
+      where a.kind = 'email' and a.user_id = app.current_user_id()
+        and a.body not like 'Merchant replied%' and a.occurred_at > now() - interval '24 hours'
+        and not exists (
+          select 1 from outbox o
+           where o.client_id = a.client_id and o.user_id = a.user_id and o.status = 'sent'
+             and a.body = o.subject || E'\\n\\n' || o.text_body
+             and abs(extract(epoch from (a.occurred_at - o.sent_at))) < 300)`,
   );
   if ((rows[0]?.n ?? 0) >= limit) {
     throw new UserError(

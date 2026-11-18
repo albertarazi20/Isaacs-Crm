@@ -1,5 +1,6 @@
 import { z } from "zod";
-import { newClientSchema } from "../data/schemas";
+import { EMAIL, newClientSchema } from "../data/schemas";
+import { parseMoney } from "../money";
 import { findSensitive } from "../data/sensitive";
 
 /** Forms and Zapier send an empty field as null; that means "not given", never "refuse the lead". */
@@ -37,13 +38,30 @@ export const leadSchema = z
     source: str(100).optional(),
     notes: str(2000).optional(),
   })
-  // "N/A", "none", "-" are not phone numbers: kept out, so the lead is judged on what it really gave.
+  // "N/A", "none", "-" are not phone numbers, "none" is not an email and "ASAP" is not an amount: each is kept out
+  // of its field (the words go to the notes), so the lead is judged on what it really gave, never refused for them.
   // The state (trimmed by str) is kept in capitals: "ny" and "NY" are one state.
-  .transform((v) => ({
-    ...v,
-    phone: (v.phone ?? "").replace(/\D/g, "").length >= 7 ? v.phone : undefined,
-    ...(v.state ? { state: v.state.toUpperCase() } : {}),
-  }))
+  .transform((v) => {
+    const kept: string[] = [];
+    const email = v.email && EMAIL.test(v.email) ? v.email : undefined;
+    if (v.email && !email) kept.push(`Email as sent: ${v.email}`);
+    const amount =
+      v.wantedAmount && parseMoney(v.wantedAmount) !== null ? v.wantedAmount : undefined;
+    if (v.wantedAmount && !amount) kept.push(`Amount as sent: ${v.wantedAmount}`);
+    const notes = [v.notes, ...kept].filter(Boolean).join("\n").slice(0, 2000);
+    const out: typeof v = { ...v };
+    // a key that holds nothing is not there at all
+    const put = <K extends keyof typeof v>(key: K, value: (typeof v)[K] | undefined) => {
+      if (value === undefined || value === "") delete out[key];
+      else out[key] = value;
+    };
+    put("email", email);
+    put("wantedAmount", amount);
+    put("notes", notes);
+    put("phone", (v.phone ?? "").replace(/\D/g, "").length >= 7 ? v.phone : undefined);
+    if (v.state) out.state = v.state.toUpperCase();
+    return out;
+  })
   .superRefine((v, ctx) => {
     if (!v.phone && !v.email)
       ctx.addIssue({ code: "custom", message: "Include a phone number or an email" });

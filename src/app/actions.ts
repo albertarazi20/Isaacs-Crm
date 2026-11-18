@@ -10,7 +10,7 @@ import { GmailReconnectError } from "@/lib/email/gmail";
 import { toActionError } from "@/lib/data/errors";
 import {
   checkImportRows,
-  importClients,
+  importRawRows,
   type ImportCheck,
   type ImportResult,
 } from "@/lib/data/import";
@@ -20,6 +20,9 @@ import { findDuplicates, listSources, userContext, type DuplicateMatch } from "@
 import * as s from "@/lib/data/schemas";
 import type { ActionResult, ClientCard, UserContext } from "@/lib/data/types";
 import { env } from "@/lib/env";
+import { suggestAfterEmail } from "@/lib/mca/touch";
+import { refuseAnotherRepsOnEdit } from "@/lib/leads/editOwner";
+import { refuseAnotherReps } from "@/lib/leads/owner";
 import { sendViaResend } from "@/lib/email/resend";
 import { disconnectGmail, sendEmailAsUser } from "@/lib/system/gmail";
 import { bumpSessionEpoch } from "@/lib/system/users";
@@ -48,7 +51,12 @@ export async function findDuplicatesAction(
   return run((q) => findDuplicates(q, s.duplicateCheckSchema.parse(input)), false);
 }
 export async function addClientAction(input: unknown): Promise<ActionResult<Card>> {
-  return run((q, ctx) => m.createClient(q, s.newClientSchema.parse(input), ctx));
+  return run(async (q, ctx) => {
+    const client = s.newClientSchema.parse(input);
+    // another rep's merchant is invisible to the rep's own duplicate check: ask across the shop and refuse in words
+    await refuseAnotherReps(q, { phone: client.phone, email: client.email });
+    return m.createClient(q, client, ctx);
+  });
 }
 export async function mergeClientsAction(input: unknown): Promise<ActionResult<Card>> {
   return run((q) => m.mergeClients(q, s.mergeSchema.parse(input)));
@@ -81,7 +89,12 @@ export async function addNoteAction(input: unknown): Promise<ActionResult<null>>
   });
 }
 export async function updateClientAction(input: unknown): Promise<ActionResult<Card>> {
-  return run((q) => m.updateClient(q, s.updateClientSchema.parse(input)));
+  return run(async (q) => {
+    const parsed = s.updateClientSchema.parse(input);
+    // a phone or email moved onto another rep's merchant would make two reps chase one merchant
+    await refuseAnotherRepsOnEdit(q, parsed.clientId, parsed.fields);
+    return m.updateClient(q, parsed);
+  });
 }
 export async function listSourcesAction(): Promise<ActionResult<string[]>> {
   return run(async (q) => mergeSources(await listSources(q)), false);
@@ -118,7 +131,7 @@ export async function checkImportAction(input: unknown): Promise<ActionResult<Im
   return run((q) => checkImportRows(q, s.importCheckSchema.parse(input).rows), false);
 }
 export async function importClientsAction(input: unknown): Promise<ActionResult<ImportResult>> {
-  return run((q, ctx) => importClients(q, s.importSchema.parse(input).rows, ctx));
+  return run((q, ctx) => importRawRows(q, input, ctx));
 }
 export async function updateSettingsAction(input: unknown): Promise<ActionResult<null>> {
   return run(async (q) => {
@@ -136,7 +149,15 @@ export async function sendEmailAction(input: unknown): Promise<ActionResult<Card
       m.assertContactAllowed(q, i.clientId, "email"),
     );
     if (!client.email.trim()) throw new m.UserError("This merchant has no email address yet");
-    await db.withUser(session.userId, (q) => m.assertEmailQuota(q));
+    // everything that can refuse the follow-up date is checked BEFORE the mail goes out: a failure after the
+    // send would show an error for a mail that was sent, and the rep would send it twice
+    const nextDueOn = await db.withUser(session.userId, async (q) => {
+      await m.assertEmailQuota(q);
+      const ctx = await userContext(q);
+      const next = i.nextDueOn ?? suggestAfterEmail(ctx.today, client.stage);
+      m.checkDate(next, ctx.today);
+      return next;
+    });
     try {
       await sendEmailAsUser(session.userId, {
         to: client.email.trim(),
@@ -147,19 +168,28 @@ export async function sendEmailAction(input: unknown): Promise<ActionResult<Card
       if (e instanceof GmailReconnectError) return { ok: false, error: e.message, reconnect: true };
       throw e;
     }
-    const card = await db.withUser(session.userId, async (q) =>
-      m.logTouch(
-        q,
-        s.touchSchema.parse({
-          clientId: i.clientId,
-          kind: "email",
-          outcome: null,
-          body: `${i.subject}\n\n${i.body}`,
-          nextDueOn: i.nextDueOn,
-        }),
-        await userContext(q),
-      ),
-    );
+    let card: Card;
+    try {
+      card = await db.withUser(session.userId, async (q) =>
+        m.logTouch(
+          q,
+          s.touchSchema.parse({
+            clientId: i.clientId,
+            kind: "email",
+            outcome: null,
+            body: `${i.subject}\n\n${i.body}`,
+            nextDueOn,
+          }),
+          await userContext(q),
+        ),
+      );
+    } catch (e) {
+      console.error("email sent but not logged:", e);
+      return {
+        ok: false,
+        error: "The email was sent, but it could not be logged on the card. Do not send it again.",
+      };
+    }
     revalidatePath("/", "layout");
     return { ok: true, data: card };
   } catch (e) {

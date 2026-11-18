@@ -1,6 +1,7 @@
 import { createCipheriv, createDecipheriv, randomBytes } from "node:crypto";
 
 const VERSION = "v1";
+const TAG_BYTES = 16;
 
 function keyFrom(base64: string | undefined): Buffer {
   if (!base64) throw new Error("TOKEN_ENC_KEY is not set");
@@ -22,9 +23,16 @@ export function encryptSecret(plain: string, keyB64: string | undefined): string
 
 export function decryptSecret(blob: string, keyB64: string | undefined): string {
   const [version, iv, tag, ct] = blob.split(".");
-  if (version !== VERSION || !iv || !tag || !ct) throw new Error("unrecognised secret format");
-  const decipher = createDecipheriv("aes-256-gcm", keyFrom(keyB64), Buffer.from(iv, "base64url"));
-  decipher.setAuthTag(Buffer.from(tag, "base64url"));
+  // An empty plaintext encrypts to an empty ciphertext segment, which is still a valid blob.
+  if (version !== VERSION || !iv || !tag || ct === undefined)
+    throw new Error("unrecognised secret format");
+  const tagBytes = Buffer.from(tag, "base64url");
+  // Node accepts a 4-byte GCM tag unless told otherwise, which cuts forgery resistance from 2^-128 to 2^-32.
+  if (tagBytes.length !== TAG_BYTES) throw new Error("unrecognised secret format");
+  const decipher = createDecipheriv("aes-256-gcm", keyFrom(keyB64), Buffer.from(iv, "base64url"), {
+    authTagLength: TAG_BYTES,
+  });
+  decipher.setAuthTag(tagBytes);
   return Buffer.concat([decipher.update(Buffer.from(ct, "base64url")), decipher.final()]).toString(
     "utf8",
   );

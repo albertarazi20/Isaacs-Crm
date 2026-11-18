@@ -84,7 +84,7 @@ export type UpdateSheetInput = z.output<typeof updateSheetSchema>;
 export async function updateSheetSource(q: Db, i: UpdateSheetInput): Promise<void> {
   await q.query(
     `update sheet_sources set mapping = coalesce($2::jsonb, mapping),
-            target_bucket_id = coalesce($3, target_bucket_id),
+            target_bucket_id = case when $6::boolean then $3::uuid else target_bucket_id end,
             auto_file = coalesce($4, auto_file),
             active = coalesce($5, active)
       where id = $1`,
@@ -94,6 +94,8 @@ export async function updateSheetSource(q: Db, i: UpdateSheetInput): Promise<voi
       i.targetBucketId ?? null,
       i.autoFile ?? null,
       i.active ?? null,
+      // null is "no bucket"; an absent field leaves the bucket alone
+      i.targetBucketId !== undefined,
     ],
   );
 }

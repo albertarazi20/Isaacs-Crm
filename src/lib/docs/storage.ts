@@ -39,6 +39,13 @@ export function safeName(filename: string): string {
   return cleaned.replace(/^[._-]+/, "") || "file";
 }
 
+/** The file-name part of a storage key: safeName with every character the key pattern refuses (spaces, "..") replaced. */
+export function keyName(filename: string): string {
+  return safeName(filename)
+    .replace(/ /g, "_")
+    .replace(/\.{2,}/g, ".");
+}
+
 export class LocalStore implements BlobStore {
   readonly kind = "local" as const;
   constructor(private readonly root: string) {}

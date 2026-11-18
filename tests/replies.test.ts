@@ -301,7 +301,7 @@ describe("replies, bounces, unsubscribes", () => {
     expect(
       await handleResendEvent(t.db, "evt_in0", {
         type: "email.received",
-        data: { from: "Mike <mike@pizza.com>", subject: "unsubscribe", text: "STOP" },
+        data: { from: "Mike <mike@pizza.com>", subject: "Re: docs", text: "sending them now" },
       }),
     ).toEqual({ result: "received:unverified_sender" });
     expect((await client(pizza)).reply_waiting_subject).toBe("");
@@ -316,7 +316,9 @@ describe("replies, bounces, unsubscribes", () => {
           headers: [
             {
               name: "Authentication-Results",
-              value: "mx.resend.com; spf=pass; dkim=pass header.d=pizza.com",
+              // sent through a provider: SPF passes for the provider's own bounce domain, DKIM is aligned with pizza.com
+              value:
+                "mx.resend.com; spf=pass smtp.mailfrom=bounces.mailer.net; dkim=pass header.d=pizza.com",
             },
           ],
         },

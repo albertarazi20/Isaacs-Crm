@@ -21,6 +21,8 @@ export interface AcceptedNoticeInput {
   notAttached: readonly string[];
   /** Documents that could not be read from storage: open them in the CRM. */
   unreadable?: readonly string[];
+  /** Documents whose safety check never finished, so they were left off: open them in the CRM. */
+  unscanned?: readonly string[];
   merchantUrl: string;
   /** "Thursday, November 19 at 4:32 PM EST", in the rep's zone. */
   acceptedWords: string;
@@ -72,6 +74,9 @@ export function acceptedNotice(n: AcceptedNoticeInput): {
     ...(n.unreadable?.length
       ? [`Could not be attached (open them in the CRM): ${n.unreadable.join(", ")}`]
       : []),
+    ...(n.unscanned?.length
+      ? [`Not checked yet, so not attached (open them in the CRM): ${n.unscanned.join(", ")}`]
+      : []),
     "",
     `Open the merchant: ${n.merchantUrl}`,
   ].join("\n");
@@ -96,6 +101,10 @@ export function acceptedNotice(n: AcceptedNoticeInput): {
     ...(n.unreadable ?? []).map(
       (d) =>
         `<li style="margin:0 0 4px">${esc(d)} <span style="color:#b45309">· could not be attached, open it in the CRM</span></li>`,
+    ),
+    ...(n.unscanned ?? []).map(
+      (d) =>
+        `<li style="margin:0 0 4px">${esc(d)} <span style="color:#b45309">· not checked yet, so not attached; open it in the CRM</span></li>`,
     ),
   ].join("");
 

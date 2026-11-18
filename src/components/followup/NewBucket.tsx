@@ -39,7 +39,7 @@ export function NewBucket({ canShare, onDone }: { canShare: boolean; onDone?: ()
           value={name}
           onChange={(e) => setName(e.target.value)}
           placeholder="New bucket…"
-          maxLength={80}
+          maxLength={60}
           autoFocus
         />
       </Field>

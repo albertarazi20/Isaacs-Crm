@@ -1,7 +1,14 @@
 import { findSensitive } from "../data/sensitive";
 import { addDays, addMonths, parseISODate, toISODate, type ISODate } from "../mca/dates";
 import { normalizeUS } from "../mca/phone";
-import { IMPORT_STAGES, isStageKey, STAGES, type StageKey } from "../mca/stages";
+import {
+  defaultTimers,
+  IMPORT_STAGES,
+  isStageKey,
+  STAGES,
+  stageDef,
+  type StageKey,
+} from "../mca/stages";
 import { parseMoney } from "../money";
 
 export const IMPORT_FIELDS = [
@@ -20,6 +27,9 @@ export const IMPORT_FIELDS = [
 export type ImportField = (typeof IMPORT_FIELDS)[number];
 
 /** The server's limits per field. A longer value would reject the WHOLE import, so it is cut here, with a note. */
+// the same shape the server accepts (one address)
+const EMAIL = /^[^\s@,;<>"]+@[^\s@,;<>"]+\.[^\s@,;<>"]+$/;
+
 const MAX_LENGTH: Partial<Record<ImportField, number>> = {
   businessName: 200,
   contactName: 200,
@@ -333,7 +343,14 @@ export function buildRows(
     }
     const phoneRaw = get(r, "phone");
     const e164 = phoneRaw ? normalizeUS(phoneRaw) : null;
-    const email = get(r, "email");
+    const emailRaw = get(r, "email");
+    // "n/a", "none" or two addresses in one cell is not an email: it is left out, not allowed to sink the batch
+    const email = EMAIL.test(emailRaw) ? emailRaw : "";
+    if (emailRaw && !email)
+      problems.push({
+        line,
+        message: `"${emailRaw}" isn't an email address, so it was imported without it`,
+      });
     const reachable = Boolean(e164 || email);
     if (phoneRaw && !e164 && reachable) {
       problems.push({
@@ -367,7 +384,12 @@ export function buildRows(
     const statusNote =
       stageRaw && (unsupported || stage === null) ? `Imported status: ${stageRaw}` : "";
 
-    let followUpOn: ISODate = addDays(opts.today, (rows.length % spread) + 1);
+    // a merchant who said no waits as long as the stage says (months), instead of landing on Today as a call to make
+    const longWait = stageDef(stage ?? "name_in").followUp.kind === "months";
+    let followUpOn: ISODate = longWait
+      ? (defaultTimers(stage ?? "name_in", { today: opts.today })[0]?.dueOn ??
+        addDays(opts.today, (rows.length % spread) + 1))
+      : addDays(opts.today, (rows.length % spread) + 1);
     const dateRaw = get(r, "followUpOn");
     if (dateRaw) {
       const parsed = parseLooseDate(dateRaw);
@@ -397,7 +419,7 @@ export function buildRows(
       notes: get(r, "notes"),
       stage: stage ?? "name_in",
       followUpOn,
-      source: get(r, "source") || (opts.defaultSource ?? "").trim(),
+      source: get(r, "source") || (opts.defaultSource ?? "").trim().slice(0, 100),
       statusNote,
     });
   });

@@ -9,6 +9,7 @@ import { Glyph } from "@/components/shell/icons";
 import { Button, IconButton, Input, Kbd, cn } from "@/components/ui";
 import type { BucketMember } from "@/lib/buckets/queries";
 import { followupCsv } from "@/lib/export/followup";
+import { ALL_MEMBERS_MAX } from "@/lib/followup/limits";
 import { matchesSearch } from "@/lib/followup/search";
 import { formatUS } from "@/lib/mca/phone";
 import { DialListDialog } from "./DialList";
@@ -47,6 +48,8 @@ export function AllMembersSearch({
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, []);
+  // the list stops at ALL_MEMBERS_MAX: from there on, more people may exist than the search and the file have
+  const cut = members.length >= ALL_MEMBERS_MAX;
   const needle = query.trim();
   const found = useMemo(
     () => (needle === "" ? [] : members.filter((m) => matchesSearch(m, needle))),
@@ -65,11 +68,12 @@ export function AllMembersSearch({
     const { csv, left } = followupCsv(members);
     downloadFile(`selective-all-buckets-${today}.csv`, csv);
     toast({
-      message:
-        left > 0
+      message: cut
+        ? `Exported the first ${members.length}. There are more in follow-up than one file holds: export one bucket at a time for the rest`
+        : left > 0
           ? `Exported ${members.length - left}. ${left} marked do not contact ${left === 1 ? "was" : "were"} left out`
           : `Exported ${members.length} from every bucket`,
-      tone: "success",
+      tone: cut ? "info" : "success",
     });
   }
 
@@ -86,7 +90,7 @@ export function AllMembersSearch({
             type="search"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder={`Search all ${members.length} in follow-up: name, number, email, bucket`}
+            placeholder={`Search ${cut ? "the first " : "all "}${members.length} in follow-up: name, number, email, bucket`}
             className="rounded-full pr-9 pl-10"
           />
           {query === "" ? (

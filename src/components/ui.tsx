@@ -119,22 +119,44 @@ export function Select({ className, ...rest }: SelectHTMLAttributes<HTMLSelectEl
   return <select className={cn(FIELD, "h-10 sm:h-9", className)} {...rest} />;
 }
 
+/**
+ * A caption over a control. By default one <label>, so a click on the caption focuses the single input inside it.
+ * A control made of several buttons (a timer, a time picker) must use `group`: inside a <label> a click on the caption
+ * or the gaps would press the first button in it, and silently change the value.
+ */
 export function Field({
   label,
   hint,
   children,
   className,
+  group = false,
 }: {
   label: string;
   hint?: string;
   children: ReactNode;
   className?: string;
+  group?: boolean;
 }) {
+  const labelId = useId();
+  const caption = (
+    <span id={group ? labelId : undefined} className="text-[12px] font-medium text-text-2">
+      {label}
+    </span>
+  );
+  const note = hint ? <span className="block text-xs text-muted">{hint}</span> : null;
+  if (group)
+    return (
+      <div role="group" aria-labelledby={labelId} className={cn("block space-y-1.5", className)}>
+        {caption}
+        {children}
+        {note}
+      </div>
+    );
   return (
     <label className={cn("block space-y-1.5", className)}>
-      <span className="text-[12px] font-medium text-text-2">{label}</span>
+      {caption}
       {children}
-      {hint ? <span className="block text-xs text-muted">{hint}</span> : null}
+      {note}
     </label>
   );
 }

@@ -5,7 +5,7 @@ import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 import { useCallback, useRef, useState, type ReactNode } from "react";
 import { LogoutButton } from "@/components/LogoutButton";
-import { useModal } from "@/components/overlay";
+import { useBackdropClose, useModal } from "@/components/overlay";
 import { ThemeSwitch } from "@/components/ThemeSwitch";
 import { Avatar, cn, Kbd } from "@/components/ui";
 import { MERCHANT_VIEWS, SETTINGS_VIEWS } from "@/lib/nav";
@@ -178,9 +178,14 @@ function SubLink({
   );
 }
 
-function Logo() {
+function Logo({ onNavigate }: { onNavigate?: () => void }) {
   return (
-    <Link href="/" aria-label="Selective CRM home" className="flex h-9 items-center">
+    <Link
+      href="/"
+      aria-label="Selective CRM home"
+      onClick={onNavigate}
+      className="flex h-9 items-center"
+    >
       <Image
         src="/brand/SC-horizontal-light-web.png"
         alt="Selective Capital"
@@ -240,11 +245,11 @@ function SidebarBody({
   return (
     <div className="flex h-full flex-col">
       <div className="px-5 pt-5 pb-4">
-        <Logo />
+        <Logo onNavigate={onNavigate} />
       </div>
 
       <div className="space-y-2 px-4">
-        <NewLeadButton variant="full" />
+        <NewLeadButton variant="full" onOpen={onNavigate} />
         <button
           type="button"
           onClick={() => {
@@ -487,6 +492,7 @@ export function Sidebar(props: SidebarProps) {
   const [open, setOpen] = useState(false);
   const close = useCallback(() => setOpen(false), []);
   const [sheet, onNativeClose, onKeyDown, onCancel] = useModal(open, close);
+  const backdrop = useBackdropClose(sheet, close);
   return (
     <div data-app-header className="contents">
       <aside className="glass fixed inset-y-0 left-0 z-30 hidden w-[272px] border-r border-border lg:block">
@@ -562,9 +568,8 @@ export function Sidebar(props: SidebarProps) {
         onClose={onNativeClose}
         onKeyDown={onKeyDown}
         onCancel={onCancel}
-        onClick={(e) => {
-          if (e.target === sheet.current) close();
-        }}
+        onPointerDown={backdrop.onPointerDown}
+        onClick={backdrop.onClick}
         className="sheet-left glass-strong m-0 h-dvh max-h-none w-[min(86vw,320px)] max-w-none rounded-r-3xl border-r border-border p-0 text-text shadow-pop lg:hidden"
       >
         {open ? <SidebarBody {...props} onNavigate={close} /> : null}

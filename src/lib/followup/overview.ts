@@ -205,17 +205,22 @@ const QUEUE_SQL = `${BASE}, q as (
                         else 'Opened the upload link, nothing sent yet' end,
             o.at, -extract(epoch from o.at)
        from live c
-       join lateral (select lo.kind, max(lo.opened_at) as at from link_opens lo
-                      where lo.client_id = c.id and lo.opened_at > now() - interval '48 hours'
-                      group by lo.kind order by max(lo.opened_at) desc limit 1) o on true
-      -- an offer comes after the hand-off as often as before it, and stays on the list while it waits on them
-      where (c.brought_in_at is null or o.kind = 'offer') and c.contact_status <> 'dnc'
-        and not (o.kind = 'offer' and not exists (select 1 from merchant_offers mo
-                                              where mo.client_id = c.id and mo.status = 'sent' and mo.expires_at > now()))
-        and not (o.kind = 'apply' and exists (select 1 from applications a
-                                               where a.client_id = c.id and a.signed_at >= o.at))
-        and not (o.kind = 'upload' and exists (select 1 from documents d
-                                                where d.client_id = c.id and d.deleted_at is null and d.created_at >= o.at))
+       -- the newest open of a link the merchant has NOT finished with: an application opened at 9:00 stays on the list
+       -- when the upload link opened at 9:10 (and was used) is the newer open
+       join lateral (select k.kind, k.at from (
+                       select lo.kind, max(lo.opened_at) as at from link_opens lo
+                        where lo.client_id = c.id and lo.opened_at > now() - interval '48 hours'
+                        group by lo.kind) k
+                      -- an offer comes after the hand-off as often as before it, and stays on the list while it waits on them
+                      where (c.brought_in_at is null or k.kind = 'offer')
+                        and not (k.kind = 'offer' and not exists (select 1 from merchant_offers mo
+                                                              where mo.client_id = c.id and mo.status = 'sent' and mo.expires_at > now()))
+                        and not (k.kind = 'apply' and exists (select 1 from applications a
+                                                               where a.client_id = c.id and a.signed_at >= k.at))
+                        and not (k.kind = 'upload' and exists (select 1 from documents d
+                                                                where d.client_id = c.id and d.deleted_at is null and d.created_at >= k.at))
+                      order by k.at desc limit 1) o on true
+      where c.contact_status <> 'dnc'
       order by o.at desc limit 25)
     union all
     (select 3, 'call_now', c.id, c.business_name, c.contact_name, c.user_id,

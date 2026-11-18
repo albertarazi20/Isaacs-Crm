@@ -36,6 +36,10 @@ export function matchesSearch(m: Searchable, query: string): boolean {
     if (text.includes(w)) return true;
     const d = digitsOf(w);
     // a word like "305" is ambiguous (a name can hold digits): digits count as a phone search from three on
-    return d.length >= 3 && d.length >= w.length - 2 && phone.includes(d);
+    // (phone punctuation, "1-305-555-0100", does not count against the word)
+    if (d.length < 3 || d.length < w.replace(/[-().+]/g, "").length - 2) return false;
+    if (phone.includes(d)) return true;
+    // a country code typed in front ("+1305555", "1-305-555-0100") against a number stored without it
+    return d.length > 3 && d.startsWith("1") && phone.includes(d.slice(1));
   });
 }

@@ -65,6 +65,10 @@ beforeAll(async () => {
   await t.pool.query(
     "update shop_settings set postal_address = '1 Main St', per_merchant_daily = 5, per_merchant_weekly = 20",
   );
+  // these tests run on the wall clock and are about scores and bounces, not the window (bulk mail goes only inside it)
+  await t.pool.query(
+    "update shop_settings set send_window_start = 0, send_window_end = 24, send_on_weekends = true, send_on_holidays = true",
+  );
   statements = (
     await t.pool.query<{ id: string }>("select id from buckets where key = 'missing_statements'")
   ).rows[0]!.id;

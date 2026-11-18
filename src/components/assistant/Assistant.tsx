@@ -458,6 +458,9 @@ export function AssistantProvider({
             body: JSON.stringify({ threadId: thread, message: next, title: label ?? null }),
             signal: controller.signal,
           });
+          // a redirect to the login page (the session ended) answers 200 with a web page: say so in words
+          if (res.redirected || res.status === 401)
+            throw new Error("Your session ended. Sign in again.");
           if (!res.ok || !res.body) {
             const err = (await res.json().catch(() => null)) as { error?: string } | null;
             throw new Error(err?.error ?? "The assistant could not be reached");
@@ -571,7 +574,7 @@ export function AssistantProvider({
     setView("chat");
   }, []);
 
-  /** What the assistant prepared in the background: made minutes ago, so its buttons stay live (the server checks them again on the click). */
+  /** What the assistant prepared in the background: its buttons stay live unless the merchant has moved on since (then they show as earlier). */
   const openPrepared = useCallback(
     async (prepId: string) => {
       const r = await call(openPreparedAction({ id: prepId }));
@@ -582,7 +585,14 @@ export function AssistantProvider({
         r.items.map((i: ShownItem): Item =>
           i.role === "user"
             ? { kind: "user", text: i.text, label: "Prepared for you" }
-            : { kind: "assistant", text: i.text, actions: i.actions, tools: [], streaming: false },
+            : {
+                kind: "assistant",
+                text: i.text,
+                actions: i.actions,
+                tools: [],
+                streaming: false,
+                earlier: r.stale,
+              },
         ),
       );
       setView("chat");

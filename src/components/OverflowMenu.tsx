@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useId, useRef, useState, type ReactNode } from "react";
+import { listenEscape } from "./overlay";
 import { Glyph } from "./shell/icons";
 import { cn } from "./ui";
 
@@ -30,16 +31,15 @@ export function OverflowMenu({
     const onDown = (e: PointerEvent) => {
       if (e.target instanceof Node && !box.current?.contains(e.target)) setOpen(false);
     };
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key !== "Escape") return;
+    document.addEventListener("pointerdown", onDown);
+    // kept to this menu: inside a dialog, Escape must not close the whole sheet
+    const stopEscape = listenEscape(document, () => {
       setOpen(false);
       button.current?.focus();
-    };
-    document.addEventListener("pointerdown", onDown);
-    document.addEventListener("keydown", onKey);
+    });
     return () => {
       document.removeEventListener("pointerdown", onDown);
-      document.removeEventListener("keydown", onKey);
+      stopEscape();
     };
   }, [open]);
 

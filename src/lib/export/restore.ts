@@ -1,5 +1,11 @@
 import type { Db } from "../db";
-import { BACKUP_TABLES, BACKUP_VERSION, type Backup } from "./backup";
+import {
+  BACKUP_TABLES,
+  BACKUP_VERSION,
+  CLIENT_KEPT_TOKEN_COLUMN,
+  CLIENT_SECRET_COLUMNS,
+  type Backup,
+} from "./backup";
 
 export class RestoreError extends Error {}
 
@@ -25,6 +31,10 @@ export function checkBackup(file: unknown): Backup {
   }
   return b as Backup;
 }
+
+/** What the column default makes: 64 letters and digits. Anything shorter or odd is not a token worth keeping. */
+const usableToken = (v: unknown): boolean =>
+  typeof v === "string" && /^[A-Za-z0-9_-]{32,128}$/.test(v);
 
 /**
  * Puts a backup back into an EMPTY account. Run with the database owner's connection (the CLI does): every row is
@@ -73,7 +83,17 @@ export async function restoreBackup(
 
   const restored: Record<string, number> = {};
   for (const name of RESTORE_ORDER) {
-    const rows = (backup.tables[name] ?? []).map((r) => ({ ...r, user_id: targetUserId }));
+    const rows = (backup.tables[name] ?? []).map((r) => {
+      const row: Record<string, unknown> = { ...r, user_id: targetUserId };
+      // a file may carry upload and application tokens (an older one does): they are never reused, since anyone who
+      // held the file could open a merchant's page with them. The column defaults make fresh ones.
+      if (name === "clients") for (const c of CLIENT_SECRET_COLUMNS) delete row[c];
+      return row;
+    });
+    // The unsubscribe token comes back as it was, so links in emails already sent still work. The columns inserted are
+    // those of the first row, so unless every row has a usable one, none is passed and the defaults make new ones.
+    if (name === "clients" && !rows.every((r) => usableToken(r[CLIENT_KEPT_TOKEN_COLUMN])))
+      for (const r of rows) delete r[CLIENT_KEPT_TOKEN_COLUMN];
     const { rows: out } = await q.query<{ n: number }>(
       "select app.restore_rows($1, $2::jsonb) as n",
       [name, JSON.stringify(rows)],

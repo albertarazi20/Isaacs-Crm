@@ -30,7 +30,7 @@ import {
   phoneSchema,
 } from "@/lib/approvals/schemas";
 import { CAN } from "@/lib/auth/roles";
-import { advanceApprovalNow } from "@/lib/system/approvals";
+import { advanceApprovalSafely } from "@/lib/system/approvals";
 import { requireRole, requireSession } from "@/lib/auth/server";
 import { toActionError } from "@/lib/data/errors";
 import type { ActionResult } from "@/lib/data/types";
@@ -56,7 +56,7 @@ export async function createApprovalAction(
       createApproval(q, parsed, ctx),
     );
     // the first email: on the owner connection, after the approval is committed under the rep's own row security
-    const first = started ? await advanceApprovalNow(db, approvalId, ctx) : null;
+    const first = started ? await advanceApprovalSafely(db, approvalId, ctx) : null;
     return done({ approvalId, first });
   } catch (e) {
     return { ok: false, error: toActionError(e) };
@@ -71,7 +71,7 @@ export async function editApprovalAction(
     const parsed = approvalEditSchema.parse(input);
     const ctx = ctxFor(session.userId);
     const id = await db.withUser(session.userId, (q) => editApproval(q, parsed, ctx));
-    await advanceApprovalNow(db, id, ctx);
+    await advanceApprovalSafely(db, id, ctx);
     return done({ approvalId: id });
   } catch (e) {
     return { ok: false, error: toActionError(e) };
@@ -119,7 +119,7 @@ export async function reopenApprovalAction(
     const { running } = await db.withUser(session.userId, (q) =>
       reopenApproval(q, approvalId, ctx, restore),
     );
-    if (running) await advanceApprovalNow(db, approvalId, ctx);
+    if (running) await advanceApprovalSafely(db, approvalId, ctx);
     return done({ approvalId });
   } catch (e) {
     return { ok: false, error: toActionError(e) };
@@ -142,7 +142,7 @@ export async function resumeApprovalAction(input: unknown): Promise<ActionResult
   try {
     const { approvalId } = approvalIdSchema.parse(input);
     await db.withUser(session.userId, (q) => resumeApprovalEmails(q, approvalId));
-    const data = await advanceApprovalNow(db, approvalId, ctxFor(session.userId));
+    const data = await advanceApprovalSafely(db, approvalId, ctxFor(session.userId));
     return done(data);
   } catch (e) {
     return { ok: false, error: toActionError(e) };

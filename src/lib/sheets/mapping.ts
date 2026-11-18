@@ -101,32 +101,60 @@ export interface ParsedRow {
   phone_key: string | null;
 }
 
-const cell = (row: readonly unknown[], i: number | undefined): string =>
+const rawCell = (row: readonly unknown[], i: number | undefined): string =>
   i === undefined ? "" : String(row[i] ?? "").trim();
 
-/** "3 years", "36", "2 yrs 4 mos", "2019" (a start year) → months. Null when it cannot be read. */
+/** A one-line cell: a line break or control character inside a name or phone becomes a space. */
+const cell = (row: readonly unknown[], i: number | undefined): string =>
+  rawCell(row, i)
+    .replace(/\p{Cc}+/gu, " ")
+    .trim();
+
+/** Longest business age a sheet cell may claim, in months (100 years); anything above is a pasted phone number or typo. */
+const MAX_MONTHS_IN_BUSINESS = 1200;
+/** Largest monthly revenue a sheet cell may claim, in cents ($1 billion); keeps a typo out of the bigint column. */
+const MAX_MONTHLY_REVENUE_CENTS = 100_000_000_000;
+
+const saneRevenue = (cents: number | null): number | null =>
+  cents !== null && cents <= MAX_MONTHLY_REVENUE_CENTS ? cents : null;
+
+export type TibUnit = "years" | "months";
+
+/** Whether the time-in-business column's header names its unit ("Years in business", "Months in business"). */
+export function tibUnitFromHeader(header: readonly string[], map: Mapping): TibUnit | undefined {
+  const col = map.time_in_business;
+  const h = col === undefined ? "" : String(header[col] ?? "").toLowerCase();
+  if (/\bmonths?\b|\bmos?\b/.test(h)) return "months";
+  if (/\byears?\b|\byrs?\b/.test(h)) return "years";
+  return undefined;
+}
+
+/**
+ * "3 years", "36", "2 yrs 4 mos", "2019" (a start year) → months. Null when it cannot be read or is not plausible.
+ * A bare number takes the header's unit. With no unit named the long-standing rule stays: up to 40 reads as years,
+ * anything larger as months (so "24" is 24 years and "60" is 60 months), because a header that says nothing is a guess
+ * either way and changing the guess would rewrite the age on rows already staged.
+ */
 export function parseMonthsInBusiness(
   raw: string,
   nowYear = new Date().getUTCFullYear(),
+  unit?: TibUnit,
 ): number | null {
   const s = raw.trim().toLowerCase();
   if (!s) return null;
   const y = /(\d+(?:\.\d+)?)\s*(y|yr|yrs|year|years)\b/.exec(s);
   const m = /(\d+)\s*(m|mo|mos|month|months)\b/.exec(s);
-  if (y || m) return Math.round((y ? Number(y[1]) * 12 : 0) + (m ? Number(m[1]) : 0));
-  if (/^(19|20)\d\d$/.test(s)) return Math.max(0, (nowYear - Number(s)) * 12);
-  if (/^\d+$/.test(s))
-    return Number(s) > 60
-      ? Number(s)
-      : Number(s) * 12 > 600
-        ? Number(s)
-        : Number(s) <= 40
-          ? Number(s) * 12
-          : Number(s);
-  return null;
+  let months: number | null = null;
+  if (y || m) months = Math.round((y ? Number(y[1]) * 12 : 0) + (m ? Number(m[1]) : 0));
+  else if (/^(19|20)\d\d$/.test(s)) months = Math.max(0, (nowYear - Number(s)) * 12);
+  else if (/^\d+$/.test(s)) {
+    const n = Number(s);
+    months = unit === "months" ? n : unit === "years" || n <= 40 ? n * 12 : n;
+  }
+  return months !== null && months <= MAX_MONTHS_IN_BUSINESS ? months : null;
 }
 
-export function parseRow(row: readonly unknown[], map: Mapping): ParsedRow {
+export function parseRow(row: readonly unknown[], map: Mapping, tibUnit?: TibUnit): ParsedRow {
   const first = cell(row, map.first_name);
   const last = cell(row, map.last_name);
   const contact = cell(row, map.contact_name) || [first, last].filter(Boolean).join(" ");
@@ -146,10 +174,14 @@ export function parseRow(row: readonly unknown[], map: Mapping): ParsedRow {
     email2: cell(row, map.email2).toLowerCase(),
     industry: cell(row, map.industry),
     state: normalizeState(cell(row, map.state)) ?? cell(row, map.state),
-    monthly_revenue_cents: rev ? parseMoney(rev) : null,
-    time_in_business_months: parseMonthsInBusiness(cell(row, map.time_in_business)),
-    wanted: cell(row, map.wanted),
-    notes: cell(row, map.notes),
+    monthly_revenue_cents: rev ? saneRevenue(parseMoney(rev)) : null,
+    time_in_business_months: parseMonthsInBusiness(
+      cell(row, map.time_in_business),
+      undefined,
+      tibUnit,
+    ),
+    wanted: rawCell(row, map.wanted),
+    notes: rawCell(row, map.notes),
     phone_key: key(phone) ?? key(phone2),
   };
 }

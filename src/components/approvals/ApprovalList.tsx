@@ -15,6 +15,7 @@ import {
   canResume,
   emailsStatus,
   holdWords,
+  offerMoney,
   whenWords,
   type CadenceStep,
 } from "@/lib/approvals/words";
@@ -331,7 +332,7 @@ function ApprovalItem({
           <div className="min-w-0">
             <p className="eyebrow">Approved</p>
             <p className="mt-1 text-[30px] leading-none font-semibold tracking-[-0.04em] tabular-nums">
-              {formatMoney(row.amount_cents)}
+              {offerMoney(row.amount_cents)}
             </p>
             <p className="mt-1.5 truncate text-xs text-muted" title={row.note || undefined}>
               {[row.funder, `approved ${timeAgo(row.created_at, new Date(nowMs))}`]

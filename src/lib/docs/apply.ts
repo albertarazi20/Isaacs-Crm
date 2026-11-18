@@ -1,4 +1,4 @@
-import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
+import { PDFDocument, type PDFFont, StandardFonts, rgb } from "pdf-lib";
 import { z } from "zod";
 import { UserError } from "../data/mutations";
 import type { Db, DbAccess } from "../db";
@@ -134,6 +134,26 @@ function monthsSince(start: string, today: ISODate): number | null {
   return n >= 0 && n < 1200 ? n : null;
 }
 
+/**
+ * Text the PDF's built-in font can draw. Helvetica covers Latin-1 plus a few extras; anything else ("Ł", "ễ", an
+ * emoji, Cyrillic) would make pdf-lib throw and stop the merchant signing. Accents are folded to their base letter
+ * where they can be ("Nguyễn" -> "Nguyen"), the rest becomes "?". The exact text typed is kept in applications.fields.
+ */
+export function pdfText(text: string, font: PDFFont): string {
+  const ok = new Set(font.getCharacterSet());
+  let out = "";
+  for (const ch of text.normalize("NFC").replace(/\s+/g, " ")) {
+    const cp = ch.codePointAt(0)!;
+    if (ok.has(cp)) {
+      out += ch;
+      continue;
+    }
+    const base = ch.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+    out += base !== ch && [...base].every((b) => ok.has(b.codePointAt(0)!)) ? base : "?";
+  }
+  return out;
+}
+
 /** The application as a one- or two-page PDF: what was typed, then the signature block. Pure. */
 export async function applicationPdf(a: {
   shopName: string;
@@ -151,34 +171,53 @@ export async function applicationPdf(a: {
   const width = 612 - 2 * left;
   const ink = rgb(0.05, 0.05, 0.08);
   const grey = rgb(0.4, 0.4, 0.45);
-  const line = (text: string, size = 10.5, f = font, color = ink) => {
-    // simple word wrap on the page width
-    const words = text.split(/\s+/);
+  // the text cut into lines that fit maxWidth; a single word wider than a line is broken where it hits the edge
+  const wrap = (raw: string, size: number, f: PDFFont, maxWidth: number): string[] => {
+    const lines: string[] = [];
     let cur = "";
-    const flush = () => {
-      if (y < 60) {
-        page = doc.addPage([612, 792]);
-        y = 740;
+    for (const w of pdfText(raw, f).split(" ")) {
+      if (!w) continue;
+      let word = w;
+      if (cur && f.widthOfTextAtSize(`${cur} ${word}`, size) <= maxWidth) {
+        cur = `${cur} ${word}`;
+        continue;
       }
-      page.drawText(cur, { x: left, y, size, font: f, color });
-      y -= size * 1.45;
+      if (cur) lines.push(cur);
       cur = "";
-    };
-    for (const w of words) {
-      const next = cur ? `${cur} ${w}` : w;
-      if (f.widthOfTextAtSize(next, size) > width) flush();
-      cur = cur ? `${cur} ${w}` : w;
+      while (f.widthOfTextAtSize(word, size) > maxWidth && word.length > 1) {
+        let n = word.length - 1;
+        while (n > 1 && f.widthOfTextAtSize(word.slice(0, n), size) > maxWidth) n--;
+        lines.push(word.slice(0, n));
+        word = word.slice(n);
+      }
+      cur = word;
     }
-    if (cur || text === "") flush();
+    if (cur) lines.push(cur);
+    return lines;
   };
-  const row = (label: string, value: string) => {
+  const room = () => {
     if (y < 60) {
       page = doc.addPage([612, 792]);
       y = 740;
     }
-    page.drawText(label, { x: left, y, size: 9, font, color: grey });
-    page.drawText(value || "—", { x: left + 190, y, size: 10.5, font, color: ink });
-    y -= 16;
+  };
+  const line = (text: string, size = 10.5, f = font, color = ink) => {
+    const lines = wrap(text, size, f, width);
+    for (const l of lines.length ? lines : [""]) {
+      room();
+      page.drawText(l, { x: left, y, size, font: f, color });
+      y -= size * 1.45;
+    }
+  };
+  const row = (label: string, value: string) => {
+    const lines = wrap(value || "—", 10.5, font, width - 190);
+    room();
+    page.drawText(pdfText(label, font), { x: left, y, size: 9, font, color: grey });
+    for (const l of lines) {
+      room();
+      page.drawText(l, { x: left + 190, y, size: 10.5, font, color: ink });
+      y -= 16;
+    }
   };
   const f = a.fields;
   line(a.shopName || "Selective Capital", 11, bold, grey);
@@ -269,11 +308,18 @@ export async function signApplication(
         `select c.id, c.user_id,
                 (select shop_name from shop_settings) as shop_name,
                 exists (select 1 from client_asks k where k.client_id = c.id) as has_ask
-           from clients c where c.application_token = $1`,
+           from clients c where c.application_token = $1
+            for update of c`,
         [a.token],
       )
     ).rows[0];
     if (!c) throw new UserError("This link isn't valid any more");
+    // the row is locked: a second submit that raced past the check above waits at the select, then sees the first
+    // signature. This is a separate statement on purpose: it takes a fresh snapshot, which the locked select's does not
+    const earlier = await q.query("select 1 from applications where client_id = $1 limit 1", [
+      c.id,
+    ]);
+    if (earlier.rows.length > 0) throw new UserError("This application was already signed");
     const bytes = await applicationPdf({
       shopName: c.shop_name,
       fields: f,

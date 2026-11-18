@@ -1,9 +1,11 @@
+import { noteUnknownFields, unknownFieldsOf } from "../buckets/unknownFields";
 import { applyLink } from "../docs/applyLink";
 import { missingDocsFor } from "../docs/missing";
 import type { Db, DbAccess } from "../db";
 import { toActionError } from "../data/errors";
 import { createClient, stampClientTimezone } from "../data/mutations";
 import { newClientSchema } from "../data/schemas";
+import { findSensitive } from "../data/sensitive";
 import { findDuplicates, userContext, type DuplicateMatch } from "../data/queries";
 import { parseMoney } from "../money";
 import { OwnedElsewhereError, refuseAnotherReps } from "../leads/owner";
@@ -250,7 +252,9 @@ export async function fileOneRow(
   // "120k" is an amount; "$60k for a second truck" is what they are looking for, in their words.
   const sheetAmount = parseMoney(row.wanted);
   const wantedCents = extras.wantedAmountCents ?? sheetAmount;
-  const lookingFor = extras.lookingFor || (sheetAmount === null ? row.wanted : "");
+  // a vendor's free text can carry what the shop never stores (an SSN, a card number): it is left out, not filed
+  const clean = (v: string) => (findSensitive(v) ? "" : v);
+  const lookingFor = extras.lookingFor || (sheetAmount === null ? clean(row.wanted) : "");
   const card = await createClient(
     q,
     {
@@ -278,7 +282,7 @@ export async function fileOneRow(
     [card.id, row.phone2, row.email2, lookingFor, row.time_in_business_months],
   );
   await stampClientTimezone(q, card.id);
-  if (row.notes)
+  if (clean(row.notes))
     await q.query(
       "insert into activities (user_id, client_id, kind, body) select user_id, id, 'note', $2 from clients where id = $1",
       [card.id, `From the sheet: ${row.notes}`],
@@ -316,8 +320,9 @@ export async function sendWelcome(
     signature: string;
     token: string;
     bucket_key: string | null;
+    user_id: string;
   }>(
-    `select t.id as template_id, t.subject, t.body, c.contact_name, c.business_name, u.name as sender_name, u.application_link, c.application_token, u.signature, c.upload_token as token,
+    `select t.id as template_id, t.subject, t.body, c.user_id, c.contact_name, c.business_name, u.name as sender_name, u.application_link, c.application_token, u.signature, c.upload_token as token,
             (select b.key from buckets b where b.id = s.bucket_id) as bucket_key
        from bucket_steps s join templates t on t.id = s.template_id
        join clients c on c.id = $1 join app_users u on u.id = c.user_id
@@ -338,6 +343,17 @@ export async function sendWelcome(
   });
   const body = resolveMergeFields(r.body, values);
   const subject = resolveMergeFields(r.subject, values);
+  // a field that does not exist ({frist_name}) is never sent as typed: no welcome, and the timeline says why (once)
+  const unknown = unknownFieldsOf(body, subject);
+  if (unknown.length > 0) {
+    await noteUnknownFields(q, {
+      userId: r.user_id,
+      clientId,
+      what: "Welcome email",
+      names: unknown,
+    });
+    return false;
+  }
   if (body.missing.length || subject.missing.length) return false;
   const sent = await enqueueEmail(
     q,

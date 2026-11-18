@@ -12,9 +12,10 @@ import {
   removeFromBucketAction,
 } from "@/app/buckets-actions";
 import { handOffAction, undoHandOffAction } from "@/app/followup-actions";
+import type { ActionResult } from "@/lib/data/types";
 import { useApp } from "@/components/app-context";
 import { FormDialog, copyText, useRun } from "@/components/client/parts";
-import { useToast } from "@/components/overlay";
+import { useCall, useToast } from "@/components/overlay";
 import { Glyph } from "@/components/shell/icons";
 import { NewLeadButton } from "@/components/shell/NewLead";
 import { Avatar, Button, EmptyState, IconButton, Input, Kbd, Select, cn } from "@/components/ui";
@@ -90,6 +91,7 @@ export function BucketMembers({
   const { today, nowMs, senderName } = useApp();
   const router = useRouter();
   const run = useRun();
+  const call = useCall();
   const toast = useToast();
   const ready = isReadyBucket(bucket);
   const [checked, setChecked] = useState<Set<string>>(new Set());
@@ -196,6 +198,28 @@ export function BucketMembers({
     }
   }
 
+  // Move or remove: a merchant who cannot go (handed off in another tab, gone) is named, and the rest still went
+  async function batch(
+    label: string,
+    p: Promise<ActionResult<{ skipped: { clientId: string; reason: string }[] }>>,
+  ) {
+    setBusy(true);
+    const r = await call(p);
+    setBusy(false);
+    if (!r) return;
+    if (r.skipped.length > 0) {
+      const names = r.skipped.map(
+        (s) => members.find((m) => m.client_id === s.clientId)?.business_name ?? "A merchant",
+      );
+      toast({
+        message: `${label}, except ${names.join(", ")}: ${r.skipped[0]!.reason}`,
+        tone: "info",
+      });
+    } else toast({ message: label, tone: "success" });
+    setChecked(new Set());
+    router.refresh();
+  }
+
   // Hand off: the merchant is marked brought in and the chase stops. The toast carries the way back.
   // Undo puts each merchant back in the bucket they were taken out of, at the same step; one with no bucket to go
   // back to gets a follow-up for tomorrow instead. The toast says which happened.
@@ -287,8 +311,8 @@ export function BucketMembers({
     onHandOff: (m) => void handOff([m]),
     onPause: (m, paused, until) => void pause([m], paused, until),
     onMove: (m, bucketId) =>
-      void act("Moved", moveToBucketAction({ clientIds: [m.client_id], bucketId })),
-    onRemove: (m) => void act("Removed", removeFromBucketAction({ clientIds: [m.client_id] })),
+      void batch("Moved", moveToBucketAction({ clientIds: [m.client_id], bucketId })),
+    onRemove: (m) => void batch("Removed", removeFromBucketAction({ clientIds: [m.client_id] })),
   };
 
   // The blast confirm shows the template merged for the first checked merchant (P2-14), so what goes out is
@@ -692,7 +716,7 @@ export function BucketMembers({
                 size="sm"
                 disabled={busy || !moveTo}
                 onClick={() =>
-                  void act("Moved", moveToBucketAction({ clientIds: ids, bucketId: moveTo }))
+                  void batch("Moved", moveToBucketAction({ clientIds: ids, bucketId: moveTo }))
                 }
               >
                 Move
@@ -736,7 +760,7 @@ export function BucketMembers({
                 variant="ghost"
                 disabled={busy}
                 onClick={() =>
-                  void act("Removed from the bucket", removeFromBucketAction({ clientIds: ids }))
+                  void batch("Removed from the bucket", removeFromBucketAction({ clientIds: ids }))
                 }
               >
                 Remove

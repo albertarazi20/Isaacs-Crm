@@ -8,7 +8,7 @@ import type Anthropic from "@anthropic-ai/sdk";
 import { z } from "zod";
 import { getClientDetail } from "../data/queries";
 import type { Db } from "../db";
-import { addDays, type ISODate } from "../mca/dates";
+import { addDays, isRealDate, type ISODate } from "../mca/dates";
 import { stageDef } from "../mca/stages";
 import { missingDocsPhrase, stipLabel } from "../mca/stips";
 import { contactAllowed, type ContactStatus } from "../mca/contact";
@@ -142,7 +142,10 @@ export function toolLabel(name: string): string {
 // ---------- actions ----------
 
 const uuid = z.string().uuid("Not a merchant id");
-const day = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "A date is YYYY-MM-DD");
+const day = z
+  .string()
+  .regex(/^\d{4}-\d{2}-\d{2}$/, "A date is YYYY-MM-DD")
+  .refine(isRealDate, "That isn't a real calendar date");
 const label = z.string().trim().min(1).max(80);
 const OPEN_PREFIXES = [
   "/",

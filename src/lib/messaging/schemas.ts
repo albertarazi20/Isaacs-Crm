@@ -89,7 +89,11 @@ const webAddress = line(500).refine((v) => {
 }, "Enter a full web address that starts with https://");
 
 export const messageSettingsSchema = z.object({
-  signature: text(SIGNATURE_MAX),
+  // Nothing fills merge fields into a signature, so a {token} there would go out as typed on every email.
+  signature: text(SIGNATURE_MAX).refine(
+    (v) => leftoverFields(v).length === 0,
+    "The signature can't have {fields} in it, because they are not filled in. Type the real name.",
+  ),
   applicationLink: webAddress,
 });
 export type MessageSettingsInput = z.output<typeof messageSettingsSchema>;

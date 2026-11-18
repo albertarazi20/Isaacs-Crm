@@ -46,7 +46,9 @@ Send a phone or an email, and a business or contact name. Anything else (a stage
 - **Marked on the card:** every new merchant gets a timeline line `Added by lead connection "<name>"`, so after
   you turn a leaked connection off you can find what it added.
 - **Keep it on a server or inside Zapier — never in a web page** (anyone could view-source it). Turn it off from the
-  Lead intake page at any time; it stops working immediately. Removing the owner from `ALLOWED_EMAILS` does too.
+  Lead intake page at any time; it stops working immediately. So does disabling the owner's account in Settings > Team
+  (or deleting it). `ALLOWED_EMAILS` plays no part: accounts are the allowlist, and the lead route only needs the token
+  to belong to an active account.
 - SSNs and card numbers in `notes` are refused, like everywhere else in the app.
 - **Instant alert:** when Resend is configured, a brand-new lead emails the owner right away ("New lead: Mike's
   Pizza — call now"). At most 20 alerts a day, one per lead, off when the reminder switch in Settings is off.

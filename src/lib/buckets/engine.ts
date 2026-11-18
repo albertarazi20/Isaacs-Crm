@@ -4,6 +4,16 @@ import type { Db, DbAccess } from "../db";
 import { addDays, todayIn, type ISODate } from "../mca/dates";
 import { effectiveSignature, mergeValues, resolveMergeFields } from "../messaging/merge";
 import { enqueueEmail } from "../send/enqueue";
+import { describeUnknownFields, unknownFieldsNote, unknownFieldsOf } from "./unknownFields";
+
+/** How many days a step whose template cannot send is held before the sequence moves on without it. */
+const MAX_HOLD_DAYS = 3;
+/**
+ * The hold is counted in elapsed time from `enrollments.hold_since`. A step is retried once a day at the first cron
+ * tick of the merchant's day, so the run that ends the hold lands up to an hour or so short of exactly 3 x 24 h; this
+ * slack keeps the limit at three daily tries and not four.
+ */
+const HOLD_LIMIT_MS = MAX_HOLD_DAYS * 86_400_000 - 2 * 3_600_000;
 
 /**
  * The bucket sequence runner. Once a day (or whenever the cron fires) it finds every live enrolment whose next
@@ -145,6 +155,7 @@ export async function runBucketSteps(args: {
          join buckets b on b.id = e.bucket_id
          join app_users u on u.id = e.user_id
         where e.stopped_at is null and not e.paused and e.next_due_on is not null
+          and u.active
           and e.next_due_on <= (($1::timestamptz at time zone app.client_timezone(c))::date)
           and c.contact_status <> 'dnc'
           and c.brought_in_at is null
@@ -159,8 +170,8 @@ export async function runBucketSteps(args: {
   for (const row of due) {
     await args.db.withSystem(async (q) => {
       // another run may hold this enrolment, or may have taken this step already: lock it and re-read it first
-      const mine = await q.query(
-        `select 1 from enrollments
+      const mine = await q.query<{ hold_since: Date | null }>(
+        `select hold_since from enrollments
           where id = $1 and stopped_at is null and not paused and next_step = $2 and next_due_on = $3::date
           for update skip locked`,
         [row.enrollment_id, row.next_step, row.next_due_on],
@@ -169,6 +180,7 @@ export async function runBucketSteps(args: {
         summary.taken += 1;
         return;
       }
+      const holdSince = mine.rows[0]?.hold_since ?? null;
       const steps = await stepsFor(q, row.bucket_id);
       const today: ISODate = todayIn(row.timezone, now);
       if (steps.length === 0) {
@@ -185,13 +197,13 @@ export async function runBucketSteps(args: {
         summary.finished += 1;
         if (row.bucket_key === "cold") {
           await q.query(
-            "update enrollments set next_due_on = null, next_step = next_step + $2, steps_sent = steps_sent + $2 where id = $1",
+            "update enrollments set next_due_on = null, next_step = next_step + $2, steps_sent = steps_sent + $2, hold_since = null where id = $1",
             [row.enrollment_id, took],
           );
           return;
         }
         await q.query(
-          "update enrollments set stopped_at = now(), stop_reason = 'sequence_done', steps_sent = steps_sent + $2 where id = $1",
+          "update enrollments set stopped_at = now(), stop_reason = 'sequence_done', steps_sent = steps_sent + $2, hold_since = null where id = $1",
           [row.enrollment_id, took],
         );
         const cold = (
@@ -213,9 +225,11 @@ export async function runBucketSteps(args: {
         return;
       }
       const after = sequences ? steps.find((s) => s.step_no === step.step_no + 1) : step;
-      const scheduleNext = async () => {
+      // `counted` is true only when an email really went on the outbox: steps_sent feeds the "N sent" line, the
+      // export and the "no reply to N emails" call note, so a skipped step must not add to it
+      const scheduleNext = async (counted: boolean) => {
         if (!after) {
-          await finish(1);
+          await finish(counted ? 1 : 0);
           return;
         }
         // with sequences off, "tomorrow" again; with them on, entered_at + the next step's offset (never in the past)
@@ -223,8 +237,8 @@ export async function runBucketSteps(args: {
           ? maxDate(addDays(today, 1), addDays(await enteredDay(row, q), after.day_offset))
           : addDays(today, 1);
         await q.query(
-          "update enrollments set next_step = $2, next_due_on = $3, steps_sent = steps_sent + 1 where id = $1",
-          [row.enrollment_id, sequences ? after.step_no : 1, nextDue],
+          "update enrollments set next_step = $2, next_due_on = $3, steps_sent = steps_sent + $4, hold_since = null where id = $1",
+          [row.enrollment_id, sequences ? after.step_no : 1, nextDue, counted ? 1 : 0],
         );
       };
 
@@ -247,12 +261,53 @@ export async function runBucketSteps(args: {
           ],
         );
         summary.called += 1;
-        await scheduleNext();
+        await scheduleNext(false);
         return;
       }
-      if (!step.template_id || !step.may_send || !row.email) {
+      // A step that cannot go out today (its template is archived, not approved or paused after a bounce spike; or it
+      // names a merge field that does not exist) is held and tried again tomorrow, so it goes out when it is fixed. The
+      // hold has a limit, counted from the moment it began (`hold_since`): a template that stays broken would otherwise
+      // freeze this merchant on the step, and every later step, for good. It never touches the enrolment's pause flag,
+      // which belongs to the rep's Pause and the merchant's "not now" and is lifted only by them.
+      const holdStep = async (note: string) => {
         summary.skipped += 1;
-        await scheduleNext();
+        if (holdSince === null) {
+          // the hold begins today: stamp it and say so once (a second, later break gets its own note and its own clock)
+          await q.query("update enrollments set hold_since = $2 where id = $1", [
+            row.enrollment_id,
+            now.toISOString(),
+          ]);
+          await q.query(
+            "insert into activities (user_id, client_id, kind, body) values ($1, $2, 'system', $3)",
+            [row.user_id, row.client_id, note],
+          );
+        }
+        if (holdSince !== null && now.getTime() - holdSince.getTime() >= HOLD_LIMIT_MS) {
+          await q.query(
+            "insert into activities (user_id, client_id, kind, body) values ($1, $2, 'system', $3)",
+            [
+              row.user_id,
+              row.client_id,
+              `Bucket email skipped: the template for step ${step.step_no} could not send for ${MAX_HOLD_DAYS} days (${row.bucket_name})`,
+            ],
+          );
+          await scheduleNext(false);
+          return;
+        }
+        await q.query("update enrollments set next_due_on = $2 where id = $1", [
+          row.enrollment_id,
+          addDays(today, 1),
+        ]);
+      };
+      if (step.template_id && !step.may_send) {
+        await holdStep(
+          `Bucket email on hold: the template for step ${step.step_no} cannot send right now (${row.bucket_name})`,
+        );
+        return;
+      }
+      if (!step.template_id || !row.email) {
+        summary.skipped += 1;
+        await scheduleNext(false);
         return;
       }
       const wording = pickWording(step, row.client_id);
@@ -267,6 +322,18 @@ export async function runBucketSteps(args: {
       });
       const body = resolveMergeFields(wording.body, values);
       const subject = resolveMergeFields(wording.subject, values);
+      // a template with a field that does not exist ({frist_name}) never goes out with the literal text in it: the
+      // step is held (not lost, and the rep's pause is left alone) and the merchant's timeline says why, once per hold
+      const unknown = unknownFieldsOf(body, subject);
+      if (unknown.length > 0) {
+        await holdStep(
+          unknownFieldsNote({
+            what: `Bucket email on hold: step ${step.step_no} (${row.bucket_name}) was`,
+            names: unknown,
+          }),
+        );
+        return;
+      }
       // a template with a blank field never goes out half-filled: skip and flag it on the enrolment
       if (body.missing.length > 0 || subject.missing.length > 0) {
         summary.skipped += 1;
@@ -305,7 +372,7 @@ export async function runBucketSteps(args: {
       } else {
         summary.skipped += 1;
       }
-      await scheduleNext();
+      await scheduleNext(r.queued);
     });
   }
   return summary;
@@ -374,6 +441,11 @@ export async function queueBlast(
     });
     const body = resolveMergeFields(tpl.body, values);
     const subject = resolveMergeFields(tpl.subject, values);
+    const unknown = unknownFieldsOf(body, subject);
+    if (unknown.length > 0) {
+      out.skipped.push({ clientId, reason: `unknown field ${describeUnknownFields(unknown)}` });
+      continue;
+    }
     if (body.missing.length || subject.missing.length) {
       out.skipped.push({
         clientId,

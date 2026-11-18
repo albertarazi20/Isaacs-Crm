@@ -228,7 +228,7 @@ function EmailLinkDialog({
           </p>
           <p className="mt-1 text-sm whitespace-pre-wrap">{signature}</p>
         </div>
-        <Field label="Follow up again">
+        <Field label="Follow up again" group>
           <TimerPicker value={next} onChange={setNext} today={today} />
         </Field>
         {reconnect ? (

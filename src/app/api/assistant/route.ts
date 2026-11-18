@@ -1,8 +1,8 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { z } from "zod";
-import { requireSession } from "@/lib/auth/server";
+import { getSession } from "@/lib/auth/server";
 import { anthropicCaller, runAssistantTurn } from "@/lib/assistant/run";
-import { apiErrorWords } from "@/lib/assistant/errors";
+import { apiErrorWords, sameOrigin } from "@/lib/assistant/errors";
 import { toActionError } from "@/lib/data/errors";
 import { env } from "@/lib/env";
 
@@ -23,10 +23,12 @@ const body = z.object({
  * {t:"actions"}, {t:"notice"}, then {t:"done", more} or {t:"error"}. Same-origin only.
  */
 export async function POST(req: Request) {
-  const origin = req.headers.get("origin");
-  if (origin && new URL(origin).host !== req.headers.get("host"))
+  if (!sameOrigin(req.headers.get("origin"), req.headers.get("host")))
     return Response.json({ error: "Not allowed" }, { status: 403 });
-  const session = await requireSession();
+  // a request is not a page: an ended session is a plain 401 the browser can read, not a redirect to the login page
+  const session = await getSession();
+  if (!session)
+    return Response.json({ error: "Your session ended. Sign in again." }, { status: 401 });
   const parsed = body.safeParse(await req.json().catch(() => null));
   if (!parsed.success)
     return Response.json({ error: "That request doesn't look right" }, { status: 400 });

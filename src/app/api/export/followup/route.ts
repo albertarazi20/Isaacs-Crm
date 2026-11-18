@@ -1,5 +1,5 @@
 import { CAN, getSession } from "@/lib/auth/server";
-import { listAllMembers, listBucketMembers } from "@/lib/buckets/queries";
+import { listAllMembersCapped, listBucketMembers } from "@/lib/buckets/queries";
 import { db } from "@/lib/db";
 import { fileSlug, followupCsv } from "@/lib/export/followup";
 
@@ -11,7 +11,7 @@ const UUID = /^[0-9a-f-]{36}$/;
 /**
  * One bucket (?bucket=<id>) or every bucket (?bucket=all) as a spreadsheet for a sheet and a text blast. Runs as the
  * signed-in manager, so row-level security applies; do-not-contact merchants are left out (their number is in the
- * x-left-out header).
+ * x-left-out header). An all-buckets file that hit the cap says so in x-truncated.
  */
 export async function GET(req: Request) {
   const session = await getSession();
@@ -22,12 +22,19 @@ export async function GET(req: Request) {
   if (which !== "all" && !UUID.test(which)) return new Response("Unknown bucket", { status: 400 });
 
   const found = await db.withUser(session.userId, async (q) => {
-    if (which === "all") return { name: "all-buckets", members: await listAllMembers(q) };
+    if (which === "all") {
+      const all = await listAllMembersCapped(q);
+      return { name: "all-buckets", members: all.members, truncated: all.truncated };
+    }
     const named = await q.query<{ name: string }>("select name from buckets where id = $1", [
       which,
     ]);
     if (!named.rows[0]) return null;
-    return { name: fileSlug(named.rows[0].name), members: await listBucketMembers(q, which) };
+    return {
+      name: fileSlug(named.rows[0].name),
+      members: await listBucketMembers(q, which),
+      truncated: false,
+    };
   });
   if (!found) return new Response("Unknown bucket", { status: 404 });
 
@@ -39,6 +46,8 @@ export async function GET(req: Request) {
       "content-disposition": `attachment; filename="selective-${found.name}-${day}.csv"`,
       "cache-control": "no-store",
       "x-left-out": String(left),
+      // the file stopped at the most the all-buckets list holds: more people exist than it has
+      "x-truncated": found.truncated ? "1" : "0",
     },
   });
 }

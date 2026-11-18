@@ -1,5 +1,6 @@
 import { diffDays, type ISODate } from "../mca/dates";
 import { formatDate } from "../format";
+import { formatMoney } from "../money";
 import type { ApprovalRow } from "./queries";
 
 /** What the approval screens say, as pure functions (the page, the merchant card and the tests share them). */
@@ -101,6 +102,12 @@ export function emailsStatus(
         label: "Offer accepted",
         detail: "Emails stopped. Press Pitched once it's moving.",
       };
+    case "next_run":
+      return {
+        tone: "info",
+        label: "Saved",
+        detail: "The emails start within a few minutes.",
+      };
     case "expired":
       return { tone: "warn", label: "Hold date passed", detail: "Emails stopped." };
     case "opted_out":
@@ -149,6 +156,12 @@ export function emailsStatus(
     default:
       break;
   }
+  if (note.startsWith("bad_field:"))
+    return {
+      tone: "warn",
+      label: "Held",
+      detail: `The design has a broken field (${note.slice(10)}). A manager fixes it in Settings.`,
+    };
   if (note.startsWith("missing:")) {
     const fields = note.slice(8).split(",").filter(Boolean);
     return {
@@ -240,7 +253,7 @@ export function whenWords(iso: string, timezone: string, nowMs: number): string 
 }
 
 /** Stops no Resume can undo: the merchant or the law ended it. A bounce or a missing address can be fixed. */
-const PERMANENT = new Set(["opted_out", "dnc", "suppressed", "trashed"]);
+const PERMANENT = new Set(["opted_out", "dnc", "suppressed", "trashed", "offer_accepted"]);
 
 /** Can the rep restart these emails? Not when the merchant unsubscribed or is do-not-contact. */
 export function canResume(
@@ -248,6 +261,28 @@ export function canResume(
 ): boolean {
   if (row.status !== "open" || row.emails === "finished" || row.emails === "running") return false;
   return !(PERMANENT.has(row.emails_note) || (row.halt !== null && PERMANENT.has(row.halt)));
+}
+
+/** The approved amount as the emails and the screens say it: whole dollars, and cents when it has them. */
+export const offerMoney = (cents: number | null | undefined) =>
+  formatMoney(cents, { cents: cents != null && cents % 100 !== 0 });
+
+/** What the setup box over the approvals list says is missing. The box shows only when something in it does. */
+export function setupNotices(i: {
+  unready: number;
+  emailsOn: boolean;
+  postalAddress: string;
+  myPhone: string | null | undefined;
+  cadence: readonly CadenceStep[];
+}) {
+  // only when a design actually asks the merchant to call the rep does a missing phone number hold anything
+  const needsPhone = !i.myPhone && i.cadence.some((s) => s.uses_phone);
+  const noAddress = i.postalAddress.trim() === "";
+  return {
+    needsPhone,
+    noAddress,
+    any: i.unready > 0 || !i.emailsOn || noAddress || needsPhone,
+  };
 }
 
 /** What an engine pass did, in a line for a toast ("The approval email goes out tomorrow at 9:00 AM."). */

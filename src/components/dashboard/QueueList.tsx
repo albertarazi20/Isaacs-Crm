@@ -12,6 +12,7 @@ import { PREP_LABEL } from "@/lib/brain/briefs";
 import type { PrepRow } from "@/lib/brain/queries";
 import { timeAgo } from "@/lib/format";
 import type { QueueItem, QueueKind } from "@/lib/followup/overview";
+import { effectiveKind } from "./queueFilter";
 
 const KIND: Record<QueueKind, { label: string; icon: GlyphName; chip: string; ink: string }> = {
   reply: {
@@ -67,7 +68,10 @@ export function QueueList({ items, preps = [] }: { items: QueueItem[]; preps?: P
   const counts = new Map<QueueKind, number>();
   for (const it of items) counts.set(it.kind, (counts.get(it.kind) ?? 0) + 1);
   const present = ORDER.filter((k) => counts.has(k));
-  const shown = kind === "all" ? items : items.filter((it) => it.kind === kind);
+  // the chosen reason can vanish after a refresh (the last reply was answered): fall back to everything rather than
+  // showing an empty list with the filter chips hidden
+  const selected = effectiveKind(kind, new Set(counts.keys()));
+  const shown = selected === "all" ? items : items.filter((it) => it.kind === selected);
   const now = new Date(nowMs);
   // what the assistant already prepared for a merchant on this list (the newest one, unread)
   const prepared = new Map<string, PrepRow>();
@@ -92,7 +96,7 @@ export function QueueList({ items, preps = [] }: { items: QueueItem[]; preps?: P
           className="flex gap-1.5 overflow-x-auto px-4 pb-3 sm:px-5"
         >
           {(["all", ...present] as const).map((k) => {
-            const active = kind === k;
+            const active = selected === k;
             const n = k === "all" ? items.length : (counts.get(k) ?? 0);
             return (
               <button

@@ -5,10 +5,9 @@ import { saveAiSettingsAction } from "@/app/settings-actions";
 import { useFormState, useRun } from "@/components/client/parts";
 import { Button, Field, Input, Select, Textarea } from "@/components/ui";
 import type { ShopSettingsRow } from "@/lib/settings/queries";
+import { AI_MODELS, DEFAULT_AI_MODEL } from "@/lib/settings/schemas";
 import { SettingsCard, StatusChip } from "./primitives";
 import { Toggle } from "./Toggle";
-
-const MODELS = ["claude-opus-5-5", "claude-sonnet-5-5", "claude-haiku-5-5"];
 
 export function AiSettingsForm({ s }: { s: ShopSettingsRow }) {
   const run = useRun();
@@ -16,7 +15,7 @@ export function AiSettingsForm({ s }: { s: ShopSettingsRow }) {
   const [busy, setBusy] = useState(false);
   const { v, bind, set } = useFormState(() => ({
     aiEnabled: s.ai_enabled,
-    aiModel: s.ai_model,
+    aiModel: (AI_MODELS as readonly string[]).includes(s.ai_model) ? s.ai_model : DEFAULT_AI_MODEL,
     aiDailyCapCents: String(s.ai_daily_cap_cents),
     brainOn: s.brain_on,
     brainDailyPerRep: String(s.brain_daily_per_rep),
@@ -70,7 +69,7 @@ export function AiSettingsForm({ s }: { s: ShopSettingsRow }) {
         <div className="grid gap-3 border-t border-border p-4 sm:grid-cols-2 sm:p-5">
           <Field label="Model">
             <Select {...bind("aiModel")}>
-              {MODELS.map((m) => (
+              {AI_MODELS.map((m) => (
                 <option key={m} value={m}>
                   {m}
                 </option>

@@ -9,7 +9,7 @@ import { UserError } from "../data/mutations";
 import type { ISODate } from "../mca/dates";
 import { freshness, type Freshness } from "./freshness";
 import { DOC_KINDS, type DocKind, labelFile, labelOf } from "./label";
-import { type BlobStore, safeName } from "./storage";
+import { type BlobStore, keyName, safeName } from "./storage";
 
 export const MAX_BYTES = 25 * 1024 * 1024;
 export const SESSION_HOURS = 2;
@@ -188,15 +188,14 @@ export async function mintUploadSession(
   return { token, expiresAt: rows[0]?.expires_at ?? "" };
 }
 
-async function loadSession(q: Db, token: string): Promise<UploadSession | null> {
-  const { rows } = await q.query<UploadSession>(
-    `select s.id, s.token, s.client_id, s.purpose, s.wanted, s.expires_at::text as expires_at, s.max_files, s.files_received,
+const SESSION_SQL = `select s.id, s.token, s.client_id, s.purpose, s.wanted, s.expires_at::text as expires_at, s.max_files, s.files_received,
             c.business_name, c.contact_name, u.name as rep_name, (select shop_name from shop_settings) as shop_name
        from upload_sessions s join clients c on c.id = s.client_id join app_users u on u.id = c.user_id
       where s.token = $1 and s.expires_at > now()
-        and not exists (select 1 from trashed_clients tc where tc.client_id = c.id)`,
-    [token],
-  );
+        and not exists (select 1 from trashed_clients tc where tc.client_id = c.id)`;
+
+async function loadSession(q: Db, token: string): Promise<UploadSession | null> {
+  const { rows } = await q.query<UploadSession>(SESSION_SQL, [token]);
   return rows[0] ?? null;
 }
 
@@ -350,7 +349,7 @@ async function writeDocument(
   const confidence = a.kind ? (a.kindByMerchant ? 0.7 : 1) : guess.confidence;
   const { rows } = await q.query<{ id: string }>("select gen_random_uuid() as id");
   const id = rows[0]!.id;
-  const key = `${a.clientId}/${id}-${safeName(a.filename)}`;
+  const key = `${a.clientId}/${id}-${keyName(a.filename)}`;
   await store.put(key, a.bytes, s.contentType);
   try {
     await q.query(
@@ -400,38 +399,60 @@ export async function acceptUpload(
   store: BlobStore,
   a: FileIn & { token: string; today: ISODate; ip?: string; kind?: DocKind },
 ): Promise<Accepted> {
-  return db.withSystem(async (q) => {
-    const s = await loadSession(q, a.token);
-    if (!s) throw new UserError("This upload link has expired. Ask your rep for a fresh one.");
-    if (s.files_received >= s.max_files)
+  // The file cap is enforced by a short reservation: one conditional update takes a slot, commits, and releases the row
+  // lock. The blob write then runs outside any lock, so parallel uploads on one link (several tabs, retries, slow
+  // storage) do not queue behind each other, and several at once still cannot pass max_files.
+  const s = await db.withSystem(async (q) => {
+    const live = await loadSession(q, a.token);
+    if (!live) throw new UserError("This upload link has expired. Ask your rep for a fresh one.");
+    const { rowCount } = await q.query(
+      `update upload_sessions set files_received = files_received + 1, last_used_at = now()
+        where id = $1 and files_received < max_files`,
+      [live.id],
+    );
+    if (!rowCount)
       throw new UserError(
         "This link has taken all the files it can. Ask your rep for a fresh one.",
       );
-    const { rows } = await q.query<{ user_id: string }>(
-      "select user_id from clients where id = $1",
-      [s.client_id],
-    );
-    const userId = rows[0]?.user_id;
-    if (!userId) throw new UserError("This upload link has expired.");
-    const out = await writeDocument(q, store, {
-      ...a,
-      // only an offer page's slots name what a file is; every other link reads it from the file
-      kind: s.purpose === "offer" ? a.kind : undefined,
-      kindByMerchant: true,
-      clientId: s.client_id,
-      userId,
-      source: "upload_link",
-      uploadedBy: null,
-      scan: "pending",
-    });
-    if (!out.duplicate) {
-      await q.query(
-        "update upload_sessions set files_received = files_received + 1, last_used_at = now() where id = $1",
-        [s.id],
-      );
-    }
-    return out;
+    return live;
   });
+  const release = () =>
+    db
+      .withSystem((q) =>
+        q.query(
+          "update upload_sessions set files_received = greatest(files_received - 1, 0) where id = $1",
+          [s.id],
+        ),
+      )
+      .catch((err) => console.error("upload slot not released:", err));
+  let out: Accepted;
+  try {
+    out = await db.withSystem(async (q) => {
+      const { rows } = await q.query<{ user_id: string }>(
+        "select user_id from clients where id = $1",
+        [s.client_id],
+      );
+      const userId = rows[0]?.user_id;
+      if (!userId) throw new UserError("This upload link has expired.");
+      return writeDocument(q, store, {
+        ...a,
+        // only an offer page's slots name what a file is; every other link reads it from the file
+        kind: s.purpose === "offer" ? a.kind : undefined,
+        kindByMerchant: true,
+        clientId: s.client_id,
+        userId,
+        source: "upload_link",
+        uploadedBy: null,
+        scan: "pending",
+      });
+    });
+  } catch (err) {
+    await release();
+    throw err;
+  }
+  // a file already on record is not a new file: give the slot back
+  if (out.duplicate) await release();
+  return out;
 }
 
 /**
@@ -642,7 +663,7 @@ export async function scanPending(
   store: BlobStore,
   scanner: Scanner = builtinScanner,
   max = 50,
-): Promise<{ scanned: number; clean: number; rejected: number }> {
+): Promise<{ scanned: number; clean: number; rejected: number; errors: number }> {
   return db.withSystem(async (q) => {
     const { rows } = await q.query<{
       id: string;
@@ -655,11 +676,21 @@ export async function scanPending(
     );
     let clean = 0;
     let rejected = 0;
+    let errors = 0;
     for (const d of rows) {
-      const stored = await store.get(d.storage_key);
-      const verdict = stored
-        ? await scanner(stored.bytes, d.content_type, d.filename)
-        : { clean: false, note: "bytes missing from storage" };
+      let verdict: { clean: boolean; note: string };
+      try {
+        const stored = await store.get(d.storage_key);
+        verdict = stored
+          ? await scanner(stored.bytes, d.content_type, d.filename)
+          : { clean: false, note: "bytes missing from storage" };
+      } catch (err) {
+        // a storage hiccup on one file must not undo the verdicts already written for the others: it stays pending
+        // and the next run tries it again
+        errors++;
+        console.error("document scan:", d.id, err instanceof Error ? err.message : err);
+        continue;
+      }
       await q.query(
         "update documents set scan_status = $2, scan_note = $3, scanned_at = now() where id = $1",
         [d.id, verdict.clean ? "clean" : "rejected", verdict.note],
@@ -682,6 +713,6 @@ export async function scanPending(
         );
       }
     }
-    return { scanned: rows.length, clean, rejected };
+    return { scanned: rows.length - errors, clean, rejected, errors };
   });
 }

@@ -47,27 +47,37 @@ export interface SplitOutcome {
 
 const digits = (s: string) => s.replace(/\D/g, "");
 
+/** The phone-shaped stretches of the text: digits joined only by one space, dot, dash or bracket, as a number is written. */
+const phoneTokens = (text: string): string[] =>
+  (text.match(/\+?(?:\(\d+\)|\d+)(?:[\s.-]?(?:\(\d+\)|\d+))*/g) ?? []).map(digits);
+
+const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+/** True when the address stands alone in the text: "ike@x.com" is not found inside "mike@x.com" or "ike@x.com.au". */
+const hasWholeEmail = (text: string, email: string): boolean =>
+  new RegExp(`(?<![a-z0-9._%+-])${escapeRe(email)}(?![a-z0-9_-]|\\.[a-z0-9])`, "i").test(text);
+
 /** Pure: what the model claims must be in the text. Returns the problems, in words. */
 export function verifySplit(text: string, r: SplitResult): string[] {
   const problems: string[] = [];
-  const textDigits = digits(text);
-  const textLower = text.toLowerCase();
+  const tokens = phoneTokens(text);
   for (const [label, value] of [
     ["phone", r.phone],
     ["second phone", r.phone2],
   ] as const) {
     const d = digits(value);
     if (d === "") continue;
-    if (d.length < 7 || !textDigits.includes(d))
+    // at an end of one written number (so a country code in front or an extension after is fine), never across two
+    if (d.length < 7 || !tokens.some((t) => t.endsWith(d) || t.startsWith(d)))
       problems.push(`the ${label} ${value} is not in the text`);
   }
   for (const [label, value] of [
     ["email", r.email],
     ["second email", r.email2],
   ] as const) {
-    const v = value.trim().toLowerCase();
+    const v = value.trim();
     if (v === "") continue;
-    if (!textLower.includes(v)) problems.push(`the ${label} ${value} is not in the text`);
+    if (!hasWholeEmail(text, v)) problems.push(`the ${label} ${value} is not in the text`);
   }
   if (r.state !== "" && !/^[A-Za-z]{2}$/.test(r.state.trim()))
     problems.push("the state is not a two-letter code");

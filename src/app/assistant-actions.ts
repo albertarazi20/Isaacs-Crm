@@ -14,7 +14,7 @@ import { toActionError } from "@/lib/data/errors";
 import { UserError } from "@/lib/data/mutations";
 import { userContext } from "@/lib/data/queries";
 import type { ActionResult } from "@/lib/data/types";
-import { openPrep } from "@/lib/brain/queries";
+import { openPrep, prepIsStale } from "@/lib/brain/queries";
 import { db } from "@/lib/db";
 import { gmailStatus } from "@/lib/system/gmail";
 
@@ -77,14 +77,16 @@ export async function loadRecommendationsAction(): Promise<ActionResult<Recommen
 /** Opens what the assistant prepared for the person: marks it read and returns the conversation with its buttons. */
 export async function openPreparedAction(
   input: unknown,
-): Promise<ActionResult<{ threadId: string; items: ShownItem[] }>> {
+): Promise<ActionResult<{ threadId: string; items: ShownItem[]; stale: boolean }>> {
   const session = await requireSession();
   try {
     const { id } = idInput.parse(input);
     const opened = await db.withUser(session.userId, async (q) => {
       const threadId = await openPrep(q, id);
       const items = threadId ? await loadThreadForDisplay(q, threadId) : null;
-      return threadId && items ? { threadId, items } : null;
+      // the buttons were made when the preparation was: if the merchant has moved on since, they are shown as earlier
+      const stale = threadId ? await prepIsStale(q, id) : false;
+      return threadId && items ? { threadId, items, stale } : null;
     });
     if (!opened) throw new UserError("That is no longer there");
     return { ok: true, data: opened };

@@ -7,7 +7,22 @@ const uuid = z.string().uuid("That record no longer exists");
 const isoDate = z
   .string()
   .regex(/^\d{4}-\d{2}-\d{2}$/, "Pick a date")
-  .refine((s) => !Number.isNaN(new Date(`${s}T00:00:00Z`).getTime()), "Pick a date");
+  // a real calendar date (2026-02-31 rolls over to March 2 in Date), in a sane range
+  .refine((s) => {
+    const d = new Date(`${s}T00:00:00Z`);
+    return (
+      !Number.isNaN(d.getTime()) &&
+      d.toISOString().slice(0, 10) === s &&
+      s >= "2000-01-01" &&
+      s <= "2100-12-31"
+    );
+  }, "Pick a date");
+
+/** A new approval's hold cannot already be over (a mistyped year would stop the emails at once). A day of slack covers every time zone. */
+const notPast = isoDate.refine(
+  (s) => s >= new Date(Date.now() - 86_400_000).toISOString().slice(0, 10),
+  "That hold date has already passed",
+);
 
 /** "$85,000", "85k", 85000 → cents. */
 const amount = z.union([z.string(), z.number()]).transform((v, ctx) => {
@@ -26,7 +41,7 @@ const amount = z.union([z.string(), z.number()]).transform((v, ctx) => {
 export const approvalSchema = z.object({
   clientId: uuid,
   amount,
-  holdUntil: isoDate.nullable().default(null),
+  holdUntil: notPast.nullable().default(null),
   funder: z.string().trim().max(120).default(""),
   note: z.string().trim().max(2000).default(""),
   /** Start the emails now (the default) or hold them until a rep presses Start. */

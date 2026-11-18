@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import type { Db, DbAccess } from "../db";
 import { googleAccessTokenFor } from "../system/gmail";
 import { listTabs, readTab } from "./api";
-import { guessMapping, isLeadRow, parseRow, type Mapping } from "./mapping";
+import { guessMapping, isLeadRow, parseRow, tibUnitFromHeader, type Mapping } from "./mapping";
 
 /**
  * Pull every connected sheet into sheet_rows (the staging copy). Runs on the owner connection every few minutes;
@@ -15,6 +15,8 @@ export interface SyncSummary {
   rows: number;
   added: number;
   changed: number;
+  /** Rows the database refused (one bad cell never stops the rest of the sheet). */
+  skipped: number;
   failed: { sourceId: string; error: string }[];
 }
 
@@ -35,8 +37,12 @@ export function productionTokenFor(): TokenFor {
   return (userId) => googleAccessTokenFor(userId, "sheets");
 }
 
-const hashRow = (cells: readonly string[]) =>
-  createHash("sha1").update(JSON.stringify(cells)).digest("hex");
+/** The mapping is part of the hash, so a corrected mapping re-reads rows whose cells did not change. */
+const hashRow = (cells: readonly string[], mapping: Mapping) =>
+  createHash("sha1")
+    // sorted: the database hands a stored mapping back with its keys in its own order
+    .update(JSON.stringify([cells, Object.entries(mapping).sort(([a], [b]) => (a < b ? -1 : 1))]))
+    .digest("hex");
 
 export async function syncSheets(args: {
   db: DbAccess;
@@ -45,7 +51,14 @@ export async function syncSheets(args: {
   /** Sync only this source (a manager pressed "Sync now"). */
   sourceId?: string;
 }): Promise<SyncSummary> {
-  const summary: SyncSummary = { sources: 0, rows: 0, added: 0, changed: 0, failed: [] };
+  const summary: SyncSummary = {
+    sources: 0,
+    rows: 0,
+    added: 0,
+    changed: 0,
+    skipped: 0,
+    failed: [],
+  };
   const sources = await args.db.withSystem(
     async (q) =>
       (
@@ -81,26 +94,41 @@ export async function syncSheets(args: {
           await q.query("update sheet_sources set sheet_title = $2 where id = $1", [src.id, title]);
         let added = 0;
         let changed = 0;
+        let skipped = 0;
         let rows = 0;
+        const tibUnit = tibUnitFromHeader(header, mapping);
         for (let i = headerIdx + 1; i < grid.length; i += 1) {
           const cells = grid[i] ?? [];
           if (cells.every((c) => c.trim() === "")) continue;
-          const parsed = parseRow(cells, mapping);
+          const parsed = parseRow(cells, mapping, tibUnit);
           if (!isLeadRow(parsed)) continue;
           rows += 1;
-          const r = await upsertRow(q, src.id, i + 1, cells, parsed);
-          if (r === "added") added += 1;
-          else if (r === "changed") changed += 1;
+          // its own savepoint: a value the database refuses skips this row, not the whole sheet
+          await q.query("savepoint sheet_row");
+          try {
+            const r = await upsertRow(q, src.id, i + 1, cells, parsed, mapping);
+            await q.query("release savepoint sheet_row");
+            if (r === "added") added += 1;
+            else if (r === "changed") changed += 1;
+          } catch (e) {
+            await q.query("rollback to savepoint sheet_row");
+            skipped += 1;
+            console.error(
+              `sheet ${src.id} row ${i + 1} skipped:`,
+              e instanceof Error ? e.message : e,
+            );
+          }
         }
         await q.query(
           "update sheet_sources set last_synced_at = now(), last_error = null, row_count = $2 where id = $1",
           [src.id, rows],
         );
-        return { rows, added, changed };
+        return { rows, added, changed, skipped };
       });
       summary.rows += n.rows;
       summary.added += n.added;
       summary.changed += n.changed;
+      summary.skipped += n.skipped;
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       summary.failed.push({ sourceId: src.id, error: msg });
@@ -118,10 +146,11 @@ async function upsertRow(
   rowNo: number,
   cells: readonly string[],
   p: ReturnType<typeof parseRow>,
+  mapping: Mapping,
 ): Promise<"added" | "changed" | "same"> {
-  const hash = hashRow(cells);
-  const { rows } = await q.query<{ row_hash: string }>(
-    "select row_hash from sheet_rows where source_id = $1 and row_no = $2",
+  const hash = hashRow(cells, mapping);
+  const { rows } = await q.query<{ row_hash: string; raw: unknown }>(
+    "select row_hash, raw from sheet_rows where source_id = $1 and row_no = $2",
     [sourceId, rowNo],
   );
   const existing = rows[0];
@@ -141,7 +170,20 @@ async function upsertRow(
        email = excluded.email, phone = excluded.phone, phone2 = excluded.phone2, email2 = excluded.email2,
        industry = excluded.industry, state = excluded.state, monthly_revenue_cents = excluded.monthly_revenue_cents,
        time_in_business_months = excluded.time_in_business_months, wanted = excluded.wanted, notes = excluded.notes,
-       raw = excluded.raw, row_hash = excluded.row_hash, last_seen_at = now()`,
+       raw = excluded.raw, row_hash = excluded.row_hash, last_seen_at = now(),
+       -- the cells now hold a different lead (a row inserted above, or the sheet sorted): it is not the merchant
+       -- that was filed from this row number, so it must be offered and filed as new. An edit to the same lead
+       -- (a fixed phone, a better name) keeps its filed mark.
+       filed_at = case when $18::boolean
+                        and lower(btrim(sheet_rows.business_name)) <> lower(btrim(excluded.business_name))
+                        and lower(btrim(sheet_rows.contact_name)) <> lower(btrim(excluded.contact_name))
+                        and (sheet_rows.phone_key is distinct from excluded.phone_key or sheet_rows.email <> excluded.email)
+                       then null else sheet_rows.filed_at end,
+       client_id = case when $18::boolean
+                         and lower(btrim(sheet_rows.business_name)) <> lower(btrim(excluded.business_name))
+                         and lower(btrim(sheet_rows.contact_name)) <> lower(btrim(excluded.contact_name))
+                         and (sheet_rows.phone_key is distinct from excluded.phone_key or sheet_rows.email <> excluded.email)
+                        then null else sheet_rows.client_id end`,
     [
       sourceId,
       rowNo,
@@ -160,6 +202,8 @@ async function upsertRow(
       p.notes,
       JSON.stringify(cells),
       hash,
+      // a mapping-only change re-reads the row but is not a different lead
+      !existing || JSON.stringify(existing.raw) !== JSON.stringify(cells),
     ],
   );
   return existing ? "changed" : "added";

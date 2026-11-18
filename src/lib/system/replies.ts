@@ -4,7 +4,7 @@
  * rules live in one place; this file is the glue and the alerts.
  */
 import type { Db, DbAccess } from "../db";
-import { authResults } from "../inbox/gmailRead";
+import { authResults, senderVerified } from "../inbox/gmailRead";
 import { isStopMessage } from "../messaging/stop";
 import type { DigestSender } from "./reminders";
 
@@ -33,16 +33,17 @@ function headerOf(d: Record<string, unknown>, name: string): string {
 }
 
 /**
- * A From header is forgeable. An inbound message counts as the merchant's only when SPF and DKIM both pass, or when
+ * A From header is forgeable. An inbound message counts as the merchant's only when SPF or DKIM passes aligned with the From domain, or when
  * it replies to an email the CRM sent that merchant (In-Reply-To / References name one of our provider ids).
  */
 async function inboundVerified(
   q: Db,
   d: Record<string, unknown>,
   clientId: string,
+  from: string,
 ): Promise<boolean> {
-  const auth = authResults(headerOf(d, "authentication-results") || null);
-  if (auth.spf === true && auth.dkim === true) return true;
+  const auth = authResults(headerOf(d, "authentication-results") || null, addressOf(from));
+  if (senderVerified(auth)) return true;
   const refs = `${headerOf(d, "in-reply-to")} ${headerOf(d, "references")}`;
   if (refs.trim() === "") return false;
   const { rows } = await q.query<{ provider_id: string }>(
@@ -50,6 +51,37 @@ async function inboundVerified(
     [clientId],
   );
   return rows.some((r) => r.provider_id !== "" && refs.includes(r.provider_id));
+}
+
+/**
+ * A STOP from the merchant's exact address whose sender check failed (a forwarder, a misaligned third-party sender, no
+ * Authentication-Results). It is applied anyway: a missed STOP is a compliance problem, a spoofed one costs one lead.
+ * Nothing else about the mail is trusted (no reply flag, no attachment filing). The timeline says why the opt-out
+ * happened so the rep can undo it if it was forged. Returns false when the merchant was already opted out.
+ */
+export async function applyUnverifiedStop(
+  q: Db,
+  clientId: string,
+  from: string,
+  snippet: string,
+): Promise<boolean> {
+  const { rows } = await q.query<{ user_id: string; email_opt_out: boolean }>(
+    "select user_id, email_opt_out from clients where id = $1",
+    [clientId],
+  );
+  const c = rows[0];
+  if (!c || c.email_opt_out) return false;
+  await q.query("select opt_out($1, 'email', 'stop_reply', $2)", [clientId, snippet.slice(0, 200)]);
+  await q.query("select stop_enrollment($1, 'opted_out')", [clientId]);
+  await q.query(
+    "insert into activities (user_id, client_id, kind, body) values ($1, $2, 'system', $3)",
+    [
+      c.user_id,
+      clientId,
+      `Opted out of email from an unverified sender: a STOP from ${from.toLowerCase()} failed the sender check (forwarded or misaligned mail), so it was applied anyway. If it was not them, turn email back on for this merchant.`,
+    ],
+  );
+  return true;
 }
 
 const mask = (email: string): string => {
@@ -119,6 +151,9 @@ export async function handleResendEvent(
     let result = "ignored";
     const d = evt.data ?? {};
     const emailId = str(d["email_id"]);
+    // A failing statement aborts a Postgres transaction, so the error is caught under a savepoint: rolled back to it,
+    // the transaction can still store the error on the event instead of the whole route failing and Resend retrying.
+    await q.query("savepoint handle_event");
     try {
       switch (evt.type) {
         case "email.delivered": {
@@ -165,8 +200,12 @@ export async function handleResendEvent(
             result = "received:unknown_sender";
             break;
           }
-          if (!(await inboundVerified(q, d as Record<string, unknown>, clientId))) {
-            result = "received:unverified_sender";
+          if (!(await inboundVerified(q, d as Record<string, unknown>, clientId, from))) {
+            result =
+              isStopMessage(subject, text) &&
+              (await applyUnverifiedStop(q, clientId, addressOf(from), text))
+                ? "received:unverified_stop"
+                : "received:unverified_sender";
             break;
           }
           const stop = isStopMessage(subject, text);
@@ -183,7 +222,9 @@ export async function handleResendEvent(
         default:
           result = "ignored";
       }
+      await q.query("release savepoint handle_event");
     } catch (e) {
+      await q.query("rollback to savepoint handle_event");
       result = `error: ${e instanceof Error ? e.message : String(e)}`.slice(0, 300);
     }
     await q.query(
@@ -321,7 +362,11 @@ export async function sendReplyAlerts(
           [row.user_id, day, clientId, providerId],
         );
         return "sent" as const;
-      } catch {
+      } catch (e) {
+        console.error(
+          `reply alert for client ${clientId}:`,
+          e instanceof Error ? e.message : String(e),
+        );
         await q.query(
           "delete from reminders_sent where user_id = $1 and kind = 'reply' and for_date = $2 and ref = $3 and provider_id is null",
           [row.user_id, day, clientId],

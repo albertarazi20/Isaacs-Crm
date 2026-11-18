@@ -38,7 +38,11 @@ async function handle(req: Request): Promise<NextResponse> {
     max: 150,
   });
   // merchant uploads wait here until checked; nothing opens before that
-  const scan = await scanPending(db, documentStore(e));
+  // a failed scan (storage down) must not skip the offer notices and the heartbeat below
+  const scan = await scanPending(db, documentStore(e)).catch((err: unknown) => {
+    console.error("document scan:", err);
+    return { scanned: 0, clean: 0, rejected: 0, errors: 1 };
+  });
   // a rep's copy of an accepted offer that did not go when it was accepted
   const offerNotices = await retryOfferNotices({
     store: documentStore(e),

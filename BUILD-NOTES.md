@@ -523,3 +523,20 @@ be "sent to my email", and to see whether the merchant opened the link.
   maker rather than the merchant's rep, the Gmail body limit, the page's dark browser chrome and invisible focus ring,
   the email's width on phones and in Outlook, Georgia's old-style figures, faint grey text, "26 every two weeks
   payments": all fixed with tests.
+
+## Brain spend guard, 2026-11-18 (review fix)
+
+The brain stops at 70% of the day's AI cap (`BRAIN_SHARE` in `src/lib/system/brain.ts`) and re-reads the day's spend
+before every preparation, so it can never use the money the reps' own assistant questions and reply tagging need.
+This is deliberate, not a bug, and there is no setting for the share: when it trips, the sweep says "the brain has
+used its 70% of today's AI budget; the rest is kept for the reps' own questions, and it starts again tomorrow".
+Raise the daily cap in Settings → AI if the brain should do more. Covered by `tests/brain.test.ts` ("stops at 70%").
+
+Other review fixes the same day: the upload cap takes its slot with one short conditional update and writes the blob
+outside any lock (`acceptUpload`); editing a card checks another rep's ownership only for a phone or email that
+changed (`src/lib/leads/editOwner.ts`); a sender is verified when SPF or DKIM passes aligned with the From domain
+(`senderVerified`); an accepted offer's email waits at most an hour for a document's check, then goes without it and
+says so; a bare time-in-business number with no unit in its header keeps the old rule (up to 40 = years, above =
+months); the sheet row hash includes the mapping, so on the first sync after deploy every existing sheet row is re-read
+once and counted as "changed" (their cell contents and filed marks are untouched); `callCron` fails the run on any
+non-2xx/207 except a 503 saying "not configured". The unused `staleJobs`/`FREQUENT_JOBS` were removed.

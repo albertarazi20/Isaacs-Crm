@@ -22,7 +22,7 @@ lead from 2024 is a warm call today.
 - **Reminders:** morning email digest, call heads-up, instant new-lead alert, Monday scorecard (Resend);
   send email as Isaac through his Gmail (Google OAuth); texting opens his phone / Google Voice (no SMS API).
 - **Lead intake:** `POST /api/leads` puts a new merchant on Today as "call now" (`docs/LEAD-INTAKE.md`).
-- **Backup:** Settings → Your data downloads everything as one JSON file; `scripts/restore-backup.ts` puts it back (`docs/BACKUP.md`).
+- **Backup:** Settings → Your data downloads merchants, trash, asks, document checklist, timers, timeline and snippets as one JSON file (no upload or application tokens, which a restore re-makes; unsubscribe tokens are kept so old email links still work; not documents, applications, outbox, enrolments or offers); `scripts/restore-backup.ts` puts it back (`docs/BACKUP.md`).
 - CSV import and export, trash with restore, sign out of all devices, installable on a phone.
 
 ## Where things are

@@ -7,7 +7,10 @@ import {
   useEffect,
   useRef,
   useState,
+  type HTMLAttributes,
   type KeyboardEvent as ReactKeyboardEvent,
+  type MouseEvent as ReactMouseEvent,
+  type PointerEvent as ReactPointerEvent,
   type ReactNode,
   type SyntheticEvent,
 } from "react";
@@ -24,6 +27,53 @@ function returnFocus(opener: { current: HTMLElement | null }) {
     if (el.isConnected && (!now || now === document.body || !now.isConnected))
       el.focus({ preventScroll: true });
   });
+}
+
+/**
+ * Should a click on a <dialog> close it? Only when the press started on the backdrop too: a text-selection drag that
+ * starts in a field and ends past the dialog edge also dispatches its click to the <dialog> itself, and must not
+ * throw away what was typed.
+ */
+export function isBackdropClick(
+  pressStartedOnBackdrop: boolean,
+  clickTarget: EventTarget | null,
+  dialog: EventTarget | null,
+): boolean {
+  return pressStartedOnBackdrop && clickTarget !== null && clickTarget === dialog;
+}
+
+/** Props for a <dialog> that closes on a real backdrop click (see isBackdropClick). */
+export function useBackdropClose(ref: { current: HTMLDialogElement | null }, onClose: () => void) {
+  const pressedBackdrop = useRef(false);
+  return {
+    onPointerDown: (e: ReactPointerEvent<HTMLDialogElement>) => {
+      pressedBackdrop.current = e.target === ref.current;
+    },
+    onClick: (e: ReactMouseEvent<HTMLDialogElement>) => {
+      const started = pressedBackdrop.current;
+      pressedBackdrop.current = false;
+      if (isBackdropClick(started, e.target, ref.current)) onClose();
+    },
+  };
+}
+
+/**
+ * Escape for a popover that sits inside a dialog or drawer (time picker, overflow menu): it listens before anything
+ * else does and keeps the key to itself, so the press closes only the popover and not the sheet around it.
+ * Returns the cleanup.
+ */
+export function listenEscape(
+  target: Pick<Document, "addEventListener" | "removeEventListener">,
+  onEscape: () => void,
+): () => void {
+  const handler = (e: Event) => {
+    if ((e as KeyboardEvent).key !== "Escape") return;
+    e.preventDefault();
+    e.stopPropagation();
+    onEscape();
+  };
+  target.addEventListener("keydown", handler, true);
+  return () => target.removeEventListener("keydown", handler, true);
 }
 
 /**
@@ -127,6 +177,7 @@ export function Dialog({
   wide?: boolean;
 }) {
   const [ref, onNativeClose, onKeyDown, onCancel] = useModal(open, onClose);
+  const backdrop = useBackdropClose(ref, onClose);
   return (
     <dialog
       ref={ref}
@@ -134,9 +185,8 @@ export function Dialog({
       onClose={onNativeClose}
       onKeyDown={onKeyDown}
       onCancel={onCancel}
-      onClick={(e) => {
-        if (e.target === ref.current) onClose();
-      }}
+      onPointerDown={backdrop.onPointerDown}
+      onClick={backdrop.onClick}
       className={cn(
         // anchored a fixed distance from the top on a desktop, so content that loads after it opens grows downward instead
         // of re-centring the box under the pointer; a bottom sheet with a grab handle on a phone
@@ -192,6 +242,7 @@ export function Drawer({
   headerAside?: ReactNode;
 }) {
   const [ref, onNativeClose, onKeyDown, onCancel] = useModal(open, onClose);
+  const backdrop = useBackdropClose(ref, onClose);
   return (
     <dialog
       ref={ref}
@@ -199,9 +250,8 @@ export function Drawer({
       onClose={onNativeClose}
       onKeyDown={onKeyDown}
       onCancel={onCancel}
-      onClick={(e) => {
-        if (e.target === ref.current) onClose();
-      }}
+      onPointerDown={backdrop.onPointerDown}
+      onClick={backdrop.onClick}
       className={cn(
         "sheet-right glass-strong m-0 ml-auto h-dvh max-h-none w-full border-l border-border p-0 text-text shadow-pop sm:rounded-l-3xl",
         wide ? "max-w-[820px]" : "max-w-[560px]",
@@ -234,6 +284,59 @@ export function Drawer({
   );
 }
 
+/**
+ * A box that lives in the browser's top layer. A modal <dialog> puts itself and its backdrop there, and no z-index
+ * can lift an ordinary element above it, so anything that must stay visible over a dialog (toasts, the reminder
+ * banner) renders through this. Shown on mount and again whenever `bump` changes, so it lands above a dialog that
+ * opened after it. Where popovers are unsupported it is just a fixed box, as before.
+ */
+export function TopLayer({
+  bump,
+  className,
+  children,
+  ...rest
+}: {
+  bump?: string | number;
+  className?: string;
+  children?: ReactNode;
+} & Omit<HTMLAttributes<HTMLDivElement>, "className" | "children">) {
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || typeof el.showPopover !== "function") return;
+    try {
+      if (el.matches(":popover-open")) el.hidePopover();
+      el.showPopover();
+    } catch {
+      // not allowed right now (detached, or the page is closing): it stays a plain fixed box
+    }
+  }, [bump]);
+  useEffect(() => {
+    const el = ref.current;
+    return () => {
+      try {
+        if (el?.matches(":popover-open")) el.hidePopover();
+      } catch {
+        // already gone
+      }
+    };
+  }, []);
+  return (
+    <div
+      ref={ref}
+      popover="manual"
+      // reset the browser's popover box (centred, bordered, opaque, scrolling) to a bare fixed strip
+      className={cn(
+        "m-0 h-auto max-h-none w-auto overflow-visible border-0 bg-transparent p-0 text-inherit",
+        className,
+      )}
+      {...rest}
+    >
+      {children}
+    </div>
+  );
+}
+
 interface ToastInput {
   message: string;
   tone?: "info" | "error" | "success";
@@ -256,9 +359,10 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   return (
     <ToastContext.Provider value={toast}>
       {children}
-      <div
+      <TopLayer
         aria-live="polite"
-        className="pointer-events-none fixed inset-x-0 bottom-4 z-50 flex flex-col items-center gap-2 px-4 sm:items-end sm:px-5"
+        bump={items.length}
+        className="pointer-events-none fixed inset-x-0 top-auto bottom-4 z-50 flex flex-col items-center gap-2 px-4 sm:items-end sm:px-5"
       >
         {items.map((t) => (
           <div
@@ -310,12 +414,33 @@ export function ToastProvider({ children }: { children: ReactNode }) {
             ) : null}
           </div>
         ))}
-      </div>
+      </TopLayer>
     </ToastContext.Provider>
   );
 }
 
 export const useToast = () => useContext(ToastContext);
+
+/** The body of useCall, without the hook: await the action, toast a failure, resolve to the data or null. */
+export async function runCall<T>(
+  toast: (t: ToastInput) => void,
+  promise: Promise<ActionResult<T>>,
+  success?: string,
+): Promise<T | null> {
+  let res: ActionResult<T>;
+  try {
+    res = await promise;
+  } catch {
+    toast({ message: "Couldn't reach the server. Check your connection", tone: "error" });
+    return null;
+  }
+  if (!res.ok) {
+    toast({ message: res.error, tone: "error" });
+    return null;
+  }
+  if (success) toast({ message: success, tone: "success" });
+  return res.data;
+}
 
 /**
  * Await a server action. Failures become an error toast and resolve to null, so callers
@@ -324,21 +449,8 @@ export const useToast = () => useContext(ToastContext);
 export function useCall() {
   const toast = useToast();
   return useCallback(
-    async <T,>(promise: Promise<ActionResult<T>>, success?: string): Promise<T | null> => {
-      let res: ActionResult<T>;
-      try {
-        res = await promise;
-      } catch {
-        toast({ message: "Couldn't reach the server. Check your connection", tone: "error" });
-        return null;
-      }
-      if (!res.ok) {
-        toast({ message: res.error, tone: "error" });
-        return null;
-      }
-      if (success) toast({ message: success, tone: "success" });
-      return res.data;
-    },
+    <T,>(promise: Promise<ActionResult<T>>, success?: string): Promise<T | null> =>
+      runCall(toast, promise, success),
     [toast],
   );
 }

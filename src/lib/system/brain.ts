@@ -1,9 +1,10 @@
 import Anthropic from "@anthropic-ai/sdk";
-import { UserError } from "../data/mutations";
 import { userContext } from "../data/queries";
 import { db as defaultDb, type DbAccess } from "../db";
 import { loadQueue } from "../followup/overview";
 import {
+  AssistantUnavailableError,
+  ConversationGoneError,
   loadThreadForDisplay,
   runAssistantTurn,
   type ModelCaller,
@@ -24,6 +25,8 @@ const CLAIM_MINUTES = 3;
 /** Failed this many times and it is given up on (the rep can still ask by hand). */
 const MAX_ATTEMPTS = 3;
 const DEFAULT_BUDGET_MS = 50_000;
+/** The brain stops at this share of the day's AI cap: the rest is kept for the reps' own questions and for replies. */
+const BRAIN_SHARE = 0.7;
 
 export interface BrainOptions {
   db?: DbAccess;
@@ -58,12 +61,39 @@ interface Prep {
 
 /** True for an error that no retry will fix and that every later preparation would hit too. */
 export function isAccountProblem(e: unknown): string | null {
-  if (e instanceof UserError) return e.message;
+  if (e instanceof AssistantUnavailableError) return e.message;
   if (e instanceof Anthropic.APIError) {
     if (/credit balance/i.test(e.message)) return "The Anthropic account is out of credit";
     if (e instanceof Anthropic.AuthenticationError || e instanceof Anthropic.PermissionDeniedError)
       return "The Anthropic key was refused";
   }
+  return null;
+}
+
+/** True for a failure of the service rather than of this preparation (busy, down, unreachable): try again later. */
+export function isTransient(e: unknown): string | null {
+  if (
+    e instanceof Anthropic.RateLimitError ||
+    e instanceof Anthropic.InternalServerError ||
+    e instanceof Anthropic.APIConnectionError ||
+    (e instanceof Anthropic.APIError && typeof e.status === "number" && e.status >= 500)
+  )
+    return "The Anthropic service is busy or unreachable: trying again on the next run";
+  return null;
+}
+
+/** The brain's own stop for spending: when today's cap, or the brain's share of it, is used. Null while there is room. */
+async function spendStop(access: DbAccess): Promise<string | null> {
+  const { rows } = await access.withSystem((q) =>
+    q.query<{ cap: number; spent: string }>(
+      "select ai_daily_cap_cents as cap, app.ai_spent_today_cents()::text as spent from shop_settings",
+    ),
+  );
+  const r = rows[0];
+  if (!r) return null;
+  if (Number(r.spent) >= r.cap) return "today's AI budget is spent";
+  if (Number(r.spent) >= r.cap * BRAIN_SHARE)
+    return `the brain has used its ${Math.round(BRAIN_SHARE * 100)}% of today's AI budget; the rest is kept for the reps' own questions, and it starts again tomorrow`;
   return null;
 }
 
@@ -80,18 +110,13 @@ export async function runBrain(opts: BrainOptions): Promise<BrainResult> {
       ai_enabled: boolean;
       brain_on: boolean;
       per_rep: number;
-      cap: number;
-      spent: string;
-    }>(
-      `select ai_enabled, brain_on, brain_daily_per_rep as per_rep, ai_daily_cap_cents as cap,
-              app.ai_spent_today_cents()::text as spent
-         from shop_settings`,
-    );
+    }>(`select ai_enabled, brain_on, brain_daily_per_rep as per_rep from shop_settings`);
     return rows[0];
   });
   if (!shop?.ai_enabled) return { ...result, skipped: "AI is off" };
   if (!shop.brain_on) return { ...result, skipped: "the brain is off" };
-  if (Number(shop.spent) >= shop.cap) return { ...result, skipped: "today's AI budget is spent" };
+  const outOfMoney = await spendStop(access);
+  if (outOfMoney) return { ...result, skipped: outOfMoney };
 
   // 1. what is new on each rep's list
   const reps = await access.withSystem(async (q) => {
@@ -115,6 +140,9 @@ export async function runBrain(opts: BrainOptions): Promise<BrainResult> {
   const claimed = new Set<string>();
   for (;;) {
     if (Date.now() > deadline - 12_000) break;
+    // each preparation can spend several calls: look again at the day's spend before taking the next
+    const noMoney = await spendStop(access);
+    if (noMoney) return { ...result, skipped: noMoney };
     const prep = await claimNext(access, now, claimed);
     if (!prep) break;
     claimed.add(prep.id);
@@ -173,9 +201,16 @@ async function queueForRep(
       // the daily limit counts the last 24 hours, so a busy morning cannot starve the afternoon for long
       const { rowCount } = await q.query(
         `insert into brain_preps (user_id, client_id, kind, trigger_key)
-         select $1, $2, $3, $4
+         select $1, $2::uuid, $3, $4
           where (select count(*) from brain_preps
                   where user_id = $1 and created_at > $5::timestamptz - interval '24 hours') < $6
+            -- the same merchant opening their link again every half hour is the same advice: one preparation for the
+            -- same merchant and reason stays on the list until the rep has read it (or a day has passed)
+            and ($2::uuid is null or not exists (
+                  select 1 from brain_preps b
+                   where b.user_id = $1 and b.client_id = $2::uuid and b.kind = $3
+                     and b.created_at > $5::timestamptz - interval '24 hours'
+                     and (b.status = 'working' or (b.status = 'ready' and b.seen_at is null))))
          on conflict (user_id, trigger_key) do nothing`,
         [userId, w.clientId, w.kind, w.key, now.toISOString(), perRep],
       );
@@ -214,7 +249,17 @@ async function prepare(
   deadline: number,
 ): Promise<Outcome> {
   let threadId = prep.thread_id;
-  let saved: Promise<unknown> = Promise.resolve();
+  // the conversation's id is written down as soon as it exists, while the turn runs on: a failure of that write is
+  // caught where it happens (no unhandled rejection in the middle of a model call) and the write is tried again after
+  let saved: Promise<void> = Promise.resolve();
+  let saveFailed = false;
+  const writeThreadId = (id: string) =>
+    access
+      .withSystem((q) =>
+        q.query("update brain_preps set thread_id = $2 where id = $1", [prep.id, id]),
+      )
+      .then(() => undefined);
+  let notice = "";
   try {
     for (let more = true, first = threadId === null; more; first = false) {
       const left = deadline - Date.now();
@@ -233,41 +278,44 @@ async function prepare(
           thread: (id) => {
             if (id === threadId) return;
             threadId = id;
-            saved = access.withSystem((q) =>
-              q.query("update brain_preps set thread_id = $2 where id = $1", [prep.id, id]),
-            );
+            saved = writeThreadId(id).catch(() => {
+              saveFailed = true;
+            });
           },
           text: () => undefined,
           tool: () => undefined,
           actions: () => undefined,
-          notice: () => undefined,
+          notice: (m) => {
+            notice = m;
+          },
         },
         now,
         budgetMs: Math.max(4_000, left - 14_000),
         hardStopMs: left - 2_000,
       });
       await saved;
+      if (saveFailed && threadId) {
+        saveFailed = false;
+        await writeThreadId(threadId);
+      }
       threadId = r.threadId;
       more = r.more;
     }
   } catch (e) {
-    await saved.catch(() => undefined);
-    const stop = isAccountProblem(e);
+    await saved;
+    const stop = isAccountProblem(e) ?? isTransient(e);
     if (stop) {
       await release(access, prep.id, stop);
       return { stop };
     }
     console.error("brain: a preparation failed:", e);
-    const give = prep.attempts + 1 >= MAX_ATTEMPTS;
-    await access.withSystem((q) =>
-      q.query(
-        `update brain_preps set attempts = attempts + 1, claimed_at = null, error = $2,
-                status = case when $3 then 'failed' else status end
-          where id = $1`,
-        [prep.id, (e instanceof Error ? e.message : String(e)).slice(0, 280), give],
-      ),
+    // the conversation was deleted under it: the next try starts a fresh one
+    return fail(
+      access,
+      prep,
+      e instanceof Error ? e.message : String(e),
+      e instanceof ConversationGoneError,
     );
-    return give ? "failed" : "unfinished";
   }
 
   // what came out: the first lines of the last answer and how many buttons it set up
@@ -279,6 +327,10 @@ async function prepare(
   );
   const actions = answers.reduce((n, a) => n + a.actions.length, 0);
   const text = answers.map((a) => a.text).join(" ");
+  // a refusal, a notice that the answer ran too long, a cut-off tool call: the assistant gave nothing to read, so
+  // it is not "ready"; a fresh conversation is tried again, up to the usual number of attempts
+  if (actions === 0 && !text.trim())
+    return fail(access, prep, notice || "The assistant gave no answer", true);
   await access.withSystem((q) =>
     q.query(
       `update brain_preps set status = 'ready', ready_at = now(), claimed_at = null, error = null,
@@ -288,6 +340,26 @@ async function prepare(
     ),
   );
   return "ready";
+}
+
+/** Counts a failed try; after the last one the preparation is given up on. `newThread` forgets the saved conversation. */
+async function fail(
+  access: DbAccess,
+  prep: Prep,
+  error: string,
+  newThread: boolean,
+): Promise<Outcome> {
+  const give = prep.attempts + 1 >= MAX_ATTEMPTS;
+  await access.withSystem((q) =>
+    q.query(
+      `update brain_preps set attempts = attempts + 1, claimed_at = null, error = $2,
+              thread_id = case when $4 then null else thread_id end,
+              status = case when $3 then 'failed' else status end
+        where id = $1`,
+      [prep.id, error.slice(0, 280), give, newThread],
+    ),
+  );
+  return give ? "failed" : "unfinished";
 }
 
 const titleFor = (p: Prep): string => (p.kind === "plan" ? "Plan for today" : "Prepared for you");
@@ -317,11 +389,12 @@ export async function brainStatus(access: DbAccess = defaultDb): Promise<BrainSt
       failed: number;
       last_error: string | null;
     }>(
-      `select count(*) filter (where status = 'ready' and ready_at > now() - interval '24 hours')::int as ready,
-              count(*) filter (where status = 'working')::int as working,
-              count(*) filter (where status = 'failed' and created_at > now() - interval '24 hours')::int as failed,
+      // a rep who has left keeps their unfinished rows, but nothing will ever run them: they are not "working"
+      `select count(*) filter (where p.status = 'ready' and p.ready_at > now() - interval '24 hours')::int as ready,
+              count(*) filter (where p.status = 'working' and u.active and u.offboarded_at is null)::int as working,
+              count(*) filter (where p.status = 'failed' and p.created_at > now() - interval '24 hours')::int as failed,
               (select error from brain_preps where error is not null order by created_at desc limit 1) as last_error
-         from brain_preps`,
+         from brain_preps p join app_users u on u.id = p.user_id`,
     );
     const r = rows[0];
     return {

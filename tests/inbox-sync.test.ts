@@ -183,13 +183,28 @@ describe("syncing a mailbox for merchant replies", () => {
       (await t.pool.query("select 1 from inbound_emails where from_address = 'news@vendor.com'"))
         .rowCount,
     ).toBe(0);
-    // the forged "STOP" did not opt Tina out, flag her, or suppress her address
+    // the unverified "STOP" is honoured (a forged one costs one lead, a missed one is a compliance problem) but
+    // nothing else about the mail is trusted: no reply flag, and the timeline says it came from an unverified sender
     const tina = await t.pool.query<{ email_opt_out: boolean; since: string | null }>(
       "select email_opt_out, reply_waiting_since::text as since from clients where id = $1",
       [taco],
     );
-    expect(tina.rows[0]).toEqual({ email_opt_out: false, since: null });
-    expect((await t.pool.query("select 1 from suppressions")).rowCount).toBe(0);
+    expect(tina.rows[0]).toEqual({ email_opt_out: true, since: null });
+    const sup = await t.pool.query<{ display: string; reason: string }>(
+      "select display, reason from suppressions",
+    );
+    expect(sup.rows).toEqual([{ display: "tina@taco.com", reason: "stop_reply" }]);
+    const note = await t.pool.query<{ body: string }>(
+      "select body from activities where client_id = $1 and kind = 'system' and body like 'Opted out of email from an unverified sender%'",
+      [taco],
+    );
+    expect(note.rows).toHaveLength(1);
+    expect(note.rows[0]?.body).toContain("tina@taco.com");
+    expect(s.merchantReplies).not.toContain(taco);
+    const tinaMail = await t.pool.query<{ kind: string; matched_by: string }>(
+      "select kind, matched_by from inbound_emails where from_address = 'tina@taco.com'",
+    );
+    expect(tinaMail.rows).toEqual([{ kind: "unknown", matched_by: "none" }]);
 
     // the sync remembers where it got to
     const state = await t.pool.query<{ history_id: string | null; last_error: string | null }>(

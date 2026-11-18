@@ -41,7 +41,7 @@ export const line = (max = 200) =>
 /** A state, trimmed and in capitals: "ny" and "NY" are one state. */
 const stateField = line(40).toUpperCase();
 
-const EMAIL = /^[^\s@,;<>"]+@[^\s@,;<>"]+\.[^\s@,;<>"]+$/;
+export const EMAIL = /^[^\s@,;<>"]+@[^\s@,;<>"]+\.[^\s@,;<>"]+$/;
 /** Blank, or exactly one plain address — never "a@b.com,c@d.com". */
 const emailField = line(200).refine(
   (v) => v === "" || EMAIL.test(v),

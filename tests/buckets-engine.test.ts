@@ -213,10 +213,22 @@ describe("the sequence runner", () => {
     let s = await runBucketSteps({ db: t.db, appUrl: "https://crm.test" });
     expect(s.skipped).toBeGreaterThanOrEqual(1);
     expect(await outboxFor(id)).toHaveLength(0);
+    // the unapproved step is held, not taken: the merchant stays in the bucket on that step with nothing counted as sent
+    expect(await liveBucketKey(id)).toBeNull();
+    const held = (
+      await t.pool.query<{ next_step: number; steps_sent: number; next_due_on: string }>(
+        "select next_step, steps_sent, next_due_on::text from enrollments where client_id = $1 and stopped_at is null",
+        [id],
+      )
+    ).rows[0];
+    expect(held).toMatchObject({ next_step: 1, steps_sent: 0 });
     await t.pool.query("update templates set approved = true where id = $1", [tpl]);
-    // the unapproved run finished the one-step sequence and handed over to Cold (0543); enrol it again
-    await t.db.withUser(rep, (q) => q.query("select enroll_in_bucket($1, $2)", [id, mine]));
-    s = await runBucketSteps({ db: t.db, appUrl: "https://crm.test" });
+    // the hold lasts until tomorrow in the merchant's zone: the approved template goes out on that day's run
+    s = await runBucketSteps({
+      db: t.db,
+      now: new Date(Date.now() + 2 * 86_400_000),
+      appUrl: "https://crm.test",
+    });
     expect((await outboxFor(id)).length).toBe(1);
   });
   it("a blast merges per merchant and skips the ones with a blank field", async () => {

@@ -85,7 +85,9 @@ const ROW_SQL = `
          app.client_timezone(c) as timezone, (select shop_name from shop_settings) as shop_name,
          coalesce(u.name, '') as rep_name, coalesce(u.phone, '') as rep_phone, u.email as rep_email,
          o.funded_cents::text, o.factor_rate::text, o.frequency, o.payments, o.payback_cents::text, o.payment_cents::text,
-         o.message, o.docs, o.expires_at::text as expires_at, o.accepted_at::text as accepted_at, o.accepted_name, o.views,
+         o.message, o.docs,
+         to_char(o.expires_at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') as expires_at,
+         to_char(o.accepted_at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') as accepted_at, o.accepted_name, o.views,
          o.approval_id, o.created_at::text as created_at
     from merchant_offers o join clients c on c.id = o.client_id join app_users u on u.id = c.user_id
    where o.token = $1 and not exists (select 1 from trashed_clients t where t.client_id = c.id)`;
@@ -220,6 +222,18 @@ async function docsOnFile(q: Db, clientId: string, kinds: readonly string[]): Pr
     [clientId, kinds],
   );
   return new Set(rows.map((x) => x.kind));
+}
+
+/** Where the offer stands now (open, accepted, withdrawn, expired), for a page that just had an accept refused. */
+export async function offerState(
+  token: string,
+  access: DbAccess = defaultDb,
+): Promise<OfferPage["state"] | null> {
+  if (!TOKEN.test(token)) return null;
+  return access.withSystem(async (q) => {
+    const r = (await q.query<Row>(ROW_SQL, [token])).rows[0];
+    return r ? stateOf(r) : null;
+  });
 }
 
 /** Which of the offer's documents are on file now (the page asks after each upload). */

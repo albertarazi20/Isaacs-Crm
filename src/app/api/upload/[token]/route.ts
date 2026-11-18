@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { toActionError } from "@/lib/data/errors";
 import { db } from "@/lib/db";
+import { clientIp } from "@/lib/docs/clientIp";
 import { documentStore } from "@/lib/docs/storage";
 import { acceptUpload, MAX_BYTES, openUploadPage, uploadSessionLive } from "@/lib/docs/upload";
 import { env } from "@/lib/env";
@@ -68,7 +69,7 @@ export async function POST(req: Request, { params }: Params) {
     return NextResponse.json({ error: "Send one file for each document" }, { status: 400 });
   const store = documentStore(env());
   const today = todayIn("America/New_York");
-  const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "";
+  const ip = clientIp(req.headers);
   const results = [];
   for (const f of files) {
     try {

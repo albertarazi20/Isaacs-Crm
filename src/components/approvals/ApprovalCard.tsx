@@ -14,12 +14,12 @@ import {
   canResume,
   emailsStatus,
   holdWords,
+  offerMoney,
   whenWords,
   type CadenceStep,
 } from "@/lib/approvals/words";
 import type { ActionResult } from "@/lib/data/types";
 import { timeAgo } from "@/lib/format";
-import { formatMoney } from "@/lib/money";
 import { useApp } from "../app-context";
 import { useCall, useToast } from "../overlay";
 import { Glyph } from "../shell/icons";
@@ -109,7 +109,7 @@ export function ApprovalCard({
           <p className="text-sm font-semibold">Got an approval?</p>
           <p className="text-xs text-muted">
             {last
-              ? `Last one: ${formatMoney(last.amount_cents)}, ${last.status === "pitched" ? `pitched ${fmt(last.pitched_at ?? last.created_at)}` : `closed${last.closed_reason ? ` (${last.closed_reason})` : ""}`}.`
+              ? `Last one: ${offerMoney(last.amount_cents)}, ${last.status === "pitched" ? `pitched ${fmt(last.pitched_at ?? last.created_at)}` : `closed${last.closed_reason ? ` (${last.closed_reason})` : ""}`}.`
               : "Mark it and the approval emails go out on their own until you pitch it."}
           </p>
         </div>
@@ -143,7 +143,7 @@ export function ApprovalCard({
             Open approval {status.hot ? <Badge tone="accent">Replied</Badge> : null}
           </p>
           <p className="mt-1 text-2xl leading-none font-semibold tracking-[-0.03em] tabular-nums">
-            {formatMoney(open.amount_cents)}
+            {offerMoney(open.amount_cents)}
           </p>
           <p className="mt-1 truncate text-xs text-muted">
             {[open.funder, `marked ${timeAgo(open.created_at, new Date(nowMs))}`]

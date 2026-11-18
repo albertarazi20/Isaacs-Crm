@@ -1,8 +1,8 @@
 import { UserError } from "../data/mutations";
 import type { Db } from "../db";
-import { formatMoney } from "../money";
 import { expiryWords, stopApprovalEmails } from "./engine";
 import { checkDesign, subjectFromHtml } from "./html";
+import { offerMoney } from "./words";
 import type {
   ApprovalEditInput,
   ApprovalInput,
@@ -43,9 +43,10 @@ async function openApproval(q: Db, approvalId: string) {
     client_id: string;
     status: string;
     emails: string;
+    emails_note: string;
     business_name: string;
   }>(
-    `select a.id, a.client_id, a.status, a.emails, c.business_name
+    `select a.id, a.client_id, a.status, a.emails, a.emails_note, c.business_name
        from approvals a join clients c on c.id = a.client_id where a.id = $1 for update of a`,
     [approvalId],
   );
@@ -54,8 +55,16 @@ async function openApproval(q: Db, approvalId: string) {
   return a;
 }
 
+async function offerAccepted(q: Db, approvalId: string): Promise<boolean> {
+  const { rows } = await q.query(
+    "select 1 from merchant_offers where approval_id = $1 and status = 'accepted' limit 1",
+    [approvalId],
+  );
+  return rows.length > 0;
+}
+
 const offerWords = (cents: number, holdUntil: string | null) =>
-  `${formatMoney(cents)}${holdUntil ? `, held until ${expiryWords(holdUntil)}` : ""}`;
+  `${offerMoney(cents)}${holdUntil ? `, held until ${expiryWords(holdUntil)}` : ""}`;
 
 /**
  * "Got an approval": the merchant goes on the Open approvals page. The action then moves it along on the owner
@@ -115,8 +124,9 @@ export async function createApproval(
  */
 export async function editApproval(q: Db, input: ApprovalEditInput, ctx: Ctx): Promise<string> {
   const a = await openApproval(q, input.approvalId);
+  if (a.status !== "open") throw new UserError("That approval is not open any more");
   await q.query(
-    "update approvals set amount_cents = $2, hold_until = $3, funder = $4, note = $5 where id = $1",
+    "update approvals set amount_cents = $2, hold_until = $3, funder = $4, note = $5 where id = $1 and status = 'open'",
     [a.id, input.amount, input.holdUntil, input.funder, input.note],
   );
   await activity(
@@ -224,6 +234,10 @@ export async function resumeApprovalEmails(q: Db, approvalId: string): Promise<v
   const a = await openApproval(q, approvalId);
   if (a.status !== "open") throw new UserError("That approval is not open any more");
   if (a.emails === "finished") throw new UserError("Every approval email has already gone");
+  // already going (another rep resumed it, or a double click): restarting the clock would hide a reply
+  if (a.emails === "running") return;
+  if (a.emails_note === "offer_accepted" || (await offerAccepted(q, a.id)))
+    throw new UserError("The merchant accepted the offer: the emails are done");
   await q.query(
     "update approvals set emails = 'running', emails_note = '', emails_since = now() where id = $1",
     [a.id],

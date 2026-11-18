@@ -4,6 +4,7 @@ import { useEffect, useId, useRef, useState } from "react";
 import { clockNow, TIME_SLOTS } from "@/lib/mca/callback";
 import { useApp } from "./app-context";
 import { Icon } from "./client/icons";
+import { listenEscape } from "./overlay";
 import { cn } from "./ui";
 
 type Period = "AM" | "PM";
@@ -56,22 +57,26 @@ export function TimeSelect({
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState(() => split(value));
   const root = useRef<HTMLDivElement>(null);
+  const trigger = useRef<HTMLButtonElement>(null);
   const id = useId();
 
-  // Closes on a click outside or Escape.
+  // Closes on a click outside or Escape. Escape is kept to this popover, so inside a dialog it does not close the
+  // whole sheet and the form with it; focus goes back to the field's button.
   useEffect(() => {
     if (!open) return;
     const onDown = (e: MouseEvent | TouchEvent) => {
       if (root.current && !root.current.contains(e.target as Node)) setOpen(false);
     };
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setOpen(false);
     document.addEventListener("mousedown", onDown);
     document.addEventListener("touchstart", onDown);
-    document.addEventListener("keydown", onKey);
+    const stopEscape = listenEscape(document, () => {
+      setOpen(false);
+      trigger.current?.focus();
+    });
     return () => {
       document.removeEventListener("mousedown", onDown);
       document.removeEventListener("touchstart", onDown);
-      document.removeEventListener("keydown", onKey);
+      stopEscape();
     };
   }, [open]);
 
@@ -93,6 +98,8 @@ export function TimeSelect({
       if (v > now) {
         onChange(v);
         setOpen(false);
+        // the button just pressed leaves the page with the popover: keep focus on the field
+        trigger.current?.focus();
       }
     }
   }
@@ -107,6 +114,7 @@ export function TimeSelect({
   return (
     <div ref={root} className="relative">
       <button
+        ref={trigger}
         type="button"
         aria-haspopup="dialog"
         aria-expanded={open}
@@ -193,6 +201,7 @@ export function TimeSelect({
                 setDraft(split(""));
                 onChange("");
                 setOpen(false);
+                trigger.current?.focus();
               }}
               className="mt-2 h-10 w-full rounded-lg px-3 text-sm text-muted transition hover:bg-surface-2 hover:text-text sm:h-8"
             >

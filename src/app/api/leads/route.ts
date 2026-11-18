@@ -1,12 +1,11 @@
 import { OwnedElsewhereError } from "@/lib/leads/owner";
 import { NextResponse } from "next/server";
 import { ZodError } from "zod";
-import { isAllowedEmail } from "@/lib/auth/google";
 import { userContext } from "@/lib/data/queries";
 import { toActionError } from "@/lib/data/errors";
 import { UserError } from "@/lib/data/mutations";
 import { db } from "@/lib/db";
-import { devLoginEnabled, env } from "@/lib/env";
+import { env } from "@/lib/env";
 import { ingestLead, LeadCapError } from "@/lib/leads/intake";
 import { describeLeadProblem, leadSchema } from "@/lib/leads/schema";
 import { parseBearer, readLimitedJson } from "@/lib/leads/token";
@@ -33,9 +32,8 @@ export async function POST(req: Request) {
       ? json({ error: "Too many leads this minute. Slow down" }, 429, { "retry-after": "60" })
       : json({ error: "That lead token isn't valid" }, 401);
   }
-  // Taking someone off ALLOWED_EMAILS must switch their token off too, like their session.
-  if (!devLoginEnabled() && !isAllowedEmail(check.email, env().ALLOWED_EMAILS))
-    return json({ error: "That lead token isn't valid" }, 401);
+  // No allowlist check here: accounts are the allowlist (Settings > Team). checkLeadToken already requires an active
+  // user, and disabling one revokes their tokens, like their session.
 
   const body = await readLimitedJson(req);
   if (!body.ok) return json({ error: body.error }, body.status);
