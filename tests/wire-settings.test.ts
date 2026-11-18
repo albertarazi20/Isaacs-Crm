@@ -156,13 +156,25 @@ describe("the DNS card's view of the stored check", () => {
 
 describe("AI settings and the spend list", () => {
   it("saves the kill switch, the model and the daily cap, and the database holds them", async () => {
-    const form = { aiEnabled: false, aiModel: "claude-opus-5-5", aiDailyCapCents: 1500 };
+    const form = {
+      aiEnabled: false,
+      aiModel: "claude-opus-5-5",
+      aiDailyCapCents: 1500,
+      brainOn: true,
+      brainDailyPerRep: 7,
+      playbook: "  We say funding, never loan.  ",
+    };
     await t.db.withUser(manager, (q) => saveAiSettings(q, aiSchema.parse(form)));
     expect(await stored()).toMatchObject({
       ai_enabled: false,
       ai_model: "claude-opus-5-5",
       ai_daily_cap_cents: 1500,
+      brain_on: true,
+      brain_daily_per_rep: 7,
+      playbook: "We say funding, never loan.",
     });
+    expect(aiSchema.safeParse({ ...form, brainDailyPerRep: 0 }).success).toBe(false);
+    expect(aiSchema.safeParse({ ...form, playbook: "x".repeat(4001) }).success).toBe(false);
     expect(aiSchema.safeParse({ ...form, aiDailyCapCents: -1 }).success).toBe(false);
   });
 

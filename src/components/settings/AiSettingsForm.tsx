@@ -3,7 +3,7 @@
 import { useId, useState } from "react";
 import { saveAiSettingsAction } from "@/app/settings-actions";
 import { useFormState, useRun } from "@/components/client/parts";
-import { Button, Field, Input, Select } from "@/components/ui";
+import { Button, Field, Input, Select, Textarea } from "@/components/ui";
 import type { ShopSettingsRow } from "@/lib/settings/queries";
 import { SettingsCard, StatusChip } from "./primitives";
 import { Toggle } from "./Toggle";
@@ -18,6 +18,9 @@ export function AiSettingsForm({ s }: { s: ShopSettingsRow }) {
     aiEnabled: s.ai_enabled,
     aiModel: s.ai_model,
     aiDailyCapCents: String(s.ai_daily_cap_cents),
+    brainOn: s.brain_on,
+    brainDailyPerRep: String(s.brain_daily_per_rep),
+    playbook: s.playbook,
   }));
   const [saved, setSaved] = useState(() => JSON.stringify(v));
   const dirty = JSON.stringify(v) !== saved;
@@ -83,6 +86,37 @@ export function AiSettingsForm({ s }: { s: ShopSettingsRow }) {
             }
           >
             <Input {...bind("aiDailyCapCents")} inputMode="numeric" />
+          </Field>
+        </div>
+        <div className="border-t border-border px-4 py-2 sm:px-5">
+          <Toggle
+            label="Prepare the next step in the background"
+            hint="Every few minutes the assistant looks at each rep's Do this now list and prepares the reply, nudge or file check for anything new. The rep reads it and clicks. It never sends or changes anything itself."
+            checked={v.brainOn}
+            onChange={(x) => set("brainOn", x)}
+          />
+        </div>
+        <div className="grid gap-3 border-t border-border p-4 sm:grid-cols-2 sm:p-5">
+          <Field
+            label="Most things prepared per rep a day"
+            hint="Each one costs a few cents. The daily spend cap above still applies."
+          >
+            <Input {...bind("brainDailyPerRep")} inputMode="numeric" />
+          </Field>
+        </div>
+        <div className="border-t border-border p-4 sm:p-5">
+          <Field
+            label="House rules for the assistant"
+            hint="How you want merchants spoken to, words to use or avoid, what your reps should never say. The assistant reads this in every conversation and every preparation."
+          >
+            <Textarea
+              {...bind("playbook")}
+              rows={7}
+              maxLength={4000}
+              placeholder={
+                "Examples:\nSign emails with the rep's first name only.\nMost merchants are restaurants and contractors: keep it short and friendly.\nNever quote an amount by email.\nAlways offer a call before asking for more documents."
+              }
+            />
           </Field>
         </div>
       </form>

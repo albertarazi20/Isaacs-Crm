@@ -86,8 +86,16 @@ transaction. Tables from the removed features stay in the schema, unused.
 - **Sending:** a per-mailbox cap (CRM and outside mail counted), a slice held for intake and replies, the legal
   footer and one-click unsubscribe, a claim checker (no "approved" without an offer, no "guaranteed"), and a DNS
   check before the automation domain is used.
-- **The assistant:** Claude Opus 5.5 reads the CRM under the person's row security and proposes actions as buttons;
+- **The assistant:** Claude (the model chosen in Settings → AI, Sonnet 5.5 by default) reads the CRM under the person's row security and proposes actions as buttons;
   nothing happens until the person clicks; every call is counted against the daily AI budget.
+- **The brain (0554):** every five minutes (`/api/cron/brain`, `src/lib/system/brain.ts`) the assistant looks at each
+  rep's own "Do this now" list and prepares the next step for anything new (a reply drafted, a nudge written, the file
+  checked), once per trigger (`brain_preps`), plus a plan for the day. The result is an ordinary assistant
+  conversation with its buttons, found under "Prepared for you" on the Overview and as a mark on the merchant's row.
+  Nothing is sent or changed by it: the rep reads and clicks. A manager switches it on in Settings → AI, sets how many
+  it prepares per rep a day, and writes the shop's house rules (the playbook the assistant reads in every
+  conversation). It uses the shop's daily AI cap, gives up on a preparation after three failures, and stops at once
+  when the Anthropic account is out of credit.
 
 ## 6. The screens
 

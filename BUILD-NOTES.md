@@ -410,3 +410,28 @@ next one sends." The owner will send the final designs; their drafts (four email
 - **Live:** main `82b87ba`, Netlify deploy 6afcd89833ce10d94baef5b1, Supabase `aztoxzcmnvqaypjuuuwj` through 0553 (92
   migrations; the four email slots are empty, so nothing sends until the designs are uploaded). Unit 107 files /
   1,472 tests; browser run 565 checks plus 22 (approvals) and 11 (approval settings); `pnpm build` passes.
+
+## The brain, 2026-11-18
+
+The owner turned the assistant back on (key on Netlify, credit added), asked for the model to be Sonnet 5.5, and for
+"an AI brain designed to my business that automates most of my workflow".
+
+- **Model:** the assistant now uses `shop_settings.ai_model` (Settings → AI; default Sonnet 5.5 since 0554) instead of a
+  constant; reply tagging and lead splitting already did. A real run on Sonnet 5.5 passed (`LIVE_AI=1 ANTHROPIC_API_KEY=…
+pnpm vitest run tests/assistant-live.test.ts`, a few cents).
+- **House rules:** `shop_settings.playbook` (manager-written, 4,000 characters) is a second system block in every
+  conversation, below the fixed prompt, which it cannot override.
+- **The brain:** `src/lib/system/brain.ts` + `/api/cron/brain` + `netlify/functions/cron-brain.mts` (every five minutes).
+  For each active rep it reads their own "Do this now" list (`loadQueue`, row security), skips what is not theirs and
+  bounced addresses, and queues one `brain_preps` row per trigger (kind + merchant + the moment that put it on the list)
+  inside a rolling 24-hour limit per rep (`brain_daily_per_rep`, default 15), plus one plan a day. Each is run through
+  `runAssistantTurn` as the rep (the same tools, checks and spend log as a chat), claimed for three minutes so two
+  runs never share one, resumed if it ran out of time, given up after three failures, and the whole sweep stops when
+  the account is out of credit or the daily cap is spent. The rep's side: "Prepared for you" on the Overview
+  (`PreparedForYou`), a mark and a changed sparkles button on the Do this now row, and the panel opens it with live
+  buttons (`openPreparedAction`; the server re-checks each click as always). A manager sees the counts in Settings → AI.
+- **Tests:** `tests/brain.test.ts` (17, DB-proving: who is queued, once only, the limit, the claim, credit, failures,
+  offboarded reps, row security, the model and house rules), `tests/assistant-errors.test.ts`, `e2e/brain.e2e.mjs`
+  (12 checks on the stand-in model). Full browser run 596/596.
+- **Left on purpose:** nothing is sent by the brain (an email is a button the rep reviews); buttons done in an opened
+  preparation are not remembered if it is opened again.

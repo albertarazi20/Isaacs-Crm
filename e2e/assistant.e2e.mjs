@@ -1,4 +1,4 @@
-// The assistant (Claude Opus 5.5) in the browser. Without a model it must still be useful: the Overview's
+// The assistant (Claude, the model chosen in Settings; Sonnet 5.5 by default) in the browser. Without a model it must still be useful: the Overview's
 // recommendations are read from the database and link to the pages, and the panel says plainly why it cannot answer.
 // With the stand-in model (WIRE_AI=stub, a dev server pointed at e2e/model-stub.mjs) the whole loop runs: a
 // recommendation is planned, the answer streams in, the action buttons do what they say, and every change is read
@@ -174,10 +174,10 @@ export default async function assistantFlow({ email }) {
       JSON.stringify({ runs: runsAfter.n - runsBefore.n, thread }),
     );
     check(
-      "the model was asked for Claude Opus 5.5 with adaptive thinking and the safety fallback",
+      "the model was asked for the shop's model (Sonnet 5.5) with adaptive thinking and the safety fallback",
       model.calls.every(
         (c) =>
-          c.body.model === "claude-opus-5-5" &&
+          c.body.model === "claude-sonnet-5-5" &&
           c.body.thinking?.type === "adaptive" &&
           c.body.fallbacks === "default",
       ),

@@ -8,7 +8,7 @@ Supabase project.
 
 - The app: Netlify builds it from GitHub with its zero-config Next.js adapter (`next build`; Node 22 from
   `netlify.toml`). Nothing to install or pin.
-- The five scheduled jobs: Netlify scheduled functions in `netlify/functions/cron-*.mts` call the app's own
+- The six scheduled jobs: Netlify scheduled functions in `netlify/functions/cron-*.mts` call the app's own
   `/api/cron/*` routes with the bearer secret (outbox and inbox every 5 minutes, sheets every 10, nightly and
   reminders hourly, all in UTC). They fire only on the published production deploy, so nothing else to schedule.
 - The database: the Supabase project, already migrated through 0531.
@@ -36,7 +36,7 @@ Supabase project.
    Leave `DEV_LOGIN` unset: dev login is impossible in production anyway.
 
 3. **Deploy** (Deploys → Trigger deploy). Sign in with the passcode, then check Settings → Email & lenders (the DNS
-   check) and the Functions tab (the five `cron-*` functions and their last runs).
+   check) and the Functions tab (the six `cron-*` functions and their last runs).
 4. A custom domain, when you want one: Domain management → Add a domain, then update `APP_URL`, the Google redirect
    URI and the Resend webhook, and redeploy.
 

@@ -397,9 +397,10 @@ describe("a turn", () => {
     expect(log.actions).toHaveLength(1);
     expect(log.actions[0]).toMatchObject({ type: "set_follow_up", merchant_name: "Harbor Tacos" });
 
-    // the model was asked for Opus 5.5, adaptive thinking, the fallbacks, and got Rita's context line
+    // the model was asked for the one the shop chose (Sonnet 5.5 is the default), adaptive thinking, the fallbacks,
+    // and got Rita's context line
     const first = sent[0]!;
-    expect(first.model).toBe("claude-opus-5-5");
+    expect(first.model).toBe("claude-sonnet-5-5");
     expect(first.thinking).toEqual({ type: "adaptive" });
     expect(first.fallbacks).toBe("default");
     const opening = first.messages[0]!.content as Anthropic.Beta.Messages.BetaTextBlockParam[];

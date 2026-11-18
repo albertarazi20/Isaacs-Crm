@@ -328,6 +328,35 @@ const monthKpis = (rows: MonthRow[], month: string): MonthKpis => {
   };
 };
 
+/** "Do this now": one line per merchant (the most urgent reason wins), as the signed-in person may see them. */
+export async function loadQueue(q: Db, today: ISODate): Promise<QueueItem[]> {
+  const seen = new Set<string>();
+  const queue: QueueItem[] = [];
+  const queued = await q.query<{
+    kind: QueueKind;
+    client_id: string;
+    business_name: string;
+    contact_name: string;
+    detail: string;
+    at: Date | string;
+    owner_name: string | null;
+  }>(QUEUE_SQL, [today]);
+  for (const r of queued.rows) {
+    if (seen.has(r.client_id) || queue.length >= QUEUE_MAX) continue;
+    seen.add(r.client_id);
+    queue.push({
+      kind: r.kind,
+      clientId: r.client_id,
+      businessName: r.business_name,
+      contactName: r.contact_name,
+      detail: r.detail,
+      at: iso(r.at),
+      ownerName: r.owner_name,
+    });
+  }
+  return queue;
+}
+
 export async function loadOverview(
   q: Db,
   args: { today: ISODate; month: string; manager: boolean },
@@ -361,31 +390,7 @@ export async function loadOverview(
 
   const buckets = (await q.query<BucketCount>(BUCKETS_SQL)).rows;
 
-  const seen = new Set<string>();
-  const queue: QueueItem[] = [];
-  const queued = await q.query<{
-    kind: QueueKind;
-    client_id: string;
-    business_name: string;
-    contact_name: string;
-    detail: string;
-    at: Date | string;
-    owner_name: string | null;
-  }>(QUEUE_SQL, [today]);
-  for (const r of queued.rows) {
-    // one line per merchant: the most urgent reason wins
-    if (seen.has(r.client_id) || queue.length >= QUEUE_MAX) continue;
-    seen.add(r.client_id);
-    queue.push({
-      kind: r.kind,
-      clientId: r.client_id,
-      businessName: r.business_name,
-      contactName: r.contact_name,
-      detail: r.detail,
-      at: iso(r.at),
-      ownerName: r.owner_name,
-    });
-  }
+  const queue = await loadQueue(q, today);
 
   const activity = (
     await q.query<{

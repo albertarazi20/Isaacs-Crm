@@ -18,6 +18,9 @@ export interface ShopSettingsRow {
   ai_enabled: boolean;
   ai_model: string;
   ai_daily_cap_cents: number;
+  brain_on: boolean;
+  brain_daily_per_rep: number;
+  playbook: string;
   /** US federal holidays are send days (0507). */
   send_on_holidays: boolean;
   /** The DNS gate (0503): the last stored check of the automation domain. */
@@ -32,7 +35,7 @@ export async function getShopSettings(q: Db): Promise<ShopSettingsRow> {
   const { rows } = await q.query<ShopSettingsRow>(
     `select shop_name, postal_address, daily_cap, amber_at, reserved_for_intake, sequences_enabled, send_window_start, send_window_end,
             send_on_weekends, per_merchant_daily, per_merchant_weekly, automation_from, automation_reply_to_rep,
-            ai_enabled, ai_model, ai_daily_cap_cents, send_on_holidays, open_nudge, dns_ok, dns_checked_at::text as dns_checked_at,
+            ai_enabled, ai_model, ai_daily_cap_cents, brain_on, brain_daily_per_rep, playbook, send_on_holidays, open_nudge, dns_ok, dns_checked_at::text as dns_checked_at,
             dns_result
        from shop_settings`,
   );

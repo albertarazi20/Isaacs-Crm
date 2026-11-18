@@ -16,6 +16,7 @@ import {
   listThreadsAction,
   loadRecommendationsAction,
   loadThreadAction,
+  openPreparedAction,
 } from "@/app/assistant-actions";
 import {
   moveToBucketAction as moveMerchantsToBucketAction,
@@ -55,6 +56,8 @@ interface OpenOptions {
   send?: boolean;
   /** Start a new conversation first (a recommendation always does). */
   fresh?: boolean;
+  /** Open what the assistant prepared in the background (a brain_preps id) with its buttons live. */
+  prepId?: string;
 }
 const AssistantContext = createContext<(o?: OpenOptions) => void>(() => undefined);
 
@@ -568,12 +571,33 @@ export function AssistantProvider({
     setView("chat");
   }, []);
 
+  /** What the assistant prepared in the background: made minutes ago, so its buttons stay live (the server checks them again on the click). */
+  const openPrepared = useCallback(
+    async (prepId: string) => {
+      const r = await call(openPreparedAction({ id: prepId }));
+      if (!r) return;
+      setThreadId(r.threadId);
+      setStatus({});
+      setItems(
+        r.items.map((i: ShownItem): Item =>
+          i.role === "user"
+            ? { kind: "user", text: i.text, label: "Prepared for you" }
+            : { kind: "assistant", text: i.text, actions: i.actions, tools: [], streaming: false },
+        ),
+      );
+      setView("chat");
+      router.refresh();
+    },
+    [call, router],
+  );
+
   const show = useCallback(
     (o: OpenOptions = {}) => {
       // a fresh ask stops whatever is still streaming, so it never lands in the old conversation
-      if (o.fresh) reset();
+      if (o.fresh || o.prepId) reset();
       setOpen(true);
       setRecs(null);
+      if (o.prepId) void openPrepared(o.prepId);
       void loadRecommendationsAction()
         .then((r) => setRecs(r.ok ? r.data : []))
         .catch(() => setRecs([]));
@@ -582,7 +606,7 @@ export function AssistantProvider({
         else setDraft(o.prompt);
       }
     },
-    [reset, state.ready],
+    [reset, state.ready, openPrepared],
   );
 
   // a prompt handed over by open({ send: true }) goes out once the sheet has rendered (after a reset, if any)

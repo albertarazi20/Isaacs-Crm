@@ -174,6 +174,7 @@ describe("C-6: an older backup still restores after a new column with a default"
       // like the offers above); both are in the database backup
       "approval_emails",
       "approvals",
+      "brain_preps", // 0554: what the assistant prepared in the background, throwaway working state like its threads
       "ai_runs",
       "app_state_tz",
       "area_code_tz",

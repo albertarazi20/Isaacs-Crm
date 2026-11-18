@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { OverviewRecommendations } from "@/components/assistant/OverviewRecommendations";
+import { PreparedForYou } from "@/components/assistant/PreparedForYou";
+import { listPreps, type PrepRow } from "@/lib/brain/queries";
 import { QueueList } from "@/components/dashboard/QueueList";
 import { WeeklyChart } from "@/components/dashboard/WeeklyChart";
 import { CountUp } from "@/components/fx";
@@ -406,7 +408,7 @@ function Sending({ meters }: { meters: EmailMeter[] }) {
   );
 }
 
-function body(o: Overview, now: Date, manager: boolean) {
+function body(o: Overview, now: Date, manager: boolean, preps: PrepRow[]) {
   const { kpis } = o;
   const last = monthName(kpis.lastMonth.month);
   const leads = o.series.map((w) => w.newLeads);
@@ -506,7 +508,7 @@ function body(o: Overview, now: Date, manager: boolean) {
               </span>
             }
           >
-            <QueueList items={o.queue} />
+            <QueueList items={o.queue} preps={preps} />
           </Panel>
         </div>
 
@@ -644,15 +646,23 @@ export default async function OverviewPage({
   const manager = CAN.seeEveryone(session.role);
   const me = await loadShell(session.userId);
   const gmail = await gmailStatus(session.userId);
-  const { overview, recommendations, assistant } = await db.withUser(session.userId, async (q) => ({
-    overview: await loadOverview(q, { today: me.ctx.today, month: monthOf(me.ctx.today), manager }),
-    recommendations: await loadRecommendations(q, {
-      today: me.ctx.today,
-      manager,
-      gmailConnected: gmail.connected,
+  const { overview, recommendations, assistant, preps } = await db.withUser(
+    session.userId,
+    async (q) => ({
+      overview: await loadOverview(q, {
+        today: me.ctx.today,
+        month: monthOf(me.ctx.today),
+        manager,
+      }),
+      recommendations: await loadRecommendations(q, {
+        today: me.ctx.today,
+        manager,
+        gmailConnected: gmail.connected,
+      }),
+      assistant: await assistantState(q, Boolean(env().ANTHROPIC_API_KEY)),
+      preps: await listPreps(q),
     }),
-    assistant: await assistantState(q, Boolean(env().ANTHROPIC_API_KEY)),
-  }));
+  );
   const nowMs = requestTimeMs();
   const first = (me.user?.name || me.user?.email.split("@")[0] || "").split(" ")[0];
   const { kpis } = overview;
@@ -708,7 +718,8 @@ export default async function OverviewPage({
       <div className="max-sm:order-[-2]">
         <OverviewRecommendations items={recommendations} ready={assistant.ready} />
       </div>
-      {body(overview, new Date(nowMs), manager)}
+      <PreparedForYou items={preps} />
+      {body(overview, new Date(nowMs), manager, preps)}
     </div>
   );
 }

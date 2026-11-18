@@ -8,12 +8,11 @@ environment variables; Claude only needs to be told they are set.
 ## Selective Capital, as of 2026-11-17 (this is the list that applies now)
 
 The live site is the Netlify project `selective-capital-crm`; the database is Supabase `aztoxzcmnvqaypjuuuwj`, in step
-with the code (migrations through 0553). What only you can do, most useful first:
+with the code (migrations through 0554). What only you can do, most useful first:
 
-1. **Add credit to the assistant's Anthropic account (the key is in; 2026-11-18).** The owner's key is set as a secret
-   `ANTHROPIC_API_KEY` on Netlify and signs in, but Anthropic answers every model call with "credit balance is too low".
-   Add credits under Plans & Billing at console.anthropic.com; the assistant then works with no further change. Until
-   then the panel says the account is out of credit.
+1. **The assistant and the brain are on (2026-11-18).** The key is a secret `ANTHROPIC_API_KEY` on Netlify and the account has
+   credit. Settings → AI chooses the model (Sonnet 5.5), switches the brain on or off, sets how many things it prepares
+   per rep a day, and holds the shop's house rules. The key was pasted into a chat: rotate it when convenient.
 2. **Set the shop's postal address** in Settings → Email. Bucket sequences and blasts wait until it is filled (the
    law asks for it in every automated email); welcome emails and replies already go.
 3. **Make the database password and the sign-in passcode random, and mark both secret** in Netlify (they are short

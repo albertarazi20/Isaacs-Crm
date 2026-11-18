@@ -31,5 +31,10 @@ export const aiSchema = z.object({
   aiEnabled: z.boolean(),
   aiModel: z.string().trim().min(3).max(60),
   aiDailyCapCents: z.coerce.number().int().min(0).max(100_000),
+  /** The background preparation of each rep's next steps (0554). */
+  brainOn: z.boolean(),
+  brainDailyPerRep: z.coerce.number().int().min(1).max(100),
+  /** The shop's house rules, read by the assistant in every conversation. */
+  playbook: z.string().max(4000),
 });
 export type AiSettingsInput = z.infer<typeof aiSchema>;

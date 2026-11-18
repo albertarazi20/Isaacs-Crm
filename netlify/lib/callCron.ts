@@ -4,7 +4,7 @@
  * Reads APP_URL and CRON_SECRET from the site's environment variables (scope: Functions).
  */
 export async function callCron(
-  job: "outbox" | "inbox" | "sheets" | "nightly" | "reminders",
+  job: "outbox" | "inbox" | "sheets" | "nightly" | "reminders" | "brain",
 ): Promise<void> {
   const base = process.env.APP_URL?.replace(/\/+$/, "");
   const secret = process.env.CRON_SECRET;

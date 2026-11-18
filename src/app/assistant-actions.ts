@@ -14,6 +14,7 @@ import { toActionError } from "@/lib/data/errors";
 import { UserError } from "@/lib/data/mutations";
 import { userContext } from "@/lib/data/queries";
 import type { ActionResult } from "@/lib/data/types";
+import { openPrep } from "@/lib/brain/queries";
 import { db } from "@/lib/db";
 import { gmailStatus } from "@/lib/system/gmail";
 
@@ -68,6 +69,25 @@ export async function loadRecommendationsAction(): Promise<ActionResult<Recommen
       });
     });
     return { ok: true, data };
+  } catch (e) {
+    return { ok: false, error: toActionError(e) };
+  }
+}
+
+/** Opens what the assistant prepared for the person: marks it read and returns the conversation with its buttons. */
+export async function openPreparedAction(
+  input: unknown,
+): Promise<ActionResult<{ threadId: string; items: ShownItem[] }>> {
+  const session = await requireSession();
+  try {
+    const { id } = idInput.parse(input);
+    const opened = await db.withUser(session.userId, async (q) => {
+      const threadId = await openPrep(q, id);
+      const items = threadId ? await loadThreadForDisplay(q, threadId) : null;
+      return threadId && items ? { threadId, items } : null;
+    });
+    if (!opened) throw new UserError("That is no longer there");
+    return { ok: true, data: opened };
   } catch (e) {
     return { ok: false, error: toActionError(e) };
   }

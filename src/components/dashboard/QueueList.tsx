@@ -8,6 +8,8 @@ import { Glyph, type GlyphName } from "@/components/shell/icons";
 import { NewLeadButton } from "@/components/shell/NewLead";
 import { cn, EmptyState } from "@/components/ui";
 import { queueBrief } from "@/lib/assistant/prompts";
+import { PREP_LABEL } from "@/lib/brain/briefs";
+import type { PrepRow } from "@/lib/brain/queries";
 import { timeAgo } from "@/lib/format";
 import type { QueueItem, QueueKind } from "@/lib/followup/overview";
 
@@ -58,7 +60,7 @@ const KIND: Record<QueueKind, { label: string; icon: GlyphName; chip: string; in
 const ORDER: QueueKind[] = ["reply", "opened", "call_now", "ready", "upload", "bounced", "overdue"];
 
 /** "Do this now": the ranked list of merchants that need a person, with a filter by why they are on it. */
-export function QueueList({ items }: { items: QueueItem[] }) {
+export function QueueList({ items, preps = [] }: { items: QueueItem[]; preps?: PrepRow[] }) {
   const { nowMs } = useApp();
   const ask = useAssistant();
   const [kind, setKind] = useState<QueueKind | "all">("all");
@@ -67,6 +69,9 @@ export function QueueList({ items }: { items: QueueItem[] }) {
   const present = ORDER.filter((k) => counts.has(k));
   const shown = kind === "all" ? items : items.filter((it) => it.kind === kind);
   const now = new Date(nowMs);
+  // what the assistant already prepared for a merchant on this list (the newest one, unread)
+  const prepared = new Map<string, PrepRow>();
+  for (const p of preps) if (p.clientId && !prepared.has(p.clientId)) prepared.set(p.clientId, p);
 
   if (items.length === 0)
     return (
@@ -115,6 +120,7 @@ export function QueueList({ items }: { items: QueueItem[] }) {
         {shown.map((it) => {
           const k = KIND[it.kind];
           const brief = queueBrief(it.kind, it.businessName || it.contactName, it.clientId);
+          const prep = prepared.get(it.clientId);
           return (
             <li
               key={`${it.kind}-${it.clientId}`}
@@ -149,6 +155,12 @@ export function QueueList({ items }: { items: QueueItem[] }) {
                     <span aria-hidden> · </span>
                     {it.detail}
                   </span>
+                  {prep ? (
+                    <span className="mt-0.5 flex items-center gap-1 text-[12px] font-medium text-accent">
+                      <Glyph name="sparkles" className="size-3" />
+                      {PREP_LABEL[prep.kind]}
+                    </span>
+                  ) : null}
                 </span>
                 <span className="shrink-0 text-right">
                   <span className="block text-xs text-muted tabular-nums">
@@ -165,9 +177,11 @@ export function QueueList({ items }: { items: QueueItem[] }) {
               </Link>
               <button
                 type="button"
-                onClick={() => ask({ ...brief, send: true, fresh: true })}
-                aria-label={brief.label}
-                title={brief.label}
+                onClick={() =>
+                  prep ? ask({ prepId: prep.id }) : ask({ ...brief, send: true, fresh: true })
+                }
+                aria-label={prep ? `Review what was prepared: ${it.businessName}` : brief.label}
+                title={prep ? "Review what the assistant prepared" : brief.label}
                 className="mx-2 flex size-10 shrink-0 items-center justify-center rounded-xl text-muted transition duration-150 hover:bg-brand-soft hover:text-accent active:scale-[0.95] sm:mr-3"
               >
                 <Glyph name="sparkles" className="size-4" />

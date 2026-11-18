@@ -33,7 +33,8 @@ export async function saveShopSettings(q: Db, i: ShopSettingsInput): Promise<voi
 
 export async function saveAiSettings(q: Db, i: AiSettingsInput): Promise<void> {
   await q.query(
-    "update shop_settings set ai_enabled = $1, ai_model = $2, ai_daily_cap_cents = $3",
-    [i.aiEnabled, i.aiModel, i.aiDailyCapCents],
+    `update shop_settings set ai_enabled = $1, ai_model = $2, ai_daily_cap_cents = $3,
+                              brain_on = $4, brain_daily_per_rep = $5, playbook = $6`,
+    [i.aiEnabled, i.aiModel, i.aiDailyCapCents, i.brainOn, i.brainDailyPerRep, i.playbook.trim()],
   );
 }

@@ -12,6 +12,7 @@ import { timeAgo } from "@/lib/format";
 import { requestTimeMs } from "@/lib/server-time";
 import { aiSpendByPurpose } from "@/lib/settings/ai";
 import { aiStatus, getShopSettings } from "@/lib/settings/queries";
+import { brainStatus } from "@/lib/system/brain";
 
 export const dynamic = "force-dynamic";
 
@@ -26,6 +27,7 @@ export default async function AiSettingsPage() {
     status: await aiStatus(q),
     spend: await aiSpendByPurpose(q),
   }));
+  const brain = await brainStatus();
   const keySet = Boolean(env().ANTHROPIC_API_KEY);
   const now = new Date(requestTimeMs());
   const spent = status.spent_today_cents;
@@ -48,7 +50,7 @@ export default async function AiSettingsPage() {
       role={session.role}
       current="/settings/ai"
       title="AI assistant"
-      description="The AI tags merchants' replies and splits pasted lead lines. It never sends mail or decides anything by itself: it fills in a form and the code checks it. Every run is logged with its cost."
+      description="The AI tags merchants' replies, splits pasted lead lines, answers the reps' questions and prepares their next steps. It never sends mail or decides anything by itself: it fills in a form and the code checks it. Every run is logged with its cost."
       notice={
         !keySet ? (
           <Note tone="warn">
@@ -119,6 +121,43 @@ export default async function AiSettingsPage() {
         </dl>
       </SettingsCard>
       <AiSettingsForm s={settings} />
+      <SettingsCard
+        title="The brain"
+        description="Every few minutes the assistant looks at each rep's Do this now list and prepares the next step for anything new. The rep finds it under Prepared for you on the Overview."
+        aside={
+          settings.brain_on && live ? (
+            <StatusChip tone="good">On</StatusChip>
+          ) : (
+            <StatusChip tone="warn">Off</StatusChip>
+          )
+        }
+        flush
+      >
+        <dl className="grid grid-cols-3 divide-x divide-border">
+          {[
+            { label: "Prepared, last 24 h", value: brain.ready24h, bad: false },
+            { label: "In progress", value: brain.working, bad: false },
+            { label: "Gave up on", value: brain.failed24h, bad: brain.failed24h > 0 },
+          ].map((x) => (
+            <div key={x.label} className="min-w-0 px-4 py-3.5 sm:px-6">
+              <dt className="eyebrow truncate">{x.label}</dt>
+              <dd
+                className={cn(
+                  "mt-1 text-[22px] leading-7 font-semibold tracking-tight tabular-nums",
+                  x.bad && "text-bad",
+                )}
+              >
+                {x.value}
+              </dd>
+            </div>
+          ))}
+        </dl>
+        {brain.lastError ? (
+          <p className="border-t border-border px-4 py-3 text-[12.5px] text-muted sm:px-6">
+            Last problem: {brain.lastError}
+          </p>
+        ) : null}
+      </SettingsCard>
       <AiSpendCard rows={spend} />
       <SettingsCard
         title="Recent runs"
