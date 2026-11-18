@@ -47,7 +47,7 @@ export default async function OfferPageRoute({ params }: { params: Promise<{ tok
       className={`${serif.variable} offer-paper min-h-dvh bg-[#f4f2ec] text-[#0e1424]`}
       style={{ colorScheme: "light" }}
     >
-      <div aria-hidden className="h-1 bg-linear-to-br from-[#4f46e5] via-[#6d28d9] to-[#c026d3]" />
+      <div aria-hidden className="h-1 bg-linear-to-r from-[#2e7bff] to-[#7c3aed]" />
       <header className="border-b border-[#e5e2d9] bg-[#f4f2ec]/90 backdrop-blur">
         <div className="mx-auto flex h-16 max-w-2xl items-center justify-between gap-4 px-5">
           <Image

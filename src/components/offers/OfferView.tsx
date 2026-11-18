@@ -37,9 +37,9 @@ const CARD =
 const INPUT =
   "h-12 w-full rounded-xl border border-[#d9d5ca] bg-white px-3.5 text-[16px] text-[#0e1424] placeholder:text-[#9a9ea9] focus:border-[#0e1424] focus:ring-[3px] focus:ring-[#0e1424]/10 focus:outline-none";
 const INK_BUTTON =
-  "inline-flex items-center justify-center gap-2 rounded-xl bg-[#6d28d9] font-semibold text-white transition hover:bg-[#5b21b6] active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-40";
+  "inline-flex items-center justify-center gap-2 rounded-xl bg-[#0b0b12] font-semibold text-white transition hover:bg-[#1f1f2e] active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-40";
 const BRAND_BUTTON =
-  "inline-flex items-center justify-center gap-2 bg-linear-to-br from-[#4f46e5] via-[#6d28d9] to-[#c026d3] font-semibold text-white shadow-[0_10px_28px_-10px_rgba(109,40,217,0.7)] transition hover:brightness-110 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-40 disabled:shadow-none";
+  "inline-flex items-center justify-center gap-2 bg-linear-to-r from-[#2e7bff] to-[#7c3aed] font-semibold text-white shadow-[0_10px_28px_-12px_rgba(124,58,237,0.65)] transition hover:brightness-110 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-40 disabled:shadow-none";
 
 /**
  * What the merchant sees: who it is for, how long it stands, the terms as a term sheet, and the form to accept with
@@ -82,7 +82,7 @@ export function OfferView({
       {preview ? (
         <p
           role="status"
-          className="rounded-2xl border border-[#6d28d9]/25 bg-[#6d28d9]/[0.06] px-4 py-2.5 text-[13px] font-medium text-[#5b21b6]"
+          className="rounded-2xl border border-[#7c3aed]/25 bg-[#7c3aed]/[0.06] px-4 py-2.5 text-[13px] font-medium text-[#5b21b6]"
         >
           Preview: you&apos;re signed in to the CRM, so this is the merchant&apos;s page as they see
           it. Nothing you do here counts.
@@ -91,7 +91,7 @@ export function OfferView({
 
       {/* who it is for */}
       <header>
-        <p className={cn(EYEBROW, "text-[#6d28d9]")}>Prepared for</p>
+        <p className={cn(EYEBROW, "text-[#7c3aed]")}>Prepared for</p>
         <h1
           style={SERIF}
           className="mt-2.5 text-[36px] leading-[1.05] font-medium tracking-[-0.01em] text-balance sm:text-[46px]"
@@ -149,7 +149,7 @@ export function OfferView({
           ) : null}
         </div>
         {running ? (
-          <p className="rounded-full bg-linear-to-br from-[#4f46e5] via-[#6d28d9] to-[#c026d3] px-3.5 py-1.5 text-[12px] font-semibold tracking-[0.14em] text-white uppercase tabular-nums shadow-[0_6px_18px_-6px_rgba(109,40,217,0.6)]">
+          <p className="rounded-full bg-[#7c3aed] px-3.5 py-1.5 text-[12px] font-semibold tracking-[0.14em] text-white uppercase tabular-nums shadow-[0_6px_18px_-8px_rgba(124,58,237,0.55)]">
             {left} left
           </p>
         ) : null}
@@ -158,10 +158,14 @@ export function OfferView({
       {/* the term sheet */}
       <section aria-label="Your funding offer" className={cn(CARD, "overflow-hidden p-1.5")}>
         <div className="rounded-[15px] border border-[#ece9e1]">
-          <div className="relative overflow-hidden rounded-t-[14px] bg-linear-to-br from-[#4f46e5] via-[#6d28d9] to-[#c026d3] px-6 pt-7 pb-6 text-center text-white">
+          <div className="relative overflow-hidden rounded-t-[14px] bg-[#0b0b12] px-6 pt-7 pb-6 text-center text-white">
             <div
               aria-hidden
-              className="pointer-events-none absolute -top-24 -right-20 size-64 rounded-full bg-white/15 blur-3xl"
+              className="pointer-events-none absolute -top-24 -right-20 size-64 rounded-full bg-[#7c3aed]/35 blur-3xl"
+            />
+            <div
+              aria-hidden
+              className="pointer-events-none absolute -bottom-28 -left-20 size-64 rounded-full bg-[#2e7bff]/25 blur-3xl"
             />
             <p className={cn(EYEBROW, "relative text-white/85")}>Funding offered</p>
             <p
@@ -224,7 +228,7 @@ export function OfferView({
       </section>
 
       {offer.message ? (
-        <figure className="border-l-[3px] border-[#c026d3] py-1 pl-5">
+        <figure className="border-l-[3px] border-[#7c3aed] py-1 pl-5">
           <blockquote style={SERIF} className="text-[18px] leading-relaxed text-[#2b2f3c] italic">
             “{offer.message}”
           </blockquote>

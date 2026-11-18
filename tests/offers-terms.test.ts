@@ -126,7 +126,7 @@ describe("the email", () => {
     expect(mail.text).toContain("Josh Miller\nSelective Capital\n(305) 555-0100\njosh@example.com");
     // a text link, not a button
     expect(mail.html).toMatch(
-      /<a href="https:\/\/crm\.example\.com\/offer\/abc" style="color:#6d28d9;text-decoration:underline/,
+      /<a href="https:\/\/crm\.example\.com\/offer\/abc" style="color:#7c3aed;text-decoration:underline/,
     );
     expect(mail.html).toContain("View your offer &rarr;");
   });
