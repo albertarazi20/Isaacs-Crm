@@ -124,9 +124,10 @@ describe("architecture boundaries", () => {
       "lib/data/mutations.ts": 2, // ${sets} from the CLIENT_COLUMNS map; ${fn} from a fixed list
       "lib/data/queries.ts": 1, // ${NAME_KEY_SQL("business_name")}
       "lib/approvals/queries.ts": 2, // ${SELECT} (one fixed column list); ${order} from a fixed three-way choice
-      // ${TZ_LABEL}: a constant CASE expression (time-zone label); stream 1 adds ${SENDS_SQL} / ${TOTALS_SQL}, the
-      // fixed fragments the template and bucket scores are counted with (the window is a bound parameter)
-      "lib/buckets/queries.ts": 3,
+      // ${MEMBER_SELECT} (the fixed lead-line column list, with ${TZ_LABEL}, a constant CASE expression) and
+      // ${ALL_MEMBERS_MAX} (a constant); stream 1 adds ${SENDS_SQL} / ${TOTALS_SQL}, the fixed fragments the template and
+      // bucket scores are counted with (the window is a bound parameter)
+      "lib/buckets/queries.ts": 4,
       // ${PENDING_ROW_COLUMNS}: the fixed column list a sheet row is read with before it is filed as a merchant —
       // the daily loop's read, and loadPendingRow (stream 1), which the form and the actions call
       "lib/sheets/file.ts": 2,

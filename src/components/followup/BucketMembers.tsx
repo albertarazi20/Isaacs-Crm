@@ -18,6 +18,9 @@ import { useToast } from "@/components/overlay";
 import { Glyph } from "@/components/shell/icons";
 import { NewLeadButton } from "@/components/shell/NewLead";
 import { Avatar, Button, EmptyState, IconButton, Input, Kbd, Select, cn } from "@/components/ui";
+import { followupCsv, fileSlug } from "@/lib/export/followup";
+import { matchesSearch } from "@/lib/followup/search";
+import { formatUS } from "@/lib/mca/phone";
 import type { BucketMember, BucketRow, TemplateRow } from "@/lib/buckets/queries";
 import type { SequenceStep } from "@/lib/followup/bucketBoard";
 import { formatDate, timeAgo } from "@/lib/format";
@@ -25,6 +28,8 @@ import type { ISODate } from "@/lib/mca/dates";
 import type { MemberMeta } from "@/lib/messaging/memberMeta";
 import { mergeValues, resolveMergeFields } from "@/lib/messaging/merge";
 import { isReadyBucket } from "./bucketCopy";
+import { DialListDialog } from "./DialList";
+import { downloadFile } from "./download";
 import { MemberDrawer, type MemberActions } from "./MemberDrawer";
 import {
   Ico,
@@ -68,6 +73,7 @@ export function BucketMembers({
   buckets,
   templates,
   steps,
+  canExport = false,
 }: {
   bucket: BucketRow;
   members: BucketMember[];
@@ -77,6 +83,8 @@ export function BucketMembers({
   templates: TemplateRow[];
   /** The bucket's sequence, so a row can say what goes out next. */
   steps: readonly SequenceStep[];
+  /** Managers may take a bucket out as a spreadsheet; the file is the server's rule too (src/app/api/export). */
+  canExport?: boolean;
 }) {
   const { today, nowMs, senderName } = useApp();
   const router = useRouter();
@@ -92,6 +100,7 @@ export function BucketMembers({
   const [busy, setBusy] = useState(false);
   const [openId, setOpenId] = useState<string | null>(null);
   const [confirmBlast, setConfirmBlast] = useState(false);
+  const [dialing, setDialing] = useState(false);
   const searchRef = useRef<HTMLLabelElement>(null);
 
   // "/" jumps to the search box, unless something is being typed or a sheet is open.
@@ -120,10 +129,7 @@ export function BucketMembers({
     return members.filter((m) => {
       if (tz && m.tz_label !== tz) return false;
       if (!matches(m, filter, today, nowMs)) return false;
-      if (!needle) return true;
-      return [m.business_name, m.contact_name, m.email, m.phone, m.state].some((v) =>
-        v.toLowerCase().includes(needle),
-      );
+      return needle === "" || matchesSearch(m, needle);
     });
   }, [members, filter, tz, query, today, nowMs]);
   const picked = shown.filter((m) => checked.has(m.client_id));
@@ -131,6 +137,26 @@ export function BucketMembers({
   const allShown = shown.length > 0 && picked.length === shown.length;
   const opened = openId ? (members.find((m) => m.client_id === openId) ?? null) : null;
   const narrowed = filter !== "all" || tz !== "" || query.trim() !== "";
+  // the dial list and the file are for the checked rows when some are checked, else for what is on screen
+  const working = picked.length > 0 ? picked : shown;
+  const workingWords =
+    picked.length > 0
+      ? `${picked.length} checked`
+      : narrowed
+        ? `${shown.length} shown`
+        : `all ${shown.length}`;
+
+  function exportCsv() {
+    const { csv, left } = followupCsv(working);
+    downloadFile(`selective-${fileSlug(bucket.name)}-${today}.csv`, csv);
+    toast({
+      message:
+        left > 0
+          ? `Exported ${working.length - left}. ${left} marked do not contact ${left === 1 ? "was" : "were"} left out`
+          : `Exported ${working.length} from ${bucket.name}`,
+      tone: "success",
+    });
+  }
 
   function toggleAll() {
     setChecked((cur) => {
@@ -369,6 +395,28 @@ export function BucketMembers({
               ))}
             </Select>
           ) : null}
+          <div className="flex w-full items-center gap-2 sm:ml-auto sm:w-auto">
+            <Button
+              size="sm"
+              onClick={() => setDialing(true)}
+              aria-label={`Dial list, ${workingWords}`}
+            >
+              <Glyph name="phone" className="size-3.5 text-muted" />
+              Dial list
+              <span className="text-[11px] text-muted tabular-nums">{working.length}</span>
+            </Button>
+            {canExport ? (
+              <Button
+                size="sm"
+                onClick={exportCsv}
+                disabled={working.length === 0}
+                aria-label={`Export CSV, ${workingWords}`}
+              >
+                <Glyph name="download" className="size-3.5 text-muted" />
+                Export CSV
+              </Button>
+            ) : null}
+          </div>
         </div>
 
         {/* Column heads; on a phone this row is just "check all". */}
@@ -443,9 +491,9 @@ export function BucketMembers({
                         {m.business_name}
                       </p>
                       <p className="truncate text-xs text-muted">
-                        {[m.contact_name, m.email || m.phone || "no email or phone"]
+                        {[m.contact_name, m.phone ? formatUS(m.phone) : "", m.email]
                           .filter(Boolean)
-                          .join(" · ")}
+                          .join(" · ") || "no email or phone"}
                       </p>
                     </div>
                   </div>
@@ -673,6 +721,14 @@ export function BucketMembers({
             </Button>
           </div>
         </div>
+      ) : null}
+
+      {dialing ? (
+        <DialListDialog
+          title={`Dial list · ${bucket.name}`}
+          members={working}
+          onClose={() => setDialing(false)}
+        />
       ) : null}
 
       <MemberDrawer

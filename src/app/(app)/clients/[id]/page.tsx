@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { ClientView } from "@/components/client/ClientView";
 import { approvalCadence, approvalForClient } from "@/lib/approvals/queries";
 import { requireSession } from "@/lib/auth/server";
+import { listBuckets } from "@/lib/buckets/queries";
 import { getClientDetail, userContext } from "@/lib/data/queries";
 import { db } from "@/lib/db";
 import { clientFreshness, listDocuments } from "@/lib/docs/upload";
@@ -51,6 +52,14 @@ export default async function ClientPage({ params }: { params: Promise<{ id: str
       freshness: await clientFreshness(q, id, today),
       approval: await approvalForClient(q, id),
       cadence: await approvalCadence(q),
+      buckets: (await listBuckets(q)).map((b) => ({ id: b.id, name: b.name })),
+      bucketId:
+        (
+          await q.query<{ bucket_id: string }>(
+            "select bucket_id from enrollments where client_id = $1 and stopped_at is null limit 1",
+            [id],
+          )
+        ).rows[0]?.bucket_id ?? null,
       today,
     };
   });
@@ -66,6 +75,8 @@ export default async function ClientPage({ params }: { params: Promise<{ id: str
       appUrl={env().APP_URL}
       approval={data.approval}
       cadence={data.cadence}
+      buckets={data.buckets}
+      bucketId={data.bucketId}
     />
   );
 }

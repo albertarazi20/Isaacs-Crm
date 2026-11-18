@@ -55,6 +55,10 @@ export interface BucketMember {
   /** The merchant's own last move: a reply, an open, a document they sent, a signature (see CardMeta.active_at). */
   active_at: string | null;
   rep_name: string;
+  /** ok, no_text, no_call, no_email or dnc: what the merchant has asked us not to do (0002). */
+  contact_status: string;
+  bucket_id: string;
+  bucket_name: string;
 }
 
 const TZ_LABEL = `case app.client_timezone(c)
@@ -62,11 +66,7 @@ const TZ_LABEL = `case app.client_timezone(c)
   when 'America/Phoenix' then 'MT' when 'America/Los_Angeles' then 'PT' when 'America/Anchorage' then 'AKT'
   when 'Pacific/Honolulu' then 'HT' else app.client_timezone(c) end`;
 
-/** The lead lines in one bucket, live enrolments only, soonest step first. */
-export async function listBucketMembers(q: Db, bucketId: string): Promise<BucketMember[]> {
-  const { rows } = await q.query<{ j: BucketMember }>(
-    `select to_jsonb(x) as j from (
-       select e.id as enrollment_id, c.id as client_id, c.business_name, c.contact_name, c.phone, c.email, c.state,
+const MEMBER_SELECT = `select e.id as enrollment_id, c.id as client_id, c.business_name, c.contact_name, c.phone, c.email, c.state,
               app.client_timezone(c) as timezone, ${TZ_LABEL} as tz_label,
               (select k.wanted_amount_cents from client_asks k where k.client_id = c.id order by k.created_at desc limit 1) as wanted_amount_cents,
               e.entered_at, e.next_step, e.next_due_on::text as next_due_on, e.steps_sent, e.paused,
@@ -84,18 +84,44 @@ export async function listBucketMembers(q: Db, bucketId: string): Promise<Bucket
                   where d.client_id = c.id and d.deleted_at is null and d.source in ('upload_link', 'email')),
                 (select max(ap.signed_at) from applications ap where ap.client_id = c.id)
               ) as active_at,
-              u.name as rep_name
+              u.name as rep_name, c.contact_status, b.id as bucket_id, b.name as bucket_name
          from enrollments e join clients c on c.id = e.client_id join app_users u on u.id = c.user_id
+         join buckets b on b.id = e.bucket_id`;
+
+const toMember = (j: BucketMember): BucketMember => ({
+  ...j,
+  wanted_amount_cents: j.wanted_amount_cents === null ? null : Number(j.wanted_amount_cents),
+});
+
+/** The lead lines in one bucket, live enrolments only, soonest step first. */
+export async function listBucketMembers(q: Db, bucketId: string): Promise<BucketMember[]> {
+  const { rows } = await q.query<{ j: BucketMember }>(
+    `select to_jsonb(x) as j from (
+       ${MEMBER_SELECT}
         where e.bucket_id = $1 and e.stopped_at is null
           and not exists (select 1 from trashed_clients tc where tc.client_id = c.id)
         order by e.paused, e.next_due_on nulls last, c.business_name
      ) x`,
     [bucketId],
   );
-  return rows.map((r) => ({
-    ...r.j,
-    wanted_amount_cents: r.j.wanted_amount_cents === null ? null : Number(r.j.wanted_amount_cents),
-  }));
+  return rows.map((r) => toMember(r.j));
+}
+
+/** The most lead lines any one list holds (the find-anyone search and the export of every bucket). */
+export const ALL_MEMBERS_MAX = 5000;
+
+/** Everyone in any bucket, as the signed-in person may see them: a merchant is in one bucket at a time. */
+export async function listAllMembers(q: Db): Promise<BucketMember[]> {
+  const { rows } = await q.query<{ j: BucketMember }>(
+    `select to_jsonb(x) as j from (
+       ${MEMBER_SELECT}
+        where e.stopped_at is null
+          and not exists (select 1 from trashed_clients tc where tc.client_id = c.id)
+        order by b.sort, lower(b.name), e.paused, e.next_due_on nulls last, c.business_name
+        limit ${ALL_MEMBERS_MAX}
+     ) x`,
+  );
+  return rows.map((r) => toMember(r.j));
 }
 
 export interface TemplateRow {

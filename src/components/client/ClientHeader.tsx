@@ -24,6 +24,7 @@ import {
   timerLabel,
 } from "@/lib/mca/stages";
 import { formatMoney } from "@/lib/money";
+import { BucketMover, type BucketOption } from "./BucketMover";
 import { ContactStatusButton } from "./ContactStatus";
 import { ContactActions } from "../ContactActions";
 import { toggleHot, useHotIds } from "../power/prefs";
@@ -97,7 +98,18 @@ function StarToggle({ id, name }: { id: string; name: string }) {
  * does to the record itself. Call, text and email sit beside the name on a wide screen; on a phone they ride in the
  * glass bar at the bottom (MobileActionBar).
  */
-export function ClientHero({ detail, className }: { detail: ClientDetail; className?: string }) {
+export function ClientHero({
+  detail,
+  className,
+  buckets = [],
+  bucketId = null,
+}: {
+  detail: ClientDetail;
+  className?: string;
+  /** Every active follow-up bucket, and the one this merchant is in now. */
+  buckets?: readonly BucketOption[];
+  bucketId?: string | null;
+}) {
   const { card, bringIn } = detail;
   const { today, timezone } = useApp();
   const { requestMove, dialogs } = useStageMove();
@@ -252,6 +264,14 @@ export function ClientHero({ detail, className }: { detail: ClientDetail; classN
           )}
         </p>
         <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto sm:flex-wrap sm:items-center">
+          {buckets.length > 0 ? (
+            <BucketMover
+              clientId={card.id}
+              current={bucketId}
+              buckets={buckets}
+              locked={Boolean(bringIn.brought_in_at)}
+            />
+          ) : null}
           <div className="relative w-full sm:w-auto">
             <select
               aria-label="Move to stage"
@@ -260,7 +280,7 @@ export function ClientHero({ detail, className }: { detail: ClientDetail; classN
               onChange={(e) => void move(e.target.value)}
               className="h-10 w-full cursor-pointer appearance-none rounded-full border border-border bg-surface pr-8 pl-3.5 text-sm font-medium text-text shadow-card transition duration-150 hover:border-border-strong hover:bg-surface-3 focus:border-accent focus:ring-[3px] focus:ring-ring focus:outline-none disabled:cursor-not-allowed disabled:opacity-50 sm:h-8 sm:w-40 sm:text-[13px]"
             >
-              <option value="">Move to…</option>
+              <option value="">Change stage…</option>
               {STAGE_GROUPS.map((g) => (
                 <optgroup key={g.key} label={g.label}>
                   {CORE_STAGES.filter((s) => s.group === g.key).map((s) => (

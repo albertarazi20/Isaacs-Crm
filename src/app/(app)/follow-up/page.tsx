@@ -3,6 +3,7 @@ import { AskButton } from "@/components/assistant/AskButton";
 import { ALL_BUCKETS_BRIEF, bucketBrief } from "@/lib/assistant/prompts";
 import Link from "next/link";
 import { BucketBoard } from "@/components/followup/BucketBoard";
+import { AllMembersSearch } from "@/components/followup/AllMembersSearch";
 import { BucketBrief } from "@/components/followup/BucketBrief";
 import { BucketMembers } from "@/components/followup/BucketMembers";
 import { BucketSwitcher } from "@/components/followup/BucketSwitcher";
@@ -12,7 +13,13 @@ import { Glyph } from "@/components/shell/icons";
 import { EmptyState, PageHeader, buttonClass } from "@/components/ui";
 import { requirePage, requireSession } from "@/lib/auth/server";
 import { CAN } from "@/lib/auth/roles";
-import { bucketScores, listBucketMembers, listBuckets, listTemplates } from "@/lib/buckets/queries";
+import {
+  bucketScores,
+  listAllMembers,
+  listBucketMembers,
+  listBuckets,
+  listTemplates,
+} from "@/lib/buckets/queries";
 import { userContext } from "@/lib/data/queries";
 import { db } from "@/lib/db";
 import { bucketPulse, listSequences } from "@/lib/followup/bucketBoard";
@@ -85,7 +92,8 @@ export default async function FollowUpPage({
     if (!selected) {
       const { today } = await userContext(q);
       const pulse = await bucketPulse(q, today);
-      return { buckets, selected, scores, sequences, postal, pulse };
+      const everyone = await listAllMembers(q);
+      return { buckets, selected, scores, sequences, postal, pulse, everyone };
     }
     const members = await listBucketMembers(q, selected.id);
     const meta = await loadMemberMeta(
@@ -124,6 +132,7 @@ export default async function FollowUpPage({
           }
         />
         {hold}
+        <AllMembersSearch members={data.everyone} canExport={CAN.exportData(session.role)} />
         {buckets.length === 0 ? (
           <EmptyState title="No buckets yet" action={<NewBucketButton canShare={manager} />}>
             A bucket is a follow-up list: the merchants in it, and the emails they get.
@@ -195,6 +204,7 @@ export default async function FollowUpPage({
         buckets={buckets}
         templates={templates}
         steps={steps}
+        canExport={CAN.exportData(session.role)}
       />
     </div>
   );

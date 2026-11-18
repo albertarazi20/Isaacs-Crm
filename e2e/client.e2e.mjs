@@ -1067,7 +1067,7 @@ export default async function clientFlow({ email }) {
         5000,
       )),
     );
-    check("the select goes back to 'Move to…' after a move", (await sel.inputValue()) === "");
+    check("the select goes back to 'Change stage…' after a move", (await sel.inputValue()) === "");
     const sc = await rows(
       "select from_stage, to_stage from activities where client_id = $1 and kind = 'stage_change'",
       [c.id],

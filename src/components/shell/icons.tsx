@@ -66,6 +66,13 @@ const PATHS = {
   arrowUpRight: <path d="M7 17 17 7M8 7h9v9" />,
   arrowRight: <path d="M5 12h14M13 6l6 6-6 6" />,
   check: <path d="m5 12.5 4.5 4.5L19 7.5" />,
+  copy: (
+    <>
+      <rect x="9" y="9" width="11" height="11" rx="2.5" />
+      <path d="M5 15V6a2 2 0 0 1 2-2h8" />
+    </>
+  ),
+  download: <path d="M12 4v11M7 11l5 5 5-5M5 20h14" />,
   clock: (
     <>
       <circle cx="12" cy="12" r="9" />

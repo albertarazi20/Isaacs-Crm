@@ -61,6 +61,15 @@ const card = (over: Partial<ClientCard> = {}): ClientCard =>
     ...over,
   }) as ClientCard;
 
+describe("csvCell and phone numbers", () => {
+  it("leaves a plain international number alone, and still guards anything else that starts with a plus", () => {
+    expect(csvCell("+13055550100")).toBe("+13055550100");
+    expect(csvCell("+1 305 555 0100")).toBe("'+1 305 555 0100");
+    expect(csvCell("+1+2")).toBe("'+1+2");
+    expect(csvCell("+cmd|' /C calc'!A0")).toBe("'+cmd|' /C calc'!A0");
+  });
+});
+
 describe("csvCell", () => {
   it("quotes commas, quotes and newlines", () => {
     expect(csvCell("a,b")).toBe('"a,b"');

@@ -435,3 +435,30 @@ pnpm vitest run tests/assistant-live.test.ts`, a few cents).
   (12 checks on the stand-in model). Full browser run 596/596.
 - **Left on purpose:** nothing is sent by the brain (an email is a button the rep reviews); buttons done in an opened
   preparation are not remembered if it is opened again.
+
+## Follow Up tools, 2026-11-18
+
+The owner asked for: a dial list per bucket to copy into Google Voice, merchant information that is easy to find, a search
+in every bucket and across all buckets, a CSV export per bucket for a sheet and a text blast, and a fix for "can't move
+it to another bucket" (the merchant page's Move to… menu moved the _stage_, not the bucket).
+
+- **Rows** show the number (it was hidden whenever an email existed). `matchesSearch` (src/lib/followup/search.ts) needs
+  every typed word somewhere on the merchant (name, contact, email, state, bucket, rep) and matches a number as digits, so
+  "305-555", "(305) 555 01" and "+1305555" all find (305) 555-0100.
+- **Dial list** (`DialList.tsx`, src/lib/followup/dial.ts): the checked rows, else what the search and filter show. One
+  "next to dial" card with the number, the merchant's own clock and a warning outside 8 am to 9 pm there; Copy number,
+  Open in Google Voice (the existing `voiceCallHref`), Dialed next (which puts the next number on the clipboard);
+  Copy all numbers (one a line) and Copy for a sheet (tabs). Do-not-contact, no-call and unusable numbers are left off
+  with the reason; one number on two records is dialed once.
+- **All buckets search** (`AllMembersSearch.tsx`, `listAllMembers`): results say which bucket, copy the number, open the
+  merchant, and can become a dial list.
+- **Export CSV** (managers, the same rule as every other export): per bucket from the rows on screen or checked (client
+  side, `followupCsv`), and every bucket through `/api/export/followup?bucket=all|<id>`. Do-not-contact is left out and
+  counted; Call OK / Text OK / Email OK columns mark the rest; the E.164 column is `+13055550100` (csvCell now leaves a
+  plain international number alone, every other leading plus is still guarded).
+- **Moving a merchant:** the merchant page has a Move to bucket select showing the current bucket (`BucketMover`); the
+  stage control now reads "Change stage…". Locked for a merchant who was handed off.
+- **Tests:** tests/followup-tools.test.ts (14), tests/followup-members.test.ts (6, DB-proving), e2e/follow-up-tools.e2e.mjs
+  (26 checks, including a rep who gets the dial list and no export). boundaries allow-list for `buckets/queries.ts` is 4.
+- **Left:** texting stays parked (the file is for the owner's own sheet); the dial list does not log a call (the call list
+  on Today still does).

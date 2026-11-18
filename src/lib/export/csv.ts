@@ -8,8 +8,11 @@ import { stageDef, timerLabel } from "../mca/stages";
  */
 export function csvCell(value: unknown): string {
   let s = value === null || value === undefined ? "" : String(value);
+  // a plain international number (+13055550100) is only digits after the plus: nothing a spreadsheet could run, and a
+  // text-blast tool needs it exactly as it is, without a stray apostrophe in front
+  const plainPhone = /^\+\d{7,15}$/.test(s);
   // Some spreadsheets skip leading spaces before deciding a cell is a formula, so look past them.
-  if (/^[\t\r]/.test(s) || /^[=+\-@]/.test(s.trimStart())) s = `'${s}`;
+  if (!plainPhone && (/^[\t\r]/.test(s) || /^[=+\-@]/.test(s.trimStart()))) s = `'${s}`;
   return /[",\r\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
 }
 

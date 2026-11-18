@@ -34,6 +34,8 @@ export function ClientView({
   appUrl,
   approval = null,
   cadence = [],
+  buckets = [],
+  bucketId = null,
 }: {
   detail: ClientDetail;
   serverNow: number;
@@ -46,6 +48,9 @@ export function ClientView({
   /** The merchant's open approval, else their latest one. */
   approval?: ApprovalRow | null;
   cadence?: readonly CadenceStep[];
+  /** The follow-up buckets to move this merchant between, and the one they are in. */
+  buckets?: readonly { id: string; name: string }[];
+  bucketId?: string | null;
 }) {
   const { card } = detail;
   return (
@@ -53,7 +58,7 @@ export function ClientView({
       {/* first in the page so the phone's own copy of the buttons is the first one found */}
       <MobileActionBar card={card} />
       <div className="stagger flex min-w-0 flex-col gap-4 max-sm:pb-10 lg:gap-5">
-        <ClientHero detail={detail} />
+        <ClientHero detail={detail} buckets={buckets} bucketId={bucketId} />
         <div className="flex flex-col gap-4 xl:grid xl:grid-cols-[minmax(0,1fr)_minmax(0,420px)] xl:items-start xl:gap-5">
           <BringInStrip
             detail={detail}
