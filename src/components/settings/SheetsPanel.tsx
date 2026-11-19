@@ -5,7 +5,7 @@ import { useState } from "react";
 import { connectSheetAction, syncSheetNowAction, updateSheetAction } from "@/app/sheets-actions";
 import { useApp } from "@/components/app-context";
 import { useFormState, useRun } from "@/components/client/parts";
-import { useToast } from "@/components/overlay";
+import { NETWORK_ERROR, useToast } from "@/components/overlay";
 import { Badge, Button, buttonClass, cn, EmptyState, Field, Input, Select } from "@/components/ui";
 import type { BucketRow } from "@/lib/buckets/queries";
 import { timeAgo } from "@/lib/format";
@@ -40,15 +40,21 @@ export function SheetsPanel({
 
   async function connect() {
     setBusy(true);
-    const r = await connectSheetAction({
-      name: v.name,
-      url: v.url,
-      tab: v.tab,
-      targetBucketId: v.targetBucketId || null,
-      autoFile: v.autoFile,
-      shared: v.shared,
-    });
-    setBusy(false);
+    let r: Awaited<ReturnType<typeof connectSheetAction>>;
+    try {
+      r = await connectSheetAction({
+        name: v.name,
+        url: v.url,
+        tab: v.tab,
+        targetBucketId: v.targetBucketId || null,
+        autoFile: v.autoFile,
+        shared: v.shared,
+      });
+    } catch {
+      return toast({ message: NETWORK_ERROR, tone: "error" });
+    } finally {
+      setBusy(false);
+    }
     if (!r.ok) return toast({ message: r.error, tone: "error" });
     toast({ message: `Connected. Tabs: ${r.data.tabs.join(", ")}`, tone: "success" });
     set("url", "");
@@ -199,8 +205,14 @@ export function SheetsPanel({
                     disabled={busy}
                     onClick={async () => {
                       setBusy(true);
-                      const r = await syncSheetNowAction({ id: s.id });
-                      setBusy(false);
+                      let r: Awaited<ReturnType<typeof syncSheetNowAction>>;
+                      try {
+                        r = await syncSheetNowAction({ id: s.id });
+                      } catch {
+                        return toast({ message: NETWORK_ERROR, tone: "error" });
+                      } finally {
+                        setBusy(false);
+                      }
                       if (!r.ok) return toast({ message: r.error, tone: "error" });
                       toast({
                         message: `${r.data.rows} rows, ${r.data.added} new`,

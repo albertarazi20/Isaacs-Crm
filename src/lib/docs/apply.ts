@@ -97,7 +97,9 @@ export async function openApplicationPage(
                  where a.client_id = c.id
                  order by a.signed_at desc limit 1) as signed_at
          from clients c join app_users u on u.id = c.user_id
-        where c.application_token = $1 and not exists (select 1 from trashed_clients t where t.client_id = c.id)`,
+        where (c.application_token = $1
+               or c.id = (select a.client_id from client_token_aliases a where a.token = $1 and a.kind = 'application'))
+          and not exists (select 1 from trashed_clients t where t.client_id = c.id)`,
       [token],
     );
     const r = rows[0];
@@ -308,7 +310,9 @@ export async function signApplication(
         `select c.id, c.user_id,
                 (select shop_name from shop_settings) as shop_name,
                 exists (select 1 from client_asks k where k.client_id = c.id) as has_ask
-           from clients c where c.application_token = $1
+           from clients c
+          where c.application_token = $1
+             or c.id = (select a.client_id from client_token_aliases a where a.token = $1 and a.kind = 'application')
             for update of c`,
         [a.token],
       )

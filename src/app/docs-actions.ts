@@ -1,5 +1,6 @@
 "use server";
 
+import { recordAuditHere } from "@/lib/system/audit";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { requireSession } from "@/lib/auth/server";
@@ -86,6 +87,12 @@ export async function deleteDocumentAction(input: unknown): Promise<ActionResult
     await db.withUser(session.userId, (q) =>
       deleteDocument(q, documentStore(env()), i.documentId, session.userId),
     );
+    await recordAuditHere({
+      kind: "document_deleted",
+      userId: session.userId,
+      email: session.email,
+      detail: { document_id: i.documentId },
+    });
     revalidatePath("/", "layout");
     return { ok: true, data: null };
   } catch (e) {

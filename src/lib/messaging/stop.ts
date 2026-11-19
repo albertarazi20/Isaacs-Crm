@@ -64,6 +64,10 @@ const STRONG = [
   new RegExp(`^opt (?:me|us) out${T}$`),
   new RegExp(`^no more ${NOUN}${T}$`),
   new RegExp(`\\b(?:do not|don't|dont|never) (?:email|e mail|contact|call|text|message|mail)${T}$`),
+  // "don't call or email me", "never text me or email me again": the list of verbs names email
+  new RegExp(
+    `\\b(?:do not|don't|dont|never) (?:(?:call|text|contact|message|mail)(?: me| us)? (?:or|and|nor) )+(?:email|e mail|contact|message|mail)${T}$`,
+  ),
   new RegExp(
     `\\b(?:do not|don't|dont|never) send (?:me|us) (?:anything|any|more|another|further|nothing|emails?|e mails?|messages?|mail|texts?)${T}$`,
   ),
@@ -76,6 +80,20 @@ const STRONG = [
   /\bno longer interested(?: (?:thanks|in this|at all|in any))*$/,
   /\bnot interested(?: (?:thanks|anymore|any more|in this|at all|in any))*$/,
 ];
+
+/** An opt-out phrase about the phone only ("stop calling me", "don't text"): it says nothing about email by itself. */
+const PHONE_ONLY = /^(?:stop (?:calling|texting)|(?:do not|don't|dont|never) (?:call|text))\b/;
+/** Words that put email or writing in a fragment: a phone-only phrase that also says them is about email too. */
+const NAMES_WRITING =
+  /\b(?:e ?mail|e mails?|mail|write|writing|message|messages|messaging|contact)\b/;
+/**
+ * A fragment that ASKS to be written to ("email me instead", "just write", "reach me by email"), not one that merely
+ * mentions email ("I get too many emails", "you're spamming my email" are complaints, and a complaint is an opt-out).
+ */
+const INVITES_WRITING =
+  /\b(?:(?:e ?mail|write|message|send) (?:to )?(?:me|us)\b|(?:by|via|through) (?:e ?mails?|writing)\b|in writing\b|(?:prefer|rather) (?:e ?mails?|writing)\b|e ?mails? (?:is|works) (?:better|best|easier|fine|great|preferred)\b|reach me\b|send me (?:it|them|the|an?|your|over|that)\b)/;
+/** A fragment that refuses ("don't email me", "stop") never counts as an invitation, whatever words it shares. */
+const REFUSES = /\b(?:not|no|never|don't|dont|stop|without|cannot|can't)\b/;
 
 /** What a fragment says once the polite edges are trimmed; null if it was only a greeting or politeness. */
 function core(fragment: string): string | null {
@@ -110,7 +128,13 @@ export function isOptOutText(text: string): boolean {
     .map(core)
     .filter((f): f is string => f !== null);
   if (fragments.length === 0) return false;
-  if (fragments.some((f) => STRONG.some((re) => re.test(f)))) return true;
+  const strong = fragments.filter((f) => STRONG.some((re) => re.test(f)));
+  // "stop calling" / "don't text me" only asks us to leave the phone alone: with an offer to be written to ("don't call,
+  // just email me the numbers") the lead is alive and must not be opted out of email for good. Any other strong phrase
+  // (or one that names email, mail or a message) is a real opt-out wherever the rest of the message points.
+  if (strong.some((f) => !PHONE_ONLY.test(f) || NAMES_WRITING.test(f))) return true;
+  if (strong.length > 0 && !fragments.some((f) => INVITES_WRITING.test(f) && !REFUSES.test(f)))
+    return true;
   // a bare keyword in a short reply ("Stop." after a complaint, "Stop" over a signature name) is the opt-out
   const words = fragments.join(" ").split(" ").length;
   return (

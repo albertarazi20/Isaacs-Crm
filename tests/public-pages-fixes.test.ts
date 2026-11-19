@@ -152,8 +152,10 @@ describe("scanPending", () => {
 describe("rep notices for accepted offers", () => {
   const offerFor = async (client: string, kind: string, scan: "pending" | "clean", n: number) => {
     await t.pool.query(
-      `insert into documents (user_id, client_id, kind, filename, content_type, size_bytes, sha256, storage_key, source, scan_status)
-       values ($1, $2, $3, 'f.pdf', 'application/pdf', 10, $4, $5, 'upload_link', $6)`,
+      `insert into documents (user_id, client_id, kind, filename, content_type, size_bytes, sha256, storage_key, source, scan_status,
+                              label_by, label_confidence, label_reason)
+       values ($1, $2, $3, 'f.pdf', 'application/pdf', 10, $4, $5, 'upload_link', $6,
+               'rule', 0.7, 'chosen by the merchant on the offer page')`,
       [rep, client, kind, `${n}`.padStart(64, "0"), `k/${n}`, scan],
     );
     const o = await one<{ id: string; token: string }>(

@@ -9,7 +9,7 @@ import {
 } from "@/app/buckets-actions";
 import { useFormState, useRun } from "@/components/client/parts";
 import { AskButton } from "@/components/assistant/AskButton";
-import { Drawer } from "@/components/overlay";
+import { Dialog, Drawer } from "@/components/overlay";
 import { Badge, Button, EmptyState, Field, Input, Textarea, cn } from "@/components/ui";
 import type { TemplateRow, TemplateScore } from "@/lib/buckets/queries";
 import { checkClaims } from "@/lib/messaging/claims";
@@ -197,6 +197,20 @@ export function TemplateEditor({
     scores.filter((x) => x.auto_paused_at).map((x) => [x.template_id, x] as const),
   );
 
+  // an archived template drops out of every sequence that uses it, so those merchants would silently get no email
+  const [confirmArchive, setConfirmArchive] = useState<TemplateRow | null>(null);
+
+  async function archive(t: TemplateRow) {
+    setBusy(true);
+    const ok = await run(
+      archiveTemplateAction({ templateId: t.id, archived: !t.archived }),
+      t.archived ? "Restored" : "Archived",
+    );
+    setBusy(false);
+    setConfirmArchive(null);
+    if (ok) router.refresh();
+  }
+
   async function approve(t: TemplateRow, approved: boolean, done: string) {
     setBusy(true);
     const ok = await run(approveTemplateAction({ templateId: t.id, approved }), done);
@@ -349,14 +363,9 @@ export function TemplateEditor({
                   size="sm"
                   variant="ghost"
                   disabled={busy}
-                  onClick={async () => {
-                    setBusy(true);
-                    const ok = await run(
-                      archiveTemplateAction({ templateId: t.id, archived: !t.archived }),
-                      t.archived ? "Restored" : "Archived",
-                    );
-                    setBusy(false);
-                    if (ok) router.refresh();
+                  onClick={() => {
+                    if (!t.archived && t.used_in.length > 0) setConfirmArchive(t);
+                    else void archive(t);
                   }}
                 >
                   {t.archived ? "Restore" : "Archive"}
@@ -366,6 +375,34 @@ export function TemplateEditor({
           ))}
         </ul>
       )}
+      <Dialog
+        open={confirmArchive !== null}
+        onClose={() => setConfirmArchive(null)}
+        title={confirmArchive ? `Archive ${confirmArchive.name}?` : "Archive template"}
+        footer={
+          <>
+            <Button variant="ghost" onClick={() => setConfirmArchive(null)}>
+              Keep it
+            </Button>
+            <Button
+              variant="danger"
+              disabled={busy}
+              onClick={() => confirmArchive && void archive(confirmArchive)}
+            >
+              Archive anyway
+            </Button>
+          </>
+        }
+      >
+        {confirmArchive ? (
+          <p className="text-sm text-text-2">
+            This template is used in {confirmArchive.used_in.join(", ")}. Once it is archived,
+            merchants in {confirmArchive.used_in.length === 1 ? "that bucket" : "those buckets"}{" "}
+            will stop receiving this email. Restore it any time, or swap it out of the sequence
+            first.
+          </p>
+        ) : null}
+      </Dialog>
       {editing ? (
         <Editor
           t={editing === "new" ? null : editing}

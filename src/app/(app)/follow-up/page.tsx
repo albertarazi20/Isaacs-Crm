@@ -21,13 +21,13 @@ import {
   listTemplates,
 } from "@/lib/buckets/queries";
 import { userContext } from "@/lib/data/queries";
+import { isUuid } from "@/lib/data/schemas";
 import { db } from "@/lib/db";
 import { bucketPulse, listSequences } from "@/lib/followup/bucketBoard";
 import { loadMemberMeta } from "@/lib/messaging/memberMeta";
 
 export const dynamic = "force-dynamic";
 
-const UUID = /^[0-9a-f-]{36}$/;
 const SCORE_DAYS = 90;
 
 /** Sequences and blasts wait for the shop's postal address; say so wherever they would have gone out. */
@@ -64,7 +64,7 @@ export async function generateMetadata({
   searchParams: Promise<{ b?: string }>;
 }): Promise<Metadata> {
   const { b } = await searchParams;
-  if (!b || !UUID.test(b)) return { title: "Follow Up" };
+  if (!b || !isUuid(b)) return { title: "Follow Up" };
   const session = await requireSession();
   const name = await db.withUser(session.userId, async (q) => {
     const r = await q.query<{ name: string }>("select name from buckets where id = $1", [b]);
@@ -83,7 +83,7 @@ export default async function FollowUpPage({
   const manager = CAN.manageTeam(session.role);
   const data = await db.withUser(session.userId, async (q) => {
     const buckets = await listBuckets(q);
-    const selected = (b && UUID.test(b) ? buckets.find((x) => x.id === b) : null) ?? null;
+    const selected = (b && isUuid(b) ? buckets.find((x) => x.id === b) : null) ?? null;
     const scores = await bucketScores(q, SCORE_DAYS);
     const sequences = await listSequences(q);
     const postal =

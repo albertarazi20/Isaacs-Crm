@@ -69,9 +69,13 @@ export default async function documentsFlow({ email }) {
     `${got.status()}`,
   );
   check(
-    "no view is logged and nothing is stamped on it",
-    (await one("select count(*)::int n from document_views where document_id = $1", [filed.id]))
-      .n === 0,
+    "the open is logged as one view by the rep, and nothing is stamped on the file",
+    (
+      await one(
+        "select count(*)::int n from document_views where document_id = $1 and action = 'view' and viewer_user_id is not null",
+        [filed.id],
+      )
+    ).n === 1,
   );
   check(
     "the statements checklist notes the month as received",

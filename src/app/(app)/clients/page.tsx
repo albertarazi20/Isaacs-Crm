@@ -5,7 +5,7 @@ import { OverflowMenu } from "@/components/OverflowMenu";
 import { Glyph } from "@/components/shell/icons";
 import { NewLeadButton } from "@/components/shell/NewLead";
 import { PageHeader } from "@/components/ui";
-import { requireSession } from "@/lib/auth/server";
+import { CAN, requireSession } from "@/lib/auth/server";
 import { listCardMeta } from "@/lib/data/cardMeta";
 import { listCards, userContext } from "@/lib/data/queries";
 import { db } from "@/lib/db";
@@ -21,6 +21,8 @@ export default async function ClientsPage() {
     const ctx = await userContext(q);
     return { cards, meta, today: ctx.today };
   });
+  // exports are manager-only on the server too; a rep is not shown a button that can only fail
+  const canExport = CAN.exportData(session.role);
   const overdue = cards.filter((c) => c.next_due_on !== null && c.next_due_on < today).length;
   const brought = cards.filter((c) => meta[c.id]?.brought_in_at).length;
 
@@ -42,15 +44,22 @@ export default async function ClientsPage() {
         actions={
           <>
             {/* Downloads are plain links (the browser saves the file); pages go through the router. */}
-            <OverflowMenu label="Export and tools" text="Export">
-              <a href="/api/export/clients">
-                <Glyph name="sheet" className="size-4 text-muted" />
-                Download merchants (CSV)
-              </a>
-              <a href="/api/export/activity">
-                <Glyph name="file" className="size-4 text-muted" />
-                Download notes (CSV)
-              </a>
+            <OverflowMenu
+              label={canExport ? "Export and tools" : "Tools"}
+              text={canExport ? "Export" : "Tools"}
+            >
+              {canExport ? (
+                <a href="/api/export/clients">
+                  <Glyph name="sheet" className="size-4 text-muted" />
+                  Download merchants (CSV)
+                </a>
+              ) : null}
+              {canExport ? (
+                <a href="/api/export/activity">
+                  <Glyph name="file" className="size-4 text-muted" />
+                  Download notes (CSV)
+                </a>
+              ) : null}
               <Link href="/import">
                 <Glyph name="upload" className="size-4 text-muted" />
                 Import a file
@@ -60,7 +69,7 @@ export default async function ClientsPage() {
           </>
         }
       />
-      <ClientsTable cards={cards} meta={meta} />
+      <ClientsTable cards={cards} meta={meta} canExport={canExport} />
     </div>
   );
 }

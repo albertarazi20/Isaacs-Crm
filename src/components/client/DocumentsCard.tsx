@@ -7,9 +7,11 @@ import type { Freshness } from "@/lib/docs/freshness";
 import { DOC_KINDS, DOC_LABELS, type DocKind } from "@/lib/docs/label";
 import type { DocumentRow } from "@/lib/docs/upload";
 import { formatDate } from "@/lib/format";
+import { useApp } from "../app-context";
 import { useToast } from "../overlay";
 import { Badge, Button, buttonClass, cn, Input, Select } from "../ui";
 import { Icon } from "./icons";
+import { dateInTz } from "./logic";
 import { ConfirmButton, Panel, useRun } from "./parts";
 import { Dot } from "./primitives";
 import { ResetUploadLinkButton, UploadLinkButton } from "./UploadLinkButton";
@@ -95,6 +97,8 @@ export function DocumentsCard({
 }) {
   const router = useRouter();
   const toast = useToast();
+  // dates are the rep's day, not the UTC day: an upload at 8:30pm Eastern would otherwise read as tomorrow
+  const { timezone } = useApp();
   const run = useRun();
   const input = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
@@ -239,7 +243,7 @@ export function DocumentsCard({
                         : d.source === "email"
                           ? "from email"
                           : (d.uploaded_by_name ?? "staff")}{" "}
-                      · {formatDate(d.created_at.slice(0, 10), today)}
+                      · {formatDate(dateInTz(d.created_at, timezone), today)}
                     </p>
                     <div className="mt-1.5 flex flex-wrap items-center gap-1">
                       {d.scan_status === "clean" ? (

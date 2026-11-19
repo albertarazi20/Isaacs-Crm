@@ -47,3 +47,40 @@ export function checkClaims(text: string, ctx?: ClaimContext): ClaimCheck {
     );
   return { ok: reasons.length === 0, reasons };
 }
+
+const escapeRegex = (s: string): string => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+/**
+ * Take the merchant's OWN words out of a filled message before the claim check reads it. A business called "Mike's Loan
+ * Office" or "Guaranteed Roofing" is not the shop saying a loan or a guarantee: the check is about what the engine
+ * says, and the merchant's name is a fact about them. Only a value that would trip a rule by itself is cut out (a name
+ * like "Al" is never touched, so nothing else in the text can be hidden by it), and it is cut whole: the same word on its
+ * own elsewhere in the template still counts. Quotes and spacing are matched loosely because a merge may tidy them.
+ */
+export function stripMerchantText(
+  text: string,
+  values: readonly (string | null | undefined)[],
+): string {
+  let out = text;
+  const seen = new Set<string>();
+  for (const raw of values) {
+    const v = (raw ?? "").trim().replace(/\s+/g, " ");
+    if (v === "" || seen.has(v.toLowerCase())) continue;
+    seen.add(v.toLowerCase());
+    if (checkClaims(v).ok) continue;
+    const pattern = escapeRegex(v).replace(/ /g, "\\s+").replace(/['’]/g, "['’]");
+    out = out.replace(new RegExp(`(?<![\\p{L}\\p{N}])${pattern}(?![\\p{L}\\p{N}])`, "giu"), " ");
+  }
+  return out;
+}
+
+/** The merchant fields a message can carry as written by the merchant: names, and the greeting built from them. */
+export function merchantOwnWords(m: {
+  businessName?: string | null;
+  contactName?: string | null;
+  dba?: string | null;
+}): string[] {
+  const contact = (m.contactName ?? "").trim();
+  const [first = ""] = contact.split(/\s+/);
+  return [m.businessName ?? "", m.dba ?? "", contact, first];
+}

@@ -27,6 +27,11 @@ export const AUDIT_KINDS = [
   "export_blocked",
   "merchant_emails_stopped",
   "merchant_emails_resumed",
+  "client_merged",
+  "client_purged",
+  "document_deleted",
+  "template_approval_changed",
+  "blast_sent",
 ] as const;
 export type AuditKind = (typeof AUDIT_KINDS)[number];
 
@@ -52,6 +57,11 @@ export const AUDIT_KIND_LABELS: Record<AuditKind, string> = {
   export_blocked: "Export refused",
   merchant_emails_stopped: "Merchant emails stopped",
   merchant_emails_resumed: "Merchant emails turned back on",
+  client_merged: "Merchants merged",
+  client_purged: "Merchant deleted for good",
+  document_deleted: "Document deleted",
+  template_approval_changed: "Template approval changed",
+  blast_sent: "Email sent to a group",
 };
 
 /** The last 200 events are what the page shows. */

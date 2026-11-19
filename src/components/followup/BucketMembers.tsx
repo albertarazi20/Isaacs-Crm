@@ -15,11 +15,11 @@ import { handOffAction, undoHandOffAction } from "@/app/followup-actions";
 import type { ActionResult } from "@/lib/data/types";
 import { useApp } from "@/components/app-context";
 import { FormDialog, copyText, useRun } from "@/components/client/parts";
-import { useCall, useToast } from "@/components/overlay";
+import { NETWORK_ERROR, useCall, useToast } from "@/components/overlay";
 import { Glyph } from "@/components/shell/icons";
 import { NewLeadButton } from "@/components/shell/NewLead";
 import { Avatar, Button, EmptyState, IconButton, Input, Kbd, Select, cn } from "@/components/ui";
-import { followupCsv, fileSlug } from "@/lib/export/followup";
+import { fileSlug } from "@/lib/export/followup";
 import { callWindow, localTime } from "@/lib/followup/dial";
 import { matchesSearch } from "@/lib/followup/search";
 import { formatUS } from "@/lib/mca/phone";
@@ -155,9 +155,30 @@ export function BucketMembers({
         ? `${shown.length} shown`
         : `all ${shown.length}`;
 
-  function exportCsv() {
-    const { csv, left } = followupCsv(working);
-    downloadFile(`selective-${fileSlug(bucket.name)}-${today}.csv`, csv);
+  async function exportCsv() {
+    // built on the server (managers only, audited, 20 an hour), from the rows this page is showing
+    let res: Response;
+    try {
+      res = await fetch("/api/export/followup", {
+        method: "POST",
+        body: new URLSearchParams({
+          bucket: bucket.id,
+          ids: working.map((m) => m.client_id).join(","),
+        }),
+      });
+    } catch {
+      toast({ message: "Couldn't reach the server. Check your connection", tone: "error" });
+      return;
+    }
+    if (!res.ok) {
+      toast({
+        message: (await res.text().catch(() => "")) || "The download didn't work. Try again",
+        tone: "error",
+      });
+      return;
+    }
+    const left = Number(res.headers.get("x-left-out") ?? "0");
+    downloadFile(`selective-${fileSlug(bucket.name)}-${today}.csv`, await res.text());
     toast({
       message:
         left > 0
@@ -346,8 +367,14 @@ export function BucketMembers({
     const why = (reason: string | undefined) => (reason ? (SKIP_WORDS[reason] ?? reason) : "");
     setConfirmBlast(false);
     setBusy(true);
-    const r = await blastAction({ templateId, clientIds: ids });
-    setBusy(false);
+    let r: Awaited<ReturnType<typeof blastAction>>;
+    try {
+      r = await blastAction({ templateId, clientIds: ids });
+    } catch {
+      return toast({ message: NETWORK_ERROR, tone: "error" });
+    } finally {
+      setBusy(false);
+    }
     if (!r.ok) return toast({ message: r.error, tone: "error" });
     toast({
       message: `${r.data.queued} queued${r.data.skipped.length ? `, ${r.data.skipped.length} skipped (${why(r.data.skipped[0]?.reason)})` : ""}`,
@@ -447,7 +474,7 @@ export function BucketMembers({
             {canExport ? (
               <Button
                 size="sm"
-                onClick={exportCsv}
+                onClick={() => void exportCsv()}
                 disabled={working.length === 0}
                 aria-label={`Export CSV, ${workingWords}`}
               >

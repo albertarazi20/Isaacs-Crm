@@ -2,7 +2,7 @@ import { z } from "zod";
 import type { Db } from "../db";
 import { createClient, stampClientTimezone, UserError } from "../data/mutations";
 import { findDuplicates, userContext, type DuplicateMatch } from "../data/queries";
-import { id, line, optMoney, text } from "../data/schemas";
+import { id, line, optMoney, stateField, text } from "../data/schemas";
 import { stageDef } from "../mca/stages";
 import { fileOneRow, loadPendingRow, sendWelcome } from "../sheets/file";
 import { refuseAnotherReps } from "./owner";
@@ -29,7 +29,7 @@ export const intakeSchema = z.object({
   phone2: line(40).default(""),
   email2: email.default(""),
   industry: line(100).default(""),
-  state: line(40).toUpperCase().default(""),
+  state: stateField.default(""),
   lookingFor: text(1000).default(""),
   wantedAmount: optMoney.optional(),
   bucketId: id.nullable().default(null),

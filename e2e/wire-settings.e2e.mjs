@@ -56,7 +56,7 @@ export default async function wireSettings({ email }) {
 
     await page.getByLabel("Daily cap").fill("10");
     await page.getByRole("button", { name: "Save settings" }).click();
-    await toast(/Too small: expected number to be >=50/);
+    await toast(/Daily cap must be at least 50/);
     check(
       "a refused value shows the reason and leaves the database as it was",
       (await shop()).daily_cap === 1450,

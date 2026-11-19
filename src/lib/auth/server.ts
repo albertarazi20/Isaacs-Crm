@@ -11,7 +11,7 @@ import { CAN, type Role } from "./roles";
 import { SESSION_COOKIE, SESSION_DAYS, signSession, type SessionClaims } from "./session";
 
 /** Cached per request: the layout, the page and any action all ask, and the epoch and idle checks are database work. */
-const sessionOutcome = cache(async (): Promise<SessionOutcome> => {
+const outcomeFor = async (roll: boolean): Promise<SessionOutcome> => {
   const store = await cookies();
   return resolveSessionOutcome(store.get(SESSION_COOKIE)?.value, {
     secret: env().SESSION_SECRET,
@@ -20,8 +20,19 @@ const sessionOutcome = cache(async (): Promise<SessionOutcome> => {
     // "Log out everywhere" (and a disabled or deleted user) must end the session now too.
     currentEpoch: currentSessionEpoch,
     // A session nobody has used for 12 hours ends, whatever the cookie says; use rolls the window forward.
-    touch: (sid, userId, now) => touchSession(sid, userId, now),
+    touch: (sid, userId, now) => touchSession(sid, userId, now, undefined, roll),
   });
+};
+const sessionOutcome = cache(() => outcomeFor(true));
+const passiveOutcome = cache(() => outcomeFor(false));
+
+/**
+ * The session for a request the page makes by itself (a background timer), not because a person did something: it is
+ * checked like any other (revoked, idle, expired all refuse) but never renews the idle window, so a tab left open
+ * on an unattended screen still signs out after the idle timeout.
+ */
+export const getSessionPassive = cache(async (): Promise<SessionClaims | null> => {
+  return (await passiveOutcome()).claims;
 });
 
 export const getSession = cache(async (): Promise<SessionClaims | null> => {

@@ -2,6 +2,7 @@ import "../zod-setup";
 import { z } from "zod";
 import { findSensitive } from "./sensitive";
 import { isRealDate } from "../mca/dates";
+import { normalizeState } from "../mca/states";
 import { IMPORT_STAGES, STAGE_KEYS } from "../mca/stages";
 import { parseMoney } from "../money";
 
@@ -11,6 +12,9 @@ const isoDate = z
   .refine(isRealDate, "That isn't a real calendar date");
 const localDateTime = z.string().regex(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/, "Pick a date and time");
 export const id = z.string().uuid();
+/** A real UUID, the shape Postgres accepts: a 36-character run of dashes or hex is not one, and would reach the database as a 500. */
+const UUID_SHAPE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+export const isUuid = (v: string): boolean => UUID_SHAPE.test(v);
 /** Multi-line text (notes, bodies). Refuses SSNs and card/account numbers — see sensitive.ts. */
 const tooLong = (max: number) =>
   `That's too long — the limit is ${max.toLocaleString("en-US")} characters`;
@@ -38,8 +42,8 @@ export const line = (max = 200) =>
       if (hit) ctx.addIssue({ code: "custom", message: hit.message });
     });
 
-/** A state, trimmed and in capitals: "ny" and "NY" are one state. */
-const stateField = line(40).toUpperCase();
+/** A state as its two-letter code ("Florida", "fl" and "FL" are one state); text we do not recognise stays, in capitals. */
+export const stateField = line(40).transform((v) => normalizeState(v) ?? v.toUpperCase());
 
 export const EMAIL = /^[^\s@,;<>"]+@[^\s@,;<>"]+\.[^\s@,;<>"]+$/;
 /** Blank, or exactly one plain address — never "a@b.com,c@d.com". */

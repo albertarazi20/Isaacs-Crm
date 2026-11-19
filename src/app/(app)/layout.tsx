@@ -117,7 +117,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
               {gmail.needsReconnect ? (
                 <div className="border-b border-warn/30 bg-warn-soft px-4 py-2 text-center text-sm text-warn">
                   Gmail needs to be reconnected:{" "}
-                  <a className="font-semibold underline" href="/api/auth/google?purpose=gmail">
+                  <a className="font-semibold underline" href="/api/auth/google?purpose=mail">
                     reconnect now
                   </a>
                   . Until then, emails open in Gmail instead of sending.

@@ -2,14 +2,15 @@ import { UserError } from "../data/mutations";
 import { db as defaultDb, type Db, type DbAccess } from "../db";
 import { labelOf } from "../docs/label";
 import { mintUploadSession, type Wanted } from "../docs/upload";
-import { formatMoney } from "../money";
 import { stopApprovalEmails } from "../approvals/engine";
 import {
   OFFER_DOC_WORDS,
+  exactMoney,
   factorWords,
   finalPayment,
   type Frequency,
   type OfferDoc,
+  offerGreetingName,
   validThroughWords,
   offerNumber,
 } from "../offers/terms";
@@ -148,7 +149,7 @@ export async function openOffer(
       state,
       businessName: r.business_name,
       contactName: r.contact_name,
-      firstName: r.contact_name.trim().split(/\s+/)[0] ?? "",
+      firstName: offerGreetingName(r.contact_name),
       shopName: r.shop_name || "Selective Capital",
       repName: r.rep_name,
       repPhone: r.rep_phone,
@@ -196,7 +197,7 @@ export async function recordOfferView(token: string, access: DbAccess = defaultD
     if (r.views > 0) return;
     await q.query(
       "insert into activities (user_id, client_id, kind, body) values ($1, $2, 'system', $3)",
-      [r.user_id, r.client_id, `Opened the offer of ${formatMoney(Number(r.funded_cents))}`],
+      [r.user_id, r.client_id, `Opened the offer of ${exactMoney(Number(r.funded_cents))}`],
     );
     await q.query(
       `insert into user_alerts (user_id, kind, client_id, title, body, href, dedupe_key)
@@ -205,7 +206,7 @@ export async function recordOfferView(token: string, access: DbAccess = defaultD
         r.user_id,
         r.client_id,
         `${r.business_name} opened their offer`,
-        `${formatMoney(Number(r.funded_cents))}. A good moment to call.`,
+        `${exactMoney(Number(r.funded_cents))}. A good moment to call.`,
         `/clients/${r.client_id}`,
         `offer_opened:${r.id}`,
       ],
@@ -213,13 +214,25 @@ export async function recordOfferView(token: string, access: DbAccess = defaultD
   });
 }
 
+/** What the offer page's own upload slots record on a file (src/lib/docs/upload.ts): the merchant named the slot. */
+const OFFER_PAGE_REASON = "chosen by the merchant on the offer page";
+
+/**
+ * Which of the offer's documents really are on file. A file counts only when its kind is trustworthy: a person
+ * labelled it, the AI read it with confidence of at least 0.8, or the merchant sent it into that slot on this
+ * offer page. A filename guess (an unknown photo guessed as a license at 0.35) does not: the page would say "Already
+ * on file" and let them accept without ever sending it.
+ */
 async function docsOnFile(q: Db, clientId: string, kinds: readonly string[]): Promise<Set<string>> {
   if (kinds.length === 0) return new Set();
   const { rows } = await q.query<{ kind: string }>(
     `select distinct kind from documents
       where client_id = $1 and deleted_at is null and kind = any($2::text[])
-        and scan_status not in ('infected', 'rejected')`,
-    [clientId, kinds],
+        and scan_status not in ('infected', 'rejected')
+        and (label_by = 'human'
+             or (label_by = 'ai' and label_confidence >= 0.8)
+             or label_reason = $3)`,
+    [clientId, kinds, OFFER_PAGE_REASON],
   );
   return new Set(rows.map((x) => x.kind));
 }
@@ -280,7 +293,7 @@ export async function acceptOffer(
         where id = $1 returning accepted_at::text`,
       [r.id, a.name.slice(0, 160), a.email.slice(0, 254), a.ip.slice(0, 64)],
     );
-    const amount = formatMoney(Number(r.funded_cents));
+    const amount = exactMoney(Number(r.funded_cents));
     await q.query(
       "insert into activities (user_id, client_id, kind, body) values ($1, $2, 'system', $3)",
       [

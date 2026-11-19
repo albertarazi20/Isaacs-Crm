@@ -1,6 +1,12 @@
 {
   "secrets": [
     {
+      "path": ".github/workflows/ci.yml",
+      "rule": "database-url-credentials",
+      "contains": "@localhost:5432",
+      "reason": "The throwaway Postgres service container the unit tests run against inside the CI job (it listens on localhost of the runner and is destroyed with the job). Its password is a fixed label for that container only; no real database uses it."
+    },
+    {
       "path": "tests/auth-routes-leads.test.ts",
       "rule": "named-secret-assignment",
       "reason": "Test fixture: a fake value (a repeated letter, a placeholder URL, or a too-short value on purpose) put in the test process's own environment so the code under test can start. It is not a credential for anything and never leaves the test run."
@@ -17,6 +23,11 @@
     },
     {
       "path": "tests/env.test.ts",
+      "rule": "named-secret-assignment",
+      "reason": "Test fixture: a fake value (a repeated letter, a placeholder URL, or a too-short value on purpose) put in the test process's own environment so the code under test can start. It is not a credential for anything and never leaves the test run."
+    },
+    {
+      "path": "tests/hard-stop-fixes-optout.test.ts",
       "rule": "named-secret-assignment",
       "reason": "Test fixture: a fake value (a repeated letter, a placeholder URL, or a too-short value on purpose) put in the test process's own environment so the code under test can start. It is not a credential for anything and never leaves the test run."
     },
@@ -41,19 +52,13 @@
       "reason": "Test fixture: a fake value (a repeated letter, a placeholder URL, or a too-short value on purpose) put in the test process's own environment so the code under test can start. It is not a credential for anything and never leaves the test run."
     },
     {
-      "path": ".github/workflows/ci.yml",
-      "rule": "database-url-credentials",
-      "contains": "@localhost:5432",
-      "reason": "The throwaway Postgres service container the unit tests run against inside the CI job (it listens on localhost of the runner and is destroyed with the job). Its password is a fixed label for that container only; no real database uses it."
-    },
-    {
       "path": "tests/security-fixes-secretscan.test.ts",
-      "rule": "named-secret-assignment",
+      "rule": "database-url-credentials",
       "reason": "The scanner's own test: its inputs are deliberately secret-shaped, fake values (a weak passcode, a database URL with a made-up password) that prove the rules fire and that stand-ins do not. Nothing here is a credential for anything."
     },
     {
       "path": "tests/security-fixes-secretscan.test.ts",
-      "rule": "database-url-credentials",
+      "rule": "named-secret-assignment",
       "reason": "The scanner's own test: its inputs are deliberately secret-shaped, fake values (a weak passcode, a database URL with a made-up password) that prove the rules fire and that stand-ins do not. Nothing here is a credential for anything."
     }
   ],

@@ -210,11 +210,16 @@ export async function openUploadPage(
 ): Promise<UploadSession | null> {
   if (!/^[A-Za-z0-9]{20,80}$/.test(token)) return null;
   return db.withSystem(async (q) => {
+    // the list stored at mint time goes stale the moment a file lands: ask again against what is on file now
+    const fresh = async (s: UploadSession | null): Promise<UploadSession | null> =>
+      s && s.purpose !== "offer" ? { ...s, wanted: await wantedFor(q, s.client_id, today) } : s;
     const live = await loadSession(q, token);
-    if (live) return live;
+    if (live) return fresh(live);
     const { rows } = await q.query<{ id: string }>(
-      `select c.id from clients c where c.upload_token = $1
-         and not exists (select 1 from trashed_clients tc where tc.client_id = c.id)`,
+      `select c.id from clients c
+        where (c.upload_token = $1
+               or c.id = (select a.client_id from client_token_aliases a where a.token = $1 and a.kind = 'upload'))
+          and not exists (select 1 from trashed_clients tc where tc.client_id = c.id)`,
       [token],
     );
     const clientId = rows[0]?.id;
@@ -227,10 +232,10 @@ export async function openUploadPage(
         order by created_at desc limit 1`,
       [clientId],
     );
-    if (open.rows[0]) return loadSession(q, open.rows[0].token);
+    if (open.rows[0]) return fresh(await loadSession(q, open.rows[0].token));
     const wanted = await wantedFor(q, clientId, today);
     const minted = await mintUploadSession(q, { clientId, wanted, createdBy: null });
-    return loadSession(q, minted.token);
+    return fresh(await loadSession(q, minted.token));
   });
 }
 
@@ -241,6 +246,8 @@ export async function openUploadPage(
 export async function rotateUploadToken(q: Db, clientId: string): Promise<void> {
   const r = await q.query("update clients set upload_token = default where id = $1", [clientId]);
   if (r.rowCount === 0) throw new UserError("That merchant isn't in your view");
+  // a link the merchant kept from a merged-away card (0583) is an old link too: the reset kills it with the rest
+  await q.query("select app.clear_client_token_aliases($1, 'upload')", [clientId]);
   await q.query(
     "update upload_sessions set expires_at = now() where client_id = $1 and created_by is null and expires_at > now()",
     [clientId],
@@ -657,7 +664,10 @@ export type Scanner = (
  * (ClamAV, VirusTotal, the host's scanner), it slots in here and nothing else changes.
  */
 export const builtinScanner: Scanner = async (bytes, contentType, filename) => {
-  const s = sniff(bytes, contentType, filename);
+  // The stored type was set by the upload-time sniff, which already matched the original extension to the bytes. The
+  // cleaned display name may have lost its extension (non-ASCII names), so the type picks the extension to re-check.
+  const ext = Object.entries(EXT_TYPE).find(([, t]) => t === contentType)?.[0];
+  const s = sniff(bytes, contentType, ext ? `scan.${ext}` : filename);
   return s.ok ? { clean: true, note: "type check passed" } : { clean: false, note: s.reason };
 };
 

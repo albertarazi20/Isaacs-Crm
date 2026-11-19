@@ -61,7 +61,18 @@ export async function addClientAction(input: unknown): Promise<ActionResult<Card
   });
 }
 export async function mergeClientsAction(input: unknown): Promise<ActionResult<Card>> {
-  return run((q) => m.mergeClients(q, s.mergeSchema.parse(input)));
+  const session = await requireSession();
+  const parsed = s.mergeSchema.safeParse(input);
+  const res = await run((q) => m.mergeClients(q, s.mergeSchema.parse(input)));
+  if (res.ok && parsed.success)
+    await recordAuditHere({
+      kind: "client_merged",
+      userId: session.userId,
+      email: session.email,
+      clientId: res.data.id,
+      detail: { merged_away: parsed.data.dropId },
+    });
+  return res;
 }
 export async function moveClientAction(input: unknown): Promise<ActionResult<Card>> {
   return run((q, ctx) => m.moveClient(q, s.moveSchema.parse(input), ctx));
@@ -114,10 +125,20 @@ export async function restoreClientAction(input: unknown): Promise<ActionResult<
   });
 }
 export async function purgeClientAction(input: unknown): Promise<ActionResult<null>> {
-  return run(async (q) => {
+  const session = await requireSession();
+  const parsed = s.clientIdSchema.safeParse(input);
+  const res = await run(async (q) => {
     await m.purgeClient(q, s.clientIdSchema.parse(input).clientId);
     return null;
   });
+  if (res.ok && parsed.success)
+    await recordAuditHere({
+      kind: "client_purged",
+      userId: session.userId,
+      email: session.email,
+      clientId: parsed.data.clientId,
+    });
+  return res;
 }
 export async function seedStipsAction(input: unknown): Promise<ActionResult<number>> {
   return run((q, ctx) => m.seedStips(q, s.clientIdSchema.parse(input).clientId, ctx));

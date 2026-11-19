@@ -8,25 +8,27 @@ import type { TrashedClient } from "@/lib/data/queries";
 import { timeAgo } from "@/lib/format";
 import { formatUS } from "@/lib/mca/phone";
 import { useApp } from "./app-context";
-import { Dialog, useCall } from "./overlay";
+import { useRun } from "./client/parts";
+import { Dialog } from "./overlay";
 import { Glyph } from "./shell/icons";
 import { StageBadge } from "./StageBadge";
 import { Avatar, Badge, Button, buttonClass, EmptyState, Input } from "./ui";
 
 export function TrashList({ items }: { items: TrashedClient[] }) {
   const router = useRouter();
-  const call = useCall();
+  const run = useRun();
   const { nowMs } = useApp();
   const [busy, setBusy] = useState<string | null>(null);
   const [confirming, setConfirming] = useState<TrashedClient | null>(null);
   const [term, setTerm] = useState("");
 
-  async function act(id: string, run: () => ReturnType<typeof restoreClientAction>, ok: string) {
+  async function act(id: string, go: () => ReturnType<typeof restoreClientAction>, ok: string) {
     setBusy(id);
-    const done = await call(run(), ok);
+    // restore and purge return null data on success, which useCall can't tell from a failure
+    const done = await run(go(), ok);
     setBusy(null);
     setConfirming(null);
-    if (done !== null) router.refresh();
+    if (done) router.refresh();
   }
 
   if (items.length === 0)

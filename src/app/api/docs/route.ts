@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth/server";
 import { toActionError } from "@/lib/data/errors";
 import { userContext } from "@/lib/data/queries";
+import { isUuid } from "@/lib/data/schemas";
 import { db } from "@/lib/db";
 import { DOC_KINDS, type DocKind } from "@/lib/docs/label";
 import { documentStore } from "@/lib/docs/storage";
@@ -10,8 +11,6 @@ import { env } from "@/lib/env";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
-
-const UUID = /^[0-9a-f-]{36}$/;
 
 /** Staff drag-and-drop: multipart with clientId, optional kind / period, and one or more `file`s. */
 export async function POST(req: Request) {
@@ -22,7 +21,7 @@ export async function POST(req: Request) {
   const clientId = String(form.get("clientId") ?? "");
   const kindRaw = String(form.get("kind") ?? "");
   const period = String(form.get("period") ?? "") || null;
-  if (!UUID.test(clientId)) return NextResponse.json({ error: "Bad merchant id" }, { status: 400 });
+  if (!isUuid(clientId)) return NextResponse.json({ error: "Bad merchant id" }, { status: 400 });
   const kind =
     kindRaw && (DOC_KINDS as readonly string[]).includes(kindRaw)
       ? (kindRaw as DocKind)

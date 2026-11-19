@@ -80,7 +80,7 @@ const open = async (id: string, query = "") => {
 };
 
 describe("opening a document", () => {
-  it("the merchant's rep and a manager get the file exactly as it was filed; nothing is stamped or logged", async () => {
+  it("the merchant's rep and a manager get the file exactly as it was filed (not stamped), and every open is logged", async () => {
     await asUser(rep, "rep@x.com", "rep");
     const res = await open(docId);
     expect(res.status).toBe(200);
@@ -96,7 +96,13 @@ describe("opening a document", () => {
     expect(m.headers.get("content-disposition")).toMatch(/^attachment; /);
     expect(new Uint8Array(await m.arrayBuffer())).toEqual(original);
 
-    expect((await t.pool.query("select 1 from document_views")).rowCount).toBe(0);
+    // every open is logged, by whom and how: the rep's view, the manager's download
+    const views = await t.pool.query<{ action: string; viewer_user_id: string }>(
+      "select action, viewer_user_id from document_views where document_id = $1 order by id",
+      [docId],
+    );
+    expect(views.rows.map((r) => r.action)).toEqual(["view", "download"]);
+    expect(views.rows.map((r) => r.viewer_user_id)).toEqual([rep, manager]);
   });
 
   it("another rep cannot open it, a signed-out caller is turned away, a bad id is not found", async () => {

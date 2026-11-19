@@ -50,12 +50,15 @@ export async function endAllSessions(userId: string, db: DbAccess = defaultDb): 
  * One statement: reads when the session was last used and, if that is inside the idle window but at least the roll
  * interval old, moves it to now. A session used again within the roll interval writes nothing. "idle" means the last
  * use is older than the idle window (and stays so: nothing rolls an idle session); "unknown" means no record.
+ * `roll: false` only checks: the page's own background timer (the reminder poll) uses it so an open but unattended
+ * tab can never keep a session alive past the idle window; only a person using the app moves it forward.
  */
 export async function touchSession(
   sid: string,
   userId: string,
   now: Date = new Date(),
   db: DbAccess = defaultDb,
+  roll: boolean = true,
 ): Promise<TouchResult> {
   const { rows } = await db.withSystem((q) =>
     q.query<{ last_seen_at: Date | null }>(
@@ -63,13 +66,13 @@ export async function touchSession(
          select last_seen_at from session_activity where sid = $1 and user_id = $2
        ), rolled as (
          update session_activity set last_seen_at = $3
-          where sid = $1 and user_id = $2
+          where sid = $1 and user_id = $2 and $6::boolean
             and last_seen_at > $3::timestamptz - make_interval(secs => $4::int)
             and last_seen_at <= $3::timestamptz - make_interval(secs => $5::int)
          returning 1
        )
        select (select last_seen_at from cur) as last_seen_at`,
-      [sid, userId, now, SESSION_IDLE_SECONDS, SESSION_ROLL_SECONDS],
+      [sid, userId, now, SESSION_IDLE_SECONDS, SESSION_ROLL_SECONDS, roll],
     ),
   );
   const last = rows[0]?.last_seen_at;

@@ -264,7 +264,9 @@ export async function resolveUnsubscribe(
     }>(
       `select c.id, c.business_name, c.email, (c.email_opt_out and not app.hand_stopped_only(c.id)) as email_opt_out,
               (select shop_name from shop_settings) as shop_name
-         from clients c where c.unsubscribe_token = $1`,
+         from clients c
+        where c.unsubscribe_token = $1
+           or c.id = (select a.client_id from client_token_aliases a where a.token = $1 and a.kind = 'unsubscribe')`,
       [token],
     );
     const c = rows[0];

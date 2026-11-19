@@ -1,4 +1,4 @@
-import { getSession } from "@/lib/auth/server";
+import { getSessionPassive } from "@/lib/auth/server";
 import { db } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
@@ -17,7 +17,8 @@ interface DueReminder {
  * every half minute and pops up a banner. Runs as the user, so row-level security applies.
  */
 export async function GET() {
-  const session = await getSession();
+  // a timer, not a person: checks the session without renewing its idle window
+  const session = await getSessionPassive();
   if (!session) return new Response("Sign in first", { status: 401 });
   const rows = await db.withUser(session.userId, async (q) => {
     const res = await q.query<DueReminder>(

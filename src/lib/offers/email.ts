@@ -3,8 +3,7 @@
  * button), showing only the amount, same-day funding and how long it stands; the rest is on the offer page. Polished: the real logo, Inter with tabular figures (Helvetica/Arial where a mail app
  * will not load a web font), and the brand glow in the offer box. A plain-text part says the same.
  */
-import { formatMoney } from "../money";
-import type { Frequency } from "./terms";
+import { exactMoney, type Frequency } from "./terms";
 
 export interface OfferEmailInput {
   number: string;
@@ -45,7 +44,7 @@ const SERIF = "'Source Serif 4',Georgia,'Times New Roman',serif";
 const NUM = "font-variant-numeric:tabular-nums;font-feature-settings:'tnum' 1";
 
 export function offerEmail(o: OfferEmailInput): { subject: string; text: string; html: string } {
-  const amount = formatMoney(o.fundedCents);
+  const amount = exactMoney(o.fundedCents);
   const hi = o.firstName.trim() ? `Hi ${o.firstName.trim()},` : "Hi,";
   const shop = o.shopName.trim() || "Selective Capital";
   const business = o.businessName.trim() || "your business";

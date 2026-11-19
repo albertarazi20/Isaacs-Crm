@@ -17,7 +17,7 @@ import { ThemeSwitch } from "@/components/ThemeSwitch";
 import { MessagesCard } from "@/components/messaging/MessagesCard";
 import { Avatar, Badge, buttonClass, LinkButton } from "@/components/ui";
 import { ROLE_LABEL } from "@/lib/auth/roles";
-import { requireSession } from "@/lib/auth/server";
+import { CAN, requireSession } from "@/lib/auth/server";
 import { db } from "@/lib/db";
 import { env, googleConfigured } from "@/lib/env";
 import { getMessageSettings, listSnippets } from "@/lib/messaging/queries";
@@ -185,6 +185,7 @@ export default async function AccountSettingsPage({
           connected: gmail.connected,
           needsReconnect: gmail.needsReconnect,
           googleEmail: gmail.googleEmail,
+          canReadMail: gmail.canReadMail,
           configured: googleConfigured(e),
         }}
         resendReady={Boolean(e.RESEND_API_KEY && e.RESEND_FROM)}
@@ -216,27 +217,30 @@ export default async function AccountSettingsPage({
         </SettingRow>
       </SettingsCard>
 
-      <SettingsCard
-        title="Your data"
-        description="Everything you have put in, as files you can keep."
-        aside={<StatusChip tone="info">Yours to keep</StatusChip>}
-        flush
-      >
-        <BackupRow />
-        {EXPORTS.map((x) => (
-          <SettingRow key={x.href} label={x.title} hint={x.hint}>
-            <a
-              href={x.href}
-              download
-              aria-label={x.label}
-              className={buttonClass("secondary", "sm")}
-            >
-              <Icon d={ICON.download} className="size-3.5" />
-              Download
-            </a>
-          </SettingRow>
-        ))}
-      </SettingsCard>
+      {/* exports are manager-only on the server: a rep is not shown buttons that can only fail */}
+      {CAN.exportData(session.role) ? (
+        <SettingsCard
+          title="Your data"
+          description="Everything you have put in, as files you can keep."
+          aside={<StatusChip tone="info">Yours to keep</StatusChip>}
+          flush
+        >
+          <BackupRow />
+          {EXPORTS.map((x) => (
+            <SettingRow key={x.href} label={x.title} hint={x.hint}>
+              <a
+                href={x.href}
+                download
+                aria-label={x.label}
+                className={buttonClass("secondary", "sm")}
+              >
+                <Icon d={ICON.download} className="size-3.5" />
+                Download
+              </a>
+            </SettingRow>
+          ))}
+        </SettingsCard>
+      ) : null}
 
       <SecurityPanel />
     </SettingsPage>

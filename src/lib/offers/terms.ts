@@ -1,5 +1,6 @@
 /** A merchant offer's terms and their arithmetic. Browser-safe: the form previews with the same numbers the database stores. */
 import { z } from "zod";
+import { greetingName, tidy } from "../mca/templates";
 import { formatMoney } from "../money";
 
 export const FREQUENCIES = ["daily", "weekly", "biweekly", "monthly"] as const;
@@ -175,6 +176,12 @@ export function timeLeft(expiresAt: string, nowMs: number): string | null {
 /** Dollars, with cents only when there are some: $4,197.99, $80,850. */
 export const exactMoney = (cents: number): string =>
   formatMoney(cents, { cents: Math.round(cents) % 100 !== 0 });
+
+/** What the merchant is called on the page and in the email: "Gayle", "Dr. Weiss", never a bare "Dr.". */
+export function offerGreetingName(contactName: string): string {
+  const name = tidy(greetingName(contactName));
+  return /^(dr|mr|mrs|ms|miss|mx|prof)\.?$/i.test(name) ? "" : name;
+}
 
 /** "Thursday, November 19 at 4:32 PM EST", where the merchant is. */
 export function validThroughWords(iso: string, timezone: string): string {

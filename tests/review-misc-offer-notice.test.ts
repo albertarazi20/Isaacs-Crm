@@ -33,8 +33,10 @@ async function acceptedOffer(name: string, scanAge: string) {
     )
   ).id;
   await t.pool.query(
-    `insert into documents (user_id, client_id, kind, filename, content_type, size_bytes, sha256, storage_key, source, scan_status, created_at)
-     values ($1, $2, 'voided_check', 'f.pdf', 'application/pdf', 10, $4, $5, 'upload_link', 'pending', now() - $3::text::interval)`,
+    `insert into documents (user_id, client_id, kind, filename, content_type, size_bytes, sha256, storage_key, source, scan_status, created_at,
+                            label_by, label_confidence, label_reason)
+     values ($1, $2, 'voided_check', 'f.pdf', 'application/pdf', 10, $4, $5, 'upload_link', 'pending', now() - $3::text::interval,
+             'rule', 0.7, 'chosen by the merchant on the offer page')`,
     [rep, client, scanAge, client.replaceAll("-", "").repeat(2), `${client}/k`],
   );
   const o = await one<{ id: string; token: string }>(

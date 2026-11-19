@@ -289,7 +289,10 @@ describe("S1-13: bulk intake files N staged rows into one bucket, one transactio
     expect(report[2]?.message).toBe(
       "Already in the system: Mike's lead, in Missing statements, touched 3 days ago",
     );
-    expect(report[2]?.clientId).toBe(harbor);
+    // another rep's merchant: the rep learns the owner's first name (in the message) but not the merchant or its id
+    expect(report[2]?.clientId).toBeNull();
+    // the rep's own merchant keeps its id
+    expect(report[1]?.clientId).not.toBeNull();
     expect(report[3]?.message).not.toBe("");
     expect((await one<{ n: number }>("select count(*)::int as n from clients"))!.n).toBe(
       before + 1,

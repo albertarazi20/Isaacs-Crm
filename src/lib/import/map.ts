@@ -179,23 +179,50 @@ const WORKED_ELSEWHERE =
 
 const IMPORTABLE = new Set<StageKey>(IMPORT_STAGES);
 
+/**
+ * A status where somebody said no or walked away. It wins over WORKED_ELSEWHERE: "Declined offer", "Withdrew offer" and
+ * "Denied - not approved" mention an offer or an approval, but the merchant is out, so they must never come in as a
+ * fresh lead to call tomorrow.
+ */
+const SAID_NO =
+  /\b(declined|denied|rejected|killed|withdrew|withdrawn|pulled|lost|dead)\b|went (with|elsewhere)|competitor/;
+const NOT_INTERESTED = /not interested|no thanks/;
+
 export function parseStageWord(raw: string): { stage: StageKey | null; unsupported: boolean } {
   const w = norm(raw);
   if (!w) return { stage: null, unsupported: false };
   const key = w.replace(/ /g, "_");
   // a stage's own key first ("not_interested" is a stage of its own), then the label a sheet copied from the app
-  const hit =
+  const exact =
     STAGES.find((s) => s.key === key)?.key ??
     (isStageKey(key) && IMPORTABLE.has(key) ? key : null) ??
     STAGES.find((s) => norm(s.label) === w)?.key ??
-    STAGE_WORDS.find(([re]) => re.test(w))?.[1] ??
     null;
+  if (!exact) {
+    if (NOT_INTERESTED.test(w)) return { stage: "not_interested", unsupported: false };
+    if (SAID_NO.test(w)) return { stage: "dead", unsupported: false };
+  }
+  const hit = exact ?? STAGE_WORDS.find(([re]) => re.test(w))?.[1] ?? null;
   if (hit && IMPORTABLE.has(hit) && !WORKED_ELSEWHERE.test(w))
     return { stage: hit, unsupported: false };
   return {
     stage: null,
     unsupported: WORKED_ELSEWHERE.test(w) || (hit !== null && !IMPORTABLE.has(hit)),
   };
+}
+
+const STATUS_NOTE_MAX = 200;
+/** "Imported status: <cell>" as one clean line that always fits the row's 200-character note field. */
+export function statusNoteFor(raw: string): string {
+  const prefix = "Imported status: ";
+  const cell = raw
+    .replace(/\p{Cc}+/gu, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  const room = STATUS_NOTE_MAX - prefix.length;
+  const kept = cell.length > room ? `${cell.slice(0, room - 1).trimEnd()}…` : cell;
+  // the same guard the row's note field applies: a number the shop never stores is left out, not allowed to fail the row
+  return prefix + (findSensitive(kept) ? "(left out)" : kept);
 }
 
 /** YYYY-MM-DD, M/D/YYYY or M/D/YY. Null when it isn't a date. */
@@ -381,8 +408,8 @@ export function buildRows(
 
     const stageRaw = get(r, "stage");
     const { stage, unsupported } = parseStageWord(stageRaw);
-    const statusNote =
-      stageRaw && (unsupported || stage === null) ? `Imported status: ${stageRaw}` : "";
+    // the note field holds 200 characters on one line: a long or multi-line cell must not fail the row at import
+    const statusNote = stageRaw && (unsupported || stage === null) ? statusNoteFor(stageRaw) : "";
 
     // a merchant who said no waits as long as the stage says (months), instead of landing on Today as a call to make
     const longWait = stageDef(stage ?? "name_in").followUp.kind === "months";

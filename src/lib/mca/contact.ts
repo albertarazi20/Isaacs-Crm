@@ -1,3 +1,5 @@
+import { AREA_CODE_TZ } from "./areaCodeTz";
+
 /**
  * How a merchant may be reached. "Stop" must mean stop: Call/Text/Email are disabled in the UI AND refused
  * on the server, and a do-not-contact merchant never appears on Today or in the morning email.
@@ -34,6 +36,7 @@ export function contactAllowed(status: ContactStatus, kind: ContactKind): Contac
   return { ok: true };
 }
 
+/** The state's own zone: a copy of `app_state_tz`. A state that spans zones is refined by area code, see SPLIT_STATE_ZONES. */
 const STATE_TZ: Record<string, string> = {
   AL: "America/Chicago",
   AK: "America/Anchorage",
@@ -86,6 +89,27 @@ const STATE_TZ: Record<string, string> = {
   WV: "America/New_York",
   WI: "America/Chicago",
   WY: "America/Denver",
+};
+
+/**
+ * States that span zones, with the zones an area code may pick from: a copy of the `split` list in
+ * `app.client_timezone` (db/migrations/0566). For these an area code inside the list wins over the state's one zone, so
+ * a Pensacola number (850, Central) is Central although Florida is Eastern, and a Knoxville one (865) is Eastern
+ * although Tennessee is Central.
+ */
+export const SPLIT_STATE_ZONES: Readonly<Record<string, readonly string[]>> = {
+  FL: ["America/New_York", "America/Chicago"],
+  TX: ["America/Chicago", "America/Denver"],
+  KY: ["America/New_York", "America/Chicago", "America/Kentucky/Louisville"],
+  TN: ["America/New_York", "America/Chicago"],
+  ID: ["America/Boise", "America/Los_Angeles"],
+  OR: ["America/Los_Angeles", "America/Boise"],
+  KS: ["America/Chicago", "America/Denver"],
+  NE: ["America/Chicago", "America/Denver"],
+  SD: ["America/Chicago", "America/Denver"],
+  ND: ["America/Chicago", "America/Denver"],
+  MI: ["America/Detroit", "America/Chicago"],
+  IN: ["America/Indiana/Indianapolis", "America/Chicago", "America/New_York"],
 };
 
 const STATE_NAMES: Record<string, string> = {
@@ -144,10 +168,33 @@ const STATE_NAMES: Record<string, string> = {
 
 /** The merchant's time zone from a free-text state ("TX", "Texas"). Null when unknown — never guess. */
 export function stateTimezone(raw: string): string | null {
-  const s = raw.trim();
-  if (!s) return null;
-  const abbr = s.length === 2 ? s.toUpperCase() : STATE_NAMES[s.toLowerCase()];
+  const abbr = stateAbbr(raw);
   return (abbr && STATE_TZ[abbr]) || null;
+}
+
+function stateAbbr(raw: string): string | undefined {
+  const s = raw.trim();
+  if (!s) return undefined;
+  return s.length === 2 ? s.toUpperCase() : STATE_NAMES[s.toLowerCase()];
+}
+
+/** The area code of a US number, the way the database cuts it (the three digits after an optional leading 1). */
+function areaCodeOf(phone: string): string {
+  const digits = phone.replace(/\D/g, "");
+  return digits.slice(digits.length === 11 ? 1 : 0, digits.length === 11 ? 4 : 3);
+}
+
+/**
+ * The merchant's time zone as `app.client_timezone` decides it (minus the zone typed by hand, and the rep's own zone as
+ * the last resort): for a state that spans zones an area code in one of its zones wins; otherwise the state; with no
+ * state, the area code. Null when neither is known: never a guess.
+ */
+export function merchantTimezone(state: string, phone = ""): string | null {
+  const abbr = stateAbbr(state);
+  const byPhone = AREA_CODE_TZ[areaCodeOf(phone)] ?? null;
+  const split = abbr ? SPLIT_STATE_ZONES[abbr] : undefined;
+  if (split && byPhone && split.includes(byPhone)) return byPhone;
+  return (abbr && STATE_TZ[abbr]) || byPhone;
 }
 
 export const QUIET_START_HOUR = 21; // 9 PM
@@ -158,9 +205,17 @@ export interface QuietHours {
   localTime: string;
 }
 
-/** A warning (not a block) when it is before 8 AM or after 9 PM where the merchant is. Null when fine or unknown. */
-export function quietHours(state: string, now: Date = new Date()): QuietHours | null {
-  const tz = stateTimezone(state);
+/**
+ * A warning (not a block) when it is before 8 AM or after 9 PM where the merchant is. Null when fine or unknown.
+ * `where.timezone` is the zone the database already decided for this merchant (use it when the page has it); without
+ * it the zone comes from the state and phone number, the same rules the database uses.
+ */
+export function quietHours(
+  state: string,
+  now: Date = new Date(),
+  where: { timezone?: string | null; phone?: string | null } = {},
+): QuietHours | null {
+  const tz = where.timezone || merchantTimezone(state, where.phone ?? "");
   if (!tz) return null;
   const hour = Number(
     new Intl.DateTimeFormat("en-US", { timeZone: tz, hour: "numeric", hourCycle: "h23" }).format(

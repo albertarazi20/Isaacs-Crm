@@ -23,9 +23,12 @@ export async function recordLinkOpen(
   return db.withSystem(async (q) => {
     const { rows } = await q.query<{ id: string; user_id: string }>(
       kind === "apply"
-        ? `select c.id, c.user_id from clients c where c.application_token = $1`
+        ? `select c.id, c.user_id from clients c
+            where c.application_token = $1
+               or c.id = (select a.client_id from client_token_aliases a where a.token = $1 and a.kind = 'application')`
         : `select c.id, c.user_id from clients c
             where c.upload_token = $1
+               or c.id = (select a.client_id from client_token_aliases a where a.token = $1 and a.kind = 'upload')
                or c.id = (select s.client_id from upload_sessions s where s.token = $1 and s.expires_at > now())`,
       [token],
     );

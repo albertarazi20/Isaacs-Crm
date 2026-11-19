@@ -109,8 +109,11 @@ export function ClientHero({
   buckets = [],
   bucketId = null,
   emailsStop,
+  merchantTimezone,
 }: {
   detail: ClientDetail;
+  /** The merchant's own zone (not the rep's), for the quiet-hours warning on Call and Text. */
+  merchantTimezone?: string;
   className?: string;
   /** Every active follow-up bucket, and the one this merchant is in now. */
   buckets?: readonly BucketOption[];
@@ -215,7 +218,11 @@ export function ClientHero({
             </p>
           </div>
           <div className="max-sm:hidden">
-            <ContactActions client={card} size="md" explain="always" />
+            <ContactActions
+              client={{ ...card, timezone: merchantTimezone }}
+              size="md"
+              explain="always"
+            />
           </div>
         </div>
 
@@ -342,10 +349,16 @@ export function ClientHero({
 }
 
 /** Call, text and email, always under the thumb on a phone: a glass bar pinned to the bottom of the screen. */
-export function MobileActionBar({ card }: { card: ClientDetail["card"] }) {
+export function MobileActionBar({
+  card,
+  merchantTimezone,
+}: {
+  card: ClientDetail["card"];
+  merchantTimezone?: string;
+}) {
   return (
     <div className="glass-strong fixed inset-x-0 bottom-0 z-30 border-t border-border px-4 pt-2.5 pb-[max(0.625rem,env(safe-area-inset-bottom))] sm:hidden">
-      <ContactActions client={card} size="md" bar />
+      <ContactActions client={{ ...card, timezone: merchantTimezone }} size="md" bar />
     </div>
   );
 }

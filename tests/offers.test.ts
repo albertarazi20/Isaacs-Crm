@@ -37,8 +37,10 @@ const input = (over: Record<string, unknown> = {}) =>
 let docSeq = 0;
 const addDoc = (clientId: string, userId: string, kind: string) =>
   t.pool.query(
-    `insert into documents (user_id, client_id, kind, filename, content_type, size_bytes, sha256, storage_key, source, scan_status)
-     values ($1, $2, $3, 'f.pdf', 'application/pdf', 10, $4, $5, 'upload_link', 'clean')`,
+    `insert into documents (user_id, client_id, kind, filename, content_type, size_bytes, sha256, storage_key, source, scan_status,
+                            label_by, label_confidence, label_reason)
+     values ($1, $2, $3, 'f.pdf', 'application/pdf', 10, $4, $5, 'upload_link', 'clean',
+             'rule', 0.7, 'chosen by the merchant on the offer page')`,
     [userId, clientId, kind, String(++docSeq).padStart(64, "0"), `k/${docSeq}`],
   );
 
@@ -162,8 +164,15 @@ describe("making an offer", () => {
   });
 
   it("can be made without an email: the rep sends the link", async () => {
+    // another merchant: a second offer for the same merchant would replace the first
+    const other = (
+      await one<{ id: string }>(
+        "insert into clients (user_id, business_name, contact_name, phone, email, state) values ($1, 'Second Shop', 'Sam Roe', '3105550188', 'sam@shop.com', 'NY') returning id",
+        [rita],
+      )
+    ).id;
     const made = await db.withUser(rita, (q) =>
-      mutations.createOffer(q, input({ send: false, funded: "50000" }), ctx(rita)),
+      mutations.createOffer(q, input({ clientId: other, send: false, funded: "50000" }), ctx(rita)),
     );
     expect(made.email).toBeNull();
     expect(
@@ -174,8 +183,11 @@ describe("making an offer", () => {
         )
       ).outbox_id,
     ).toBeNull();
-    // keep the tests below about the first offer
-    await t.pool.query("delete from merchant_offers where id = $1", [made.offerId]);
+    // the first merchant's offer is untouched
+    expect(
+      (await one<{ status: string }>("select status from merchant_offers where id = $1", [offerId]))
+        .status,
+    ).toBe("sent");
   });
 
   it("opening the page changes nothing (a mail scanner fetches links first); the page's own beacon counts the open", async () => {

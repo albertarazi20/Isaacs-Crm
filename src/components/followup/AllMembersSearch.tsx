@@ -8,7 +8,6 @@ import { useToast } from "@/components/overlay";
 import { Glyph } from "@/components/shell/icons";
 import { Button, IconButton, Input, Kbd, cn } from "@/components/ui";
 import type { BucketMember } from "@/lib/buckets/queries";
-import { followupCsv } from "@/lib/export/followup";
 import { matchesSearch } from "@/lib/followup/search";
 import { formatUS } from "@/lib/mca/phone";
 import { DialListDialog } from "./DialList";
@@ -65,9 +64,30 @@ export function AllMembersSearch({
     });
   }
 
-  function exportEverything() {
-    const { csv, left } = followupCsv(members);
-    downloadFile(`selective-all-buckets-${today}.csv`, csv);
+  async function exportEverything() {
+    // built on the server (managers only, audited, 20 an hour), from the members this page holds
+    let res: Response;
+    try {
+      res = await fetch("/api/export/followup", {
+        method: "POST",
+        body: new URLSearchParams({
+          bucket: "all",
+          ids: members.map((m) => m.client_id).join(","),
+        }),
+      });
+    } catch {
+      toast({ message: "Couldn't reach the server. Check your connection", tone: "error" });
+      return;
+    }
+    if (!res.ok) {
+      toast({
+        message: (await res.text().catch(() => "")) || "The download didn't work. Try again",
+        tone: "error",
+      });
+      return;
+    }
+    const left = Number(res.headers.get("x-left-out") ?? "0");
+    downloadFile(`selective-all-buckets-${today}.csv`, await res.text());
     toast({
       message: cut
         ? `Exported the first ${members.length}. There are more in follow-up than one file holds: export one bucket at a time for the rest`
@@ -101,7 +121,7 @@ export function AllMembersSearch({
           ) : null}
         </label>
         {canExport ? (
-          <Button onClick={exportEverything} disabled={members.length === 0}>
+          <Button onClick={() => void exportEverything()} disabled={members.length === 0}>
             <Glyph name="download" className="size-4 text-muted" />
             Export every bucket
           </Button>

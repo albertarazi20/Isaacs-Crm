@@ -409,6 +409,66 @@ describe("followup-9: the follow-up CSV route", () => {
   });
 });
 
+describe("the page's filtered follow-up export goes through the server", () => {
+  const post = (bucketId: string, ids: string[]) =>
+    route.POST(
+      new Request("https://crm.test/api/export/followup", {
+        method: "POST",
+        body: new URLSearchParams({ bucket: bucketId, ids: ids.join(",") }),
+      }),
+    );
+
+  it("a manager gets only the named members, audited with that count; a rep is refused", async () => {
+    await as(boss, "boss@x.com", "manager");
+    const a = await client(boss, "Filtered One Co");
+    const b = await client(boss, "Filtered Two Co");
+    const bid = await bucket("interested");
+    await enrol(boss, a, bid);
+    await enrol(boss, b, bid);
+    const res = await post(bid, [a]);
+    expect(res.status).toBe(200);
+    const csv = await res.text();
+    expect(csv).toContain("Filtered One Co");
+    expect(csv).not.toContain("Filtered Two Co");
+    const logged = await one<{ detail: { rows: number; export: string } }>(
+      "select detail from audit_events where kind = 'export_download' order by at desc limit 1",
+    );
+    expect(logged?.detail.rows).toBe(1);
+    expect((await post(bid, [])).status).toBe(200);
+    expect(
+      (
+        await route.POST(
+          new Request("https://crm.test/x", {
+            method: "POST",
+            body: new URLSearchParams({ ids: a }),
+          }),
+        )
+      ).status,
+    ).toBe(400);
+    await as(rep, "rep@x.com", "rep");
+    expect((await post(bid, [a])).status).toBe(403);
+    // the sign-in and role checks come before the body is read: no session is 401 whatever was sent
+    jar.token = "";
+    expect((await post(bid, [a])).status).toBe(401);
+    expect(
+      (await route.POST(new Request("https://crm.test/x", { method: "POST", body: "not a form" })))
+        .status,
+    ).toBe(401);
+  });
+
+  it("every bucket can be downloaded the same way (the all-buckets button)", async () => {
+    await as(boss, "boss@x.com", "manager");
+    const c = await client(boss, "All Buckets Filter Co");
+    const bid = await bucket("interested");
+    await enrol(boss, c, bid);
+    const res = await post("all", [c]);
+    expect(res.status).toBe(200);
+    expect(res.headers.get("content-disposition")).toContain("all-buckets");
+    const csv = await res.text();
+    expect(csv).toContain("All Buckets Filter Co");
+  });
+});
+
 describe("followup-5: the all-buckets list says when it was cut", () => {
   it("not truncated below the cap", async () => {
     const r = await t.db.withUser(boss, (q) => listAllMembersCapped(q));

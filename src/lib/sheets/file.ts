@@ -7,6 +7,7 @@ import { createClient, stampClientTimezone } from "../data/mutations";
 import { newClientSchema } from "../data/schemas";
 import { findSensitive } from "../data/sensitive";
 import { findDuplicates, userContext, type DuplicateMatch } from "../data/queries";
+import { normalizeUS } from "../mca/phone";
 import { parseMoney } from "../money";
 import { OwnedElsewhereError, refuseAnotherReps } from "../leads/owner";
 import { enqueueEmail } from "../send/enqueue";
@@ -79,6 +80,17 @@ export interface BulkFileReport {
  * Bulk intake (S1-13): file N staged rows into one bucket in one action. Each row is its own transaction, so one
  * bad row never rolls the others back; duplicates (the rep's own, and another rep's) are skipped and named.
  */
+/**
+ * A merchant the signed-in person may see (row-level security answers): their own, or any for a manager. The bulk filer
+ * tells the person which merchant a row matched only when this is true; a rep whose row matches another rep's merchant
+ * learns the first name of the owner (as the single-lead check does) but not the business or its id.
+ */
+async function canSee(q: Db, clientId: string | null): Promise<boolean> {
+  if (!clientId) return false;
+  const { rowCount } = await q.query("select 1 from clients where id = $1", [clientId]);
+  return (rowCount ?? 0) > 0;
+}
+
 export async function fileManyRows(args: {
   db: DbAccess;
   userId: string;
@@ -112,7 +124,7 @@ export async function fileManyRows(args: {
             rowId,
             businessName,
             result: "already_filed",
-            clientId: already.client_id,
+            clientId: (await canSee(q, already.client_id)) ? already.client_id : null,
             message: "Already filed",
           } as const;
         const filed = await fileOneRow(q, row, args.appUrl, args.now, args.bucketId);
@@ -121,7 +133,7 @@ export async function fileManyRows(args: {
             rowId,
             businessName,
             result: "duplicate",
-            clientId: filed.clientId,
+            clientId: (await canSee(q, filed.clientId)) ? filed.clientId : null,
             message: `Already in the system: ${filed.match.owner_name || "this book"}'s lead${filed.match.bucket_name ? `, in ${filed.match.bucket_name}` : ""}`,
           } as const;
         return {
@@ -136,17 +148,26 @@ export async function fileManyRows(args: {
     } catch (e) {
       if (e instanceof OwnedElsewhereError) {
         // the row is the other rep's merchant: marked as such, like the daily loop does, so it is not offered again
-        await args.db.withUser(args.userId, (q) =>
-          q.query("update sheet_rows set filed_at = now(), client_id = $2 where id = $1", [
+        const seen = await args.db.withUser(args.userId, async (q) => {
+          await q.query("update sheet_rows set filed_at = now(), client_id = $2 where id = $1", [
             rowId,
             e.owner.client_id,
-          ]),
-        );
+          ]);
+          const mine = await canSee(q, e.owner.client_id);
+          // a rep sees the row's own name, never another rep's merchant's
+          const rowName = (
+            await q.query<{ business_name: string; contact_name: string }>(
+              "select business_name, contact_name from sheet_rows where id = $1",
+              [rowId],
+            )
+          ).rows[0];
+          return { mine, rowName: rowName?.business_name || rowName?.contact_name || "" };
+        });
         out.push({
           rowId,
-          businessName: e.owner.business_name,
+          businessName: seen.mine ? e.owner.business_name : seen.rowName,
           result: "duplicate",
-          clientId: e.owner.client_id,
+          clientId: seen.mine ? e.owner.client_id : null,
           message: e.message,
         });
         continue;
@@ -237,8 +258,20 @@ export async function fileOneRow(
   bucketOverride?: string | null,
   extras: FileExtras = {},
 ): Promise<FileOutcome> {
-  const dupes = await findDuplicates(q, { phone: row.phone, businessName: row.business_name });
-  const dupe = dupes.find((m) => m.reason === "same phone" || !row.phone || !m.phone);
+  // the same merchant by phone (main or second number), by email, or by name: a sheet row's second number counts as
+  // the number when the first is empty or not a US number
+  const phones = [row.phone, row.phone2].filter((p) => p !== "" && normalizeUS(p) !== null);
+  const first = await findDuplicates(q, {
+    phone: phones[0] ?? "",
+    email: row.email,
+    businessName: row.business_name,
+  });
+  const second = phones[1] ? await findDuplicates(q, { phone: phones[1], email: row.email2 }) : [];
+  const dupes = [...first, ...second.filter((m) => !first.some((f) => f.id === m.id))];
+  const dupe = dupes.find(
+    (m) =>
+      m.reason === "same phone" || m.reason === "same email" || phones.length === 0 || !m.phone,
+  );
   if (dupe) {
     await q.query("update sheet_rows set filed_at = now(), client_id = $2 where id = $1", [
       row.id,

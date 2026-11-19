@@ -2,6 +2,7 @@ import { z } from "zod";
 import { EMAIL, newClientSchema } from "../data/schemas";
 import { parseMoney } from "../money";
 import { findSensitive } from "../data/sensitive";
+import { normalizeState } from "../mca/states";
 
 /** Forms and Zapier send an empty field as null; that means "not given", never "refuse the lead". */
 const str = (max: number) =>
@@ -40,7 +41,7 @@ export const leadSchema = z
   })
   // "N/A", "none", "-" are not phone numbers, "none" is not an email and "ASAP" is not an amount: each is kept out
   // of its field (the words go to the notes), so the lead is judged on what it really gave, never refused for them.
-  // The state (trimmed by str) is kept in capitals: "ny" and "NY" are one state.
+  // The state (trimmed by str) is stored as its two-letter code ("Florida", "fl" and "FL" are one state), unknown text in capitals.
   .transform((v) => {
     const kept: string[] = [];
     const email = v.email && EMAIL.test(v.email) ? v.email : undefined;
@@ -59,7 +60,7 @@ export const leadSchema = z
     put("wantedAmount", amount);
     put("notes", notes);
     put("phone", (v.phone ?? "").replace(/\D/g, "").length >= 7 ? v.phone : undefined);
-    if (v.state) out.state = v.state.toUpperCase();
+    if (v.state) out.state = normalizeState(v.state) ?? v.state.toUpperCase();
     return out;
   })
   .superRefine((v, ctx) => {

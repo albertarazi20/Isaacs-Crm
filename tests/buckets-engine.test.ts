@@ -154,13 +154,19 @@ describe("the sequence runner", () => {
     s = await runBucketSteps({ db: t.db, now: day(2), appUrl: "https://crm.test" });
     expect(await mine()).toBe(2);
     await runBucketSteps({ db: t.db, now: day(3), appUrl: "https://crm.test" });
+    // the outbox worker sends what the engine queues (it is not part of this test); the call note counts emails that
+    // really went out, so mark the three as sent the way the worker would have
+    await t.pool.query(
+      "update outbox set status = 'sent', sent_at = now() where client_id = $1 and lane = 'sequence' and status = 'queued'",
+      [id],
+    );
     s = await runBucketSteps({ db: t.db, now: day(5), appUrl: "https://crm.test" });
     expect(s.called).toBeGreaterThanOrEqual(1);
     const task = await t.pool.query<{ note: string }>(
       "select note from timers where client_id = $1 and done_at is null and kind = 'follow_up' order by created_at desc limit 1",
       [id],
     );
-    expect(task.rows[0]?.note).toMatch(/Call: no reply/);
+    expect(task.rows[0]?.note).toMatch(/^Call: no reply to 3 emails \(/);
     s = await runBucketSteps({ db: t.db, now: day(14), appUrl: "https://crm.test" });
     expect(s.moved).toBeGreaterThanOrEqual(1);
     expect(await liveBucketKey(id)).toBe("cold");

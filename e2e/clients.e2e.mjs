@@ -1,4 +1,3 @@
-import { readFileSync } from "node:fs";
 import { BASE, check, openBrowser, withDb } from "./lib.mjs";
 
 export default async function clientsFlow({ email }) {
@@ -88,21 +87,11 @@ export default async function clientsFlow({ email }) {
   const label = (await filters.innerText()).replace(/\s+/g, " ").trim();
   check("the button says how many filters are on", /^Filters ?1$/.test(label), label);
 
-  // The download is exactly what is on screen.
-  const [download] = await Promise.all([
-    page.waitForEvent("download"),
-    page.getByRole("button", { name: /^Download these/ }).click(),
-  ]);
-  const text = readFileSync(await download.path(), "utf8");
-  const lines = text.replace(/^﻿/, "").trim().split(/\r\n/);
+  // Downloads are for managers (and go through the audited server export: tests/export-clients-filtered.test.ts): a
+  // rep sees no download button at all, however the list is filtered.
   check(
-    "the downloaded CSV has a header and one row per client on screen",
-    lines.length - 1 === (await shown()) && lines[0].startsWith("Business,"),
-    `${lines.length - 1} rows`,
-  );
-  check(
-    "the download is named for the day",
-    /isaac-clients-filtered-\d{4}-\d{2}-\d{2}\.csv/.test(download.suggestedFilename()),
+    "a rep sees no download button",
+    (await page.getByRole("button", { name: /^Download these/ }).count()) === 0,
   );
 
   await page.getByLabel("Not contacted in").selectOption("any");

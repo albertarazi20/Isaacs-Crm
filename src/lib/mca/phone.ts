@@ -1,9 +1,30 @@
-/** US numbers only for now — Isaac works US merchants. Returns E.164 or null. */
+/** A trailing extension ("x12", "ext. 2", "extension 15") is not part of the number. */
+const EXTENSION = /[\s,;]*(?:extension|ext\.?|x)\s*\.?\s*\d{1,6}\s*$/i;
+
+/** Placeholder numbers people type to get past a required field: 0000000000, 1111111111, 1234567890, 9876543210. */
+function isPlaceholder(ten: string): boolean {
+  if (/^(\d)\1{9}$/.test(ten)) return true;
+  const step = (ten.charCodeAt(1) - ten.charCodeAt(0) + 10) % 10;
+  if (step !== 1 && step !== 9) return false;
+  return [...ten].every((c, i) => i === 0 || (Number(c) - Number(ten[i - 1]) + 10) % 10 === step);
+}
+
+/**
+ * US numbers only for now — Isaac works US merchants. Returns E.164 or null. Numbers no US carrier can issue (an area
+ * code starting 0 or 1, an exchange starting 0) and placeholders (all one digit, 1234567890) are not numbers: the same
+ * junk typed on two different leads must never read as one merchant.
+ */
 export function normalizeUS(raw: string): string | null {
-  const digits = raw.replace(/\D/g, "");
-  if (digits.length === 10) return `+1${digits}`;
-  if (digits.length === 11 && digits.startsWith("1")) return `+${digits}`;
-  return null;
+  const digits = raw.replace(EXTENSION, "").replace(/\D/g, "");
+  const ten =
+    digits.length === 10
+      ? digits
+      : digits.length === 11 && digits.startsWith("1")
+        ? digits.slice(1)
+        : null;
+  if (!ten) return null;
+  if (!/^[2-9]/.test(ten) || ten[3] === "0" || isPlaceholder(ten)) return null;
+  return `+1${ten}`;
 }
 
 /**

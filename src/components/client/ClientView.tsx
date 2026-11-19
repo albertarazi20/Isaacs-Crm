@@ -68,9 +68,15 @@ export function ClientView({
   return (
     <NowProvider serverNow={serverNow}>
       {/* first in the page so the phone's own copy of the buttons is the first one found */}
-      <MobileActionBar card={card} />
+      <MobileActionBar card={card} merchantTimezone={offerTarget?.timezone} />
       <div className="stagger flex min-w-0 flex-col gap-4 max-sm:pb-10 lg:gap-5">
-        <ClientHero detail={detail} buckets={buckets} bucketId={bucketId} emailsStop={emailsStop} />
+        <ClientHero
+          detail={detail}
+          buckets={buckets}
+          bucketId={bucketId}
+          emailsStop={emailsStop}
+          merchantTimezone={offerTarget?.timezone}
+        />
         <div className="flex flex-col gap-4 xl:grid xl:grid-cols-[minmax(0,1fr)_minmax(0,420px)] xl:items-start xl:gap-5">
           <BringInStrip
             detail={detail}

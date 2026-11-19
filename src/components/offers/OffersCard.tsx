@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import { resendOfferNoticeAction, withdrawOfferAction } from "@/app/offer-actions";
-import { formatMoney } from "@/lib/money";
 import type { OfferRow, OfferState } from "@/lib/offers/queries";
 import { exactMoney, paymentsWords, factorWords, offerNumber, timeLeft } from "@/lib/offers/terms";
 import { timeAgo } from "@/lib/format";
@@ -168,7 +167,7 @@ export function OffersCard({
                   <Button
                     size="sm"
                     onClick={() => void copy(o)}
-                    aria-label={`Copy the link to the ${formatMoney(o.funded_cents)} offer`}
+                    aria-label={`Copy the link to the ${exactMoney(o.funded_cents)} offer`}
                   >
                     <Glyph name="copy" className="size-3.5" />
                     Copy link

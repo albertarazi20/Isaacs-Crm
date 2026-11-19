@@ -480,6 +480,9 @@ export function ToastProvider({ children }: { children: ReactNode }) {
 
 export const useToast = () => useContext(ToastContext);
 
+/** What a failed network call says: the action never answered (offline, the server restarting). */
+export const NETWORK_ERROR = "Couldn't reach the server. Check your connection";
+
 /** The body of useCall, without the hook: await the action, toast a failure, resolve to the data or null. */
 export async function runCall<T>(
   toast: (t: ToastInput) => void,
@@ -490,7 +493,7 @@ export async function runCall<T>(
   try {
     res = await promise;
   } catch {
-    toast({ message: "Couldn't reach the server. Check your connection", tone: "error" });
+    toast({ message: NETWORK_ERROR, tone: "error" });
     return null;
   }
   if (!res.ok) {

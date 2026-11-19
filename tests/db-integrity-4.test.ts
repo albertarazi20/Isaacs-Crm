@@ -160,6 +160,9 @@ describe("database-1: merging two cards keeps everything that hangs off the othe
       "positions",
       "competing_offers",
       "fundings",
+      // 0583: gets its rows from the merge itself (the dropped card's links, pointed at the kept card); proved in
+      // review-fixes-merge-sync-claims.test.ts
+      "client_token_aliases",
     ]); // the first and the last four are covered by merge.test.ts
     // access_log is an append-only audit trail: merge_clients deliberately does not rewrite it (checked after the merge)
     const AUDIT = "access_log";

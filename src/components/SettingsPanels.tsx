@@ -25,6 +25,7 @@ interface Props {
     connected: boolean;
     needsReconnect: boolean;
     googleEmail: string | null;
+    canReadMail: boolean;
     configured: boolean;
   };
   resendReady: boolean;
@@ -141,7 +142,7 @@ export function SettingsPanels({ loginEmail, settings, gmail, resendReady, sched
 
       <SettingsCard
         title="Gmail"
-        description="Connect your Gmail so emails to merchants go out from your own address and land in your Sent folder."
+        description="Connect your Gmail so emails to merchants go out from your own address, land in your Sent folder, and merchant replies are noticed."
         aside={
           !gmail.configured ? (
             <StatusChip tone="warn">Not set up</StatusChip>
@@ -163,8 +164,17 @@ export function SettingsPanels({ loginEmail, settings, gmail, resendReady, sched
         ) : gmail.connected ? (
           <SettingRow
             label={gmail.googleEmail ?? "Your Gmail"}
-            hint="Sends as you. Replies are read for alerts."
+            hint={
+              gmail.canReadMail
+                ? "Sends as you. Replies are read for alerts and to stop follow-ups when a merchant answers."
+                : "Sends as you, but replies are NOT being read yet, so follow-ups keep going after a merchant answers. Reconnect and allow reading."
+            }
           >
+            {gmail.canReadMail ? null : (
+              <a className={buttonClass("secondary", "sm")} href="/api/auth/google?purpose=mail">
+                Reconnect with reply reading
+              </a>
+            )}
             <Button
               variant="ghost"
               size="sm"
@@ -189,7 +199,7 @@ export function SettingsPanels({ loginEmail, settings, gmail, resendReady, sched
                 : "Until you connect, emails open in Gmail instead of sending from here."
             }
           >
-            <a className={buttonClass("secondary", "sm")} href="/api/auth/google?purpose=gmail">
+            <a className={buttonClass("secondary", "sm")} href="/api/auth/google?purpose=mail">
               {gmail.needsReconnect ? "Reconnect Gmail" : "Connect Gmail"}
             </a>
           </SettingRow>

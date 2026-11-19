@@ -12,7 +12,7 @@ import { suggestAfterEmail } from "@/lib/mca/touch";
 import type { ISODate } from "@/lib/mca/dates";
 import { appendSignature, effectiveSignature } from "@/lib/messaging/merge";
 import { useApp } from "../app-context";
-import { Dialog, useCall, useToast } from "../overlay";
+import { Dialog, NETWORK_ERROR, useCall, useToast } from "../overlay";
 import { TimerPicker } from "../TimerPicker";
 import { Badge, Button, buttonClass, Field, Input, Textarea } from "../ui";
 import { useMessagingContext } from "../messaging/useMessagingContext";
@@ -143,6 +143,7 @@ function EmailLinkDialog({
 }) {
   const { today, senderName, gmailConnected, gmailNeedsReconnect } = useApp();
   const call = useCall();
+  const toast = useToast();
   const start = applicationEmail({
     contactName: card.contact_name,
     businessName: card.business_name,
@@ -160,13 +161,19 @@ function EmailLinkDialog({
 
   async function send() {
     setBusy(true);
-    const res = await sendEmailAction({
-      clientId: card.id,
-      subject,
-      body: appendSignature(body, signature),
-      nextDueOn: next,
-    });
-    setBusy(false);
+    let res: Awaited<ReturnType<typeof sendEmailAction>>;
+    try {
+      res = await sendEmailAction({
+        clientId: card.id,
+        subject,
+        body: appendSignature(body, signature),
+        nextDueOn: next,
+      });
+    } catch {
+      return toast({ message: NETWORK_ERROR, tone: "error" });
+    } finally {
+      setBusy(false);
+    }
     if (!res.ok && res.reconnect) setReconnect(true);
     const sent = await call(
       Promise.resolve(res),
@@ -202,7 +209,7 @@ function EmailLinkDialog({
               {busy ? "Sending…" : "Send from my Gmail"}
             </Button>
           ) : (
-            <a className={buttonClass("primary", "md")} href="/api/auth/google?purpose=gmail">
+            <a className={buttonClass("primary", "md")} href="/api/auth/google?purpose=mail">
               {reconnect ? "Reconnect Gmail" : "Connect Gmail to send"}
             </a>
           )}

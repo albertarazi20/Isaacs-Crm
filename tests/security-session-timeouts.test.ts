@@ -159,6 +159,25 @@ describe("the idle timeout: 12 hours of no use ends a session", () => {
   });
 });
 
+describe("a page timer never keeps a session alive (passive check)", () => {
+  it("a check with roll off reports ok but leaves last_seen_at alone, so an unattended tab still times out", async () => {
+    await startSession("sid-passive", user, T0, t.db);
+    // polled every 30 seconds for the whole idle window: reads, never writes
+    for (let m = 6; m <= 12 * 60 - 1; m += 6) {
+      expect(await touchSession("sid-passive", user, at(m * MIN), t.db, false)).toBe("ok");
+    }
+    expect(await lastSeen("sid-passive")).toEqual(T0);
+    // 12 hours after the last real use it is idle, timer or not
+    expect(await touchSession("sid-passive", user, at(SESSION_IDLE_SECONDS + 1), t.db, false)).toBe(
+      "idle",
+    );
+    // while a real request (roll on) does move it
+    await startSession("sid-active", user, T0, t.db);
+    expect(await touchSession("sid-active", user, at(SESSION_ROLL_SECONDS), t.db, true)).toBe("ok");
+    expect(await lastSeen("sid-active")).toEqual(at(SESSION_ROLL_SECONDS));
+  });
+});
+
 describe("the absolute lifetime: 7 days from sign-in, however busy", () => {
   it("is seven days", () => {
     expect(SESSION_DAYS).toBe(7);

@@ -27,16 +27,22 @@ export function assertKey(key: string): string {
   return key;
 }
 
-/** A file name that is safe in a key and a Content-Disposition header. */
+/** A file name that is safe in a key and a Content-Disposition header. The extension survives cleaning and truncation. */
 export function safeName(filename: string): string {
-  const base = filename.split(/[\\/]/).pop() ?? "file";
-  const cleaned = base
-    .replace(/["']/g, "")
+  const raw = (filename.split(/[\\/]/).pop() ?? "file").replace(/["']/g, "").trim();
+  const dot = raw.lastIndexOf(".");
+  const rawExt = dot >= 0 ? raw.slice(dot + 1) : "";
+  const ext = /^[A-Za-z0-9]{1,10}$/.test(rawExt) ? rawExt : "";
+  const stem = ext ? raw.slice(0, dot) : raw;
+  const cleaned = stem
     .replace(/[^A-Za-z0-9._ -]+/g, "_")
     .replace(/\s+/g, " ")
     .trim()
-    .slice(0, 120);
-  return cleaned.replace(/^[._-]+/, "") || "file";
+    .replace(/^[._\s-]+/, "")
+    .slice(0, 120 - (ext ? ext.length + 1 : 0))
+    .trim();
+  const base = cleaned || "file";
+  return ext ? `${base}.${ext}` : base;
 }
 
 /** The file-name part of a storage key: safeName with every character the key pattern refuses (spaces, "..") replaced. */

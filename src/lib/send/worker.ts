@@ -1,6 +1,6 @@
 import type { Db, DbAccess } from "../db";
 import { approvalClaims, hasPostalAddress, withFooter } from "../approvals/html";
-import { checkClaims } from "../messaging/claims";
+import { checkClaims, merchantOwnWords, stripMerchantText } from "../messaging/claims";
 import {
   capAllows,
   inSendWindow,
@@ -85,6 +85,10 @@ interface Job {
   /** A nudge after an open that something since made wrong to send (app.nudge_overtaken). */
   nudge_overtaken: boolean;
   client_state: string | null;
+  /** The merchant's own words in the message (names): the claim check does not read them as the shop's claims. */
+  client_business_name: string | null;
+  client_contact_name: string | null;
+  client_dba: string | null;
   /** The merchant's own time zone: the send window is theirs. */
   tz: string | null;
   suppressed: boolean;
@@ -106,6 +110,18 @@ interface ApprovalCheck {
 }
 
 const MAX_ATTEMPTS = 3;
+
+/** Why a deferred bucket step never went out, in words for the merchant's timeline (the outbox row's last deferral). */
+const UNSENT_WHY: Record<string, string> = {
+  gmail_not_connected: "the rep's Gmail is not connected",
+  claim_check: "held by the claim check",
+  dns_not_verified: "the sending domain is not verified yet",
+  no_postal_address: "the shop's postal address is not set",
+  paused: "the follow-up was paused",
+  per_merchant_cap: "the per-merchant sending limit",
+  cap: "the daily sending cap",
+  outside_window: "outside the sending window",
+};
 
 /** Socket-level codes where the request may already have reached the provider before the connection died. */
 const AMBIGUOUS_CODES = new Set([
@@ -318,6 +334,9 @@ export async function drainOutbox(args: {
                       and o.source like 'bucket:' || e.bucket_id::text || ':%') as enrollment_paused,
            (o.source like 'nudge:%' and app.nudge_overtaken(o.client_id, o.created_at)) as nudge_overtaken,
            (select state from clients c where c.id = o.client_id) as client_state,
+           (select business_name from clients c where c.id = o.client_id) as client_business_name,
+           (select contact_name from clients c where c.id = o.client_id) as client_contact_name,
+           (select dba from clients c where c.id = o.client_id) as client_dba,
            (select app.client_timezone(c) from clients c where c.id = o.client_id) as tz,
            app.is_suppressed('email', o.to_address) as suppressed,
            (select unsubscribe_token from clients c where c.id = o.client_id) as unsubscribe_token,
@@ -330,11 +349,35 @@ export async function drainOutbox(args: {
       claimed = { id: job.id, lane: job.lane, tz: job.tz };
       summary.claimed += 1;
 
+      // A bucket step that ends unsent (it sat past its 36 hours because the rep's Gmail was not connected, the claim
+      // check held it, the sending domain was not verified...) is written on the merchant's timeline, and the step no
+      // longer counts as sent: the sequence has already moved on, so without this the merchant could be walked through
+      // every step and into Cold with nothing ever sent, and nobody would know. A merchant who stopped the mail
+      // themselves (opt-out, do-not-contact, trash, suppression) has their own timeline entry already.
+      const unsentStep = async (reason: string) => {
+        const m = /^bucket:([0-9a-f-]{36}):step:(\d+)$/.exec(job.source);
+        if (job.lane !== "sequence" || !m || !job.client_id) return;
+        if (["suppressed", "opted_out", "dnc", "trashed"].includes(reason)) return;
+        const why = job.last_error ? UNSENT_WHY[job.last_error] : undefined;
+        await q.query(
+          "update enrollments set steps_sent = greatest(steps_sent - 1, 0) where client_id = $1 and bucket_id = $2 and stopped_at is null",
+          [job.client_id, m[1]],
+        );
+        await q.query(
+          "insert into activities (user_id, client_id, kind, body) values ($1, $2, 'system', $3)",
+          [
+            job.user_id,
+            job.client_id,
+            `Bucket email step ${m[2]} ${reason === "expired" ? "expired" : "was cancelled"} unsent: ${why ?? job.last_error ?? reason}`,
+          ],
+        );
+      };
       const skip = async (reason: string) => {
         await q.query("update outbox set status = 'skipped', skip_reason = $2 where id = $1", [
           job.id,
           reason,
         ]);
+        await unsentStep(reason);
         summary.skipped += 1;
       };
       const cancel = async (reason: string) => {
@@ -342,6 +385,7 @@ export async function drainOutbox(args: {
           job.id,
           reason,
         ]);
+        await unsentStep(reason);
         summary.skipped += 1;
       };
       // Sequence and blast mail goes only inside the merchant's send window, however it came to be re-timed (a cap
@@ -356,14 +400,32 @@ export async function drainOutbox(args: {
       };
       const hour = 3_600_000;
 
-      if (job.expires_at && new Date(job.expires_at) < now) return (skip("expired"), false);
+      if (job.expires_at && new Date(job.expires_at) < now) {
+        await skip("expired");
+        return false;
+      }
       // a deleted merchant gets no mail at all, whatever lane the row is on (S1-2)
-      if (job.client_trashed) return (cancel("trashed"), false);
-      if (job.suppressed) return (skip("suppressed"), false);
-      if (job.client_opt_out) return (skip("opted_out"), false);
-      if (job.client_dnc) return (skip("dnc"), false);
+      if (job.client_trashed) {
+        await cancel("trashed");
+        return false;
+      }
+      if (job.suppressed) {
+        await skip("suppressed");
+        return false;
+      }
+      if (job.client_opt_out) {
+        await skip("opted_out");
+        return false;
+      }
+      if (job.client_dnc) {
+        await skip("dnc");
+        return false;
+      }
       // a nudge after an open goes only if nothing happened since it was queued (0552)
-      if (job.nudge_overtaken) return (cancel("overtaken"), false);
+      if (job.nudge_overtaken) {
+        await cancel("overtaken");
+        return false;
+      }
       if (job.lane === "approval") {
         // Right before an approval email goes: is its approval still open with nothing stopping it (a reply, a pitch,
         // a pause, the hold date), is it still inside the merchant's day (a retry an hour later may not be), and is it
@@ -392,12 +454,23 @@ export async function drainOutbox(args: {
           summary.failed += 1;
           return false;
         }
-        if (!c) return (cancel("gone"), false);
-        if (c.halt) return (cancel(c.halt), false);
+        if (!c) {
+          await cancel("gone");
+          return false;
+        }
+        if (c.halt) {
+          await cancel(c.halt);
+          return false;
+        }
         // the merchant changed hands: the email names the old rep, so it is filled again for the new one
-        if (c.owner_id !== job.user_id) return (cancel("owner_changed"), false);
-        if (c.email.trim().toLowerCase() !== job.to_address.trim().toLowerCase())
-          return (cancel("address_changed"), false);
+        if (c.owner_id !== job.user_id) {
+          await cancel("owner_changed");
+          return false;
+        }
+        if (c.email.trim().toLowerCase() !== job.to_address.trim().toLowerCase()) {
+          await cancel("address_changed");
+          return false;
+        }
         const w: WindowInput = {
           timezone: c.tz,
           startHour: c.approval_window_start,
@@ -446,7 +519,15 @@ export async function drainOutbox(args: {
       if (automated) {
         // the claim checker (S1-15): what the engine says on its own must be true for this merchant. An approval
         // email may say "approved" (the merchant is); every other rule holds.
-        const text = `${job.subject}\n${job.text_body}`;
+        // the merchant's own business or contact name ("Guaranteed Roofing", "Mike's Loan Office") is not the shop's claim
+        const text = stripMerchantText(
+          `${job.subject}\n${job.text_body}`,
+          merchantOwnWords({
+            businessName: job.client_business_name,
+            contactName: job.client_contact_name,
+            dba: job.client_dba,
+          }),
+        );
         const ctx = { state: job.client_state ?? "" };
         const claims = bulk
           ? checkClaims(text, ctx)

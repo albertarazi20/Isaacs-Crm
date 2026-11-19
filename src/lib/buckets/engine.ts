@@ -206,6 +206,18 @@ export async function runBucketSteps(args: {
           "update enrollments set stopped_at = now(), stop_reason = 'sequence_done', steps_sent = steps_sent + $2, hold_since = null where id = $1",
           [row.enrollment_id, took],
         );
+        if (
+          steps.some((st) => st.action === "email") &&
+          (await emailsSent(q, row.client_id, row.bucket_id, true)) === 0
+        )
+          await q.query(
+            "insert into activities (user_id, client_id, kind, body) values ($1, $2, 'system', $3)",
+            [
+              row.user_id,
+              row.client_id,
+              `The ${row.bucket_name} sequence ended with none of its emails actually sent`,
+            ],
+          );
         const cold = (
           await q.query<{ id: string }>(
             "select b.id from buckets b where b.key = 'cold' and b.active and not app.chase_closed($1)",
@@ -249,6 +261,9 @@ export async function runBucketSteps(args: {
         return;
       }
       if (step.action === "call") {
+        // the note counts emails that really went out: a step that was queued and then expired unsent (Gmail not
+        // connected, held by the claim check...) is not an email the merchant got and did not answer
+        const sentN = await emailsSent(q, row.client_id, row.bucket_id);
         await q.query(
           `insert into timers (user_id, client_id, kind, due_on, note)
            select $1, $2, 'follow_up', $3, $4
@@ -257,7 +272,9 @@ export async function runBucketSteps(args: {
             row.user_id,
             row.client_id,
             today,
-            `Call: no reply to ${row.steps_sent} emails (${row.bucket_name})`,
+            sentN > 0
+              ? `Call: no reply to ${sentN} email${sentN === 1 ? "" : "s"} (${row.bucket_name})`
+              : `Call: no email has gone out yet (${row.bucket_name})`,
           ],
         );
         summary.called += 1;
@@ -372,6 +389,22 @@ export async function runBucketSteps(args: {
     });
   }
   return summary;
+}
+
+/** How many of this bucket's sequence emails really went out to the merchant; expired or cancelled ones never count, queued ones only with `alsoPending`. */
+async function emailsSent(
+  q: Db,
+  clientId: string,
+  bucketId: string,
+  alsoPending = false,
+): Promise<number> {
+  const { rows } = await q.query<{ n: number }>(
+    `select count(*)::int as n from outbox
+      where client_id = $1 and lane = 'sequence' and source like $2
+        and (status = 'sent' or ($3 and status in ('queued', 'sending')))`,
+    [clientId, `bucket:${bucketId}:step:%`, alsoPending],
+  );
+  return rows[0]?.n ?? 0;
 }
 
 async function enteredDay(row: DueRow, q: Db): Promise<ISODate> {

@@ -34,25 +34,35 @@ function inline(text: string, key: string): ReactNode[] {
 
 type Block =
   | { kind: "p"; lines: string[] }
-  | { kind: "ul" | "ol"; items: string[] }
+  | { kind: "ul"; items: string[] }
+  | { kind: "ol"; items: string[]; start: number }
   | { kind: "h"; text: string };
 
-function blocks(src: string): Block[] {
+/** Exported for tests. */
+export function blocks(src: string): Block[] {
   const out: Block[] = [];
   for (const raw of src.replace(/\r/g, "").split("\n")) {
     const line = raw.trimEnd();
     const bullet = /^\s*[-*•]\s+(.*)$/.exec(line);
-    const numbered = /^\s*\d+[.)]\s+(.*)$/.exec(line);
+    const numbered = /^\s*(\d+)[.)]\s+(.*)$/.exec(line);
     const heading = /^#{1,4}\s+(.*)$/.exec(line);
     const prev = out[out.length - 1];
     if (!line.trim()) {
-      out.push({ kind: "p", lines: [] });
+      // one marker per gap: it ends a paragraph, and a list that follows may still continue the one before it
+      if (!(prev && prev.kind === "p" && prev.lines.length === 0))
+        out.push({ kind: "p", lines: [] });
     } else if (heading) {
       out.push({ kind: "h", text: heading[1]! });
     } else if (bullet || numbered) {
       const kind = bullet ? "ul" : "ol";
-      const item = (bullet ?? numbered)![1]!;
-      if (prev && prev.kind === kind) prev.items.push(item);
+      const item = bullet ? bullet[1]! : numbered![2]!;
+      // a blank line between items ("1. a", "", "2. b") is still one list, so the steps count 1, 2, 3
+      const gap = prev && prev.kind === "p" && prev.lines.length === 0;
+      const before = gap ? out[out.length - 2] : prev;
+      if (before && before.kind === kind) {
+        if (gap) out.pop();
+        before.items.push(item);
+      } else if (kind === "ol") out.push({ kind, items: [item], start: Number(numbered![1]) });
       else out.push({ kind, items: [item] });
     } else if (prev && (prev.kind === "ul" || prev.kind === "ol") && /^\s{2,}/.test(raw)) {
       // an indented continuation line belongs to the last list item
@@ -92,6 +102,7 @@ export function Markdown({ text }: { text: string }) {
         return (
           <List
             key={k}
+            {...(b.kind === "ol" && b.start !== 1 ? { start: b.start } : {})}
             className={
               b.kind === "ol"
                 ? "list-decimal space-y-1.5 pl-5 marker:font-semibold marker:text-accent"

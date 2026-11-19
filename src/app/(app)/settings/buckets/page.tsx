@@ -15,11 +15,11 @@ import {
   listTemplates,
   templateScores,
 } from "@/lib/buckets/queries";
+import { isUuid } from "@/lib/data/schemas";
 import { db } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
 
-const UUID = /^[0-9a-f-]{36}$/;
 const SCORE_DAYS = 90;
 
 export const metadata: Metadata = { title: "Buckets & templates" };
@@ -44,7 +44,7 @@ export default async function BucketsSettingsPage({
     return { buckets, templates, steps, scores };
   });
   const { buckets, templates, steps, scores } = data;
-  const focus = b && UUID.test(b) ? b : null;
+  const focus = b && isUuid(b) ? b : null;
 
   return (
     <SettingsPage

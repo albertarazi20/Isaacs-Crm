@@ -58,6 +58,8 @@ export interface ContactTarget {
   stage: StageKey;
   /** Where the merchant is — for quiet-hours warnings. Free text ("TX", "Texas"); unknown means no warning. */
   state?: string;
+  /** The zone the database decided for this merchant (`app.client_timezone`), when the page has it. Else it is worked out from state and phone. */
+  timezone?: string;
   contact_status?: ContactStatus;
 }
 
@@ -169,7 +171,9 @@ export function ContactActions({
   function call() {
     if (!e164)
       return toast({ message: "No valid phone number on file for this merchant", tone: "error" });
-    const quiet = quietHours(client.state ?? "");
+    // the state and phone number only: client.timezone falls back to the REP's zone for a merchant with no known
+    // location, and "it's 9 PM where they are" must never be said about a place nobody knows
+    const quiet = quietHours(client.state ?? "", new Date(), { phone: client.phone });
     if (quiet) {
       toast({
         message: `It's ${quiet.localTime} where ${client.business_name} is. A call now may not be welcome`,
@@ -300,7 +304,7 @@ function TextDialogBody({
   const toast = useToast();
   const { today } = useApp();
   const e164 = normalizeUS(client.phone);
-  const quiet = quietHours(client.state ?? "");
+  const quiet = quietHours(client.state ?? "", new Date(), { phone: client.phone });
   const [message, setMessage] = useState(
     () =>
       suggestedText ??
@@ -593,7 +597,7 @@ function EmailDialogBody({
               {busy ? "Sending…" : "Send from my Gmail"}
             </Button>
           ) : (
-            <a className={buttonClass("primary", "md")} href="/api/auth/google?purpose=gmail">
+            <a className={buttonClass("primary", "md")} href="/api/auth/google?purpose=mail">
               {reconnect ? "Reconnect Gmail" : "Connect Gmail to send"}
             </a>
           )}

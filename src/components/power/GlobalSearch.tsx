@@ -206,7 +206,7 @@ function Palette({
       {
         id: "assistant",
         label: "Ask the assistant",
-        hint: "Claude Opus 5.5",
+        hint: "Ask",
         icon: "sparkles",
         run: () => {
           onClose();

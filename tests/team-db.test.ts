@@ -74,6 +74,16 @@ describe("the team: add, change role, disable", () => {
     await expect(
       t.db.withUser(manager, (q) => q.query("select set_team_member($1, 'rep', true)", [manager])),
     ).rejects.toThrow(/yourself/);
+    // "Add person" with your own address and a lower role would demote you: refused, and the row is untouched
+    const mine = (
+      await t.pool.query<{ email: string }>("select email from app_users where id = $1", [manager])
+    ).rows[0]!.email;
+    await expect(
+      t.db.withUser(manager, (q) => q.query("select add_team_member($1, 'Me', 'rep')", [mine])),
+    ).rejects.toThrow(/yourself/);
+    expect(
+      (await t.pool.query("select role, active from app_users where id = $1", [manager])).rows[0],
+    ).toEqual({ role: "manager", active: true });
     // a role change signs the person out everywhere (the session epoch moves on)
     await t.db.withUser(manager, (q) =>
       q.query("select set_team_member($1, 'manager', true)", [id]),

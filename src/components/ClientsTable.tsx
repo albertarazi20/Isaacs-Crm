@@ -13,7 +13,6 @@ import {
   type QuietFilter,
 } from "@/lib/data/clientFilters";
 import type { ClientCard } from "@/lib/data/types";
-import { CLIENT_HEADER, clientRows, toCsv } from "@/lib/export/csv";
 import { timeAgo } from "@/lib/format";
 import { bookedToday } from "@/lib/mca/booked";
 import { formatUS } from "@/lib/mca/phone";
@@ -21,6 +20,7 @@ import { reminderText } from "@/lib/mca/reminder";
 import { CORE_STAGES, STAGE_GROUPS, stageDef, type StageKey } from "@/lib/mca/stages";
 import { useApp } from "./app-context";
 import { ClientCards, DueText } from "./ClientCards";
+import { downloadFile } from "./followup/download";
 import { useToast } from "./overlay";
 import { SnoozeMenu } from "./power/SnoozeMenu";
 import { ReminderTag } from "./ReminderTag";
@@ -119,17 +119,27 @@ function writeView(v: View): void {
   }
 }
 
-/** The list as it is filtered right now, as a spreadsheet: a call list for a campaign. */
-function downloadCsv(cards: readonly ClientCard[]): void {
-  const blob = new Blob([toCsv(CLIENT_HEADER, clientRows(cards))], {
-    type: "text/csv;charset=utf-8",
-  });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = `isaac-clients-filtered-${new Date().toISOString().slice(0, 10)}.csv`;
-  a.click();
-  URL.revokeObjectURL(url);
+/**
+ * The list as it is filtered right now, as a spreadsheet: a call list for a campaign. It goes through the server's
+ * export (managers only, audited, 20 an hour) by the visible ids, never built in the browser. Resolves to an error
+ * sentence when the server said no.
+ */
+async function downloadCsv(cards: readonly ClientCard[]): Promise<string | null> {
+  let res: Response;
+  try {
+    res = await fetch("/api/export/clients", {
+      method: "POST",
+      body: new URLSearchParams({ ids: cards.map((c) => c.id).join(",") }),
+    });
+  } catch {
+    return "Couldn't reach the server. Check your connection";
+  }
+  if (!res.ok) return (await res.text().catch(() => "")) || "The download didn't work. Try again";
+  downloadFile(
+    `isaac-clients-filtered-${new Date().toISOString().slice(0, 10)}.csv`,
+    await res.text(),
+  );
+  return null;
 }
 
 /** One choice in the row of stage groups: a pill with its count. */
@@ -217,10 +227,13 @@ function SortHead({
 export function ClientsTable({
   cards,
   meta,
+  canExport = false,
 }: {
   cards: ClientCard[];
   /** Bucket, owner and hand-off by client id. */
   meta: Record<string, CardMeta>;
+  /** Managers only: the server refuses everyone else, so the download is not offered to them. */
+  canExport?: boolean;
 }) {
   const { today, nowMs, timezone } = useApp();
   const toast = useToast();
@@ -231,6 +244,7 @@ export function ClientsTable({
     return activeCount({ ...v.f, group: "all" }) > 0 || v.bucket !== "all" || v.owner !== "all";
   });
   const [limit, setLimit] = useState(PAGE);
+  const [downloading, setDownloading] = useState(false);
   const { f, bucket, owner, brought, sort } = view;
 
   /** Any change to the view starts the list from its first page again. */
@@ -478,10 +492,21 @@ export function ClientsTable({
               <Button size="sm" variant="ghost" disabled={!anyFilter} onClick={clearAll}>
                 Clear filters
               </Button>
-              <Button size="sm" disabled={rows.length === 0} onClick={() => downloadCsv(rows)}>
-                <Glyph name="sheet" className="size-3.5 text-muted" />
-                Download these {rows.length} (CSV)
-              </Button>
+              {canExport ? (
+                <Button
+                  size="sm"
+                  disabled={rows.length === 0 || downloading}
+                  onClick={async () => {
+                    setDownloading(true);
+                    const error = await downloadCsv(rows);
+                    setDownloading(false);
+                    if (error) toast({ message: error, tone: "error" });
+                  }}
+                >
+                  <Glyph name="sheet" className="size-3.5 text-muted" />
+                  Download these {rows.length} (CSV)
+                </Button>
+              ) : null}
             </div>
           </div>
         ) : null}

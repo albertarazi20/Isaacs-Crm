@@ -1,5 +1,6 @@
 "use server";
 
+import { recordAuditHere } from "@/lib/system/audit";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { CAN, requireSession } from "@/lib/auth/server";
@@ -196,6 +197,12 @@ export async function blastAction(
     const data = await db.withUser(session.userId, (q) =>
       queueBlast(q, { templateId: i.templateId, clientIds: i.clientIds, appUrl: env().APP_URL }),
     );
+    await recordAuditHere({
+      kind: "blast_sent",
+      userId: session.userId,
+      email: session.email,
+      detail: { template_id: i.templateId, chosen: i.clientIds.length, queued: data.queued },
+    });
     revalidatePath("/follow-up");
     return { ok: true, data };
   } catch (e) {
@@ -275,6 +282,12 @@ export async function approveTemplateAction(input: unknown): Promise<ActionResul
     const i = z.object({ templateId: id, approved: z.boolean() }).parse(input);
     // the claim checker runs here: a template that fails it stays unapproved, with the reasons (S1-15)
     await db.withUser(session.userId, (q) => setTemplateApproved(q, i.templateId, i.approved));
+    await recordAuditHere({
+      kind: "template_approval_changed",
+      userId: session.userId,
+      email: session.email,
+      detail: { template_id: i.templateId, approved: i.approved },
+    });
     revalidatePath("/", "layout");
     return { ok: true, data: null };
   } catch (e) {

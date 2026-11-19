@@ -69,18 +69,35 @@ export function buildRecommendations(f: RecommendationFacts): Recommendation[] {
   const q = (k: QueueKind) => f.queue[k] ?? 0;
 
   if (!f.postalAddressSet)
-    out.push({
-      id: "postal-address",
-      title: "Turn automated follow-up back on",
-      why: "Bucket emails are on hold until the shop's postal address is set.",
-      count: 0,
-      tone: "bad",
-      icon: "alert",
-      href: "/settings/email",
-      prompt:
-        "Automated follow-up emails are on hold because the shop has no postal address. Explain in two sentences why the address is required, then walk me through setting it in Settings, Email, and tell me what starts sending once it is saved.",
-      weight: 100,
-    });
+    // The address lives in Settings, Email, which only a manager can open: a rep is sent to a manager, not to a page
+    // that would bounce them back to the overview.
+    out.push(
+      f.manager
+        ? {
+            id: "postal-address",
+            title: "Turn automated follow-up back on",
+            why: "Bucket emails are on hold until the shop's postal address is set.",
+            count: 0,
+            tone: "bad",
+            icon: "alert",
+            href: "/settings/email",
+            prompt:
+              "Automated follow-up emails are on hold because the shop has no postal address. Explain in two sentences why the address is required, then walk me through setting it in Settings, Email, and tell me what starts sending once it is saved.",
+            weight: 100,
+          }
+        : {
+            id: "postal-address",
+            title: "Automated follow-up is on hold: ask a manager",
+            why: "Bucket emails wait until a manager sets the shop's postal address.",
+            count: 0,
+            tone: "bad",
+            icon: "alert",
+            href: "/follow-up",
+            prompt:
+              "Automated follow-up emails are on hold because the shop has no postal address, and only a manager can set it. Explain in two sentences why the address is required, then write me a short message to send a manager asking them to set it in Settings, Email. Do not tell me to open Settings myself.",
+            weight: 100,
+          },
+    );
 
   if (f.replyWaiting > 0)
     out.push({

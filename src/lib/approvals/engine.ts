@@ -1,5 +1,6 @@
 import type { Db } from "../db";
 import { greetingName, tidy } from "../mca/templates";
+import { merchantOwnWords, stripMerchantText } from "../messaging/claims";
 import { nextSendTime, type WindowInput } from "../send/rules";
 import { approvalClaims, fillApprovalEmail, htmlToText, type ApprovalValues } from "./html";
 import { offerMoney } from "./words";
@@ -59,6 +60,7 @@ interface Row {
   accepted: boolean;
   business_name: string;
   contact_name: string;
+  dba: string;
   email: string;
   state: string;
   unsubscribe_token: string;
@@ -166,7 +168,7 @@ export async function advanceApproval(
     `select a.id, a.client_id, c.user_id as owner_id, a.amount_cents, a.hold_until::text as hold_until, a.status, a.emails,
             a.emails_since, a.first_sent_at, app.approval_halt(a.id) as halt,
             exists (select 1 from merchant_offers o where o.approval_id = a.id and o.status = 'accepted') as accepted,
-            c.business_name, c.contact_name, c.email, c.state, c.unsubscribe_token,
+            c.business_name, c.contact_name, c.dba, c.email, c.state, c.unsubscribe_token,
             app.client_timezone(c) as tz,
             coalesce(u.name, '') as rep_name, coalesce(u.email, '') as rep_email, coalesce(u.phone, '') as rep_phone,
             s.approval_emails_on, s.approval_window_start, s.approval_window_end, s.approval_weekends,
@@ -273,7 +275,12 @@ export async function advanceApproval(
   if (filled.missing.length > 0)
     return wait(q, a.id, `missing:${filled.missing.join(",")}`, next.step, null);
   const text = htmlToText(filled.html);
-  if (approvalClaims(`${filled.subject}\n${text}`, { state: a.state }).length > 0)
+  // the merchant's own business or contact name ("Guaranteed Roofing") is not the shop's claim: cut it out first
+  const claimText = stripMerchantText(
+    `${filled.subject}\n${text}`,
+    merchantOwnWords({ businessName: a.business_name, contactName: a.contact_name, dba: a.dba }),
+  );
+  if (approvalClaims(claimText, { state: a.state }).length > 0)
     return wait(q, a.id, "claim_check", next.step, null);
 
   // a step due overnight goes when the day starts (not spread across it: these are one-to-one emails)

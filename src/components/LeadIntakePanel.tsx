@@ -6,6 +6,7 @@ import { createLeadTokenAction, revokeLeadTokenAction } from "@/app/lead-actions
 import type { LeadTokenRow } from "@/lib/leads/queries";
 import { timeAgo } from "@/lib/format";
 import { useApp } from "./app-context";
+import { useRun } from "./client/parts";
 import { useCall } from "./overlay";
 import { CopyButton } from "./settings/CopyButton";
 import { ICON, Icon, SettingsCard, StatusChip } from "./settings/primitives";
@@ -42,6 +43,7 @@ export function LeadIntakePanel({
 }) {
   const router = useRouter();
   const call = useCall();
+  const run = useRun();
   const { nowMs } = useApp();
   const [label, setLabel] = useState("");
   const [busy, setBusy] = useState(false);
@@ -61,10 +63,10 @@ export function LeadIntakePanel({
 
   async function revoke(id: string) {
     setBusy(true);
-    const done = await call(revokeLeadTokenAction({ id }), "Connection turned off");
+    const done = await run(revokeLeadTokenAction({ id }), "Connection turned off");
     setBusy(false);
     setConfirming(null);
-    if (done !== null) router.refresh();
+    if (done) router.refresh();
   }
 
   async function copy(text: string) {

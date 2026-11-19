@@ -74,10 +74,10 @@ export default async function mobileUi({ email }) {
       (await p.getByRole("link", { name: /^Download (merchants|notes) \(CSV\)/ }).count()) === 0 &&
         (await p.getByRole("main").getByRole("link", { name: "Import a file" }).count()) === 0,
     );
-    const more = p.getByRole("button", { name: "Export and tools" });
+    const more = p.getByRole("button", { name: "Tools" });
     const box = await more.boundingBox();
     check(
-      "one Export menu button holds them, at least 40px square",
+      "one Tools menu button holds Import, at least 40px square",
       !!box && box.width >= 40 && box.height >= 40,
       JSON.stringify(box),
     );
@@ -86,8 +86,8 @@ export default async function mobileUi({ email }) {
     const panel = p.locator(`[id="${await more.getAttribute("aria-controls")}"]`);
     const items = (await panel.getByRole("link").allInnerTexts()).map((t) => t.trim());
     check(
-      "the menu has all three: both downloads and Import (New lead is its own button, Trash is in the Menu)",
-      items.join("|") === "Download merchants (CSV)|Download notes (CSV)|Import a file",
+      "a rep's menu has Import only: the downloads are for managers (New lead is its own button, Trash is in the Menu)",
+      items.join("|") === "Import a file",
       JSON.stringify(items),
     );
     check(
@@ -213,8 +213,8 @@ export default async function mobileUi({ email }) {
     const d = await openBrowser(email, { width: 1440, height: 900 });
     await d.page.goto(`${BASE}/clients`, { waitUntil: "domcontentloaded" });
     await d.page.getByRole("heading", { name: /^All merchants/ }).waitFor();
-    // By design the desktop header now folds the same three into the same Export menu, beside New lead.
-    const dMore = d.page.getByRole("button", { name: "Export and tools" });
+    // By design the desktop header folds Import into the same Tools menu, beside New lead (a rep has no downloads).
+    const dMore = d.page.getByRole("button", { name: "Tools" });
     await dMore.click();
     const dItems = (
       await d.page
@@ -223,8 +223,8 @@ export default async function mobileUi({ email }) {
         .allInnerTexts()
     ).map((t) => t.trim());
     check(
-      "desktop has the same Export menu beside New lead",
-      dItems.join("|") === "Download merchants (CSV)|Download notes (CSV)|Import a file" &&
+      "desktop has the same Tools menu beside New lead",
+      dItems.join("|") === "Import a file" &&
         (await d.page.getByRole("main").getByRole("button", { name: "New lead" }).isVisible()),
       JSON.stringify(dItems),
     );
@@ -417,7 +417,7 @@ export default async function mobileUi({ email }) {
       await shot(p, name);
     }
     await p.goto(`${BASE}/clients`, { waitUntil: "domcontentloaded" });
-    await p.getByRole("button", { name: "Export and tools" }).tap();
+    await p.getByRole("button", { name: "Tools" }).tap();
     await shot(p, "clients-menu-dark");
     check("dark screenshots taken", true);
     await m.browser.close();

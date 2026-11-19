@@ -12,7 +12,7 @@ import {
 } from "@/app/intake-actions";
 import { lookupSheetRowAction } from "@/app/sheets-actions";
 import { useFormState } from "@/components/client/parts";
-import { useToast } from "@/components/overlay";
+import { NETWORK_ERROR, useToast } from "@/components/overlay";
 import { Glyph, type GlyphName } from "@/components/shell/icons";
 import { Badge, Button, buttonClass, Field, Input, Textarea, cn } from "@/components/ui";
 import type { SplitResult } from "@/lib/ai/splitLeadLine";
@@ -184,7 +184,12 @@ export function IntakeForm({
   /** Ask across the shop whose merchant this is (the answer is the server's own line); a manager may override. */
   async function checkOwner(phone: string, email: string) {
     if (phone.replace(/\D/g, "").length < 7 && email.trim() === "") return setOwner(null);
-    const r = await leadOwnerAction({ phone, email });
+    let r: Awaited<ReturnType<typeof leadOwnerAction>>;
+    try {
+      r = await leadOwnerAction({ phone, email });
+    } catch {
+      return toast({ message: NETWORK_ERROR, tone: "error" });
+    }
     if (!r.ok) return;
     setCanOverride(r.data.canOverride);
     setOwner(r.data.owner);
@@ -195,12 +200,24 @@ export function IntakeForm({
     const digits = have.phone.replace(/\D/g, "");
     if (digits.length < 7) return;
     setLooking(true);
-    const [dup, sheet, own] = await Promise.all([
-      findDuplicatesAction({ phone: have.phone }),
-      lookupSheetRowAction({ phone: have.phone }),
-      leadOwnerAction({ phone: have.phone, email: have.email }),
-    ]);
-    setLooking(false);
+    let found: [
+      Awaited<ReturnType<typeof findDuplicatesAction>>,
+      Awaited<ReturnType<typeof lookupSheetRowAction>>,
+      Awaited<ReturnType<typeof leadOwnerAction>>,
+    ];
+    try {
+      found = await Promise.all([
+        findDuplicatesAction({ phone: have.phone }),
+        lookupSheetRowAction({ phone: have.phone }),
+        leadOwnerAction({ phone: have.phone, email: have.email }),
+      ]);
+    } catch {
+      // a lookup that can't reach the server must not leave the form looking busy, or throw into the blur handler
+      return toast({ message: NETWORK_ERROR, tone: "error" });
+    } finally {
+      setLooking(false);
+    }
+    const [dup, sheet, own] = found;
     if (own.ok) {
       setCanOverride(own.data.canOverride);
       setOwner(own.data.owner);
@@ -257,14 +274,21 @@ export function IntakeForm({
 
   async function submit() {
     setBusy(true);
-    const r = await intakeLeadAction({
-      ...v,
-      wantedAmount: v.wantedAmount || null,
-      bucketId: v.bucketId || null,
-      sheetRowId: lookup?.kind === "sheet" ? lookup.rowId : null,
-      override: owner !== null && canOverride && override,
-    });
-    setBusy(false);
+    let r: Awaited<ReturnType<typeof intakeLeadAction>>;
+    try {
+      r = await intakeLeadAction({
+        ...v,
+        wantedAmount: v.wantedAmount || null,
+        bucketId: v.bucketId || null,
+        sheetRowId: lookup?.kind === "sheet" ? lookup.rowId : null,
+        override: owner !== null && canOverride && override,
+      });
+    } catch {
+      // the typed lead stays in the form, so a dropped connection costs a retry, not the lead
+      return toast({ message: NETWORK_ERROR, tone: "error" });
+    } finally {
+      setBusy(false);
+    }
     if (!r.ok) return toast({ message: r.error, tone: "error" });
     setDone(r.data);
     if (r.data.result === "duplicate")

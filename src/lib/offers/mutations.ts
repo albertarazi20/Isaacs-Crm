@@ -1,6 +1,5 @@
 import type { Db } from "../db";
 import { UserError } from "../data/mutations";
-import { formatMoney } from "../money";
 import { enqueueEmail, type EnqueueResult } from "../send/enqueue";
 import { offerEmail } from "./email";
 import {
@@ -9,6 +8,7 @@ import {
   computeTerms,
   factorWords,
   finalPayment,
+  offerGreetingName,
   offerNumber,
   validThroughWords,
   type OfferInput,
@@ -89,10 +89,11 @@ export async function createOffer(q: Db, i: OfferInput, ctx: OfferCtx): Promise<
     ],
   );
   const o = ins.rows[0]!;
+  await retireOtherOffers(q, i.clientId, o.id, ctx);
   const url = offerUrl(ctx.appUrl, o.token);
   const paymentCents = Number(o.payment_cents);
   const through = validThroughWords(i.expiresAt, c.timezone);
-  const summary = `${formatMoney(i.funded)} · factor ${factorWords(i.factorRate)} · ${i.payments} ${FREQUENCY_WORDS[i.frequency].label.toLowerCase()} payments of ${exactMoney(paymentCents)} · valid through ${through}`;
+  const summary = `${exactMoney(i.funded)} · factor ${factorWords(i.factorRate)} · ${i.payments} ${FREQUENCY_WORDS[i.frequency].label.toLowerCase()} payments of ${exactMoney(paymentCents)} · valid through ${through}`;
 
   let email: EnqueueResult | null = null;
   if (i.send) {
@@ -102,7 +103,7 @@ export async function createOffer(q: Db, i: OfferInput, ctx: OfferCtx): Promise<
       paybackCents: Number(o.payback_cents),
       logoUrl: `${ctx.appUrl.replace(/\/+$/, "")}/brand/SC-horizontal-light-web.png`,
       heroUrl: `${ctx.appUrl.replace(/\/+$/, "")}/brand/offer-hero.png`,
-      firstName: c.contact_name.trim().split(/\s+/)[0] ?? "",
+      firstName: offerGreetingName(c.contact_name),
       businessName: c.business_name,
       shopName: c.shop_name,
       fundedCents: i.funded,
@@ -156,6 +157,34 @@ export async function createOffer(q: Db, i: OfferInput, ctx: OfferCtx): Promise<
   return { offerId: o.id, token: o.token, url, email };
 }
 
+/**
+ * A new offer replaces the merchant's earlier ones that still stand: only the newest link may be accepted, and an
+ * older email not yet sent is taken back. Runs in the new offer's transaction. Each one leaves a line on the timeline.
+ */
+async function retireOtherOffers(q: Db, clientId: string, keepId: string, ctx: OfferCtx) {
+  const { rows } = await q.query<{ id: string; outbox_id: string | null; funded_cents: string }>(
+    `update merchant_offers set status = 'withdrawn', withdrawn_at = $3
+      where client_id = $1 and id <> $2 and status = 'sent' and expires_at > $3
+      returning id, outbox_id, funded_cents::text`,
+    [clientId, keepId, ctx.now.toISOString()],
+  );
+  for (const old of rows) {
+    if (old.outbox_id)
+      await q.query(
+        "update outbox set status = 'cancelled', skip_reason = 'offer_withdrawn' where id = $1 and status = 'queued'",
+        [old.outbox_id],
+      );
+    await q.query(
+      "insert into activities (user_id, client_id, kind, body) values ($1, $2, 'system', $3)",
+      [
+        ctx.userId,
+        clientId,
+        `Earlier offer of ${exactMoney(Number(old.funded_cents))} withdrawn: replaced by a new offer`,
+      ],
+    );
+  }
+}
+
 /** Take an offer back while it still stands: its page says so, and an email not yet sent stays unsent. */
 export async function withdrawOffer(q: Db, offerId: string, ctx: OfferCtx): Promise<void> {
   const { rows } = await q.query<{
@@ -177,6 +206,6 @@ export async function withdrawOffer(q: Db, offerId: string, ctx: OfferCtx): Prom
     );
   await q.query(
     "insert into activities (user_id, client_id, kind, body) values ($1, $2, 'system', $3)",
-    [ctx.userId, o.client_id, `Offer of ${formatMoney(Number(o.funded_cents))} withdrawn`],
+    [ctx.userId, o.client_id, `Offer of ${exactMoney(Number(o.funded_cents))} withdrawn`],
   );
 }

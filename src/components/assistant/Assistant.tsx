@@ -24,6 +24,7 @@ import {
 } from "@/app/buckets-actions";
 import { handOffAction } from "@/app/followup-actions";
 import { useApp } from "@/components/app-context";
+import { useRun } from "@/components/client/parts";
 import { Dialog, Drawer, useCall, useToast } from "@/components/overlay";
 import { Glyph, type GlyphName } from "@/components/shell/icons";
 import {
@@ -314,7 +315,7 @@ function EmailReview({
               {busy ? "Sending…" : "Send from my Gmail"}
             </Button>
           ) : (
-            <a className={buttonClass("primary", "md")} href="/api/auth/google?purpose=gmail">
+            <a className={buttonClass("primary", "md")} href="/api/auth/google?purpose=mail">
               Connect Gmail to send
             </a>
           )}
@@ -379,7 +380,7 @@ function Orb({ size = 28, live }: { size?: number; live?: boolean }) {
 }
 
 /**
- * The assistant: Claude Opus 5.5 reading this CRM for the person and setting up actions they run with one click.
+ * The assistant: Claude (the model is chosen in Settings, AI) reading this CRM for the person and setting up actions they run with one click.
  * One sheet for the whole app (⌘J), opened from the sidebar, the phone bar, the command palette, or a
  * recommendation ("Plan it").
  */
@@ -393,6 +394,8 @@ export function AssistantProvider({
 }) {
   const router = useRouter();
   const call = useCall();
+  // resolves true/false: several actions return null data, which call() can't tell from a failure
+  const runOk = useRun();
   const toast = useToast();
   const { nowMs, today, gmailConnected } = useApp();
   const [open, setOpen] = useState(false);
@@ -672,33 +675,24 @@ export function AssistantProvider({
         toast({ message: "Couldn't copy: select the text and copy it instead", tone: "error" });
       }
     } else if (a.type === "hand_off") {
-      ok =
-        (await call(
-          handOffAction({ clientId: a.merchant_id }),
-          `${a.merchant_name} handed off`,
-        )) !== null;
+      ok = await runOk(handOffAction({ clientId: a.merchant_id }), `${a.merchant_name} handed off`);
     } else if (a.type === "set_follow_up") {
-      ok =
-        (await call(
-          setFollowUpAction({ clientId: a.merchant_id, dueOn: a.date }),
-          "Follow-up set",
-        )) !== null;
+      ok = await runOk(
+        setFollowUpAction({ clientId: a.merchant_id, dueOn: a.date }),
+        "Follow-up set",
+      );
     } else if (a.type === "add_note") {
-      ok =
-        (await call(addNoteAction({ clientId: a.merchant_id, body: a.note }), "Note added")) !==
-        null;
+      ok = await runOk(addNoteAction({ clientId: a.merchant_id, body: a.note }), "Note added");
     } else if (a.type === "pause") {
-      ok =
-        (await call(
-          pauseEnrollmentAction({ clientIds: [a.merchant_id], paused: true, until: a.until }),
-          "Paused",
-        )) !== null;
+      ok = await runOk(
+        pauseEnrollmentAction({ clientIds: [a.merchant_id], paused: true, until: a.until }),
+        "Paused",
+      );
     } else if (a.type === "move_to_bucket") {
-      ok =
-        (await call(
-          moveMerchantsToBucketAction({ clientIds: [a.merchant_id], bucketId: a.bucket_id }),
-          `Moved to ${a.bucket_name}`,
-        )) !== null;
+      ok = await runOk(
+        moveMerchantsToBucketAction({ clientIds: [a.merchant_id], bucketId: a.bucket_id }),
+        `Moved to ${a.bucket_name}`,
+      );
     }
     setStatus((s) => ({ ...s, [a.id]: ok ? "done" : "failed" }));
     if (ok && a.type !== "copy") router.refresh();
@@ -736,7 +730,8 @@ export function AssistantProvider({
   }
 
   async function removeThread(t: ThreadSummary) {
-    if (!(await call(deleteThreadAction({ id: t.id })))) return;
+    // the action returns null data on success, so only run() can tell "deleted" from "failed"
+    if (!(await runOk(deleteThreadAction({ id: t.id })))) return;
     setThreads((cur) => (cur ?? []).filter((x) => x.id !== t.id));
     if (threadId === t.id) reset();
   }
@@ -752,7 +747,7 @@ export function AssistantProvider({
         wide
         eyebrow={
           <span className="inline-flex items-center gap-1.5">
-            <span className="live-dot text-accent" /> Claude Opus 5.5
+            <span className="live-dot text-accent" /> Claude
           </span>
         }
         title="Assistant"

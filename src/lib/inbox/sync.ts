@@ -15,8 +15,10 @@ import {
   listMessages,
   parseAddress,
   splitMessageIds,
+  type GmailMessage,
   type GmailMessageMeta,
 } from "./gmailRead";
+import { isAutoReply } from "./autoReply";
 
 /**
  * Pull new mail from each connected mailbox that may be read (managers / ops with the 'mail' grant) and keep what a
@@ -36,6 +38,10 @@ export interface InboxSyncSummary {
   unverified: number;
   /** Attachments filed into Documents. */
   filed: number;
+  /** Messages Gmail no longer has (deleted between the list and the read): skipped, the sync went on past them. */
+  unreadable: number;
+  /** Merchant mail that was a machine answering ours (out of office...): kept apart, never counted as a reply. */
+  autoReplies: number;
 }
 
 type TokenFor = (userId: string) => Promise<string>;
@@ -87,12 +93,15 @@ export async function syncInbox(args: {
     merchantReplies: [],
     unverified: 0,
     filed: 0,
+    unreadable: 0,
+    autoReplies: 0,
   };
   const mailboxes = await args.db.withSystem(
     async (q) =>
       (
-        await q.query<{ user_id: string; history_id: string | null }>(
-          `select g.user_id, m.history_id from gmail_connections g
+        await q.query<{ user_id: string; history_id: string | null; role: string }>(
+          `select g.user_id, m.history_id, u.role from gmail_connections g
+             join app_users u on u.id = g.user_id
              left join mail_sync_state m on m.user_id = g.user_id
             where g.status = 'ok' and g.can_read_mail`,
         )
@@ -134,25 +143,51 @@ export async function syncInbox(args: {
             ).rowCount === 1,
         );
         if (exists) continue;
-        const m = await getMessage(token, meta.id, args.fetchImpl);
+        let m: GmailMessage;
+        try {
+          m = await getMessage(token, meta.id, args.fetchImpl);
+        } catch (e) {
+          // One message Gmail no longer has (deleted or purged since it was listed) must not stop the mailbox: the
+          // cursor would never move and every later reply would be missed. A permanent "gone" is skipped and counted;
+          // anything that may pass (a 5xx, a 429, a refused token) still aborts the run before the cursor moves.
+          const status = (e as { status?: number }).status;
+          if (status === 404 || status === 410) {
+            summary.unreadable += 1;
+            continue;
+          }
+          throw e;
+        }
         if (!newHistoryId || BigInt(m.historyId) > BigInt(newHistoryId)) newHistoryId = m.historyId;
         const from = parseAddress(m.headers["from"]);
         const auth = authResults(m.headers["authentication-results"] ?? null, from.address);
         // Only a merchant's mail is kept; anything else in the mailbox is none of the CRM's business. A From header
         // is forgeable: the sender counts as the merchant only when SPF or DKIM passes aligned with the From domain, so one spoofed email
         // cannot stop a sequence, suppress an address shop-wide or tick a statement as received.
+        // A rep's mailbox reads only that rep's own merchants: every connected rep may be read (purpose=mail), and a
+        // merchant of someone else writing to this inbox is none of this mailbox's business, so it is not even stored.
+        // A manager's or ops mailbox sees every merchant. A merchant is matched by their second address too (a merged
+        // card keeps the other card's address there).
+        const ownerOnly = mb.role === "rep" ? mb.user_id : null;
         const sameAddress = await args.db.withSystem(async (q) => {
           const { rows } = await q.query<{ client_id: string }>(
-            `select c.id as client_id from clients c where lower(c.email) = $1 and c.email <> ''
-               and not exists (select 1 from trashed_clients tc where tc.client_id = c.id)
+            `select c.id as client_id from clients c
+              where $1 <> ''
+                and ((lower(c.email) = $1 and c.email <> '') or (lower(c.email2) = $1 and c.email2 <> ''))
+                and ($2::uuid is null or c.user_id = $2::uuid)
+                and not exists (select 1 from trashed_clients tc where tc.client_id = c.id)
               order by c.created_at desc limit 1`,
-            [from.address],
+            [from.address, ownerOnly],
           );
           return rows[0]?.client_id ?? null;
         });
         if (!sameAddress) continue;
-        const merchant = senderVerified(auth) ? sameAddress : null;
-        if (!merchant) summary.unverified += 1;
+        // A machine answering ours (out of office, a vacation responder, a bulk bounce) is not the merchant writing
+        // back: it is kept, flagged as "other" and tied to no merchant, so it stops no follow-up, raises no "replied"
+        // flag, files nothing and is never read as a STOP. The timeline says one arrived.
+        const auto = isAutoReply(m.headers, m.headers["subject"] ?? "", m.text);
+        const merchant = !auto && senderVerified(auth) ? sameAddress : null;
+        if (!merchant && !auto) summary.unverified += 1;
+        if (auto) summary.autoReplies += 1;
         await args.db.withSystem(async (q) => {
           await q.query(
             `insert into inbound_emails (mailbox_user_id, gmail_id, gmail_thread_id, message_id, in_reply_to, references_ids, from_address, from_name,
@@ -180,11 +215,20 @@ export async function syncInbox(args: {
               new Date(m.internalDate).toISOString(),
               auth.spf,
               auth.dkim,
-              sameAddress,
+              auto ? null : sameAddress,
               merchant ? "merchant_reply" : "none",
-              merchant ? "merchant" : "unknown",
+              merchant ? "merchant" : auto ? "other" : "unknown",
             ],
           );
+          if (auto)
+            await q.query(
+              `insert into activities (user_id, client_id, kind, body)
+               select c.user_id, c.id, 'system', $2 from clients c where c.id = $1`,
+              [
+                sameAddress,
+                `Automatic reply received (${(m.headers["subject"] ?? "").slice(0, 100) || "no subject"}): not counted as a reply`,
+              ],
+            );
           if (merchant) {
             await q.query("select record_merchant_reply($1, $2, $3, $4, $5)", [
               merchant,
@@ -194,7 +238,7 @@ export async function syncInbox(args: {
               isStopMessage(m.headers["subject"] ?? "", m.text),
             ]);
             summary.merchantReplies.push(merchant);
-          } else if (isStopMessage(m.headers["subject"] ?? "", m.text)) {
+          } else if (!auto && isStopMessage(m.headers["subject"] ?? "", m.text)) {
             // not proven to be the merchant, but a STOP is honoured either way: the opt-out is the safe side of a forgery
             await applyUnverifiedStop(q, sameAddress, from.address, m.snippet);
           }
