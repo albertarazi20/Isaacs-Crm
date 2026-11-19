@@ -31,9 +31,11 @@ import { drainOutbox, type Deliverer } from "@/lib/send/worker";
 import { createTestDb, insertUser, type TestDb } from "./helpers/db";
 
 /**
- * Open approvals (0553): a merchant with an offer gets the shop's HTML approval emails on their own — the first when
- * the approval is marked, each follow-up a set time after the one before it was SENT — until a reply, a pitch, a close,
- * a pause or the hold date stops them. Every claim is read back from the DATABASE (approvals, outbox, activities).
+ * Open approvals (0553): a merchant with an offer gets the shop's HTML approval emails on their own — but the FIRST
+ * is the rep's: they send it from their own mailbox and record it (approvals.first_sent_at). The system sends only the
+ * follow-ups, each a set time after the one before it was SENT (the first one after the rep's own), until a reply, a
+ * pitch, a close, a pause or the hold date stops them. Every claim is read back from the DATABASE (approvals, outbox,
+ * activities).
  */
 
 const design = (title: string, extra = "") => `<!DOCTYPE html><html><head>
@@ -239,16 +241,25 @@ describe("the approval emails (database)", () => {
       )
     ).id;
   }
-  // the action's two steps: the approval under the person's row security, then the engine on the owner connection
+  /**
+   * The action's two steps: the approval under the person's row security, then the engine on the owner connection.
+   * The system never sends the first email: unless `handSent` is null (the rep has not recorded theirs yet, so the
+   * approval is held), the rep sent step 1 from their own mailbox at `handSent`. The default is a day before NOW, so
+   * follow-up 1 (a 24 hour wait) is due now and goes on the outbox as the first email the system sends.
+   */
   async function approve(
     clientId: string,
     userId = rep,
     more: Partial<Record<string, unknown>> = {},
+    handSent: Date | null = at(-24),
   ) {
     const { approvalId, started } = await t.db.withUser(userId, (q) =>
       createApproval(
         q,
-        approvalSchema.parse({ clientId, amount: "85000", holdUntil: HOLD, ...more }),
+        {
+          ...approvalSchema.parse({ clientId, amount: "85000", holdUntil: HOLD, ...more }),
+          firstSentAt: handSent,
+        },
         ctx(userId),
       ),
     );
@@ -375,28 +386,30 @@ describe("the approval emails (database)", () => {
     expect(s).toEqual({ subject: "Congrats {{first_name}}, you're approved", file_name: "1.html" });
   });
 
-  it("holds the first email while the rep has no phone number, and says why", async () => {
+  it("holds follow-up 1 while the rep has no phone number, and says why", async () => {
     const m = await merchant();
     const { approvalId, first } = await approve(m);
-    expect(first).toMatchObject({ kind: "waiting", note: "missing:rep_phone" });
+    expect(first).toMatchObject({ kind: "waiting", note: "missing:rep_phone", step: 2 });
     expect(await rows(m)).toHaveLength(0);
     expect(await approvalRow(approvalId)).toMatchObject({
       status: "open",
       emails: "running",
       emails_note: "missing:rep_phone",
-      next_step: 1,
+      next_step: 2,
     });
     await t.pool.query("update app_users set phone = '(561) 555-0142' where id = $1", [rep]);
     await run(NOW);
-    expect((await rows(m)).map((r) => r.source)).toEqual([`approval:${approvalId}:step:1`]);
+    expect((await rows(m)).map((r) => r.source)).toEqual([`approval:${approvalId}:step:2`]);
     expect((await approvalRow(approvalId)).emails_note).toBe("");
   });
 
-  it("queues the first email at once, filled in for the merchant, and logs the approval", async () => {
+  it("queues follow-up 1 at once when its wait is over, filled in for the merchant; the rep's first email is logged, never queued", async () => {
     const m = await merchant(rep, { business: "Tacos & Co", contact: "Mr. Luis Ortega" });
     const { approvalId } = await approve(m);
-    const [r] = await rows(m);
-    expect(r).toMatchObject({ status: "queued", subject: "Congrats Mr. Ortega, you're approved" });
+    const all = await rows(m);
+    expect(all.map((r) => r.source)).toEqual([`approval:${approvalId}:step:2`]);
+    const [r] = all;
+    expect(r).toMatchObject({ status: "queued", subject: "Follow-up 1, Mr. Ortega" });
     expect(r?.not_before.getTime()).toBe(NOW.getTime());
     const token = (
       await one<{ unsubscribe_token: string }>(
@@ -410,55 +423,90 @@ describe("the approval emails (database)", () => {
     expect(r?.html_body).toContain("Josh Miller");
     expect(r?.text_body).toContain("Congrats, Mr. Ortega.");
     const log = await one<{ body: string }>(
-      "select body from activities where client_id = $1 and kind = 'system' order by created_at desc limit 1",
+      "select body from activities where client_id = $1 and body like 'Approved:%'",
       [m],
     );
     expect(log.body).toBe(`Approved: $85,000, held until ${expiryWords(HOLD)}`);
-    expect(await approvalRow(approvalId)).toMatchObject({ next_step: 1 });
+    // the rep's own first email is on the timeline, dated when they sent it, and recorded on the approval
+    const hand = await one<{ body: string; at: Date }>(
+      "select body, occurred_at as at from activities where client_id = $1 and body = 'First approval email sent by hand'",
+      [m],
+    );
+    expect(hand.at.getTime()).toBe(at(-24).getTime());
+    expect(await approvalRow(approvalId)).toMatchObject({ next_step: 2 });
+    expect(
+      (
+        await one<{ first_sent_at: Date; first_sent_by: string }>(
+          "select first_sent_at, first_sent_by from approvals where id = $1",
+          [approvalId],
+        )
+      ).first_sent_at.getTime(),
+    ).toBe(at(-24).getTime());
   });
 
-  it("sends the designed HTML with the plain-text footer, then times follow-up 1 from the moment it went", async () => {
+  it("the rep's own first email starts the clock: follow-up 1 goes its wait after it, and step 1 never reaches the outbox", async () => {
+    const m = await merchant();
+    // the rep sent it from their own mailbox just now
+    const { approvalId, first } = await approve(m, rep, {}, NOW);
+    expect(first).toMatchObject({ kind: "waiting", step: 2 });
+    expect(await rows(m)).toHaveLength(0);
+    const waiting = await approvalRow(approvalId);
+    expect(waiting).toMatchObject({ emails: "running", next_step: 2 });
+    expect(waiting.next_email_at?.getTime()).toBe(at(24).getTime());
+    await run(new Date(at(24).getTime() - 60_000));
+    expect(await rows(m)).toHaveLength(0);
+    await run(at(24));
+    const [only] = await rows(m);
+    expect(only).toMatchObject({ source: `approval:${approvalId}:step:2`, status: "queued" });
+    expect(only?.not_before.getTime()).toBe(at(24).getTime());
+    // nothing, at any time, queues step 1
+    await run(at(30));
+    expect((await rows(m)).map((r) => r.source)).toEqual([`approval:${approvalId}:step:2`]);
+  });
+
+  it("sends follow-up 1 as designed HTML with the plain-text footer, then times follow-up 2 from the moment it went", async () => {
     const m = await merchant();
     const { approvalId } = await approve(m);
     sent.length = 0;
-    // the worker sends it ten minutes later
+    // the worker sends follow-up 1 ten minutes later
     const sentAt = at(1 / 6);
     await drain(sentAt);
     const mine = sent.filter((s) => s.to.startsWith(`owner${n}@`));
     expect(mine).toHaveLength(1);
+    expect(mine[0]?.subject).toBe("Follow-up 1, Rosa");
     expect(mine[0]?.html).toContain("<h1>Congrats, Rosa.");
     expect(mine[0]?.text).toContain("To stop these emails:");
     expect(mine[0]?.html).not.toContain("To stop these emails");
     const [first] = await rows(m);
-    expect(first).toMatchObject({ status: "sent" });
+    expect(first).toMatchObject({ source: `approval:${approvalId}:step:2`, status: "sent" });
     expect(first?.sent_at?.getTime()).toBe(sentAt.getTime());
-    // 23 hours later: not yet, and the page knows when
-    await run(at(23));
+    // 47 hours later: not yet, and the page knows when
+    await run(new Date(sentAt.getTime() + 47 * H));
     expect(await rows(m)).toHaveLength(1);
     const waiting = await approvalRow(approvalId);
-    expect(waiting.next_step).toBe(2);
-    expect(waiting.next_email_at?.getTime()).toBe(sentAt.getTime() + 24 * H);
-    // 24 hours after it SENT (not after it was queued): follow-up 1 goes
-    await run(new Date(sentAt.getTime() + 24 * H));
+    expect(waiting.next_step).toBe(3);
+    expect(waiting.next_email_at?.getTime()).toBe(sentAt.getTime() + 48 * H);
+    // 48 hours after it SENT (not after it was queued): follow-up 2 goes
+    await run(new Date(sentAt.getTime() + 48 * H));
     const after = await rows(m);
     expect(after.map((r) => r.source)).toEqual([
-      `approval:${approvalId}:step:1`,
       `approval:${approvalId}:step:2`,
+      `approval:${approvalId}:step:3`,
     ]);
-    expect(after[1]).toMatchObject({ status: "queued", subject: "Follow-up 1, Rosa" });
+    expect(after[1]).toMatchObject({ status: "queued", subject: "Follow-up 2, Rosa" });
     // running again does not queue it twice
-    await run(new Date(sentAt.getTime() + 24 * H + 60_000));
+    await run(new Date(sentAt.getTime() + 48 * H + 60_000));
     expect(await rows(m)).toHaveLength(2);
   });
 
   it("waits for the morning when a follow-up falls due at night", async () => {
     const m = await merchant();
-    const { approvalId } = await approve(m);
-    // sent at 2pm; follow-up 1 set to 10 hours: due at midnight, goes at 9am
-    await drain(NOW);
+    // the rep's own first email went at 2pm; follow-up 1 set to 10 hours: due at midnight, goes at 9am
+    const { approvalId } = await approve(m, rep, {}, NOW);
     await t.pool.query("update approval_emails set delay_hours = 10 where step = 2");
     await run(at(10));
-    const [, second] = await rows(m);
+    const [second] = await rows(m);
+    expect(second?.source).toBe(`approval:${approvalId}:step:2`);
     expect(second?.not_before.toISOString()).toBe("2026-11-19T14:00:00.000Z");
     await t.pool.query("update approval_emails set delay_hours = 24 where step = 2");
     // and the worker does not send it before then
@@ -470,8 +518,8 @@ describe("the approval emails (database)", () => {
 
   it("a delay changed in Settings applies to the next follow-up not yet queued", async () => {
     const m = await merchant();
-    const { approvalId } = await approve(m);
-    await drain(NOW);
+    const { approvalId } = await approve(m, rep, {}, NOW);
+    expect(await rows(m)).toHaveLength(0);
     await t.db.withUser(boss, (q) => setApprovalDelay(q, 2, 3, boss));
     await run(at(3));
     expect((await rows(m)).map((r) => r.source)).toContain(`approval:${approvalId}:step:2`);
@@ -505,7 +553,11 @@ describe("the approval emails (database)", () => {
     });
     // a rep can start them again: the reply before the restart no longer counts
     const r = await resume(approvalId, rep, at(1));
-    expect(r).toMatchObject({ kind: "queued", step: 1 });
+    expect(r).toMatchObject({ kind: "queued", step: 2 });
+    expect((await rows(m)).map((x) => [x.source, x.status])).toEqual([
+      [`approval:${approvalId}:step:2`, "cancelled"],
+      [`approval:${approvalId}:step:2`, "queued"],
+    ]);
   });
 
   it("Pitched takes it off the page and takes back the queued email", async () => {
@@ -542,16 +594,21 @@ describe("the approval emails (database)", () => {
     await expect(approve(m)).resolves.toMatchObject({ first: { kind: "queued" } });
   });
 
-  it("Pause takes back the queued email; Resume sends an overdue step at once", async () => {
+  it("Pause holds the next follow-up; Resume sends an overdue step at once", async () => {
     const m = await merchant();
     const { approvalId } = await approve(m);
     await drain(NOW);
     await t.db.withUser(rep, (q) => pauseApprovalEmails(q, approvalId));
-    await run(at(30));
+    // follow-up 2 falls due (48 hours after follow-up 1 went) while the emails are paused: nothing goes
+    await run(at(50));
     expect(await rows(m)).toHaveLength(1);
     expect(await approvalRow(approvalId)).toMatchObject({ emails: "paused" });
-    const r = await resume(approvalId, rep, at(30));
-    expect(r).toMatchObject({ kind: "queued", step: 2 });
+    const r = await resume(approvalId, rep, at(50));
+    expect(r).toMatchObject({ kind: "queued", step: 3 });
+    expect((await rows(m)).map((x) => x.source)).toEqual([
+      `approval:${approvalId}:step:2`,
+      `approval:${approvalId}:step:3`,
+    ]);
   });
 
   it("finishes after the last email, filling in the hold date", async () => {
@@ -565,24 +622,35 @@ describe("the approval emails (database)", () => {
       clock = new Date(clock.getTime() + 24 * H);
     }
     const all = await rows(m);
-    expect(all.map((r) => r.status)).toEqual(["sent", "sent", "sent", "sent"]);
-    expect(all[3]?.html_body).toContain(`I can hold it until ${expiryWords(HOLD)}.`);
+    // the rep's own first email is not on the outbox: the system sent the three follow-ups
+    expect(all.map((r) => [r.source, r.status])).toEqual([
+      [`approval:${approvalId}:step:2`, "sent"],
+      [`approval:${approvalId}:step:3`, "sent"],
+      [`approval:${approvalId}:step:4`, "sent"],
+    ]);
+    expect(all[2]?.html_body).toContain(`I can hold it until ${expiryWords(HOLD)}.`);
     await run(clock);
     expect(await approvalRow(approvalId)).toMatchObject({ emails: "finished", next_step: null });
   });
 
   it("stops when the hold date has passed, and for a merchant who opted out", async () => {
     const m1 = await merchant();
-    // the schema refuses a hold that is over at creation, so the hold passes while the emails wait
-    const a1 = await approve(m1, rep, { startEmails: false });
+    // the schema refuses a hold that is over at creation, so the hold passes while follow-up 1 waits for its time
+    const a1 = await approve(m1, rep, {}, NOW);
+    expect(await rows(m1)).toHaveLength(0);
     await t.pool.query("update approvals set hold_until = '2026-01-02' where id = $1", [
       a1.approvalId,
     ]);
-    expect(await resume(a1.approvalId, rep, NOW)).toMatchObject({
+    expect(await advanceApprovalNow(t.db, a1.approvalId, ctx(rep, at(1)))).toMatchObject({
       kind: "stopped",
       note: "expired",
     });
     expect(await rows(m1)).toHaveLength(0);
+    expect(await approvalRow(a1.approvalId)).toMatchObject({
+      emails: "stopped",
+      emails_note: "expired",
+      next_step: null,
+    });
     const m2 = await merchant();
     const a2 = await approve(m2);
     await t.pool.query("update clients set email_opt_out = true where id = $1", [m2]);
@@ -659,14 +727,27 @@ describe("the approval emails (database)", () => {
     ).toBe(other);
   });
 
-  it("an approval marked 'hold the emails' sends nothing until Start", async () => {
+  it("an approval marked before the rep has sent their first email is held, and sends nothing", async () => {
     const m = await merchant();
-    const { approvalId, first } = await approve(m, rep, { startEmails: false });
+    const { approvalId, first } = await approve(m, rep, {}, null);
     expect(first).toBeNull();
     await run(at(2));
     expect(await rows(m)).toHaveLength(0);
-    expect(await approvalRow(approvalId)).toMatchObject({ emails: "paused", emails_note: "held" });
+    expect(await approvalRow(approvalId)).toMatchObject({
+      emails: "paused",
+      emails_note: "held",
+      next_step: null,
+    });
+    expect(
+      (
+        await one<{ first_sent_at: Date | null }>(
+          "select first_sent_at from approvals where id = $1",
+          [approvalId],
+        )
+      ).first_sent_at,
+    ).toBeNull();
     await t.db.withSystem((q) => advanceApproval(q, approvalId, { now: NOW, appUrl: APP }));
+    await drain(at(3));
     expect(await rows(m)).toHaveLength(0);
   });
 
@@ -902,10 +983,10 @@ describe("the approval emails (database)", () => {
       [rep, m],
     );
     expect(await needsCall()).toBe(false);
-    // and a reply from before the emails restarted never counted
+    // and a reply from before the approval was marked never counted
     const m2 = await merchant();
     await reply(m2);
-    const a2 = await approve(m2);
+    const a2 = await approve(m2, rep, {}, null);
     expect(
       (await t.db.withUser(rep, (q) => listApprovals(q, "open"))).find(
         (a) => a.id === a2.approvalId,
@@ -917,7 +998,7 @@ describe("the approval emails (database)", () => {
     const running = await merchant();
     const held = await merchant();
     const a = await approve(running);
-    const b = await approve(held, rep, { startEmails: false });
+    const b = await approve(held, rep, {}, null);
     await t.db.withUser(rep, (q) => markPitched(q, a.approvalId, ctx(rep)));
     await t.db.withUser(rep, (q) => markPitched(q, b.approvalId, ctx(rep)));
     await t.db.withUser(rep, (q) => reopenApproval(q, a.approvalId, ctx(rep), true));
@@ -943,17 +1024,20 @@ describe("the approval emails (database)", () => {
   });
 
   it("changing or removing a design takes back the email already queued from it", async () => {
-    await t.pool.query("update approval_emails set delay_hours = 1 where step = 2");
+    await t.pool.query("update approval_emails set delay_hours = 1 where step = 3");
     const m = await merchant();
     const { approvalId } = await approve(m);
     await drain(NOW);
     await run(at(1.1));
-    expect((await rows(m)).map((r) => r.status)).toEqual(["sent", "queued"]);
+    expect((await rows(m)).map((r) => [r.source.slice(-1), r.status])).toEqual([
+      ["2", "sent"],
+      ["3", "queued"],
+    ]);
     await t.db.withUser(boss, (q) =>
       saveApprovalDesign(
         q,
         {
-          step: 2,
+          step: 3,
           subject: "Newer wording, {{first_name}}",
           html: design("x", "<p>New</p>"),
           fileName: "",
@@ -966,17 +1050,17 @@ describe("the approval emails (database)", () => {
     const again = await rows(m);
     expect(again.at(-1)).toMatchObject({ status: "queued", subject: "Newer wording, Rosa" });
     // removing the design leaves the email waiting, not sending the old one
-    await t.db.withUser(boss, (q) => clearApprovalDesign(q, 2, boss));
+    await t.db.withUser(boss, (q) => clearApprovalDesign(q, 3, boss));
     expect((await rows(m)).at(-1)?.skip_reason).toBe("design_changed");
     await run(at(1.3));
     expect((await approvalRow(approvalId)).emails_note).toBe("no_design");
     await t.db.withUser(boss, (q) =>
       saveApprovalDesign(
         q,
-        { step: 2, subject: "Follow-up 1, {{first_name}}", html: design("x"), fileName: "" },
+        { step: 3, subject: "Follow-up 2, {{first_name}}", html: design("x"), fileName: "" },
         boss,
       ),
     );
-    await t.pool.query("update approval_emails set delay_hours = 24 where step = 2");
+    await t.pool.query("update approval_emails set delay_hours = 48 where step = 3");
   });
 });

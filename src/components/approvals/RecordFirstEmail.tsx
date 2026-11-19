@@ -24,7 +24,7 @@ export const canRecordFirst = (row: Pick<ApprovalRow, "status" | "emails" | "ema
   row.status === "open" && row.emails === "paused" && row.emails_note === "held";
 
 /**
- * "I already sent the first email": the rep tells the CRM when they sent it from their own mail. Nothing is sent; the
+ * "I sent the first email": the rep tells the CRM when they sent it from their own mail. Nothing is sent; the
  * first email is recorded as gone at that time and the follow-ups start on their own.
  */
 export function RecordFirstEmailDialog({
@@ -66,7 +66,7 @@ export function RecordFirstEmailDialog({
     <Dialog
       open
       onClose={onClose}
-      title={`I already sent the first email: ${approval.name}`}
+      title={`I sent the first email: ${approval.name}`}
       footer={
         <>
           <Button variant="ghost" onClick={onClose}>

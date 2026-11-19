@@ -119,7 +119,8 @@ export async function createApproval(
   if ((trashed.rowCount ?? 0) > 0) throw new UserError("That merchant is in the trash");
   const firstSentAt = input.firstSentAt ? checkSentAt(input.firstSentAt, ctx.now) : null;
   const emailsStopped = client.emails_stopped_at !== null;
-  const running = !emailsStopped && (input.startEmails || firstSentAt !== null);
+  // the system never sends the first email: the follow-ups start only once the rep has recorded theirs
+  const running = !emailsStopped && firstSentAt !== null;
   let approvalId: string;
   try {
     const ins = await q.query<{ id: string }>(
@@ -285,6 +286,15 @@ export async function resumeApprovalEmails(q: Db, approvalId: string): Promise<v
   if (await emailsStoppedFor(q, a.client_id))
     throw new UserError(
       `The emails to ${a.business_name} are stopped for good. A manager can turn them back on in Settings`,
+    );
+  const first = await q.query(
+    `select 1 from approvals a where a.id = $1 and (a.first_sent_at is not null
+        or exists (select 1 from outbox o where o.lane = 'approval' and o.status = 'sent' and o.source = $2))`,
+    [a.id, `approval:${a.id}:step:1`],
+  );
+  if ((first.rowCount ?? 0) === 0)
+    throw new UserError(
+      'Send the first email from your own mail, then tap "I sent the first email". The follow-ups start after it',
     );
   await q.query(
     "update approvals set emails = 'running', emails_note = '', emails_since = now() where id = $1",

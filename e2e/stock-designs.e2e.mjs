@@ -1,5 +1,5 @@
 // The four Selective Capital approval designs and the hard stop, in the browser. A manager loads the designs from
-// Settings > Approval emails; a rep marks a merchant approved with "I sent it myself" (nothing goes on the outbox);
+// Settings > Approval emails; a rep marks a merchant approved with "I sent it already" (nothing goes on the outbox);
 // "Stop emails for good" stops everything for that merchant and a manager turns it back on. Every check reads the DATABASE.
 import { BASE, check, openBrowser, setRole, withDb } from "./lib.mjs";
 
@@ -35,7 +35,7 @@ export default async function stockDesignsFlow({ email }) {
   // a rep sees only their own merchants: the approval steps run as the rep, the settings and turn-back-on as a manager
   let { browser, page } = await openBrowser(email);
   try {
-    // 2. mark a merchant approved, "I sent it myself": nothing is queued
+    // 2. mark a merchant approved, "I sent it already": nothing is queued
     await page.goto(`${BASE}/approvals`, { waitUntil: "networkidle" });
     await page.getByRole("button", { name: "Add an approval" }).first().click();
     const dialog = page.getByRole("dialog");
@@ -47,7 +47,7 @@ export default async function stockDesignsFlow({ email }) {
     await dialog.getByRole("textbox", { name: /^Approved amount/ }).fill("85k");
     await dialog.getByLabel("Funder holds it until").fill(HOLD);
     await dialog.getByRole("textbox", { name: /^Funder For you/ }).fill("Velocity Capital");
-    await dialog.getByText("I sent it myself").click();
+    await dialog.getByText("I sent it already").click();
     await dialog.getByRole("button", { name: "Mark approved" }).click();
     await page.getByText(new RegExp(`${esc(a.business_name)} is on Open approvals`)).waitFor();
     const ap = await one(
@@ -58,7 +58,7 @@ export default async function stockDesignsFlow({ email }) {
       a.id,
     ]);
     check(
-      "'I sent it myself' records the first email as sent and puts nothing on the outbox (database)",
+      "'I sent it already' records the first email as sent and puts nothing on the outbox (database)",
       ap?.status === "open" && ap.first_sent_at !== null && queued.length === 0,
       JSON.stringify({ ap, queued: queued.length }),
     );

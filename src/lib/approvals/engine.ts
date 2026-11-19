@@ -240,6 +240,9 @@ export async function advanceApproval(
     return { kind: "finished" };
   }
 
+  // the first email is the rep's own, sent from their mailbox and recorded by hand: the system only sends follow-ups
+  if (next.step === 1) return wait(q, a.id, "first_by_rep", 1, null);
+
   const window: WindowInput = {
     timezone: a.tz,
     startHour: a.approval_window_start,

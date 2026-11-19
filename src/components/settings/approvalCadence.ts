@@ -97,7 +97,7 @@ export function lastEmailSentence(steps: readonly CadenceStep[]): string {
 
 /** Where one email sits in the sequence, from the approval. */
 export function sinceApproval(atHours: number): string {
-  return atHours <= 0 ? "Right away" : `About ${roughHours(atHours)} after the approval`;
+  return atHours <= 0 ? "You send it" : `About ${roughHours(atHours)} after the approval`;
 }
 
 /** 9 → "9 AM", 12 → "Noon", 18 → "6 PM", 0 and 24 → "Midnight". */

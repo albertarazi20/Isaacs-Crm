@@ -39,7 +39,7 @@ describe("approval words", () => {
         { step: 3, delay_hours: 48, ready: true },
         { step: 4, delay_hours: 72, ready: true },
       ]),
-    ).toBe("The approval email right away, then 3 follow-ups, 1 day, 2 days and 3 days apart.");
+    ).toBe("Your approval email, then 3 follow-ups, 1 day, 2 days and 3 days apart.");
     expect(cadenceSummary([{ step: 1, delay_hours: 0, ready: true }])).toMatch(/no follow-ups/);
   });
 
@@ -88,9 +88,16 @@ describe("approval words", () => {
       ),
     ).toMatchObject({ label: "All emails sent", detail: "Last one @14:00." });
     expect(emailsStatus({ ...base, status: "pitched" }, fmt).label).toBe("Pitched");
-    expect(emailsStatus({ ...base, emails: "paused", emails_note: "held" }, fmt).label).toBe(
-      "Not started",
-    );
+    // the system never sends the first email: a held approval, or a running one with none recorded, waits for the rep
+    for (const row of [
+      { ...base, emails: "paused" as const, emails_note: "held" },
+      { ...base, emails: "running" as const, emails_note: "first_by_rep", next_step: 1 },
+    ])
+      expect(emailsStatus(row, fmt)).toEqual({
+        tone: "neutral",
+        label: "Waiting for your first email",
+        detail: 'Send the approval email from your own mail, then tap "I sent the first email".',
+      });
   });
 
   it("counts down the funder's hold", () => {

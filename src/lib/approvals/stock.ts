@@ -62,7 +62,7 @@ export const STOCK_SLOTS = STOCK_DESIGNS.length;
 export function stockTiming(step: number): string {
   const d = STOCK_DESIGNS.find((s) => s.step === step);
   const before = STOCK_DESIGNS.find((s) => s.step === step - 1);
-  if (!d || !before) return "Right away, when the approval is marked";
+  if (!d || !before) return "You send it from your own mail";
   return `${d.delayHours} hours after ${before.step === 1 ? "the approval email" : before.name}`;
 }
 

@@ -1,5 +1,5 @@
 // Open approvals in the browser: a rep marks a merchant approved (from the page's picker and from the merchant's page),
-// the approval email is on the outbox at once, a reply puts the merchant at the top, and Pitched / Close / Pause /
+// the rep's own first email is recorded (nothing is sent for it), a follow-up queues once it is due, a reply puts the merchant at the top, and Pitched / Close / Pause /
 // Reopen do what they say. Every check reads the DATABASE, not just the screen.
 import { BASE, check, openBrowser, withDb } from "./lib.mjs";
 
@@ -46,13 +46,22 @@ export default async function approvalsFlow({ email }) {
   const [a, b, c] = merchants;
   const approvalOf = (clientId) =>
     one(
-      "select id, status, emails, emails_note, amount_cents::float8 as amount, funder, closed_reason from approvals where client_id = $1 order by created_at desc limit 1",
+      "select id, status, emails, emails_note, first_sent_at, amount_cents::float8 as amount, funder, closed_reason from approvals where client_id = $1 order by created_at desc limit 1",
       [clientId],
     );
   const outbox = (clientId) =>
     all(
       "select source, status, skip_reason, html_body from outbox where client_id = $1 and lane = 'approval' order by created_at",
       [clientId],
+    );
+
+  // the rep's first email went three days ago: follow-up 1 (24 hours after it) is due
+  const backdate = (clientId) =>
+    withDb((db) =>
+      db.query(
+        "update approvals set first_sent_at = now() - interval '3 days', emails_since = now() - interval '3 days' where client_id = $1 and status = 'open'",
+        [clientId],
+      ),
     );
 
   const { browser, page } = await openBrowser(email);
@@ -100,10 +109,25 @@ export default async function approvalsFlow({ email }) {
       JSON.stringify(ap),
     );
     check(
-      "with no phone for the rep, nothing is queued and the reason is stored (database)",
-      (await outbox(a.id)).length === 0 && ap.emails_note === "missing:rep_phone",
+      "the form records the rep's own first email and puts nothing on the outbox (database)",
+      ap.first_sent_at !== null && ap.emails === "running" && (await outbox(a.id)).length === 0,
+      JSON.stringify(ap),
     );
     const row = page.getByRole("listitem").filter({ hasText: a.business_name });
+    // follow-up 1 comes due: with no phone for the rep, nothing is queued and the reason is stored
+    await backdate(a.id);
+    await row.getByRole("button", { name: new RegExp(`More for ${esc(a.business_name)}`) }).click();
+    await page.getByRole("button", { name: "Pause the emails" }).click();
+    await page.waitForTimeout(600);
+    await row.getByRole("button", { name: new RegExp(`More for ${esc(a.business_name)}`) }).click();
+    await page.getByRole("button", { name: "Resume the emails" }).click();
+    await page.waitForTimeout(800);
+    ap = await approvalOf(a.id);
+    check(
+      "with no phone for the rep, nothing is queued and the reason is stored (database)",
+      (await outbox(a.id)).length === 0 && ap.emails_note === "missing:rep_phone",
+      JSON.stringify(ap),
+    );
     check(
       "the row says it is waiting on the rep's phone",
       await row
@@ -123,10 +147,10 @@ export default async function approvalsFlow({ email }) {
     check("Pause stores paused (database)", (await approvalOf(a.id))?.emails === "paused");
     await row.getByRole("button", { name: new RegExp(`More for ${esc(a.business_name)}`) }).click();
     await page.getByRole("button", { name: "Resume the emails" }).click();
-    await page.getByText(/^Resumed\. Approval email goes out/).waitFor();
+    await page.getByText(/^Resumed\. Follow-up 1 goes out/).waitFor();
     const queued = await outbox(a.id);
     check(
-      "Resume queues the approval email, filled in for the merchant (database)",
+      "Resume queues follow-up 1, filled in for the merchant (database)",
       queued.length === 1 &&
         queued[0].status === "queued" &&
         queued[0].html_body.includes("$85,000") &&
@@ -160,10 +184,30 @@ export default async function approvalsFlow({ email }) {
     await page.getByRole("dialog").getByRole("button", { name: "Mark approved" }).click();
     await page.getByRole("region", { name: "Open approval" }).waitFor();
     check(
-      "marking from the merchant's page queues the first email at once (database)",
-      (await outbox(b.id)).map((o) => o.status).join() === "queued" &&
-        (await approvalOf(b.id))?.amount === 12_000_000,
+      "marking from the merchant's page records the rep's first email and queues nothing (database)",
+      (await outbox(b.id)).length === 0 &&
+        (await approvalOf(b.id))?.amount === 12_000_000 &&
+        (await approvalOf(b.id))?.first_sent_at !== null,
     );
+    // follow-up 1 comes due: pausing and resuming makes the engine queue it
+    await backdate(b.id);
+    await page.goto(`${BASE}/approvals`, { waitUntil: "networkidle" });
+    const brow = page.getByRole("listitem").filter({ hasText: b.business_name });
+    await brow
+      .getByRole("button", { name: new RegExp(`More for ${esc(b.business_name)}`) })
+      .click();
+    await page.getByRole("button", { name: "Pause the emails" }).click();
+    await page.waitForTimeout(600);
+    await brow
+      .getByRole("button", { name: new RegExp(`More for ${esc(b.business_name)}`) })
+      .click();
+    await page.getByRole("button", { name: "Resume the emails" }).click();
+    await page.getByText(/^Resumed\. Follow-up 1 goes out/).waitFor();
+    check(
+      "follow-up 1 is queued once it is due (database)",
+      (await outbox(b.id)).map((o) => o.status).join() === "queued",
+    );
+    await page.goto(`${BASE}/clients/${b.id}`, { waitUntil: "networkidle" });
     check(
       "the merchant's page shows the open approval",
       await page.getByRole("region", { name: "Open approval" }).getByText("$120,000").isVisible(),

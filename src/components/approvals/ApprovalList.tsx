@@ -473,14 +473,14 @@ function ApprovalItem({
                   >
                     Pause the emails
                   </button>
-                ) : !handStopped && canResume(row) ? (
+                ) : !handStopped && canResume(row) && row.emails_note !== "held" ? (
                   <button type="button" className={MENU_ITEM} onClick={() => void resume()}>
-                    {row.emails_note === "held" ? "Start the emails" : "Resume the emails"}
+                    Resume the emails
                   </button>
                 ) : null}
                 {canRecordFirst(row) ? (
                   <button type="button" className={MENU_ITEM} onClick={onFirstSent}>
-                    I already sent the first email
+                    I sent the first email
                   </button>
                 ) : null}
                 {handStopped ? null : (

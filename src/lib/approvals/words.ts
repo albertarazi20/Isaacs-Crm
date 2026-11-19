@@ -30,10 +30,10 @@ export function delayWords(hours: number): string {
 export function cadenceSummary(steps: readonly CadenceStep[]): string {
   const follow = steps.filter((s) => s.step > 1);
   if (steps.length === 0) return "No approval emails are set up.";
-  if (follow.length === 0) return "The approval email goes right away, with no follow-ups.";
+  if (follow.length === 0) return "Your approval email, with no follow-ups.";
   const gaps = follow.map((s) => delayWords(s.delay_hours));
   const list = gaps.length === 1 ? gaps[0] : `${gaps.slice(0, -1).join(", ")} and ${gaps.at(-1)}`;
-  return `The approval email right away, then ${follow.length} follow-up${follow.length === 1 ? "" : "s"}, ${list} apart.`;
+  return `Your approval email, then ${follow.length} follow-up${follow.length === 1 ? "" : "s"}, ${list} apart.`;
 }
 
 export interface Status {
@@ -146,8 +146,14 @@ export function emailsStatus(
     case "held":
       return {
         tone: "neutral",
-        label: "Not started",
-        detail: "Start the emails when you're ready.",
+        label: "Waiting for your first email",
+        detail: 'Send the approval email from your own mail, then tap "I sent the first email".',
+      };
+    case "first_by_rep":
+      return {
+        tone: "neutral",
+        label: "Waiting for your first email",
+        detail: 'Send the approval email from your own mail, then tap "I sent the first email".',
       };
     case "paused":
       return { tone: "neutral", label: "Paused", detail: "Resume to pick up where it left off." };

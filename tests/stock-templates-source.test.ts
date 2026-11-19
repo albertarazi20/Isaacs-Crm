@@ -79,7 +79,7 @@ describe("the four slots", () => {
   });
 
   it("each wait is counted from the email before it", () => {
-    expect(stockTiming(1)).toBe("Right away, when the approval is marked");
+    expect(stockTiming(1)).toBe("You send it from your own mail");
     expect(stockTiming(2)).toBe("24 hours after the approval email");
     expect(stockTiming(3)).toBe("48 hours after Follow-up 1");
     expect(stockTiming(4)).toBe("48 hours after Follow-up 2");

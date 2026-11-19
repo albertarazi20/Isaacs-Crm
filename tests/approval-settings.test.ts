@@ -114,7 +114,8 @@ describe("the sequence", () => {
     expect(lastEmailSentence([{ step: 1, delay_hours: 0 }])).toBe(
       "Just the one email, right away.",
     );
-    expect(sinceApproval(0)).toBe("Right away");
+    // the first email is the rep's own, sent from their mailbox: not a wait the system keeps
+    expect(sinceApproval(0)).toBe("You send it");
     expect(sinceApproval(72)).toBe("About 3 days after the approval");
     expect(sinceApproval(36)).toBe("About 36 hours after the approval");
   });

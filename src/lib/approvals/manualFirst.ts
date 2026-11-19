@@ -13,8 +13,8 @@ const instant = z.string().datetime({ offset: true, message: "Pick a date and ti
 
 /** Mark an approval: the form's fields, plus how the first email goes. */
 export const approvalWithFirstSchema = approvalSchema.extend({
-  /** "auto": the system sends it now (the default). "mine": the rep already sent it. */
-  firstEmail: z.enum(["auto", "mine"]).default("auto"),
+  /** "mine": the rep already sent it. "later": they will send it, and record it when they have (the default). */
+  firstEmail: z.enum(["mine", "later"]).default("later"),
   /** When the rep sent it (an ISO instant); empty means now. Only read when firstEmail is "mine". */
   sentAt: instant.nullable().default(null),
 });

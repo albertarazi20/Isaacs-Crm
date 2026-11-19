@@ -206,14 +206,14 @@ export function ApprovalCard({
             >
               Pause emails
             </Button>
-          ) : !isHandStopped(open) && canResume(open) ? (
+          ) : !isHandStopped(open) && canResume(open) && open.emails_note !== "held" ? (
             <Button size="sm" variant="ghost" disabled={busy} onClick={() => void resume()}>
-              {open.emails_note === "held" ? "Start emails" : "Resume emails"}
+              Resume emails
             </Button>
           ) : null}
           {canRecordFirst(open) ? (
             <Button size="sm" variant="ghost" disabled={busy} onClick={() => setForm("first")}>
-              I already sent the first email
+              I sent the first email
             </Button>
           ) : null}
           <Button size="sm" disabled={busy} onClick={() => setForm("edit")}>

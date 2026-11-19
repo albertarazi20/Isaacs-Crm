@@ -172,9 +172,21 @@ describe("approvals against the database", () => {
       )
     ).id;
   };
-  const approve = async (clientId: string, more: Record<string, unknown> = {}) => {
+  /**
+   * The rep sends the first email from their own mailbox and the system sends only follow-ups, so by default the rep
+   * sent it a day before NOW: follow-up 1 (a 24 hour wait) is due now. `null`: not recorded yet, so the approval is held.
+   */
+  const approve = async (
+    clientId: string,
+    more: Record<string, unknown> = {},
+    firstSentAt: Date | null = new Date(NOW.getTime() - 24 * 3_600_000),
+  ) => {
     const { approvalId } = await t.db.withUser(rep, (q) =>
-      createApproval(q, approvalSchema.parse({ clientId, amount: "85000", ...more }), ctx(rep)),
+      createApproval(
+        q,
+        { ...approvalSchema.parse({ clientId, amount: "85000", ...more }), firstSentAt },
+        ctx(rep),
+      ),
     );
     return approvalId;
   };
@@ -217,27 +229,28 @@ describe("approvals against the database", () => {
   });
 
   it("approvals-6: the email states the approved amount to the cent", async () => {
-    await save(1, "Hello", design("for {{offer_amount}}"));
+    await save(2, "Hello", design("for {{offer_amount}}"));
     const m = await merchant();
     const id = await approve(m, { amount: "85000.50" });
     const r = await advance(id);
-    expect(r.kind).toBe("queued");
-    const out = await one<{ html_body: string; text_body: string }>(
-      "select html_body, text_body from outbox where client_id = $1 and lane = 'approval'",
+    expect(r).toMatchObject({ kind: "queued", step: 2 });
+    const out = await one<{ html_body: string; text_body: string; source: string }>(
+      "select html_body, text_body, source from outbox where client_id = $1 and lane = 'approval'",
       [m],
     );
+    expect(out.source).toBe(`approval:${id}:step:2`);
     expect(out.html_body).toContain("$85,000.50");
     expect(out.text_body).toContain("$85,000.50");
     const act = await one<{ body: string }>(
-      "select body from activities where client_id = $1 and kind = 'system' order by created_at limit 1",
+      "select body from activities where client_id = $1 and body like 'Approved:%'",
       [m],
     );
     expect(act.body).toContain("$85,000.50");
   });
 
   it("approvals-1: a design with a broken field holds the email at the engine", async () => {
-    // saved before the rule existed, straight into the table
-    await t.pool.query("update approval_emails set subject = 'Hello', html = $1 where step = 1", [
+    // saved before the rule existed, straight into the table (follow-up 1: the first email the system sends)
+    await t.pool.query("update approval_emails set subject = 'Hello', html = $1 where step = 2", [
       design("Hi {{first name}}"),
     ]);
     const m = await merchant();
@@ -250,7 +263,10 @@ describe("approvals against the database", () => {
       [m],
     );
     expect(sent.n).toBe(0);
-    await save(1, "Hello", design("for {{offer_amount}}"));
+    expect(
+      await one("select emails, emails_note from approvals where id = $1", [id]),
+    ).toMatchObject({ emails: "running", emails_note: expect.stringMatching(/^bad_field:/) });
+    await save(2, "Hello", design("for {{offer_amount}}"));
   });
 
   it("approvals-4: Resume on emails that are already running keeps the reply on the stop check", async () => {
@@ -277,7 +293,7 @@ describe("approvals against the database", () => {
 
   it("approvals-8: an approval that is not open cannot be edited", async () => {
     const m = await merchant();
-    const id = await approve(m, { startEmails: false });
+    const id = await approve(m, {}, null);
     await t.db.withUser(rep, (q) => markPitched(q, id, ctx(rep)));
     await expect(
       t.db.withUser(rep, (q) =>
@@ -298,7 +314,7 @@ describe("approvals against the database", () => {
 
   it("approvals-7: after the offer is accepted the emails stay stopped", async () => {
     const m = await merchant();
-    const id = await approve(m, { startEmails: false });
+    const id = await approve(m, {}, null);
     await t.pool.query(
       `insert into merchant_offers (client_id, user_id, approval_id, funded_cents, factor_rate, frequency, payments,
                                     expires_at, status, accepted_at)
@@ -338,8 +354,8 @@ describe("approvals against the database", () => {
       one<{ d: string }>("select (now() at time zone $1)::date::text as d", [tz]);
     const kiri = (await today("Pacific/Kiritimati")).d;
     const pago = (await today("Pacific/Pago_Pago")).d;
-    const farId = await approve(far, { startEmails: false });
-    const behindId = await approve(behind, { startEmails: false });
+    const farId = await approve(far, {}, null);
+    const behindId = await approve(behind, {}, null);
     await t.pool.query("update approvals set hold_until = $2::date + 3 where id = $1", [
       farId,
       kiri,

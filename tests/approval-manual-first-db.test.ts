@@ -23,10 +23,11 @@ import { advanceApprovalNow, runApprovalEmails } from "@/lib/system/approvals";
 import { createTestDb, insertUser, type TestDb } from "./helpers/db";
 
 /**
- * "I sent the first email myself": the rep sends the approval email from their own mailbox and tells the CRM when.
- * Step 1 is recorded as sent at that time with NOTHING on the outbox, and the engine schedules follow-up 1 its delay
- * (Settings) after that moment, then carries on by itself until a reply, a pitch, a close, a pause, the hold date, an
- * unsubscribe, a bounce, do-not-contact or a hard stop. Every claim is read back from the DATABASE.
+ * "I sent the first email myself": the CRM never sends approval email 1. The rep sends it from their own mailbox and
+ * tells the CRM when. Step 1 is recorded as sent at that time with NOTHING on the outbox, and the engine schedules
+ * follow-up 1 its delay (Settings) after that moment, then carries on by itself until a reply, a pitch, a close, a
+ * pause, the hold date, an unsubscribe, a bounce, do-not-contact or a hard stop. Until the rep has recorded theirs the
+ * approval is held, the engine queues nothing and Resume is refused. Every claim is read back from the DATABASE.
  */
 
 const design = (
@@ -179,12 +180,18 @@ afterAll(async () => {
 
 describe("the form's input and the time the rep gives", () => {
   const id = "11111111-1111-4111-8111-111111111111";
-  it("defaults to the system sending it, and reads 'I sent it myself' with an optional time", () => {
+  it("defaults to 'later' (the rep records it when sent), and reads 'I sent it myself' with an optional time", () => {
     expect(approvalWithFirstSchema.parse({ clientId: id, amount: "50k" })).toMatchObject({
-      firstEmail: "auto",
+      firstEmail: "later",
       sentAt: null,
-      startEmails: true,
     });
+    expect(
+      approvalWithFirstSchema.parse({ clientId: id, amount: "50k", firstEmail: "later" }),
+    ).toMatchObject({ firstEmail: "later", sentAt: null });
+    // the system no longer sends it: "auto" is not a choice any more
+    expect(() =>
+      approvalWithFirstSchema.parse({ clientId: id, amount: "50k", firstEmail: "auto" }),
+    ).toThrow();
     expect(
       approvalWithFirstSchema.parse({
         clientId: id,
@@ -438,7 +445,7 @@ describe("the follow-ups stop on every stop condition", () => {
 describe("'I already sent the first email' on an approval created with the emails held", () => {
   it("records it, starts the follow-ups on their own schedule, and puts nothing on the outbox", async () => {
     const m = await merchant();
-    const held = await mark(m, { startEmails: false });
+    const held = await mark(m, { firstEmail: "later" });
     expect(held).toMatchObject({ started: false });
     expect(await approvalRow(held.approvalId)).toMatchObject({
       emails: "paused",
@@ -478,25 +485,42 @@ describe("'I already sent the first email' on an approval created with the email
 
   it("with no time given, now is recorded; the second time, or on an approval already running, is refused", async () => {
     const m = await merchant();
-    const { approvalId } = await mark(m, { startEmails: false });
+    const { approvalId } = await mark(m, { firstEmail: "later" });
     await t.db.withUser(rep, (q) => recordFirstEmailSent(q, approvalId, null, ctx(rep)));
     expect((await approvalRow(approvalId)).first_sent_at?.toISOString()).toBe(NOW.toISOString());
     await expect(
       t.db.withUser(rep, (q) => recordFirstEmailSent(q, approvalId, null, ctx(rep))),
     ).rejects.toThrow(/already recorded/);
 
-    // an approval whose first email the system sends is not for this
+    // an approval that is not held (here a row pushed to running with no first email, as a stale one could be) is not
+    // for this either, and nothing is recorded
     const m2 = await merchant();
-    const running = await mark(m2);
+    const odd = await mark(m2);
+    await t.pool.query("update approvals set emails = 'running', emails_note = '' where id = $1", [
+      odd.approvalId,
+    ]);
     await expect(
-      t.db.withUser(rep, (q) => recordFirstEmailSent(q, running.approvalId, null, ctx(rep))),
+      t.db.withUser(rep, (q) => recordFirstEmailSent(q, odd.approvalId, null, ctx(rep))),
     ).rejects.toThrow(/created with the emails held/);
-    expect((await approvalRow(running.approvalId)).first_sent_at).toBeNull();
+    expect(await approvalRow(odd.approvalId)).toMatchObject({
+      emails: "running",
+      first_sent_at: null,
+      first_sent_by: null,
+    });
+    // one that already started with the rep's own first email is refused too: it is recorded
+    const m3 = await merchant();
+    const started = await mine(m3, at(-1));
+    await expect(
+      t.db.withUser(rep, (q) => recordFirstEmailSent(q, started.approvalId, null, ctx(rep))),
+    ).rejects.toThrow(/already recorded/);
+    expect((await approvalRow(started.approvalId)).first_sent_at?.toISOString()).toBe(
+      at(-1).toISOString(),
+    );
   });
 
   it("refuses a time in the future or more than 30 days back, and changes nothing", async () => {
     const m = await merchant();
-    const { approvalId } = await mark(m, { startEmails: false });
+    const { approvalId } = await mark(m, { firstEmail: "later" });
     await expect(
       t.db.withUser(rep, (q) => recordFirstEmailSent(q, approvalId, at(2), ctx(rep))),
     ).rejects.toThrow(/still ahead/);
@@ -512,7 +536,7 @@ describe("'I already sent the first email' on an approval created with the email
 
   it("a rep cannot record it on another rep's approval; a manager can", async () => {
     const theirs = await merchant(other);
-    const { approvalId } = await mark(theirs, { startEmails: false }, other);
+    const { approvalId } = await mark(theirs, { firstEmail: "later" }, other);
     await expect(
       t.db.withUser(rep, (q) => recordFirstEmailSent(q, approvalId, null, ctx(rep))),
     ).rejects.toThrow(/no longer exists/);
@@ -523,7 +547,7 @@ describe("'I already sent the first email' on an approval created with the email
 
   it("is refused for a merchant whose emails were stopped for good", async () => {
     const m = await merchant();
-    const { approvalId } = await mark(m, { startEmails: false });
+    const { approvalId } = await mark(m, { firstEmail: "later" });
     await stopEmailsForGood(t.db, { userId: rep, email: "rep@crm.test" }, m);
     await expect(
       t.db.withUser(rep, (q) => recordFirstEmailSent(q, approvalId, null, ctx(rep))),
@@ -536,22 +560,120 @@ describe("'I already sent the first email' on an approval created with the email
   });
 });
 
-describe("the default is unchanged", () => {
-  it("'Send it now (automatic)' still queues step 1 at once, and records no hand-sent time", async () => {
+describe("the CRM never sends the first email", () => {
+  it("the default is 'later': the approval is held, with nothing on the outbox, now or when the engines run", async () => {
     const m = await merchant();
-    const { approvalId, first } = await mark(m);
-    expect(first).toMatchObject({ kind: "queued", step: 1 });
-    expect((await outbox(m)).map((r) => r.source)).toEqual([`approval:${approvalId}:step:1`]);
+    const { approvalId, started, emailsStopped, first } = await mark(m);
+    expect({ started, emailsStopped, first }).toEqual({
+      started: false,
+      emailsStopped: false,
+      first: null,
+    });
     expect(await approvalRow(approvalId)).toMatchObject({
+      status: "open",
+      emails: "paused",
+      emails_note: "held",
+      next_step: null,
       first_sent_at: null,
       first_sent_by: null,
     });
+    await run(at(2));
+    await drain(at(3));
+    await run(at(30));
+    expect(await outbox(m)).toEqual([]);
     expect(
       await many(
         "select 1 from activities where client_id = $1 and body like 'First approval email%'",
         [m],
       ),
     ).toHaveLength(0);
+  });
+
+  it("the engine never queues step 1, even for a running approval with no first_sent_at", async () => {
+    const m = await merchant();
+    const { approvalId } = await mark(m);
+    // a stale row, or one pushed back by hand: running, and no first email recorded
+    await t.pool.query("update approvals set emails = 'running', emails_note = '' where id = $1", [
+      approvalId,
+    ]);
+    const r = await advanceApprovalNow(t.db, approvalId, ctx(rep));
+    expect(r).toEqual({ kind: "waiting", note: "first_by_rep", step: 1, at: null });
+    expect(await approvalRow(approvalId)).toMatchObject({
+      emails: "running",
+      emails_note: "first_by_rep",
+      next_step: 1,
+      next_email_at: null,
+      first_sent_at: null,
+    });
+    // every engine pass, whatever the time: still nothing
+    await run(at(2));
+    await run(at(48));
+    await drain(at(49));
+    expect(await outbox(m)).toEqual([]);
+    expect(sent.filter((s) => s.to === `owner${n}@shop${n}.test`)).toEqual([]);
+    expect((await approvalRow(approvalId)).emails_note).toBe("first_by_rep");
+  });
+
+  it("Resume on a held approval is refused in words, and the approval is exactly as it was", async () => {
+    const m = await merchant();
+    const { approvalId } = await mark(m);
+    const before = await approvalRow(approvalId);
+    await expect(t.db.withUser(rep, (q) => resumeApprovalEmails(q, approvalId))).rejects.toThrow(
+      /Send the first email from your own mail/,
+    );
+    expect(await approvalRow(approvalId)).toEqual(before);
+    expect(await advanceApprovalNow(t.db, approvalId, ctx(rep, at(1)))).toEqual({ kind: "idle" });
+    expect(await outbox(m)).toEqual([]);
+  });
+
+  it("Resume is allowed once a first email is on record: the rep's own, or one the system sent before this rule", async () => {
+    // the rep's own, recorded: paused by hand, then resumed
+    const m = await merchant();
+    const { approvalId } = await mine(m, at(-1));
+    await t.db.withUser(rep, (q) => pauseApprovalEmails(q, approvalId));
+    await t.db.withUser(rep, (q) => resumeApprovalEmails(q, approvalId));
+    expect(await approvalRow(approvalId)).toMatchObject({ emails: "running", emails_note: "" });
+
+    // an older approval whose first email went from the system (a SENT step 1 on the outbox) and was then held
+    const old = await merchant();
+    const held = await mark(old);
+    await t.pool.query(
+      `insert into outbox (user_id, client_id, lane, source, to_address, subject, text_body, status, sent_at, not_before)
+       values ($1, $2, 'approval', $3, (select email from clients where id = $2), 'Hello', 'Hi', 'sent', $4, $4)`,
+      [rep, old, `approval:${held.approvalId}:step:1`, at(-1).toISOString()],
+    );
+    await t.db.withUser(rep, (q) => resumeApprovalEmails(q, held.approvalId));
+    expect(await approvalRow(held.approvalId)).toMatchObject({
+      emails: "running",
+      emails_note: "",
+    });
+    // its follow-up 1 comes its delay after that step 1 went, and step 1 is not queued again
+    const next = await advanceApprovalNow(t.db, held.approvalId, ctx(rep));
+    expect(next).toMatchObject({ kind: "waiting", step: 2 });
+    expect((await outbox(old)).map((r) => [r.source, r.status])).toEqual([
+      [`approval:${held.approvalId}:step:1`, "sent"],
+    ]);
+  });
+
+  it("recording the first email starts follow-up 1 its delay later, and step 1 is never queued along the way", async () => {
+    const m = await merchant();
+    const { approvalId } = await mark(m);
+    expect(await outbox(m)).toEqual([]);
+    await t.db.withUser(rep, (q) => recordFirstEmailSent(q, approvalId, NOW, ctx(rep)));
+    expect(await advanceApprovalNow(t.db, approvalId, ctx(rep))).toMatchObject({
+      kind: "waiting",
+      step: 2,
+    });
+    const a = await approvalRow(approvalId);
+    expect(a).toMatchObject({ emails: "running", emails_note: "", next_step: 2 });
+    expect(a.next_email_at?.toISOString()).toBe(at(DELAYS[2]).toISOString());
+    // a minute before its delay is up: nothing; at the moment: follow-up 1, and only that
+    await run(new Date(at(DELAYS[2]).getTime() - 60_000));
+    expect(await outbox(m)).toEqual([]);
+    await run(at(DELAYS[2]));
+    expect((await outbox(m)).map((r) => [r.source, r.status])).toEqual([
+      [`approval:${approvalId}:step:2`, "queued"],
+    ]);
   });
 
   it("the old schema still parses the old input (the form's other fields are untouched)", () => {

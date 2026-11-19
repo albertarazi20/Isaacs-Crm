@@ -4,20 +4,13 @@ import { useEffect, useMemo, useState } from "react";
 import { createApprovalAction, editApprovalAction } from "@/app/approval-actions";
 import { loadDirectoryAction } from "@/app/power-actions";
 import type { ApprovalRow } from "@/lib/approvals/queries";
-import {
-  advanceWords,
-  cadenceSummary,
-  offerMoney,
-  stepName,
-  type CadenceStep,
-} from "@/lib/approvals/words";
+import { advanceWords, offerMoney, stepName, type CadenceStep } from "@/lib/approvals/words";
 import type { DirectoryRow } from "@/lib/data/overdue";
 import { parseMoney } from "@/lib/money";
 import { useApp } from "../app-context";
 import { Dialog, useCall, useToast } from "../overlay";
 import { searchDirectory } from "../power/search";
-import { Toggle } from "../settings/Toggle";
-import { Avatar, Button, cn, Field, Input, Textarea } from "../ui";
+import { Avatar, Button, Field, Input, Textarea } from "../ui";
 import { followUpHint, localInputValue } from "./RecordFirstEmail";
 
 /**
@@ -52,9 +45,8 @@ export function ApprovalForm({
   const [holdUntil, setHoldUntil] = useState(editing?.hold_until ?? "");
   const [funder, setFunder] = useState(editing?.funder ?? "");
   const [note, setNote] = useState(editing?.note ?? "");
-  const [startEmails, setStartEmails] = useState(true);
-  // who sends the first email: the system now (the default), or the rep already did from their own mail
-  const [firstEmail, setFirstEmail] = useState<"auto" | "mine">("auto");
+  // the first email is always the rep's own, from their own mail: sent already, or still to send
+  const [firstEmail, setFirstEmail] = useState<"mine" | "later">("mine");
   const [now] = useState(() => new Date());
   const [sentAt, setSentAt] = useState(() => localInputValue(now));
   const [busy, setBusy] = useState(false);
@@ -75,7 +67,6 @@ export function ApprovalForm({
     () => (directory && query.trim() ? searchDirectory(directory, query, 6).matches : []),
     [directory, query],
   );
-  const ready = cadence.length > 0 && cadence.every((s) => s.ready);
   const target = editing ? { id: editing.client_id, name: editing.business_name } : picked;
 
   async function save() {
@@ -103,7 +94,6 @@ export function ApprovalForm({
         holdUntil: holdUntil || null,
         funder,
         note,
-        startEmails,
         firstEmail,
         sentAt: firstEmail === "mine" && sentAt ? new Date(sentAt).toISOString() : null,
       }),
@@ -114,8 +104,10 @@ export function ApprovalForm({
       message: res.emailsStopped
         ? `${target.name} is on Open approvals. Their emails are stopped for good, so none go out.`
         : `${target.name} is on Open approvals. ${
-            firstEmail === "mine" ? "First email recorded as sent. " : ""
-          }${advanceWords(res.first, fmt)}`,
+            firstEmail === "mine"
+              ? `First email recorded as sent. ${advanceWords(res.first, fmt)}`
+              : 'Send the approval email from your own mail, then tap "I sent the first email": the follow-ups start after it.'
+          }`,
       tone: "success",
     });
     onClose();
@@ -276,14 +268,14 @@ export function ApprovalForm({
               {(
                 [
                   {
-                    value: "auto",
-                    label: "Send it now (automatic)",
-                    hint: "The system sends the first approval email as soon as this is saved, inside the sending window.",
+                    value: "mine",
+                    label: "I sent it already",
+                    hint: `You sent the approval email from your own mail. ${followUpHint(cadence)}`,
                   },
                   {
-                    value: "mine",
-                    label: "I sent it myself",
-                    hint: `You sent it from your own mail. Nothing is sent now. ${followUpHint(cadence)}`,
+                    value: "later",
+                    label: "I'll send it myself",
+                    hint: 'You send the approval email from your own mail, then tap "I sent the first email" on the approval. The follow-ups start after it.',
                   },
                 ] as const
               ).map((o) => (
@@ -316,26 +308,6 @@ export function ApprovalForm({
               </div>
             ) : null}
           </fieldset>
-        )}
-
-        {editing || firstEmail === "mine" ? null : (
-          <div
-            className={cn(
-              "rounded-2xl border px-4 py-1",
-              ready ? "border-border bg-surface-3/40" : "border-warn/30 bg-warn-soft/40",
-            )}
-          >
-            <Toggle
-              label="Start the approval emails now"
-              hint={
-                ready
-                  ? cadenceSummary(cadence)
-                  : "The approval emails aren't all set up yet: they'll wait at the first one without a design."
-              }
-              checked={startEmails}
-              onChange={setStartEmails}
-            />
-          </div>
         )}
       </div>
     </Dialog>

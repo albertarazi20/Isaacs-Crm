@@ -173,7 +173,7 @@ export function ApprovalSequence({
   return (
     <SettingsCard
       title="The sequence"
-      description="Email 1 goes when an approval is marked. Each follow-up waits the time you set after the one before it actually went out, so a late send never bunches them up."
+      description="Email 1 is yours: you send it from your own mail and tell the CRM when. Each follow-up waits the time you set after the one before it actually went out, so a late send never bunches them up."
       aside={<StatusChip tone="accent">{cadenceSummary(steps)}</StatusChip>}
       footer={
         <>

@@ -132,7 +132,7 @@ export function StockDesignsPanel({ slots }: { slots: StockSlotState[] }) {
           <div className="space-y-1.5 text-[13px] leading-relaxed text-text-2">
             <p className="font-semibold text-text">When they go</p>
             <ul className="list-disc space-y-0.5 pl-5">
-              <li>The approval email goes right away, when an approval is marked.</li>
+              <li>The rep sends the approval email from their own mail.</li>
               {STOCK_DESIGNS.filter((d) => d.step > 1).map((d) => (
                 <li key={d.step}>
                   {d.name} is sent {stockTiming(d.step)}, only if the merchant has not replied.

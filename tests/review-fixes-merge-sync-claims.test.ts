@@ -221,11 +221,12 @@ describe("1. a merge keeps the dropped card's links and addresses", () => {
 
   it("a queued approval email moved to the kept card carries the old unsubscribe link, and it still works", async () => {
     const NOW = new Date("2026-11-18T19:00:00Z");
+    // follow-up 1 (step 2) is the first email the system sends: the rep sends step 1 from their own mailbox
     await t.db.withUser(boss, (q) =>
       saveApprovalDesign(
         q,
         {
-          step: 1,
+          step: 2,
           subject: "Your offer",
           html: `<html><head><title>x</title></head><body><p>Hi {{first_name}}</p>
 <p>5301 N Federal Hwy, Boca Raton, FL 33487 <a href="{{unsubscribe_link}}">Unsubscribe</a></p></body></html>`,
@@ -237,16 +238,19 @@ describe("1. a merge keeps the dropped card's links and addresses", () => {
     const keep = await card();
     const drop = await card();
     const { approvalId } = await t.db.withUser(rep, (q) =>
-      createApproval(q, approvalSchema.parse({ clientId: drop.id, amount: "85000" }), {
-        userId: rep,
-        now: NOW,
-        appUrl: APP,
-      }),
+      createApproval(
+        q,
+        {
+          ...approvalSchema.parse({ clientId: drop.id, amount: "85000" }),
+          firstSentAt: new Date(NOW.getTime() - 24 * 3_600_000),
+        },
+        { userId: rep, now: NOW, appUrl: APP },
+      ),
     );
     const r = await t.db.withSystem((q) =>
       advanceApproval(q, approvalId, { now: NOW, appUrl: APP }),
     );
-    expect(r.kind).toBe("queued");
+    expect(r).toMatchObject({ kind: "queued", step: 2 });
     await merge(keep.id, drop.id);
     const row = await one<{ client_id: string; html_body: string; status: string }>(
       "select client_id, html_body, status from outbox where lane = 'approval' and source like $1",
@@ -637,7 +641,7 @@ describe("5. the merchant's own business name is not the shop's claim", () => {
       saveApprovalDesign(
         q,
         {
-          step: 1,
+          step: 2,
           subject: "About {{business_name}}",
           html: `<html><head><title>x</title></head><body><p>Hi {{first_name}}, your file for {{business_name}} is ready.</p>
 <p>5301 N Federal Hwy, Boca Raton, FL 33487 <a href="{{unsubscribe_link}}">Unsubscribe</a></p></body></html>`,
@@ -648,16 +652,19 @@ describe("5. the merchant's own business name is not the shop's claim", () => {
     );
     const c = await card({ name: "Guaranteed Roofing & Loan Office" });
     const { approvalId } = await t.db.withUser(rep, (q) =>
-      createApproval(q, approvalSchema.parse({ clientId: c.id, amount: "85000" }), {
-        userId: rep,
-        now: NOW,
-        appUrl: APP,
-      }),
+      createApproval(
+        q,
+        {
+          ...approvalSchema.parse({ clientId: c.id, amount: "85000" }),
+          firstSentAt: new Date(NOW.getTime() - 24 * 3_600_000),
+        },
+        { userId: rep, now: NOW, appUrl: APP },
+      ),
     );
     const r = await t.db.withSystem((q) =>
       advanceApproval(q, approvalId, { now: NOW, appUrl: APP }),
     );
-    expect(r.kind).toBe("queued");
+    expect(r).toMatchObject({ kind: "queued", step: 2 });
     expect(
       (
         await one<{ n: number }>(

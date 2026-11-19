@@ -63,11 +63,18 @@ async function merchant(owner = rep, email?: string): Promise<string> {
 const emailOf = async (id: string) =>
   (await one<{ email: string }>("select email from clients where id = $1", [id])).email;
 
+/**
+ * The rep sent the first approval email from their own mailbox a day before NOW (the system never sends it), so
+ * follow-up 1 (step 2, a 24 hour wait) is due now and is the approval's first queued email.
+ */
 async function approve(clientId: string, userId = rep) {
   const { approvalId, started, emailsStopped } = await t.db.withUser(userId, (q) =>
     createApproval(
       q,
-      approvalSchema.parse({ clientId, amount: "85000", holdUntil: HOLD }),
+      {
+        ...approvalSchema.parse({ clientId, amount: "85000", holdUntil: HOLD }),
+        firstSentAt: new Date(NOW.getTime() - 24 * 3_600_000),
+      },
       ctx(userId),
     ),
   );
@@ -171,13 +178,16 @@ describe("Stop emails for good: what one press does", () => {
     sentBefore = await one("select * from outbox where id = $1", [sentId]);
 
     const rows = await outbox(m);
-    // the chase's step 1, the approval's step 1, the three hand-written lanes and the reply row are queued
+    // the chase's step 1, the approval's follow-up 1, the three hand-written lanes and the reply row are queued
     expect(
       rows
         .filter((r) => r.status === "queued")
         .map((r) => r.lane)
         .sort(),
     ).toEqual(["approval", "blast", "intake", "reply", "sequence", "system"].sort());
+    expect(rows.filter((r) => r.lane === "approval").map((r) => r.source)).toEqual([
+      `approval:${approvalId}:step:2`,
+    ]);
     expect(
       await one(
         "select count(*)::int as n from enrollments where client_id = $1 and stopped_at is null",
@@ -190,7 +200,7 @@ describe("Stop emails for good: what one press does", () => {
   it("stops the merchant's emails: flags, suppression, approval, queued mail, enrolment, note and audit line", async () => {
     const res = await stop(m);
     expect(res).toMatchObject({ already: false, wasOptedOut: false, approvals: 1, enrollments: 1 });
-    // the chase step, the approval step and the three lanes: the reply row stays
+    // the chase step, the approval's follow-up and the three lanes: the reply row stays
     expect(res.cancelled).toBe(5);
 
     // flags on the merchant
@@ -585,10 +595,19 @@ describe("Turning the emails back on", () => {
   it("only a person pressing Start the emails sends the approval again", async () => {
     await t.db.withUser(rep, (q) => resumeApprovalEmails(q, approvalId));
     const r = await advanceApprovalNow(t.db, approvalId, ctx(rep));
-    expect(r).toMatchObject({ kind: "queued", step: 1 });
+    // the rep's own first email still counts as sent: follow-up 1 is next (due since the day before), never step 1
+    expect(r).toMatchObject({ kind: "queued", step: 2 });
     expect(
-      (await outbox(m)).filter((x) => x.lane === "approval" && x.status === "queued"),
-    ).toHaveLength(1);
+      (await outbox(m))
+        .filter((x) => x.lane === "approval" && x.status === "queued")
+        .map((x) => x.source),
+    ).toEqual([`approval:${approvalId}:step:2`]);
+    expect(
+      await one("select emails, emails_note from approvals where id = $1", [approvalId]),
+    ).toEqual({
+      emails: "running",
+      emails_note: "",
+    });
   });
 
   it("is refused when the merchant also unsubscribed: their own wish stands, and the suppression says so", async () => {

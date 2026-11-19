@@ -76,7 +76,7 @@ export default async function ApprovalEmailsSettingsPage() {
       role={session.role}
       current="/settings/approvals"
       title="Approval emails"
-      description="When a funder approves a merchant, these emails go to them on their own: the first right away, each follow-up sent a set time after the previous email, only if the merchant has not replied. They stop when the merchant replies, a rep marks the approval pitched or closed, the merchant unsubscribes, or the hold date passes."
+      description="When a funder approves a merchant, the rep sends the first email from their own mail and records it, then each follow-up goes on its own a set time after the previous email, only if the merchant has not replied. They stop when the merchant replies, a rep marks the approval pitched or closed, the merchant unsubscribes, or the hold date passes."
       notice={notices.length > 0 ? <div className="space-y-2">{notices}</div> : null}
     >
       <StockDesignsPanel

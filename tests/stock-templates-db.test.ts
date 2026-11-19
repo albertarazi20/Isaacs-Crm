@@ -12,8 +12,9 @@ import { createTestDb, insertUser, type TestDb } from "./helpers/db";
 /**
  * Loading the Selective Capital designs, through the real server action with a signed session, and every claim read
  * back from the database: the four slots, their subjects and waits, a second load changing nothing, a rep refused,
- * one failure undoing the whole load. Then the designs running the whole way: an approval marked, each follow-up
- * going its wait after the email before it was SENT, and a held email (no hold date, no rep phone).
+ * one failure undoing the whole load. Then the designs running the whole way: an approval marked with the rep's own
+ * first email recorded (the system never sends it), each follow-up going its wait after the email before it was SENT,
+ * and a held email (no hold date, no rep phone).
  */
 
 const jar = vi.hoisted(() => ({ token: "" }));
@@ -294,9 +295,14 @@ describe("the designs, running the whole way", () => {
     );
     return rows[0]!.id;
   }
-  async function approve(clientId: string, holdUntil: string | null) {
+  /** The rep sent the first email from their own mailbox at `firstSentAt` (default: now); the system sends the rest. */
+  async function approve(clientId: string, holdUntil: string | null, firstSentAt: Date = NOW) {
     const { approvalId } = await t.db.withUser(rep, (q) =>
-      createApproval(q, approvalSchema.parse({ clientId, amount: "85000", holdUntil }), ctx()),
+      createApproval(
+        q,
+        { ...approvalSchema.parse({ clientId, amount: "85000", holdUntil }), firstSentAt },
+        ctx(),
+      ),
     );
     await advanceApprovalNow(t.db, approvalId, ctx());
     return approvalId;
@@ -333,14 +339,14 @@ describe("the designs, running the whole way", () => {
     await actions.loadStockDesignsAction();
   });
 
-  it("sends all four, each its wait after the one before was SENT, filled in and escaped, with a text part", async () => {
+  it("sends the three follow-ups, each its wait after the one before was SENT, filled in and escaped, with a text part", async () => {
     const m = await merchant("Harbor & Pine O'Neil's Cafe");
     const id = await approve(m, HOLD);
-    // step 1, sent ten minutes after it was queued
-    let at = new Date(NOW.getTime() + H / 6);
-    await drain(at);
+    // the rep's own first email went at NOW: nothing is queued for it, now or ever
+    expect(await outbox(m)).toEqual([]);
+    let at = NOW;
     const sentAt = [at];
-    // 24, then 48, then 48 hours after the one before went out
+    // 24, then 48, then 48 hours after the one before went out (the first of them after the rep's own email)
     for (const wait of [24, 48, 48]) {
       // one minute early: nothing is queued yet
       await run(new Date(at.getTime() + wait * H - 60_000));
@@ -352,13 +358,21 @@ describe("the designs, running the whole way", () => {
     }
     const rows = await outbox(m);
     expect(rows.map((r) => [r.source, r.status])).toEqual(
-      [1, 2, 3, 4].map((s) => [`approval:${id}:step:${s}`, "sent"]),
+      [2, 3, 4].map((s) => [`approval:${id}:step:${s}`, "sent"]),
     );
-    expect(rows.map((r) => r.sent_at?.getTime())).toEqual(sentAt.map((d) => d.getTime()));
+    expect(rows.map((r) => r.sent_at?.getTime())).toEqual(sentAt.slice(1).map((d) => d.getTime()));
+    expect(
+      (
+        await t.pool.query<{ first_sent_at: Date }>(
+          "select first_sent_at from approvals where id = $1",
+          [id],
+        )
+      ).rows[0]?.first_sent_at.getTime(),
+    ).toBe(NOW.getTime());
     expect(
       sentAt.map((d, i) => (i === 0 ? 0 : (d.getTime() - sentAt[i - 1]!.getTime()) / H)),
     ).toEqual([0, 24, 48, 48]);
-    // 1, 3 and 5 days after the approval email
+    // 1, 3 and 5 days after the approval email (the rep's own)
     expect(sentAt.map((d) => Math.round((d.getTime() - sentAt[0]!.getTime()) / H))).toEqual([
       0, 24, 72, 120,
     ]);
@@ -368,7 +382,6 @@ describe("the designs, running the whole way", () => {
 
     // what went out: subject plain, HTML escaped, a text part, the link, the rep
     expect(sent.map((s) => s.subject)).toEqual([
-      "Harbor & Pine O'Neil's Cafe: Approved for Funding",
       "Did you see your approval, Mike?",
       "Your offer is time-sensitive",
       "Should I keep your offer open, Mike?",
@@ -389,27 +402,26 @@ describe("the designs, running the whole way", () => {
       expect(s.html).toContain(`href="${APP}/u/${token}"`);
       expect(s.html).toContain('href="tel:+15619151002"');
       expect(s.html).toContain("Josh Miller");
-      if (i !== 1) expect(s.html).toContain("Harbor &amp; Pine O&#39;Neil&#39;s Cafe");
+      // follow-up 1 is the one design that does not name the business
+      if (i !== 0) expect(s.html).toContain("Harbor &amp; Pine O&#39;Neil&#39;s Cafe");
     }
     // follow-up 3 quotes the funder's hold date
-    expect(sent[3]?.html).toContain(expiryWords(HOLD));
-    expect(sent[3]?.text).toContain(expiryWords(HOLD));
+    expect(sent[2]?.html).toContain(expiryWords(HOLD));
+    expect(sent[2]?.text).toContain(expiryWords(HOLD));
     // the stored copy agrees with what was delivered
-    expect(rows[3]?.html_body).toBe(sent[3]?.html);
+    expect(rows[2]?.html_body).toBe(sent[2]?.html);
   });
 
   it("holds follow-up 3 (and says so) when the approval has no hold date, then sends it once a date is added", async () => {
     const m = await merchant("Harbor & Pine Cafe");
     const id = await approve(m, null);
     let at = NOW;
-    await drain(at);
     for (const wait of [24, 48]) {
       at = new Date(at.getTime() + wait * H);
       await run(at);
       await drain(at);
     }
     expect((await outbox(m)).map((r) => [r.source.slice(-1), r.status])).toEqual([
-      ["1", "sent"],
       ["2", "sent"],
       ["3", "sent"],
     ]);
@@ -417,8 +429,8 @@ describe("the designs, running the whole way", () => {
     at = new Date(at.getTime() + 48 * H);
     await run(at);
     await drain(at);
-    expect((await outbox(m)).map((r) => r.source.slice(-1))).toEqual(["1", "2", "3"]);
-    expect(sent).toHaveLength(3);
+    expect((await outbox(m)).map((r) => r.source.slice(-1))).toEqual(["2", "3"]);
+    expect(sent).toHaveLength(2);
     const held = await approvalRow(id);
     expect(held).toMatchObject({
       emails: "running",
@@ -450,27 +462,30 @@ describe("the designs, running the whole way", () => {
     );
     await advanceApprovalNow(t.db, id, ctx(at));
     await drain(at);
-    expect(sent).toHaveLength(4);
-    expect(sent[3]?.subject).toBe("Should I keep your offer open, Mike?");
-    expect(sent[3]?.html).toContain(expiryWords(HOLD));
+    expect(sent).toHaveLength(3);
+    expect(sent[2]?.subject).toBe("Should I keep your offer open, Mike?");
+    expect(sent[2]?.html).toContain(expiryWords(HOLD));
     await run(new Date(at.getTime() + H));
     expect((await approvalRow(id)).emails).toBe("finished");
   });
 
-  it("holds the first email while the rep has no phone number, then sends it", async () => {
+  it("holds follow-up 1 while the rep has no phone number, then sends it", async () => {
     await t.pool.query("update app_users set phone = '' where id = $1", [rep]);
     const m = await merchant("Harbor & Pine Cafe");
-    const id = await approve(m, HOLD);
+    // the rep's own first email went a day ago, so follow-up 1 is due now
+    const id = await approve(m, HOLD, new Date(NOW.getTime() - 24 * H));
     expect(await approvalRow(id)).toMatchObject({
       emails_note: "missing:rep_phone",
-      next_step: 1,
+      next_step: 2,
     });
     expect(await outbox(m)).toEqual([]);
     await t.pool.query("update app_users set phone = '(561) 915-1002' where id = $1", [rep]);
     await run(NOW);
     await drain(NOW);
     expect(sent).toHaveLength(1);
+    expect(sent[0]?.subject).toBe("Did you see your approval, Mike?");
     expect(sent[0]?.html).toContain('href="tel:+15619151002"');
+    expect((await outbox(m)).map((r) => r.source)).toEqual([`approval:${id}:step:2`]);
     expect((await approvalRow(id)).emails_note).toBe("");
   });
 });
