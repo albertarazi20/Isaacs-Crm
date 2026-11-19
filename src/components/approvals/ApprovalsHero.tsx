@@ -93,8 +93,8 @@ export function ApprovalsHero({
           <Runway items={dated} />
           {open.length > dated.length ? (
             <p className="mt-2 text-xs text-muted">
-              {open.length - dated.length} without a hold date. Add the funder&apos;s date so the
-              emails can quote it.
+              {open.length - dated.length} without a hold date. Their emails say a week after they
+              go out; add the funder&apos;s date to use that instead.
             </p>
           ) : null}
         </div>

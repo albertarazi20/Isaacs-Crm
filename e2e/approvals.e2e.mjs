@@ -90,9 +90,9 @@ export default async function approvalsFlow({ email }) {
       .click();
     await dialog.getByRole("textbox", { name: /^Approved amount/ }).fill("85k");
     check(
-      "the hold date starts empty and says which email quotes it",
+      "the hold date starts empty and says the email quotes a week after it goes out",
       (await dialog.getByLabel("Funder holds it until").inputValue()) === "" &&
-        (await dialog.getByText(/quotes? it, so that email waits/).count()) === 1,
+        (await dialog.getByText(/says? a week after (it goes|they go) out/).count()) === 1,
     );
     await dialog.getByLabel("Funder holds it until").fill(HOLD);
     check(

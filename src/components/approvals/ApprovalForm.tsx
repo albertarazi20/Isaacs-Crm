@@ -230,7 +230,7 @@ export function ApprovalForm({
                     .map((s) => stepName(s.step))
                     .join(
                       " and ",
-                    )} quote${cadence.filter((s) => s.uses_expiry).length === 1 ? "s" : ""} it, so that email waits until it's here.`
+                    )} say${cadence.filter((s) => s.uses_expiry).length === 1 ? "s" : ""} a week after ${cadence.filter((s) => s.uses_expiry).length === 1 ? "it goes" : "they go"} out (the Monday if that is a weekend), unless you type the funder's date.`
             }
           >
             <Input

@@ -1,9 +1,8 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { expiryWords } from "@/lib/approvals/engine";
-import { createApproval, editApproval } from "@/lib/approvals/mutations";
+import { createApproval } from "@/lib/approvals/mutations";
 import { approvalSchema } from "@/lib/approvals/schemas";
 import { STOCK_DESIGNS } from "@/lib/approvals/stock";
-import { emailsStatus } from "@/lib/approvals/words";
 import { signSession } from "@/lib/auth/session";
 import { drainOutbox, type Deliverer } from "@/lib/send/worker";
 import { advanceApprovalNow, runApprovalEmails } from "@/lib/system/approvals";
@@ -412,11 +411,11 @@ describe("the designs, running the whole way", () => {
     expect(rows[2]?.html_body).toBe(sent[2]?.html);
   });
 
-  it("holds follow-up 3 (and says so) when the approval has no hold date, then sends it once a date is added", async () => {
+  it("follow-up 3 quotes a week after it goes out (never a weekend) when the rep typed no hold date", async () => {
     const m = await merchant("Harbor & Pine Cafe");
     const id = await approve(m, null);
     let at = NOW;
-    for (const wait of [24, 48]) {
+    for (const wait of [24, 48, 48]) {
       at = new Date(at.getTime() + wait * H);
       await run(at);
       await drain(at);
@@ -424,47 +423,40 @@ describe("the designs, running the whole way", () => {
     expect((await outbox(m)).map((r) => [r.source.slice(-1), r.status])).toEqual([
       ["2", "sent"],
       ["3", "sent"],
+      ["4", "sent"],
     ]);
-    // the fourth is due 48 hours later: it does not go, and nothing with a literal field is sent
-    at = new Date(at.getTime() + 48 * H);
-    await run(at);
-    await drain(at);
-    expect((await outbox(m)).map((r) => r.source.slice(-1))).toEqual(["2", "3"]);
-    expect(sent).toHaveLength(2);
-    const held = await approvalRow(id);
-    expect(held).toMatchObject({
-      emails: "running",
-      emails_note: "missing:offer_expiry",
-      next_step: 4,
-    });
-    // the card's words: which email, and the way to fix it
-    const words = emailsStatus(
-      {
-        status: "open",
-        emails: "running",
-        halt: null,
-        steps: [],
-        needs_call: false,
-        next_email_at: null,
-        next_step: held.next_step,
-        emails_note: held.emails_note,
-      },
-      () => "",
-    );
-    expect(words.detail).toBe("Follow-up 3 needs the hold date. Add it with Change.");
-    // the rep adds the date (the card's Change): the email goes on the next pass
-    await t.db.withUser(rep, (q) =>
-      editApproval(
-        q,
-        { approvalId: id, amount: 8_500_000, holdUntil: HOLD, funder: "", note: "" },
-        ctx(at),
-      ),
-    );
-    await advanceApprovalNow(t.db, id, ctx(at));
-    await drain(at);
     expect(sent).toHaveLength(3);
     expect(sent[2]?.subject).toBe("Should I keep your offer open, Mike?");
-    expect(sent[2]?.html).toContain(expiryWords(HOLD));
+    // the date in the email: 7 to 9 days after the day it was queued, and a weekday
+    const quoted =
+      /(Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday), ([A-Z][a-z]+) (\d+)/.exec(
+        sent[2]?.html ?? "",
+      );
+    expect(quoted).not.toBeNull();
+    expect(["Saturday", "Sunday"]).not.toContain(quoted?.[1]);
+    const row = await approvalRow(id);
+    expect(
+      (
+        await t.pool.query<{ h: string | null }>(
+          "select hold_until::text as h from approvals where id = $1",
+          [id],
+        )
+      ).rows[0]?.h,
+    ).toBeNull();
+    expect(row).toMatchObject({ emails_note: "" });
+    const queuedDay = (
+      await t.pool.query<{ d: string }>(
+        "select (not_before at time zone 'America/New_York')::date::text as d from outbox where client_id = $1 and source like '%:step:4'",
+        [m],
+      )
+    ).rows[0]?.d;
+    const gap = Math.round(
+      (new Date(`${quoted?.[2]} ${quoted?.[3]}, ${queuedDay?.slice(0, 4)} 12:00 UTC`).getTime() -
+        new Date(`${queuedDay}T12:00:00Z`).getTime()) /
+        86_400_000,
+    );
+    expect(gap).toBeGreaterThanOrEqual(7);
+    expect(gap).toBeLessThanOrEqual(9);
     await run(new Date(at.getTime() + H));
     expect((await approvalRow(id)).emails).toBe("finished");
   });

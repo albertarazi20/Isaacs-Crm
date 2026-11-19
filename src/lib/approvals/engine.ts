@@ -1,7 +1,7 @@
 import type { Db } from "../db";
 import { greetingName, tidy } from "../mca/templates";
 import { merchantOwnWords, stripMerchantText } from "../messaging/claims";
-import { nextSendTime, type WindowInput } from "../send/rules";
+import { nextSendTime, partsIn, type WindowInput } from "../send/rules";
 import { approvalClaims, fillApprovalEmail, htmlToText, type ApprovalValues } from "./html";
 import { offerMoney } from "./words";
 
@@ -97,6 +97,18 @@ export function expiryWords(isoDate: string): string {
     day: "numeric",
     timeZone: "UTC",
   }).format(d);
+}
+
+/**
+ * The offer date an email quotes when the rep typed no hold date: a week after the day the email goes out (the
+ * merchant's own day), moved forward to the Monday when that lands on a Saturday or Sunday.
+ */
+export function weekAfterSend(sendAt: Date, tz: string): string {
+  const day = partsIn(tz, sendAt).date;
+  const d = new Date(new Date(`${day}T00:00:00Z`).getTime() + 7 * 86_400_000);
+  if (d.getUTCDay() === 6) d.setUTCDate(d.getUTCDate() + 2);
+  else if (d.getUTCDay() === 0) d.setUTCDate(d.getUTCDate() + 1);
+  return d.toISOString().slice(0, 10);
 }
 
 /** The values one merchant's email is filled with; empty means "we don't know" and holds the email. */
@@ -260,13 +272,16 @@ export async function advanceApproval(
   if (next.html.trim() === "" || next.subject.trim() === "")
     return wait(q, a.id, "no_design", next.step, null);
 
+  // a step due overnight goes when the day starts (not spread across it: these are one-to-one emails)
+  const notBefore = nextSendTime(now, window, opts.spread ?? 0);
   const filled = fillApprovalEmail(
     { subject: next.subject, html: next.html },
     approvalValues({
       contact_name: a.contact_name,
       business_name: a.business_name,
       amount_cents: Number(a.amount_cents),
-      hold_until: a.hold_until,
+      // the funder's date when the rep typed one; otherwise a week after this email goes out
+      hold_until: a.hold_until ?? weekAfterSend(notBefore, a.tz),
       rep_name: a.rep_name,
       rep_phone: a.rep_phone,
       rep_email: a.rep_email,
@@ -286,8 +301,6 @@ export async function advanceApproval(
   if (approvalClaims(claimText, { state: a.state }).length > 0)
     return wait(q, a.id, "claim_check", next.step, null);
 
-  // a step due overnight goes when the day starts (not spread across it: these are one-to-one emails)
-  const notBefore = nextSendTime(now, window, opts.spread ?? 0);
   const ins = await q.query<{ id: string }>(
     `insert into outbox (user_id, client_id, lane, source, to_address, subject, text_body, html_body, not_before)
      values ($1, $2, 'approval', $3, $4, $5, $6, $7, $8)
