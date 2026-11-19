@@ -14,6 +14,8 @@ let n = 0;
 const APP = "https://crm.test";
 const base = Date.now();
 const day = (d: number) => new Date(base + d * 86_400_000);
+// the engine counts days in the rep's zone (New York here), so the expected date is that zone's calendar date
+const nyDate = (d: Date) => d.toLocaleDateString("en-CA", { timeZone: "America/New_York" });
 const go = (d: number) => runBucketSteps({ db: t.db, now: day(d), appUrl: APP });
 
 async function setup(opts: { contact: string; steps?: number }) {
@@ -100,9 +102,7 @@ describe("a template with a blank merge field", () => {
         next_step: 1,
         steps_sent: 0,
         hold: true,
-        due: day(d + 1)
-          .toISOString()
-          .slice(0, 10),
+        due: nyDate(day(d + 1)),
       });
     }
     expect(await outboxCount(c)).toBe(0);
