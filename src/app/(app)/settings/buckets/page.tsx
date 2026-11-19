@@ -103,6 +103,7 @@ export default async function BucketsSettingsPage({
               steps={own}
               templates={templates}
               canEdit={manager || mine}
+              manager={manager}
             />
           </SettingsCard>
         );

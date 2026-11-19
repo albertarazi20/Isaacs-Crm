@@ -29,13 +29,15 @@ export interface ShopSettingsRow {
   dns_result: Partial<DnsCheck>;
   /** The "opened but did not finish" nudge (0548). */
   open_nudge: boolean;
+  /** When a daily-reminder bucket sends, minutes after the merchant's local midnight (0593). */
+  daily_reminder_minute: number;
 }
 
 export async function getShopSettings(q: Db): Promise<ShopSettingsRow> {
   const { rows } = await q.query<ShopSettingsRow>(
     `select shop_name, postal_address, daily_cap, amber_at, reserved_for_intake, sequences_enabled, send_window_start, send_window_end,
             send_on_weekends, per_merchant_daily, per_merchant_weekly, automation_from, automation_reply_to_rep,
-            ai_enabled, ai_model, ai_daily_cap_cents, brain_on, brain_daily_per_rep, playbook, send_on_holidays, open_nudge, dns_ok, dns_checked_at::text as dns_checked_at,
+            ai_enabled, ai_model, ai_daily_cap_cents, brain_on, brain_daily_per_rep, playbook, send_on_holidays, open_nudge, daily_reminder_minute, dns_ok, dns_checked_at::text as dns_checked_at,
             dns_result
        from shop_settings`,
   );

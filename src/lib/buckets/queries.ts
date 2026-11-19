@@ -13,6 +13,11 @@ export interface BucketRow {
   /** Live enrolments right now. */
   members: number;
   steps: number;
+  /** Set: the bucket sends this template to every member once a day instead of running its steps (0593). */
+  daily_template_id: string | null;
+  daily_template_name: string | null;
+  /** The shop's reminder time, minutes after the merchant's local midnight (shop_settings.daily_reminder_minute). */
+  daily_reminder_minute: number;
 }
 
 /** Shared buckets plus the caller's own, in the order the Follow Up page shows them. RLS hides other reps' buckets. */
@@ -20,7 +25,9 @@ export async function listBuckets(q: Db, includeInactive = false): Promise<Bucke
   const { rows } = await q.query<BucketRow>(
     `select b.id, b.key, b.name, b.owner_id, b.rule, b.sort, b.active,
             (select count(*)::int from enrollments e where e.bucket_id = b.id and e.stopped_at is null) as members,
-            (select count(*)::int from bucket_steps s where s.bucket_id = b.id) as steps
+            (select count(*)::int from bucket_steps s where s.bucket_id = b.id) as steps,
+            b.daily_template_id, (select t.name from templates t where t.id = b.daily_template_id) as daily_template_name,
+            (select daily_reminder_minute from shop_settings) as daily_reminder_minute
        from buckets b
       where (b.active or $1)
       order by b.sort, b.name`,

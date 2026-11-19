@@ -111,7 +111,7 @@ export interface NextUp {
 /** What goes out next for one merchant, and when. */
 export function nextUp(m: BucketMember, steps: readonly SequenceStep[], today: ISODate): NextUp {
   const s = steps.find((x) => x.step_no === m.next_step);
-  const step = `Step ${m.next_step}`;
+  const step = s?.daily ? "Daily reminder" : `Step ${m.next_step}`;
   const title = s
     ? stepTitle(s, memberMergeValues(m))
     : steps.length === 0

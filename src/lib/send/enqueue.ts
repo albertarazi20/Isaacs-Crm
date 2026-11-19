@@ -11,6 +11,8 @@ export interface EnqueueInput {
   text: string;
   /** Send now (intake, reply) or at the merchant's next local window (sequence, blast). */
   when?: "now" | "window";
+  /** An exact moment to send (a bucket's daily reminder at the shop's time): used as it is, with no window applied. */
+  at?: Date;
   /** Drop it if it has not gone by then (a stale reminder must not fire a week late). */
   expiresInHours?: number;
   /** The template it came from, for the per-template scores and the bounce-spike pause (S1-7). */
@@ -67,10 +69,11 @@ export async function enqueueEmail(
   if (c.email_opt_out) return { queued: false, reason: "opted_out" };
   if (c.suppressed) return { queued: false, reason: "suppressed" };
 
-  let notBefore = now;
+  let notBefore = input.at ?? now;
   if (
+    !input.at &&
     (input.when ?? (input.lane === "sequence" || input.lane === "blast" ? "window" : "now")) ===
-    "window"
+      "window"
   ) {
     const w = (
       await q.query<Window>(

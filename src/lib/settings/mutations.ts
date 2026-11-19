@@ -22,7 +22,8 @@ export async function saveShopSettings(q: Db, i: ShopSettingsInput): Promise<voi
             send_on_holidays = coalesce($14::boolean, send_on_holidays),
             open_nudge_since = case when coalesce($15::boolean, open_nudge) and not open_nudge then now()
                                     else open_nudge_since end,
-            open_nudge = coalesce($15::boolean, open_nudge)`,
+            open_nudge = coalesce($15::boolean, open_nudge),
+            daily_reminder_minute = coalesce($16::int, daily_reminder_minute)`,
     [
       i.shopName,
       i.postalAddress,
@@ -39,6 +40,7 @@ export async function saveShopSettings(q: Db, i: ShopSettingsInput): Promise<voi
       i.automationReplyToRep,
       i.sendOnHolidays ?? null,
       i.openNudge ?? null,
+      i.dailyReminderMinute ?? null,
     ],
   );
   const sameDomain =

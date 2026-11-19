@@ -7,6 +7,11 @@ import { automationDomain } from "../send/dns";
  * older form can never reset a setting it does not know about.
  */
 
+/** The daily reminder runs from 6:00 AM (360) to 8:00 PM (1200), minutes after local midnight; the database checks the same. */
+export const DAILY_REMINDER_MIN = 360;
+export const DAILY_REMINDER_MAX = 1200;
+const DAILY_REMINDER_MESSAGE = "Daily reminder time must be between 6:00 AM and 8:00 PM.";
+
 const shopFields = z.object({
   shopName: z.string().trim().min(1).max(80),
   postalAddress: z.string().trim().max(300).default(""),
@@ -34,6 +39,13 @@ const shopFields = z.object({
   automationReplyToRep: z.boolean(),
   /** The "opened but did not finish" nudge (0548). Not sent = the stored value stays. */
   openNudge: z.boolean().optional(),
+  /** When a daily-reminder bucket sends, in minutes after the merchant's local midnight (0593). Not sent = the stored value stays. */
+  dailyReminderMinute: z
+    .number({ error: DAILY_REMINDER_MESSAGE })
+    .int(DAILY_REMINDER_MESSAGE)
+    .min(DAILY_REMINDER_MIN, DAILY_REMINDER_MESSAGE)
+    .max(DAILY_REMINDER_MAX, DAILY_REMINDER_MESSAGE)
+    .optional(),
 });
 /*
  * Each number is valid alone, but some pairs silence the worker without a word: a send window that is empty (start at or

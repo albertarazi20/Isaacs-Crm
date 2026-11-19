@@ -4,6 +4,7 @@ import { checkClaims, merchantOwnWords, stripMerchantText } from "../messaging/c
 import {
   capAllows,
   inSendWindow,
+  isDailySource,
   legalFooter,
   merchantCapAllows,
   nextSendTime,
@@ -82,6 +83,8 @@ interface Job {
   client_trashed: boolean;
   /** The bucket enrolment this step belongs to is paused (a rep's Pause, or a merchant's "not now"). */
   enrollment_paused: boolean;
+  /** A daily reminder whose merchant is still a live member of that bucket, and the bucket still sends one. */
+  daily_member: boolean;
   /** A nudge after an open that something since made wrong to send (app.nudge_overtaken). */
   nudge_overtaken: boolean;
   client_state: string | null;
@@ -259,9 +262,12 @@ export async function drainOutbox(args: {
     weekends: settings.send_on_weekends,
     holidays: settings.send_on_holidays,
   });
-  const windowed = (lane: string, tz: string | null, at: Date): Date =>
-    lane === "sequence" || lane === "blast" ? nextSendTime(at, bulkWindow(tz)) : at;
-  let claimed: { id: string; lane: string; tz: string | null } | null = null;
+  // a bucket's daily reminder goes at the shop's reminder time, not in the shared send window: its retries are not re-timed
+  const windowed = (lane: string, tz: string | null, at: Date, source = ""): Date =>
+    (lane === "sequence" || lane === "blast") && !isDailySource(source)
+      ? nextSendTime(at, bulkWindow(tz))
+      : at;
+  let claimed: { id: string; lane: string; tz: string | null; source: string } | null = null;
   for (let i = 0; i < max && Date.now() - started < budgetMs; i += 1) {
     claimed = null;
     let done: boolean | Ready;
@@ -272,7 +278,7 @@ export async function drainOutbox(args: {
       // database rejects: data and integrity errors) fails it alone; anything else (a dropped connection, a timeout)
       // counts an attempt and tries again later, so one blip never loses the mail and a bad row never holds up the rest.
       if (!claimed) throw e;
-      const row: { id: string; lane: string; tz: string | null } = claimed;
+      const row: { id: string; lane: string; tz: string | null; source: string } = claimed;
       const code = (e as { code?: unknown }).code;
       const permanent = typeof code === "string" && /^(22|23)/.test(code);
       const msg = `could not prepare: ${e instanceof Error ? e.message : String(e)}`.slice(0, 500);
@@ -292,7 +298,12 @@ export async function drainOutbox(args: {
           );
           summary.failed += 1;
         } else {
-          const at = windowed(row.lane, row.tz, new Date(now.getTime() + 15 * 60_000 * attempts));
+          const at = windowed(
+            row.lane,
+            row.tz,
+            new Date(now.getTime() + 15 * 60_000 * attempts),
+            row.source,
+          );
           await q.query(
             "update outbox set attempts = $2, not_before = $3, last_error = $4 where id = $1",
             [row.id, attempts, at.toISOString(), msg],
@@ -332,6 +343,9 @@ export async function drainOutbox(args: {
            exists (select 1 from trashed_clients tc where tc.client_id = o.client_id) as client_trashed,
            exists (select 1 from enrollments e where e.client_id = o.client_id and e.stopped_at is null and e.paused
                       and o.source like 'bucket:' || e.bucket_id::text || ':%') as enrollment_paused,
+           exists (select 1 from enrollments e join buckets b on b.id = e.bucket_id
+                    where e.client_id = o.client_id and e.stopped_at is null and b.daily_template_id is not null
+                      and o.source like 'bucket:' || e.bucket_id::text || ':daily:%') as daily_member,
            (o.source like 'nudge:%' and app.nudge_overtaken(o.client_id, o.created_at)) as nudge_overtaken,
            (select state from clients c where c.id = o.client_id) as client_state,
            (select business_name from clients c where c.id = o.client_id) as client_business_name,
@@ -346,7 +360,7 @@ export async function drainOutbox(args: {
       );
       const job = rows[0];
       if (!job) return true;
-      claimed = { id: job.id, lane: job.lane, tz: job.tz };
+      claimed = { id: job.id, lane: job.lane, tz: job.tz, source: job.source };
       summary.claimed += 1;
 
       // A bucket step that ends unsent (it sat past its 36 hours because the rep's Gmail was not connected, the claim
@@ -356,13 +370,18 @@ export async function drainOutbox(args: {
       // themselves (opt-out, do-not-contact, trash, suppression) has their own timeline entry already.
       const unsentStep = async (reason: string) => {
         const m = /^bucket:([0-9a-f-]{36}):step:(\d+)$/.exec(job.source);
-        if (job.lane !== "sequence" || !m || !job.client_id) return;
+        // a daily reminder that ends unsent also stops counting as sent (the "N sent" line), but gets no timeline entry:
+        // it would be one a day for as long as the mail cannot go
+        const dailyBucketId = isDailySource(job.source) ? job.source.split(":")[1] : undefined;
+        const bucketId = m?.[1] ?? dailyBucketId;
+        if (job.lane !== "sequence" || !bucketId || !job.client_id) return;
         if (["suppressed", "opted_out", "dnc", "trashed"].includes(reason)) return;
         const why = job.last_error ? UNSENT_WHY[job.last_error] : undefined;
         await q.query(
           "update enrollments set steps_sent = greatest(steps_sent - 1, 0) where client_id = $1 and bucket_id = $2 and stopped_at is null",
-          [job.client_id, m[1]],
+          [job.client_id, bucketId],
         );
+        if (!m) return;
         await q.query(
           "insert into activities (user_id, client_id, kind, body) values ($1, $2, 'system', $3)",
           [
@@ -390,7 +409,7 @@ export async function drainOutbox(args: {
       };
       // Sequence and blast mail goes only inside the merchant's send window, however it came to be re-timed (a cap
       // that rolls off at 03:12, a Pause, a retry): every deferral of such a row lands on the next slot in the window.
-      const inWindow = (at: Date): Date => windowed(job.lane, job.tz, at);
+      const inWindow = (at: Date): Date => windowed(job.lane, job.tz, at, job.source);
       const defer = async (until: Date, reason: string) => {
         await q.query(
           "update outbox set status = 'queued', not_before = $2, last_error = $3 where id = $1",
@@ -419,6 +438,12 @@ export async function drainOutbox(args: {
       }
       if (job.client_dnc) {
         await skip("dnc");
+        return false;
+      }
+      const daily = isDailySource(job.source);
+      // a daily reminder goes only while the merchant is still in that bucket and the bucket still sends one
+      if (daily && !job.daily_member) {
+        await cancel("left_bucket");
         return false;
       }
       // a nudge after an open goes only if nothing happened since it was queued (0552)
@@ -487,7 +512,7 @@ export async function drainOutbox(args: {
       // Bulk mail is sent only inside the merchant's window at the moment it goes, not just when it was queued: a row
       // that waited (a rep switched off and on again, a stale 'sending' row queued again, a late cron run) is held
       // to the next slot instead of going at whatever hour the worker found it.
-      if (bulk && !inSendWindow(now, bulkWindow(job.tz))) {
+      if (bulk && !daily && !inSendWindow(now, bulkWindow(job.tz))) {
         await defer(now, "outside_window");
         return false;
       }
@@ -505,6 +530,7 @@ export async function drainOutbox(args: {
       }
       if (
         bulk &&
+        !daily &&
         !merchantCapAllows({
           sent24h: job.merchant_24h,
           sent7d: job.merchant_7d,

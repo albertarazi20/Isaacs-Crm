@@ -165,6 +165,7 @@ const KEY_WORDS: Record<string, string> = {
   automation_from: "automation sender",
   automation_reply_to_rep: "replies go to the rep",
   open_nudge: "nudge after an open",
+  daily_reminder_minute: "daily reminder time",
   approval_emails_on: "approval emails on or off",
   approval_window_start: "approval window start",
   approval_window_end: "approval window end",

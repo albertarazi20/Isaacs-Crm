@@ -1,4 +1,5 @@
 import { missingDocsPhrase } from "@/lib/mca/stips";
+import { minuteLabel } from "@/lib/settings/format";
 import type { BucketMember, BucketRow } from "@/lib/buckets/queries";
 import type { SequenceStep } from "@/lib/followup/bucketBoard";
 import {
@@ -51,6 +52,9 @@ const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? o
 /** "3 emails and a call over 14 days", in a few words. */
 export function sequenceSummary(steps: readonly SequenceStep[]): string {
   if (steps.length === 0) return "No sequence yet";
+  const daily = steps.find((s) => s.daily);
+  if (daily)
+    return `Daily${daily.daily_minute === null ? "" : ` at ${minuteLabel(daily.daily_minute)}`}, their time, every day but Saturday`;
   const emails = steps.filter((s) => s.action === "email").length;
   const calls = steps.filter((s) => s.action === "call").length;
   const toCold = steps.some((s) => s.action === "move_to_cold");
@@ -102,6 +106,7 @@ export function stepTitle(s: SequenceStep, values?: MergeValues): string {
 export function stepNote(s: SequenceStep): string {
   if (s.action === "call") return "No email goes out";
   if (s.action === "move_to_cold") return "The slow drip takes over";
+  if (s.daily && !s.template_name) return "Daily reminder";
   if (!s.template_name) return "Nothing sends until a template is picked";
   return s.template_approved === false ? `${s.template_name} (needs approval)` : s.template_name;
 }

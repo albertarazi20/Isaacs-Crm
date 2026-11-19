@@ -4,6 +4,7 @@ import type { Db, DbAccess } from "../db";
 import { addDays, todayIn, type ISODate } from "../mca/dates";
 import { effectiveSignature, mergeValues, resolveMergeFields } from "../messaging/merge";
 import { enqueueEmail } from "../send/enqueue";
+import { nextDailySend, nextNonSaturday } from "../send/rules";
 import { describeUnknownFields, unknownFieldsNote, unknownFieldsOf } from "./unknownFields";
 
 /** How many days a step whose template cannot send is held before the sequence moves on without it. */
@@ -45,6 +46,8 @@ interface DueRow {
   bucket_id: string;
   bucket_name: string;
   bucket_key: string | null;
+  /** Set: the bucket sends this template to every member once a day instead of running its steps. */
+  daily_template_id: string | null;
   next_step: number;
   next_due_on: string;
   steps_sent: number;
@@ -69,6 +72,19 @@ interface StepRow {
   body: string | null;
   may_send: boolean | null;
   variants: { subject: string; body: string }[];
+}
+
+/** A daily bucket's one "step": its reminder template, repeated every day. */
+async function dailyStepFor(q: Db, templateId: string): Promise<StepRow[]> {
+  const { rows } = await q.query<StepRow>(
+    `select 1 as step_no, 0 as day_offset, t.id as template_id, 'email' as action, t.subject, t.body,
+            app.template_may_auto_send(t.id) as may_send,
+            coalesce((select jsonb_agg(jsonb_build_object('subject', v.subject, 'body', v.body) order by v.sort)
+                        from template_variants v where v.template_id = t.id), '[]'::jsonb) as variants
+       from templates t where t.id = $1`,
+    [templateId],
+  );
+  return rows;
 }
 
 async function stepsFor(q: Db, bucketId: string): Promise<StepRow[]> {
@@ -111,11 +127,16 @@ export async function runBucketSteps(args: {
     resumed: 0,
     taken: 0,
   };
-  const sequences = await args.db.withSystem(
+  const settings = await args.db.withSystem(
     async (q) =>
-      (await q.query<{ v: boolean }>("select sequences_enabled as v from shop_settings")).rows[0]
-        ?.v ?? true,
+      (
+        await q.query<{ v: boolean; m: number }>(
+          "select sequences_enabled as v, daily_reminder_minute as m from shop_settings",
+        )
+      ).rows[0],
   );
+  const sequences = settings?.v ?? true;
+  const reminderMinute = settings?.m ?? 600;
   // a pause with a date on it ("not now until January", S1-6) lifts by itself on the day, in the merchant's zone
   summary.resumed = await args.db.withSystem(async (q) => {
     const { rows } = await q.query<{ user_id: string; client_id: string; bucket_name: string }>(
@@ -145,7 +166,7 @@ export async function runBucketSteps(args: {
   const due = await args.db.withSystem(async (q) => {
     const { rows } = await q.query<DueRow>(
       `select e.id as enrollment_id, e.user_id, e.client_id, e.bucket_id, b.name as bucket_name, b.key as bucket_key,
-              e.next_step, e.next_due_on::text as next_due_on, e.steps_sent,
+              b.daily_template_id, e.next_step, e.next_due_on::text as next_due_on, e.steps_sent,
               app.client_timezone(c) as timezone, c.contact_name, c.business_name, c.email,
               u.name as sender_name, u.application_link, c.application_token, u.signature,
               (select wanted_amount_cents from client_asks k where k.client_id = c.id order by created_at desc limit 1) as wanted_amount_cents,
@@ -181,8 +202,13 @@ export async function runBucketSteps(args: {
         return;
       }
       const holdSince = mine.rows[0]?.hold_since ?? null;
-      const steps = await stepsFor(q, row.bucket_id);
+      const daily = row.daily_template_id !== null;
+      const steps = daily
+        ? await dailyStepFor(q, row.daily_template_id ?? "")
+        : await stepsFor(q, row.bucket_id);
       const today: ISODate = todayIn(row.timezone, now);
+      // a daily bucket: the shop's reminder time in the merchant's own zone, every day but Saturday
+      const slot = daily ? nextDailySend(now, row.timezone, reminderMinute) : null;
       if (steps.length === 0) {
         // a bucket with no steps (Cold, S1-14) holds its members without chasing them: nothing is due, ever
         await q.query("update enrollments set next_due_on = null where id = $1", [
@@ -229,14 +255,16 @@ export async function runBucketSteps(args: {
           summary.moved += 1;
         }
       };
-      const step = sequences
-        ? steps.find((s) => s.step_no === row.next_step)
-        : steps.find((s) => s.action === "email");
+      const step = daily
+        ? steps[0]
+        : sequences
+          ? steps.find((s) => s.step_no === row.next_step)
+          : steps.find((s) => s.action === "email");
       if (!step) {
         await finish(0);
         return;
       }
-      const after = sequences ? steps.find((s) => s.step_no === step.step_no + 1) : step;
+      const after = daily || !sequences ? step : steps.find((s) => s.step_no === step.step_no + 1);
       // `counted` is true only when an email really went on the outbox: steps_sent feeds the "N sent" line, the
       // export and the "no reply to N emails" call note, so a skipped step must not add to it
       const scheduleNext = async (counted: boolean) => {
@@ -245,12 +273,14 @@ export async function runBucketSteps(args: {
           return;
         }
         // with sequences off, "tomorrow" again; with them on, entered_at + the next step's offset (never in the past)
-        const nextDue = sequences
-          ? maxDate(addDays(today, 1), addDays(await enteredDay(row, q), after.day_offset))
-          : addDays(today, 1);
+        const nextDue = slot
+          ? nextNonSaturday(counted ? slot.date : today)
+          : sequences
+            ? maxDate(addDays(today, 1), addDays(await enteredDay(row, q), after.day_offset))
+            : addDays(today, 1);
         await q.query(
           "update enrollments set next_step = $2, next_due_on = $3, steps_sent = steps_sent + $4, hold_since = null where id = $1",
-          [row.enrollment_id, sequences ? after.step_no : 1, nextDue, counted ? 1 : 0],
+          [row.enrollment_id, sequences && !daily ? after.step_no : 1, nextDue, counted ? 1 : 0],
         );
       };
 
@@ -367,11 +397,13 @@ export async function runBucketSteps(args: {
         {
           clientId: row.client_id,
           lane: "sequence",
-          source: `bucket:${row.bucket_id}:step:${step.step_no}`,
+          source: slot
+            ? `bucket:${row.bucket_id}:daily:${slot.date}`
+            : `bucket:${row.bucket_id}:step:${step.step_no}`,
           subject: subject.text || `About ${row.business_name}`,
           text,
           when: "window",
-          expiresInHours: 36,
+          ...(slot ? { at: slot.at, expiresInHours: 4 } : { expiresInHours: 36 }),
           templateId: step.template_id,
         },
         now,

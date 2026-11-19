@@ -99,7 +99,7 @@ export function usFederalHoliday(date: ISODate): string | null {
   return usFederalHolidays(year).get(date) ?? usFederalHolidays(year + 1).get(date) ?? null;
 }
 
-function partsIn(
+export function partsIn(
   tz: string,
   at: Date,
 ): { hour: number; minute: number; weekday: number; date: ISODate } {
@@ -199,3 +199,49 @@ export function textToHtml(text: string): string {
     .map((p) => `<p>${urlish(esc(p)).replaceAll("\n", "<br>")}</p>`)
     .join("");
 }
+
+/** The UTC instant of a wall-clock time (minutes after local midnight) on a calendar day in a zone. */
+export function localInstant(tz: string, date: ISODate, minuteOfDay: number): Date {
+  const [y, m, d] = date.split("-").map(Number) as [number, number, number];
+  const wall = Date.UTC(y, m - 1, d, 0, minuteOfDay);
+  // the zone's offset at that moment, found twice so the hour a clock change skips or repeats still lands on the day
+  const offsetAt = (t: number): number => {
+    const p = partsIn(tz, new Date(t));
+    const [py, pm, pd] = p.date.split("-").map(Number) as [number, number, number];
+    return Date.UTC(py, pm - 1, pd, p.hour, p.minute) - Math.floor(t / 60_000) * 60_000;
+  };
+  const first = wall - offsetAt(wall);
+  return new Date(wall - offsetAt(first));
+}
+
+/**
+ * The next daily reminder slot for a merchant: the shop's reminder time (minutes after local midnight) on the first
+ * day after `now` that is not a Saturday in the merchant's own zone. Today counts only while that time is still ahead.
+ */
+export function nextDailySend(
+  now: Date,
+  tz: string,
+  minuteOfDay: number,
+): { date: ISODate; at: Date } {
+  let date = partsIn(tz, now).date;
+  for (let i = 0; i < 9; i += 1) {
+    const dow = new Date(`${date}T00:00:00Z`).getUTCDay();
+    const at = localInstant(tz, date, minuteOfDay);
+    if (dow !== 6 && at.getTime() > now.getTime()) return { date, at };
+    date = new Date(new Date(`${date}T00:00:00Z`).getTime() + 86_400_000)
+      .toISOString()
+      .slice(0, 10);
+  }
+  return { date, at: localInstant(tz, date, minuteOfDay) };
+}
+
+/** The day after `date` that is not a Saturday. */
+export function nextNonSaturday(date: ISODate): ISODate {
+  let d = new Date(new Date(`${date}T00:00:00Z`).getTime() + 86_400_000);
+  if (d.getUTCDay() === 6) d = new Date(d.getTime() + 86_400_000);
+  return d.toISOString().slice(0, 10);
+}
+
+/** A daily bucket reminder's outbox source: bucket:<id>:daily:<YYYY-MM-DD>. */
+export const DAILY_SOURCE = /^bucket:[0-9a-f-]{36}:daily:\d{4}-\d{2}-\d{2}$/;
+export const isDailySource = (source: string): boolean => DAILY_SOURCE.test(source);

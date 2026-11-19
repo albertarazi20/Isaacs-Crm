@@ -4,6 +4,7 @@ import { useId, useState, type ReactNode } from "react";
 import { saveShopSettingsAction } from "@/app/settings-actions";
 import { useFormState, useRun } from "@/components/client/parts";
 import { Button, cn, Field, Input } from "@/components/ui";
+import { minuteToTime, timeToMinute } from "@/lib/settings/format";
 import type { ShopSettingsRow } from "@/lib/settings/queries";
 import { SettingsCard } from "./primitives";
 import { Toggle } from "./Toggle";
@@ -35,6 +36,7 @@ export function ShopSettingsForm({
     automationFrom: s.automation_from,
     automationReplyToRep: s.automation_reply_to_rep,
     openNudge: s.open_nudge,
+    dailyReminderTime: minuteToTime(s.daily_reminder_minute),
   }));
   // what the server last accepted, so the bar can say whether anything is waiting to be saved
   const [saved, setSaved] = useState(() => JSON.stringify(v));
@@ -46,7 +48,11 @@ export function ShopSettingsForm({
         e.preventDefault();
         setBusy(true);
         const sent = JSON.stringify(v);
-        const ok = await run(saveShopSettingsAction(v), "Saved");
+        const { dailyReminderTime, ...rest } = v;
+        const ok = await run(
+          saveShopSettingsAction({ ...rest, dailyReminderMinute: timeToMinute(dailyReminderTime) }),
+          "Saved",
+        );
         setBusy(false);
         if (ok) setSaved(sent);
       }}
@@ -117,6 +123,13 @@ export function ShopSettingsForm({
           </Field>
           <Field label="Window ends" hint="Nothing goes out after this hour.">
             <Input {...bind("sendWindowEnd")} inputMode="numeric" />
+          </Field>
+          <Field
+            label="Daily reminder time"
+            hint="Buckets that have a daily reminder send it at this time in each merchant's own time zone, every day but Saturday. Between 6:00 AM and 8:00 PM."
+            className="sm:col-span-2"
+          >
+            <Input {...bind("dailyReminderTime")} type="time" step={300} className="sm:max-w-40" />
           </Field>
         </div>
         <div className="divide-y divide-border border-t border-border px-4 sm:px-5">

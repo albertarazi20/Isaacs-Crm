@@ -97,6 +97,7 @@ function Body({
   const [link, setLink] = useState<"idle" | "busy" | "copied" | string>("idle");
   const next = nextUp(m, steps, today);
   const values = memberMergeValues(m);
+  const daily = steps.some((x) => x.daily);
   const done = Math.min(steps.length, Math.max(0, m.next_step - 1));
 
   return (
@@ -104,8 +105,8 @@ function Body({
       <MemberChips m={m} meta={meta} today={today} />
 
       <div className="flex items-center gap-4 rounded-2xl border border-border bg-surface p-4">
-        <ProgressRing value={steps.length ? done / steps.length : 0} size={52} stroke={5}>
-          {done}/{steps.length}
+        <ProgressRing value={steps.length && !daily ? done / steps.length : 0} size={52} stroke={5}>
+          {daily ? "Daily" : `${done}/${steps.length}`}
         </ProgressRing>
         <div className="min-w-0 flex-1">
           <p className="eyebrow">Next up · {next.step}</p>
@@ -172,7 +173,7 @@ function Body({
 
       <Section
         title="What was sent, what is next"
-        aside={steps.length ? `${done} of ${steps.length} done` : undefined}
+        aside={steps.length && !daily ? `${done} of ${steps.length} done` : undefined}
       >
         {steps.length === 0 ? (
           <p className="text-[13px] text-muted">
@@ -215,7 +216,7 @@ function Body({
                       {stepTitle(s, values)}
                     </p>
                     <p className="truncate text-xs text-muted">
-                      Day {s.day_offset} · {stepNote(s)}
+                      {s.daily ? "Every day but Saturday" : `Day ${s.day_offset}`} · {stepNote(s)}
                     </p>
                   </div>
                   <span

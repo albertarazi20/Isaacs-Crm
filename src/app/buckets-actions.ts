@@ -4,6 +4,7 @@ import { recordAuditHere } from "@/lib/system/audit";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { CAN, requireSession } from "@/lib/auth/server";
+import { setBucketDailyTemplate } from "@/lib/buckets/daily";
 import { queueBlast } from "@/lib/buckets/engine";
 import { setTemplateApproved } from "@/lib/buckets/templates";
 import { checkClaims } from "@/lib/messaging/claims";
@@ -345,6 +346,21 @@ export async function setBucketStepsAction(input: unknown): Promise<ActionResult
         );
       }
     });
+    revalidatePath("/", "layout");
+    return { ok: true, data: null };
+  } catch (e) {
+    return { ok: false, error: toActionError(e) };
+  }
+}
+
+/** Manager only: the template a bucket sends to every member once a day, or none (the step list is used). */
+export async function setBucketDailyTemplateAction(input: unknown): Promise<ActionResult<null>> {
+  const session = await requireSession();
+  try {
+    if (!CAN.manageTeam(session.role))
+      throw new UserError("Only a manager picks a bucket's daily reminder");
+    const i = z.object({ bucketId: id, templateId: id.nullable() }).parse(input);
+    await db.withUser(session.userId, (q) => setBucketDailyTemplate(q, i));
     revalidatePath("/", "layout");
     return { ok: true, data: null };
   } catch (e) {

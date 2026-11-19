@@ -9,3 +9,20 @@ export function centsText(cents: number): string {
   if (cents >= 100) return "$" + (cents / 100).toFixed(2);
   return `${cents.toFixed(2)}¢`;
 }
+
+/** 600 → "10:00" (what a time input holds). */
+export function minuteToTime(minute: number): string {
+  return `${String(Math.floor(minute / 60)).padStart(2, "0")}:${String(minute % 60).padStart(2, "0")}`;
+}
+
+/** "10:00" → 600. An empty or broken value gives 0, which the server refuses with its plain-words message. */
+export function timeToMinute(time: string): number {
+  const m = /^(\d{2}):(\d{2})/.exec(time);
+  return m ? Number(m[1]) * 60 + Number(m[2]) : 0;
+}
+
+/** 600 → "10:00 AM", 1200 → "8:00 PM". */
+export function minuteLabel(minute: number): string {
+  const h = Math.floor(minute / 60);
+  return `${h % 12 || 12}:${String(minute % 60).padStart(2, "0")} ${h < 12 ? "AM" : "PM"}`;
+}

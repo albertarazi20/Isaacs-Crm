@@ -41,7 +41,9 @@ function SequenceRail({ steps }: { steps: readonly SequenceStep[] }) {
                 )}
               />
             </div>
-            <p className="eyebrow mt-2.5">Day {s.day_offset}</p>
+            <p className="eyebrow mt-2.5">
+              {s.daily ? "Every day but Saturday" : `Day ${s.day_offset}`}
+            </p>
             <p className="mt-0.5 truncate text-[13px] font-medium text-text" title={stepTitle(s)}>
               {stepTitle(s)}
             </p>
