@@ -401,6 +401,24 @@ describe("a template with a field that does not exist is never sent as typed", (
     expect(w[0]).toContain("{frist_name}");
   });
 
+  it("a bucket with a daily reminder sends no instant welcome; the same bucket without one does", async () => {
+    const tpl = await template("Welcome {business}", "Hi {first_name}, upload here: {upload_link}");
+    const b = await typoBucket(tpl);
+    const control = await merchant(rep);
+    expect(
+      await t.db.withUser(rep, (q) =>
+        sendWelcome(q, control, b, APP, new Date("2026-12-01T15:00:00Z")),
+      ),
+    ).toBe(true);
+    expect(await count("select count(*) n from outbox where client_id = $1", [control])).toBe(1);
+    await t.pool.query("update buckets set daily_template_id = $2 where id = $1", [b, tpl]);
+    const c = await merchant(rep);
+    expect(
+      await t.db.withUser(rep, (q) => sendWelcome(q, c, b, APP, new Date("2026-12-01T15:00:00Z"))),
+    ).toBe(false);
+    expect(await count("select count(*) n from outbox where client_id = $1", [c])).toBe(0);
+  });
+
   it("the nudge after an open is not sent, and says why once", async () => {
     const tpl = await template("Your link", "Hi {frist_name}: {upload_link}");
     await t.pool.query(

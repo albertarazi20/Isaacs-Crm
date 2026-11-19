@@ -17,6 +17,8 @@ import { Glyph, type GlyphName } from "@/components/shell/icons";
 import { Badge, Button, buttonClass, Field, Input, Textarea, cn } from "@/components/ui";
 import type { SplitResult } from "@/lib/ai/splitLeadLine";
 import type { BucketRow } from "@/lib/buckets/queries";
+import { bucketSends as sends } from "@/lib/buckets/wording";
+import { minuteLabel } from "@/lib/settings/format";
 import type { AssistantState } from "@/lib/leads/assistant";
 import { applySplit, type PasteKey } from "@/lib/leads/paste";
 import { stageDef } from "@/lib/mca/stages";
@@ -97,13 +99,6 @@ function Callout({
       <div className="min-w-0 flex-1 space-y-1.5">{children}</div>
     </div>
   );
-}
-
-/** What choosing this bucket sets in motion, from the steps it holds. */
-function sends(b: BucketRow): string {
-  if (b.steps === 0) return "No emails set up yet";
-  if (b.steps === 1) return "One email on submit";
-  return `First email on submit, then ${b.steps - 1} reminder${b.steps === 2 ? "" : "s"}`;
 }
 
 function BucketOption({
@@ -558,7 +553,11 @@ export function IntakeForm({
             ) : bucket ? (
               <>
                 Goes to <span className="font-semibold text-text">{bucket.name}</span>.{" "}
-                {bucket.steps > 0 ? "Its first email sends on submit." : "No email will go out."}
+                {bucket.daily_template_id
+                  ? `Its first reminder goes at ${minuteLabel(bucket.daily_reminder_minute)}, their time.`
+                  : bucket.email_steps > 0
+                    ? "Its first email sends on submit."
+                    : "No email will go out."}
               </>
             ) : (
               "No bucket. Nothing is sent until you move them."

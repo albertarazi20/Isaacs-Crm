@@ -13,6 +13,9 @@ export interface BucketRow {
   /** Live enrolments right now. */
   members: number;
   steps: number;
+  /** How many of the steps send an email, and how many make a call task for the rep. */
+  email_steps: number;
+  call_steps: number;
   /** Set: the bucket sends this template to every member once a day instead of running its steps (0593). */
   daily_template_id: string | null;
   daily_template_name: string | null;
@@ -26,6 +29,8 @@ export async function listBuckets(q: Db, includeInactive = false): Promise<Bucke
     `select b.id, b.key, b.name, b.owner_id, b.rule, b.sort, b.active,
             (select count(*)::int from enrollments e where e.bucket_id = b.id and e.stopped_at is null) as members,
             (select count(*)::int from bucket_steps s where s.bucket_id = b.id) as steps,
+            (select count(*)::int from bucket_steps s where s.bucket_id = b.id and s.action = 'email') as email_steps,
+            (select count(*)::int from bucket_steps s where s.bucket_id = b.id and s.action = 'call') as call_steps,
             b.daily_template_id, (select t.name from templates t where t.id = b.daily_template_id) as daily_template_name,
             (select daily_reminder_minute from shop_settings) as daily_reminder_minute
        from buckets b

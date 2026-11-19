@@ -341,6 +341,12 @@ export async function sendWelcome(
   appUrl: string,
   now = new Date(),
 ): Promise<boolean> {
+  // a bucket with a daily reminder sends only that, at the shop's reminder time: no extra welcome on top of it (0593)
+  const daily = await q.query(
+    "select 1 from buckets where id = $1 and daily_template_id is not null",
+    [bucketId],
+  );
+  if ((daily.rowCount ?? 0) > 0) return false;
   const { rows } = await q.query<{
     template_id: string;
     subject: string;
